@@ -1,9 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+# Angular / Node
 node_modules/
 dist/
-.turbo/
+.angular/
+coverage/
+# env
 .env
 .env.*
 !.env.example
-coverage/
+# misc
 *.log
 .DS_Store
+.idea/

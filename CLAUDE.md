@@ -1,69 +1,75 @@
-# OpenBP_builder — правила проєкту для Claude Code
+# OpenBP — правила проєкту для Claude Code
 
-OpenBP_builder — платформа автоматизації процесів у стилі n8n: тригер → граф вузлів → інтеграції.
-Ми не пишемо все з нуля: беремо перевірені open-source бібліотеки і пишемо лише «клей», двигун і UX.
+OpenBP — MCP-native BPMS-конструктор: тригер → граф вузлів → будь-які системи через MCP; сам OpenBP — теж MCP-сервер для ШІ-агентів.
+Ми не пишемо все з нуля: беремо перевірені бібліотеки (ADR-001), пишемо движок, MCP-шар і UX.
 
-Перед будь-якою задачею прочитай відповідні файли в `docs/`:
-- `docs/PRD.md` — що будуємо і для кого, сценарії MVP
-- `docs/architecture.md` — компоненти, потоки даних, схема БД
-- `docs/workflow-format.md` — формат workflow JSON (джерело правди для двигуна і канвасу)
-- `docs/node-sdk.md` — контракт вузла
-- `docs/roadmap.md` — етапи, поточний етап, критерії «готово»
+Перед будь-якою задачею прочитай відповідні файли:
+- `docs/adr/ADR-001-stack.md` — стек і чому; `docs/adr/ADR-002-mcp-native.md` — MCP як ядро
+- `docs/PRD.md` — що будуємо, для кого, сценарії MVP
+- `docs/architecture.md` — проєкти, потоки даних, інтерфейси Engine, схема БД
+- `docs/workflow-format.md` — формат workflow JSON (джерело правди для движка, канвасу, MCP)
+- `docs/connectors.md` — контракт вузлів, `mcp.tool`, `ai.llm`, Connector Kit
+- `docs/roadmap.md` — фази; `BACKLOG.md` — задачі; `docs/night-agent.md` — як працює агент
 
-## Стек (не змінювати без погодження)
+## Стек (не змінювати без ADR)
 
-- Мова: TypeScript (strict) скрізь
-- Монорепо: pnpm workspaces + Turborepo
-- Backend API: Fastify + Zod (валідація), Drizzle ORM, PostgreSQL 16
-- Черга: BullMQ + Redis 7
-- Frontend: React 18 + Vite, React Flow (`@xyflow/react`), Tailwind + shadcn/ui, TanStack Query, Zustand
-- Форми вузлів: JSON Schema → `@rjsf/core` (або власний рендерер, якщо rjsf заважає)
-- Редактор коду: Monaco
-- Пісочниця для коду і виразів: `quickjs-emscripten`
-- Тести: Vitest (unit), Playwright (e2e для web)
-- Локальний запуск: Docker Compose (postgres, redis, api, worker, web)
+- .NET 10 LTS, C#, ASP.NET Core Minimal APIs, EF Core + Npgsql, PostgreSQL 16
+- Черга виконань — таблиця `jobs` у Postgres (SKIP LOCKED); розклади — Quartz.NET
+- MCP клієнт і сервер — офіційний C# SDK `ModelContextProtocol`
+- Вирази і Code-вузол — Jint з лімітами
+- Frontend: Angular (standalone, Signals), Angular Material + Tailwind, ngx-formly, Monaco; канвас — за ADR-003
+- Тести: xUnit + Testcontainers; Vitest; Playwright
+- Деплой: Docker Compose (`postgres`, `api`, `worker`, `web`)
 
 ## Структура
 
 ```
-apps/
-  api/        # REST API + webhook-ендпоінти + тригери (Fastify)
-  worker/     # виконання workflow з черги (BullMQ)
-  web/        # редактор-канвас, журнал виконань, credentials (React)
-packages/
-  engine/     # виконання графа: чистий TS, без БД і мережі напряму
-  nodes-sdk/  # типи і хелпери для опису вузлів
-  nodes/      # реалізації вузлів (кожен вузол — окрема папка)
-  expressions/# парсер і обчислення {{ }} у пісочниці
-  db/         # схема Drizzle, міграції
-  shared/     # спільні типи, zod-схеми workflow JSON
+OpenBP.sln
+src/
+  OpenBP.Shared/        # моделі формату, JSON Schema, валідатор
+  OpenBP.Engine/        # виконання графа; без БД/HTTP/MCP — лише інтерфейси
+  OpenBP.Engine.Testing/# in-memory реалізації для тестів і CLI
+  OpenBP.Expressions/   # Jint-обчислювач {{ }}
+  OpenBP.Nodes.Core/    # core.* вузли
+  OpenBP.Mcp/           # MCP-клієнт (реєстр, mcp.tool) і MCP-сервер (/mcp)
+  OpenBP.Ai/            # ai.llm
+  OpenBP.Data/          # EF Core, міграції, PostgresExecutionStore, JobQueue
+  OpenBP.Api/           # REST, auth, SSE, /mcp, webhook, Quartz
+  OpenBP.Worker/        # виконання jobs
+  OpenBP.Cli/           # openbp run file.json
+tests/                  # по проєкту на кожен src/*
+apps/web/               # Angular SPA
+tools/connector-template/
+examples/
 docs/
 ```
 
 ## Команди
 
-- `pnpm install`
-- `pnpm dev` — усі застосунки в dev-режимі
-- `pnpm test` — усі тести
-- `pnpm lint && pnpm typecheck` — запускати перед кожним завершенням задачі
-- `docker compose up -d postgres redis` — інфраструктура для локальної розробки
-- `pnpm --filter @openbp/db migrate` — міграції
+- `dotnet build -warnaserror` · `dotnet test` · `dotnet format --verify-no-changes`
+- `cd apps/web && npm ci && npm run lint && npm test && npm run build`
+- `docker compose up -d postgres` · `dotnet ef database update --project src/OpenBP.Data`
+- `dotnet run --project src/OpenBP.Cli -- run examples/telegram-1c.json`
 
 ## Правила
 
-1. `packages/engine` не знає про БД, HTTP чи Redis. Усе зовнішнє — через інтерфейси (`ExecutionStore`, `CredentialProvider`, `Logger`), які передаються ззовні. Так двигун тестується без інфраструктури.
-2. Формат workflow описаний у `docs/workflow-format.md` і продубльований zod-схемою в `packages/shared`. Змінюєш формат — оновлюй обидва місця і додавай міграцію версії формату.
-3. Кожен вузол: опис (схема параметрів) + `execute()` + тести. Без тестів вузол не вважається готовим.
-4. Користувацький код (Code-вузол, вирази `{{ }}`) виконується ТІЛЬКИ в пісочниці QuickJS з лімітами часу і пам'яті. Ніяких `eval`, `new Function`, `vm` у Node.
-5. Секрети (credentials) шифруються AES-256-GCM, ключ — зі змінної `OPENBP_ENCRYPTION_KEY`. Секрети ніколи не потрапляють у логи, журнал виконань чи відповіді API.
-6. Код n8n не копіюємо (ліцензія Sustainable Use). Ідеї й UX — можна. Код з Activepieces (MIT) — можна, з атрибуцією в `THIRD_PARTY_NOTICES.md`.
-7. Інтерфейс — українською за замовчуванням, тексти через i18n-ключі (щоб пізніше додати англійську).
-8. Одна задача — один невеликий PR/коміт з осмисленим повідомленням. Не роби рефакторинг «заодно».
-9. Якщо специфікація в `docs/` суперечить сама собі або чогось бракує — зупинись і запитай, а не вигадуй.
+1. `OpenBP.Engine` не знає про БД, HTTP, MCP чи Jint напряму — тільки інтерфейси з `architecture.md` §2. Движок тестується без інфраструктури.
+2. Формат workflow описаний у `docs/workflow-format.md` і продубльований JSON Schema у `OpenBP.Shared`. Змінюєш формат — оновлюй обидва і додавай міграцію версії формату. Зміна формату — задача `fable`, не нічна.
+3. Інтеграції — **тільки через MCP**. Не додавай вузлів `telegram.*`, `sheets.*` тощо в код; потрібна система — MCP-сервер за Connector Kit.
+4. REST, UI і MCP-сервер викликають один application-шар. Жодної логіки «тільки для ШІ».
+5. Користувацький код і вирази виконуються **тільки** в Jint з лімітами. Ніяких `Process.Start`, `Assembly.Load`, CLR-interop з пісочниці.
+6. Credentials шифруються AES-256-GCM, ключ з `OPENBP_ENCRYPTION_KEY`. Секрети ніколи не потрапляють у логи, `execution_steps`, відповіді API/MCP/SSE. Є scrubbing — див. `architecture.md` §8.
+7. Код n8n не копіюємо (Sustainable Use). Ідеї та UX — можна. Будь-яке запозичення коду — тільки MIT/Apache/BSD з записом у `THIRD_PARTY_NOTICES.md`.
+8. Інтерфейс українською за замовчуванням; тексти через i18n-ключі.
+9. Одна задача з `BACKLOG.md` — один PR. Без рефакторингів «заодно». Межі задачі — її DoD.
+10. Специфікація суперечлива або чогось бракує — зупинись, постав статус `blocked` з питанням, не вигадуй.
+11. Кожен вузол: Descriptor зі схемою + `ExecuteAsync` + тести на успіх і помилку. Без тестів вузол не готовий.
+12. Версії пакетів — у `Directory.Packages.props` / `package.json`; оновлення — окрема задача M-01.
 
 ## Визначення «готово» для будь-якої задачі
 
-- код проходить `pnpm lint`, `pnpm typecheck`, `pnpm test`
-- нова поведінка покрита тестами
-- якщо змінено контракт чи формат — оновлено `docs/`
-- у `docs/roadmap.md` позначено виконаний пункт
+- `dotnet build -warnaserror`, `dotnet test`, `dotnet format --verify-no-changes` зелені
+- для frontend-задач: `npm run lint`, `npm test`, `npm run build` зелені
+- нова поведінка покрита тестами; DoD задачі з `BACKLOG.md` виконано пункт за пунктом
+- змінено контракт/формат → оновлено `docs/`
+- статус задачі у `BACKLOG.md` оновлено; PR за шаблоном
