@@ -16,7 +16,7 @@
 ## Фаза 0 — Фундамент
 
 ### F0-01 · Скелет .NET-рішення
-- model: `sonnet` · status: `blocked середовище нічного агента без .NET SDK і доступу до nuget.org — build/test не перевірено; потрібен прогін локально або в CI; draft #2` · depends: —
+- model: `sonnet` · status: `review #2` · depends: —
 - Що: `OpenBP.sln`; проєкти з `docs/architecture.md` §1 (`src/*`, `tests/*`), `Directory.Build.props` (net10.0, nullable, warnings as errors, `TreatWarningsAsErrors`), `Directory.Packages.props` (central package management), `.editorconfig`, `global.json`.
 - DoD: `dotnet build` і `dotnet test` зелені (по одному smoke-тесту на тест-проєкт); README має секцію «Запуск».
 
