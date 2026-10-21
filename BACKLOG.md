@@ -26,7 +26,7 @@
 - DoD: `npm ci && npm run build && npm test` зелені; сторінка `/workflows` показує заголовок українською; i18n через `@angular/localize` з `uk` за замовчуванням.
 
 ### F0-03 · Docker Compose для розробки
-- model: `sonnet` · status: `in-progress agent/F0-03-docker-compose` · depends: F0-01
+- model: `sonnet` · status: `review #5` · depends: F0-01
 - Що: `docker-compose.yml`: `postgres:16` з healthcheck і volume; `.env.example` з `OPENBP_ENCRYPTION_KEY`, `ConnectionStrings__Default`; `make`/`just`-файл або `scripts/dev.sh` з командами `up`, `migrate`, `test`.
 - DoD: `docker compose up -d postgres` піднімає БД; `dotnet test` з Testcontainers проходить локально.
 

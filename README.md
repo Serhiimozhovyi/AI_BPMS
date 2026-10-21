@@ -22,5 +22,17 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
+### База даних для розробки
+
+Потрібен Docker з Compose v2.
+
+```bash
+cp .env.example .env              # і задайте OPENBP_ENCRYPTION_KEY: openssl rand -base64 32
+scripts/dev.sh up                 # postgres:16 з healthcheck і volume
+scripts/dev.sh migrate            # EF Core міграції (з'являться у F2-A)
+scripts/dev.sh test               # dotnet test; тести OpenBP.Data самі піднімають postgres:16 через Testcontainers
+scripts/dev.sh down
+```
+
 Структура: `src/*` — проєкти з [docs/architecture.md](docs/architecture.md) §1, `tests/*` — xUnit-проєкт на кожен `src/*`.
 Версії NuGet-пакетів — централізовано в `Directory.Packages.props`; спільні налаштування збірки — у `Directory.Build.props`.
