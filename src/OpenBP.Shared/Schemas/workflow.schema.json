@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbp.dev/schemas/workflow-format/1.json",
+  "title": "OpenBP workflow (formatVersion 1)",
+  "description": "Формат сценарію OpenBP. Джерело правди — docs/workflow-format.md. Невідомі поля дозволені й зберігаються.",
+  "type": "object",
+  "required": ["formatVersion", "name", "settings", "nodes", "connections", "pinData"],
+  "properties": {
+    "formatVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "settings": { "$ref": "#/$defs/settings" },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "connections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/connection" }
+    },
+    "pinData": {
+      "type": "object",
+      "description": "id вузла → items для ручного тестового запуску.",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/item" }
+      }
+    }
+  },
+  "$defs": {
+    "settings": {
+      "type": "object",
+      "required": ["timezone", "executionTimeoutSec", "errorWorkflowId", "saveSuccessfulData"],
+      "properties": {
+        "timezone": { "type": "string", "minLength": 1 },
+        "executionTimeoutSec": { "type": "integer", "minimum": 0 },
+        "errorWorkflowId": { "type": ["string", "null"] },
+        "saveSuccessfulData": { "type": "boolean" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "name", "type", "typeVersion", "position", "parameters"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$",
+          "description": "<пакет>.<вузол>, напр. core.if, mcp.tool, ai.llm"
+        },
+        "typeVersion": { "type": "integer", "minimum": 1 },
+        "position": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "parameters": { "type": "object" },
+        "timeoutSec": { "type": "integer", "minimum": 1 },
+        "retry": { "$ref": "#/$defs/retry" },
+        "continueOnFail": { "type": "boolean" },
+        "disabled": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "required": ["maxTries", "waitMs"],
+      "properties": {
+        "maxTries": { "type": "integer", "minimum": 1 },
+        "waitMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": {
+          "type": "object",
+          "required": ["node", "output"],
+          "properties": {
+            "node": { "type": "string", "minLength": 1 },
+            "output": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "to": {
+          "type": "object",
+          "required": ["node", "input"],
+          "properties": {
+            "node": { "type": "string", "minLength": 1 },
+            "input": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["json"],
+      "properties": {
+        "json": { "type": "object" },
+        "binary": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/binaryRef" }
+        }
+      }
+    },
+    "binaryRef": {
+      "type": "object",
+      "required": ["id", "mimeType"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "mimeType": { "type": "string", "minLength": 1 },
+        "fileName": { "type": "string" },
+        "fileExtension": { "type": "string" },
+        "fileSize": { "type": "integer", "minimum": 0 },
+        "storage": { "type": "string", "enum": ["local", "s3"] },
+        "directory": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}
