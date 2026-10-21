@@ -1,0 +1,13 @@
+<mat-toolbar class="gap-2">
+  <span class="mr-4 font-semibold" i18n="@@app.brand">OpenBP</span>
+  <nav class="flex gap-1" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+    <a mat-button routerLink="/workflows" routerLinkActive="active" i18n="@@nav.workflows">Сценарії</a>
+    <a mat-button routerLink="/executions" routerLinkActive="active" i18n="@@nav.executions">Виконання</a>
+    <a mat-button routerLink="/connectors" routerLinkActive="active" i18n="@@nav.connectors">Конектори</a>
+    <a mat-button routerLink="/credentials" routerLinkActive="active" i18n="@@nav.credentials">Облікові дані</a>
+    <a mat-button routerLink="/settings" routerLinkActive="active" i18n="@@nav.settings">Налаштування</a>
+  </nav>
+</mat-toolbar>
+<main>
+  <router-outlet />
+</main>

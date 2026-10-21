@@ -21,7 +21,7 @@
 - DoD: `dotnet build` і `dotnet test` зелені (по одному smoke-тесту на тест-проєкт); README має секцію «Запуск».
 
 ### F0-02 · Скелет Angular
-- model: `sonnet` · status: `in-progress agent/F0-02-angular-skeleton` · depends: —
+- model: `sonnet` · status: `review #3` · depends: —
 - Що: `apps/web` на Angular (поточна stable), standalone, роутинг з шістьма маршрутами з `architecture.md` §7 і заглушками-сторінками, Angular Material + Tailwind, ESLint, Vitest.
 - DoD: `npm ci && npm run build && npm test` зелені; сторінка `/workflows` показує заголовок українською; i18n через `@angular/localize` з `uk` за замовчуванням.
 
