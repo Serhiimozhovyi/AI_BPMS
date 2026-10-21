@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../OpenBP.Shared/OpenBP.Shared.csproj" />
+  </ItemGroup>
+
+</Project>
