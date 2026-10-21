@@ -16,12 +16,12 @@
 ## Фаза 0 — Фундамент
 
 ### F0-01 · Скелет .NET-рішення
-- model: `sonnet` · status: `review #2` · depends: —
+- model: `sonnet` · status: `done` · depends: —
 - Що: `OpenBP.sln`; проєкти з `docs/architecture.md` §1 (`src/*`, `tests/*`), `Directory.Build.props` (net10.0, nullable, warnings as errors, `TreatWarningsAsErrors`), `Directory.Packages.props` (central package management), `.editorconfig`, `global.json`.
 - DoD: `dotnet build` і `dotnet test` зелені (по одному smoke-тесту на тест-проєкт); README має секцію «Запуск».
 
 ### F0-02 · Скелет Angular
-- model: `sonnet` · status: `review #3` · depends: —
+- model: `sonnet` · status: `done` · depends: —
 - Що: `apps/web` на Angular (поточна stable), standalone, роутинг з шістьма маршрутами з `architecture.md` §7 і заглушками-сторінками, Angular Material + Tailwind, ESLint, Vitest.
 - DoD: `npm ci && npm run build && npm test` зелені; сторінка `/workflows` показує заголовок українською; i18n через `@angular/localize` з `uk` за замовчуванням.
 
