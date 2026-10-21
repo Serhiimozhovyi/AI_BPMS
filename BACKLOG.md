@@ -31,7 +31,7 @@
 - DoD: `docker compose up -d postgres` піднімає БД; `dotnet test` з Testcontainers проходить локально.
 
 ### F0-04 · CI на GitHub Actions
-- model: `sonnet` · status: `ready` · depends: F0-01, F0-02
+- model: `sonnet` · status: `in-progress agent/F0-04-ci` · depends: F0-01, F0-02
 - Що: `.github/workflows/ci.yml`: build + test .NET, build + test Angular, кешування, запуск на PR і push у `main`; бейдж у README.
 - DoD: CI зелений на PR з цієї гілки.
 
