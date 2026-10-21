@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>openbp</AssemblyName>
+    <RootNamespace>OpenBP.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OpenBP.Engine.Testing/OpenBP.Engine.Testing.csproj" />
+    <ProjectReference Include="../OpenBP.Mcp/OpenBP.Mcp.csproj" />
+    <ProjectReference Include="../OpenBP.Nodes.Core/OpenBP.Nodes.Core.csproj" />
+    <ProjectReference Include="../OpenBP.Expressions/OpenBP.Expressions.csproj" />
+    <ProjectReference Include="../OpenBP.Ai/OpenBP.Ai.csproj" />
+  </ItemGroup>
+
+</Project>

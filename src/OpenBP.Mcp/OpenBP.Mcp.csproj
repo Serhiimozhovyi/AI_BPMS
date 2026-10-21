@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../OpenBP.Engine/OpenBP.Engine.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -13,4 +13,14 @@ MCP-native BPMS-конструктор: процеси на канвасі, ін
 
 ## Запуск
 
-Зʼявиться після задачі F0-01.
+Потрібен .NET SDK 10 (версія зафіксована в `global.json`).
+
+```bash
+dotnet restore
+dotnet build -warnaserror
+dotnet test
+dotnet format --verify-no-changes
+```
+
+Структура: `src/*` — проєкти з [docs/architecture.md](docs/architecture.md) §1, `tests/*` — xUnit-проєкт на кожен `src/*`.
+Версії NuGet-пакетів — централізовано в `Directory.Packages.props`; спільні налаштування збірки — у `Directory.Build.props`.
