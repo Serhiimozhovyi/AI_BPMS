@@ -1,5 +1,7 @@
 # OpenBP
 
+[![CI](https://github.com/Serhiimozhovyi/OpenBP_builder/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Serhiimozhovyi/OpenBP_builder/actions/workflows/ci.yml)
+
 MCP-native BPMS-конструктор: процеси на канвасі, інтеграції з будь-якими системами через Model Context Protocol, сам OpenBP — MCP-сервер для Claude/GPT/власних агентів. Self-hosted, .NET + Angular.
 
 - Що будуємо: [docs/PRD.md](docs/PRD.md)
