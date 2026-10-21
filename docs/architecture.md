@@ -1,75 +1,135 @@
-# Архітектура OpenBP_builder
+# Архітектура OpenBP
+
+Версія 0.2 (.NET + Angular, MCP-native). Рішення: [ADR-001](adr/ADR-001-stack.md), [ADR-002](adr/ADR-002-mcp-native.md).
 
 ## 1. Компоненти
 
 ```
-            ┌────────────┐   REST/WS    ┌────────────┐
- Браузер ──►│  apps/web  │─────────────►│  apps/api  │◄── зовнішні webhook-и
-            └────────────┘              └─────┬──────┘
-                                              │ ставить job у чергу
-                                              ▼
-                     ┌──────────┐      ┌────────────┐
-                     │ Postgres │◄────►│   Redis    │
-                     └────▲─────┘      │  (BullMQ)  │
-                          │            └─────┬──────┘
-                          │                  │ бере job
-                          │            ┌─────▼──────┐
-                          └────────────┤ apps/worker│── packages/engine + packages/nodes
-                                       └────────────┘
+ Claude Desktop / Claude Code / ChatGPT / власний агент
+                   │  MCP (Streamable HTTP)  /mcp
+                   ▼
+ ┌──────────┐ REST+SSE ┌─────────────────────────────┐   webhook-и ззовні
+ │ apps/web │─────────►│        apps/api             │◄──────────────────
+ │ Angular  │          │ REST · /mcp сервер · SSE    │
+ └──────────┘          │ тригери · Quartz (cron)     │
+                       └──────────┬──────────────────┘
+                                  │ INSERT jobs
+                                  ▼
+                         ┌─────────────────┐
+                         │   PostgreSQL    │  workflows, executions, steps,
+                         │  jobs (SKIP     │  credentials, mcp_servers, jobs
+                         │   LOCKED)       │
+                         └────────▲────────┘
+                                  │ claim job / save step
+                       ┌──────────┴──────────────────┐
+                       │       apps/worker           │
+                       │ OpenBP.Engine + Nodes.Core  │
+                       │ MCP-клієнт (tools/call)     │──► MCP-сервери: 1С, Telegram,
+                       │ Jint (вирази, Code)         │    пошта, Jira, CRM, будь-що
+                       │ ai.llm (Claude/OpenAI)      │
+                       └─────────────────────────────┘
 ```
 
-- **apps/api** — CRUD сценаріїв і credentials, запуск, журнал, авторизація; приймає webhook-и (`/webhook/:path`); реєструє розклади (BullMQ repeatable jobs).
-- **apps/worker** — бере job `execute-workflow`, завантажує сценарій, запускає `engine`, пише результат кожного кроку в БД.
-- **apps/web** — SPA: список сценаріїв, канвас, журнал, credentials, налаштування. Живе оновлення тестового запуску — через WebSocket (або SSE) з api.
-- **packages/engine** — чиста бібліотека виконання графа.
+| Проєкт | Відповідальність |
+|---|---|
+| `src/OpenBP.Shared` | DTO, JSON-схема і валідатор формату workflow, помилки |
+| `src/OpenBP.Engine` | чиста бібліотека виконання графа; не знає про БД, HTTP, MCP — тільки інтерфейси |
+| `src/OpenBP.Nodes.Core` | `core.*` вузли: тригери і логіка |
+| `src/OpenBP.Mcp` | MCP-клієнт (реєстр серверів, discovery, `mcp.tool`) і MCP-сервер (`/mcp`) |
+| `src/OpenBP.Ai` | `ai.llm` — абстракція над провайдерами, structured output |
+| `src/OpenBP.Data` | EF Core: сутності, міграції, `PostgresExecutionStore`, `JobQueue` |
+| `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
+| `src/OpenBP.Worker` | хост: бере job, виконує через Engine, пише кроки |
+| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести) |
+| `apps/web` | Angular SPA: список, канвас, журнал, конектори, credentials |
+| `tests/*` | xUnit на кожен src-проєкт; Testcontainers для Data/Api |
+| `tools/connector-template` | Connector Kit — шаблон MCP-сервера над REST/OData |
 
-## 2. Модель виконання (як у n8n, але своя реалізація)
+## 2. Модель виконання
 
-- Дані між вузлами — масив **items**: `Array<{ json: Record<string, unknown>; binary?: Record<string, BinaryRef> }>`.
-- Вузол отримує items з кожного вхідного порту, повертає items на кожен вихідний порт (`outputs: Item[][]`). IF має 2 виходи (true/false), Switch — N.
-- Виконання — **черга готових вузлів** (а не рекурсія): вузол стає готовим, коли на всіх його обов'язкових входах є дані (Merge чекає обидва входи; інші вузли — будь-який).
-- Вузол з порожнім входом за замовчуванням не виконується (гілка «згасає»), крім вузлів з `alwaysRun: true`.
-- Після кожного вузла двигун викликає `store.saveStep(...)` — стан можна відновити і продовжити після падіння воркера.
-- Помилка вузла: retry за налаштуваннями вузла → якщо не вдалось і `continueOnFail` — помилка йде як item на вихід; інакше виконання падає і запускається error-workflow.
+- Дані між вузлами — масив **items**: `Item { JsonObject Json; Dictionary<string, BinaryRef>? Binary }`.
+- Вузол отримує items з кожного вхідного порту, повертає `Item[][]` — по масиву на кожен вихідний порт. IF — 2 виходи, Switch — N.
+- Виконання — **черга готових вузлів**, не рекурсія. Вузол готовий, коли на всіх обов'язкових входах є дані (Merge чекає всі входи; решта — будь-який).
+- Порожній вхід → вузол не виконується (гілка згасає), крім `alwaysRun: true`.
+- Після кожного вузла — `IExecutionStore.SaveStepAsync(...)`. Воркер при старті підбирає `running`-виконання без heartbeat і продовжує з останнього збереженого кроку.
+- Помилка вузла: retry за налаштуваннями → якщо `continueOnFail` — помилка стає item на виході `error`; інакше виконання `error` і старт error-workflow.
+- `CancellationToken` прокидається у кожен вузол; скасування з UI/API і таймаути працюють через нього.
 
-## 3. Вирази
+### Інтерфейси Engine (все зовнішнє — тільки через них)
 
-- Синтаксис: `{{ <js-вираз> }}` у будь-якому рядковому параметрі.
-- Доступні змінні: `$json` (поточний item), `$input`, `$node["Назва"].json`, `$now`, `$env` (тільки дозволені змінні), `$execution.id`.
-- Обчислення — у `packages/expressions` через QuickJS, ліміт 50 мс і 16 МБ на вираз.
+```csharp
+public interface IExecutionStore   { Task SaveStepAsync(StepRecord s, CancellationToken ct); Task<ExecutionSnapshot?> LoadAsync(Guid id, CancellationToken ct); }
+public interface ICredentialProvider { Task<JsonObject> GetAsync(string credentialId, CancellationToken ct); }
+public interface INodeRegistry      { INode Resolve(string type, int typeVersion); }
+public interface IExpressionEvaluator { JsonNode? Evaluate(string expr, ExpressionScope scope); }
+public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string message, object? data = null); }
+```
 
-## 4. Схема БД (Drizzle, Postgres)
+`InMemoryExecutionStore` і `FakeCredentialProvider` живуть у `OpenBP.Engine.Testing` і використовуються CLI та тестами.
+
+## 3. MCP-клієнт (Universal MCP node)
+
+- Таблиця `mcp_servers`: id, name, transport (`stdio` | `http`), config (jsonb: command/args або url), credential_id, status, tools_cache (jsonb), tools_cached_at.
+- `McpServerRegistry` (в Api і Worker) тримає пул сесій; stdio-сервери запускаються як дочірні процеси воркера з обмеженнями (timeout, max memory через cgroup у Docker).
+- Discovery: `tools/list` при реєстрації і за кнопкою «Оновити»; схеми зберігаються в `tools_cache`, щоб канвас будував форми без живого з'єднання.
+- Вузол `mcp.tool` (див. [connectors.md](connectors.md)): параметри `serverId`, `toolName`, `arguments` (object за `inputSchema`, рядки можуть бути `{{ }}`). Результат: якщо є `structuredContent` — один item з ним; інакше по item на кожен `content`-блок (`text` → `{ text }`, `resource` → binary).
+- Polling-тригер `mcp.poll`: викликає tool за розкладом, порівнює з `nodeState` за ключовим полем, віддає лише нові записи.
+
+## 4. MCP-сервер (`/mcp`)
+
+Реалізація в `OpenBP.Mcp.Server`, хоститься в `apps/api`, транспорт Streamable HTTP. Tools і resources — за ADR-002. Кожен tool викликає **той самий application-шар**, що й REST (`WorkflowService`, `ExecutionService`) — жодної окремої логіки для ШІ. Авторизація: API-ключ користувача у заголовку; права ті ж, що у користувача.
+
+## 5. Вирази і Code-вузол
+
+- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$input`, `$node["Назва"].json`, `$now`, `$env` (лише дозволені), `$execution.id`.
+- Обчислення — Jint з лімітами: 50 мс, 16 МБ, глибина рекурсії 64, без `require`, без доступу до CLR. Code-вузол: ті ж обмеження, ліміт 5 с.
+
+## 6. Схема БД (EF Core, PostgreSQL)
 
 | Таблиця | Ключові поля |
 |---|---|
 | `users` | id, email, password_hash, role, created_at |
+| `api_keys` | id, user_id, hash, name, last_used_at |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
-| `credentials` | id, name, type, data_encrypted (bytea), iv, created_by |
-| `executions` | id, workflow_id, version_id, mode (manual/webhook/schedule/retry), status (queued/running/success/error/canceled), started_at, finished_at, error |
+| `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
+| `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at |
+| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at |
-| `webhooks` | id, workflow_id, node_id, method, path (унікальний) |
-| `schedules` | id, workflow_id, node_id, cron, timezone, bullmq_key |
+| `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
+| `webhooks` | id, workflow_id, node_id, method, path (unique) |
+| `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |
 
-Великі бінарні дані (файли) — не в jsonb, а у файлове сховище (локальна папка / S3-сумісне) з посиланням `BinaryRef`.
+Quartz тримає власні таблиці для розкладів. Бінарні дані — у файловому сховищі (локальна папка / S3-сумісне), в jsonb лише `BinaryRef`.
 
-## 5. Безпека
+## 7. Frontend (Angular)
 
-- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY`; розшифровка тільки у воркері в момент виконання вузла.
-- Code-вузол і вирази — тільки QuickJS, без доступу до файлової системи, мережі та процесу.
-- Webhook-и: опційна автентифікація (header-токен / Basic).
-- Ролі перевіряються на рівні API (не лише в UI).
+- Standalone-компоненти, Signals, роутинг: `/workflows`, `/workflows/:id` (канвас), `/executions`, `/connectors`, `/credentials`, `/settings`.
+- Канвас — обраний у спайку фази 2 (ngx-vflow або Rete.js); обгорнутий у власний компонент `CanvasComponent`, щоб бібліотеку можна було замінити.
+- Форма вузла — ngx-formly з JSON Schema; для `mcp.tool` схема береться з `tools_cache`.
+- Стан тестового запуску — SSE `/executions/{id}/events`.
+- Web-component `<openbp-canvas>` збирається з тієї ж кодової бази (Angular Elements) для вбудовування.
 
-## 6. Готові компоненти, які використовуємо
+## 8. Безпека
+
+- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка тільки у воркері в момент виконання.
+- Secret scrubbing: значення credentials, що потрапили у вихід вузла, замінюються на `***` перед записом у `execution_steps` і перед віддачею через SSE/MCP.
+- Jint: без CLR-interop, без мережі, з лімітами. stdio MCP-сервери — з таймаутами і лімітами пам'яті.
+- Webhook: опційна автентифікація (header-токен / Basic).
+- Ролі перевіряються в application-шарі, тобто однаково для REST, MCP і UI.
+
+## 9. Готові компоненти
 
 | Задача | Бібліотека | Ліцензія |
 |---|---|---|
-| Канвас | @xyflow/react | MIT |
-| Черга, розклади | bullmq | MIT |
-| Пісочниця | quickjs-emscripten | MIT |
-| Форми зі схеми | @rjsf/core | Apache-2.0 |
-| Редактор коду | monaco-editor | MIT |
-| UI | shadcn/ui, Tailwind | MIT |
-| ORM | drizzle-orm | Apache-2.0 |
-| Ідеї та код інтеграцій | Activepieces pieces | MIT (з атрибуцією) |
-| Ідеї UX | n8n | лише ідеї, без коду |
+| MCP клієнт/сервер | ModelContextProtocol (C# SDK) | MIT |
+| Пісочниця | Jint | BSD-2 |
+| Розклад | Quartz.NET | Apache-2.0 |
+| ORM | EF Core + Npgsql | MIT / PostgreSQL |
+| Валідація | FluentValidation | Apache-2.0 |
+| JSON Schema (валідація параметрів) | JsonSchema.Net | MIT |
+| Канвас | ngx-vflow або Rete.js | MIT |
+| Форми | ngx-formly | MIT |
+| Редактор | Monaco | MIT |
+| UI | Angular Material, Tailwind | MIT |
+| Тести | xUnit, Testcontainers, Playwright | Apache-2.0 / MIT |

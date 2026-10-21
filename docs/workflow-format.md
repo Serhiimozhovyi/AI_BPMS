@@ -1,14 +1,15 @@
 # Формат workflow JSON (formatVersion 1)
 
-Цей формат — джерело правди для двигуна, канвасу, імпорту/експорту і API.
-Його zod-схема живе в `packages/shared/src/workflow.ts`.
+Джерело правди для движка, канвасу, REST, MCP-сервера, імпорту/експорту.
+JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`; валідатор — `WorkflowValidator`.
+Та сама схема віддається через MCP-resource `openbp://schema/workflow-format`, щоб агенти писали сценарії правильно.
 
 ## Приклад
 
 ```json
 {
   "formatVersion": 1,
-  "name": "Нова заявка → Telegram",
+  "name": "Заявка з Telegram → 1С",
   "settings": {
     "timezone": "Europe/Kyiv",
     "executionTimeoutSec": 300,
@@ -22,43 +23,70 @@
       "type": "core.webhook",
       "typeVersion": 1,
       "position": [100, 200],
-      "parameters": { "method": "POST", "path": "new-request" }
+      "parameters": { "method": "POST", "path": "telegram-in" }
     },
     {
-      "id": "n_if",
-      "name": "Терміново?",
-      "type": "core.if",
+      "id": "n_llm",
+      "name": "Розібрати заявку",
+      "type": "ai.llm",
       "typeVersion": 1,
       "position": [360, 200],
       "parameters": {
-        "conditions": [
-          { "left": "{{ $json.body.priority }}", "operator": "equals", "right": "high" }
-        ]
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "credentialId": "cred_anthropic",
+        "prompt": "Витягни замовлення з тексту: {{ $json.body.message.text }}",
+        "outputSchema": {
+          "type": "object",
+          "required": ["customer", "lines"],
+          "properties": {
+            "customer": { "type": "string" },
+            "lines": { "type": "array", "items": { "type": "object",
+              "properties": { "sku": { "type": "string" }, "qty": { "type": "number" } } } }
+          }
+        }
       }
     },
     {
-      "id": "n_tg",
-      "name": "Повідомити в Telegram",
-      "type": "telegram.sendMessage",
+      "id": "n_1c",
+      "name": "1С: створити замовлення",
+      "type": "mcp.tool",
       "typeVersion": 1,
-      "position": [620, 120],
+      "position": [620, 200],
       "parameters": {
-        "chatId": "-100123456",
-        "text": "Термінова заявка №{{ $json.body.id }}"
+        "serverId": "srv_1c",
+        "toolName": "create_order",
+        "arguments": { "customer": "{{ $json.customer }}", "lines": "{{ $json.lines }}" }
       },
-      "credentials": { "telegramApi": "cred_01H..." },
+      "timeoutSec": 30,
       "retry": { "maxTries": 3, "waitMs": 2000 },
       "continueOnFail": false,
       "disabled": false,
       "notes": ""
+    },
+    {
+      "id": "n_reply",
+      "name": "Відповісти в Telegram",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [880, 200],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": {
+          "chat_id": "{{ $node[\"Нова заявка\"].json.body.message.chat.id }}",
+          "text": "Замовлення №{{ $json.number }} створено"
+        }
+      }
     }
   ],
   "connections": [
-    { "from": { "node": "n_webhook", "output": 0 }, "to": { "node": "n_if", "input": 0 } },
-    { "from": { "node": "n_if", "output": 0 }, "to": { "node": "n_tg", "input": 0 } }
+    { "from": { "node": "n_webhook", "output": 0 }, "to": { "node": "n_llm", "input": 0 } },
+    { "from": { "node": "n_llm", "output": 0 }, "to": { "node": "n_1c", "input": 0 } },
+    { "from": { "node": "n_1c", "output": 0 }, "to": { "node": "n_reply", "input": 0 } }
   ],
   "pinData": {
-    "n_webhook": [ { "json": { "body": { "id": 42, "priority": "high" } } } ]
+    "n_webhook": [ { "json": { "body": { "message": { "chat": { "id": 42 }, "text": "2 мішки добрива Петренку" } } } } ]
   }
 }
 ```
@@ -67,16 +95,20 @@
 
 - `id` вузла — стабільний, генерується при створенні, не змінюється при перейменуванні. Вирази посилаються на **назву** (`$node["Нова заявка"]`), тому при перейменуванні канвас оновлює вирази.
 - `name` унікальний у межах сценарію.
-- `type` — `<пакет>.<вузол>`, `typeVersion` — ціле число; старі версії вузлів підтримуються, поки є сценарії, що їх використовують.
-- `connections` — масив ребер; один вихід може мати кілька ребер (розгалуження), один вхід — кілька ребер (дані об'єднуються в порядку надходження).
-- Цикли в графі заборонені (валідатор перевіряє DAG). Ітерація — через вузол `core.loop`.
-- `pinData` використовується тільки в ручному тестовому запуску, у бойових виконаннях ігнорується.
-- Секретів у форматі немає: лише id credentials.
+- `type` — `<пакет>.<вузол>`: `core.*`, `mcp.tool`, `mcp.poll`, `ai.llm`. `typeVersion` — ціле; старі версії підтримуються, поки є сценарії, що їх використовують.
+- `connections` — масив ребер; один вихід → кілька ребер (розгалуження), один вхід ← кілька ребер (items об'єднуються в порядку надходження). Індекс виходу відповідає `Descriptor.Outputs`; у вузлів з `continueOnFail: true` з'являється додатковий останній вихід `error`.
+- Цикли заборонені (валідатор перевіряє DAG). Ітерація — через `core.loop`.
+- `pinData` використовується тільки в ручному тестовому запуску.
+- Секретів у форматі немає: лише `credentialId` і `serverId`. При імпорті в інше середовище посилання перемаплюються в UI.
+- `timeoutSec` на вузлі перекриває дефолт (30 с для `mcp.tool`, 60 с для `ai.llm`, без ліміту для логіки).
 
-## Валідація при збереженні
+## Валідація при збереженні (однакова для UI, REST і MCP `validate_workflow`)
 
-1. JSON відповідає zod-схемі.
+1. JSON відповідає схемі формату.
 2. Усі `connections` посилаються на існуючі вузли й порти.
 3. Граф без циклів.
-4. Рівно один або більше тригерів для активного сценарію.
-5. Параметри кожного вузла відповідають його схемі (з урахуванням того, що рядок `{{ }}` допустимий замість будь-якого типу).
+4. Активний сценарій має ≥ 1 тригер.
+5. Параметри кожного вузла відповідають його схемі (рядок `{{ }}` допустимий замість будь-якого типу). Для `mcp.tool` схема — `inputSchema` tool'а з кешу; якщо сервер невідомий або tool не знайдено — помилка з кодом `MCP_TOOL_UNKNOWN`.
+6. `serverId`/`credentialId` існують і доступні користувачу.
+
+Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.
