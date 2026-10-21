@@ -8,6 +8,10 @@
     <PackageVersion Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup Label="JSON Schema">
+    <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Тести">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

@@ -102,6 +102,29 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 - Секретів у форматі немає: лише `credentialId` і `serverId`. При імпорті в інше середовище посилання перемаплюються в UI.
 - `timeoutSec` на вузлі перекриває дефолт (30 с для `mcp.tool`, 60 с для `ai.llm`, без ліміту для логіки).
 
+## Обов'язкові поля
+
+- Сценарій: `formatVersion` (= 1), `name`, `settings`, `nodes`, `connections`, `pinData` (може бути `{}`).
+- `settings`: `timezone`, `executionTimeoutSec`, `errorWorkflowId` (`null`, якщо немає), `saveSuccessfulData`.
+- Вузол: `id`, `name`, `type`, `typeVersion` (≥ 1), `position` (`[x, y]`), `parameters` (об'єкт). Необов'язкові: `timeoutSec`, `retry` (`maxTries`, `waitMs`), `continueOnFail`, `disabled`, `notes`.
+- Ребро: `from.node` + `from.output`, `to.node` + `to.input` (індекси від 0).
+- Невідомі поля на будь-якому рівні дозволені й зберігаються при (де)серіалізації.
+
+## Item і BinaryRef
+
+Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байти файлу в item не потрапляють, лише посилання на файлове сховище:
+
+| Поле | Тип | Обов'язкове | Опис |
+|---|---|---|---|
+| `id` | string | так | ключ файлу у сховищі |
+| `mimeType` | string | так | напр. `application/pdf` |
+| `fileName` | string | ні | оригінальна назва |
+| `fileExtension` | string | ні | розширення без крапки |
+| `fileSize` | integer | ні | розмір у байтах |
+| `storage` | `local` \| `s3` | ні | провайдер сховища |
+| `directory` | string | ні | каталог / префікс у сховищі |
+| `sha256` | string | ні | хеш вмісту, hex у нижньому регістрі |
+
 ## Валідація при збереженні (однакова для UI, REST і MCP `validate_workflow`)
 
 1. JSON відповідає схемі формату.

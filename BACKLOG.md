@@ -45,7 +45,7 @@
 ## Фаза 1 — Движок + MCP-клієнт
 
 ### F1-01 · `OpenBP.Shared`: моделі формату і JSON Schema
-- model: `opus` · status: `ready` · depends: F0-01
+- model: `opus` · status: `done` · depends: F0-01
 - Що: C#-моделі `WorkflowDefinition`, `NodeDefinition`, `Connection`, `Item`, `BinaryRef` за `docs/workflow-format.md`; `Schemas/workflow.schema.json`; System.Text.Json (де)серіалізація зі збереженням невідомих полів.
 - DoD: round-trip тест прикладу з `workflow-format.md`; схема валідує приклад і відхиляє 5 зламаних варіантів.
 
