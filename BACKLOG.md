@@ -95,7 +95,7 @@
 - DoD: критерій фази 1 з `docs/roadmap.md` виконується командою з README.
 
 ### F1-12 · `itemsPath`: список записів у `structuredContent` для `mcp.poll`/`mcp.tool`
-- model: `fable` · status: `in-progress agent/F1-12-items-path` · depends: F1-09
+- model: `fable` · status: `review #24` · depends: F1-09
 - Що: tool, що повертає колекцію, віддає її як `{ "result": [ … ] }` — один item, і `mcp.poll` не може відфільтрувати нові записи. Необов'язковий параметр `itemsPath` (шлях у `structuredContent`) розгортає масив у item на елемент до `keyField`; без нього поведінка як раніше. Оновити `connectors.md` §2–3, схеми, тести.
 - DoD: тести проти FakeServer: poll зі списком віддає лише нові записи; `itemsPath` не масив / без `structuredContent` → помилка вузла; старі сценарії без `itemsPath` працюють як раніше.
 
