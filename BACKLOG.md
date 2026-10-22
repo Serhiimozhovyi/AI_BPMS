@@ -183,7 +183,7 @@
 - DoD: тести на Testcontainers: 8 паралельних споживачів × 200 задач — кожну взято рівно раз; `run_at` у майбутньому не береться; протухлий lock повертає задачу; повтор після `FailAsync`.
 
 ### F2-04 · Credentials: AES-256-GCM і secret scrubbing
-- model: `opus` · status: `in-progress agent/F2-04-credentials` · depends: F2-01
+- model: `opus` · status: `review #33` · depends: F2-01
 - Що: за `architecture.md` §8 і правилом 6 `CLAUDE.md`:
   - `CredentialStore` (шифрування `data_encrypted` + `nonce`, ключ з `OPENBP_ENCRYPTION_KEY`, 32 байти base64; без ключа — помилка старту);
   - `PostgresCredentialProvider : ICredentialProvider`;
