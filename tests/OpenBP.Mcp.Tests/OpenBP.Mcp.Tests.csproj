@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Mcp/OpenBP.Mcp.csproj" />
+    <ProjectReference Include="../../src/OpenBP.Engine.Testing/OpenBP.Engine.Testing.csproj" />
     <ProjectReference Include="FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>
 

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mcp.tool",
+  "type": "object",
+  "required": [
+    "serverId",
+    "toolName"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "serverId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toolName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "arguments": {
+      "type": "object"
+    }
+  }
+}
