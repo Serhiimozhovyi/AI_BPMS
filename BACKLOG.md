@@ -50,7 +50,7 @@
 - DoD: round-trip тест прикладу з `workflow-format.md`; схема валідує приклад і відхиляє 5 зламаних варіантів.
 
 ### F1-02 · `WorkflowValidator`
-- model: `opus` · status: `ready` · depends: F1-01
+- model: `opus` · status: `in-progress agent/F1-02-workflow-validator` · depends: F1-01
 - Що: правила 1–4 з `workflow-format.md` §«Валідація» (схема, порти, DAG, тригер) з кодами помилок `{ code, nodeId, path, message }`. Правила 5–6 — заглушка-інтерфейс `INodeSchemaProvider` (реалізується у F1-08).
 - DoD: тести на кожне правило; детерміноване визначення циклу з вказанням вузлів.
 
