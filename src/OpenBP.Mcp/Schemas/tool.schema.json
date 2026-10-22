@@ -18,6 +18,10 @@
     },
     "arguments": {
       "type": "object"
+    },
+    "itemsPath": {
+      "type": "string",
+      "minLength": 1
     }
   }
 }

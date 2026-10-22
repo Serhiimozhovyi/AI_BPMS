@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json.Nodes;
 using OpenBP.Engine.Nodes;
 using OpenBP.Mcp.Client;
@@ -9,7 +8,7 @@ namespace OpenBP.Mcp.Nodes;
 
 /// <summary>
 /// <c>mcp.poll</c> — polling-тригер (docs/connectors.md §3): викликає tool (результат → items так само, як у
-/// <c>mcp.tool</c>), бере ключ кожного item'а за шляхом <c>keyField</c> у <c>json</c> і віддає лише items з ключами,
+/// <c>mcp.tool</c>, зокрема <c>itemsPath</c> розгортає список записів зі <c>structuredContent</c>), бере ключ кожного item'а за шляхом <c>keyField</c> у <c>json</c> і віддає лише items з ключами,
 /// яких ще немає в <c>NodeState.seenKeys</c>. <c>seenKeys</c> — кільцевий буфер останніх <see cref="SeenKeysCapacity"/>
 /// ключів; движок зберігає стан після успішного запуску. Розклад (<c>cron</c>) реєструє хост, вузол його не читає.
 /// </summary>
@@ -68,7 +67,7 @@ public sealed class McpPollNode : INode
         var fresh = new List<Item>();
         foreach (var item in items)
         {
-            var key = Resolve(item.Json, p.KeyField)
+            var key = McpToolInvoker.ResolvePath(item.Json, p.KeyField)
                 ?? throw new McpToolException(
                     $"Вузол «{ctx.Node.Name}»: у записі немає ключового поля «{p.KeyField}» (або воно null).");
             if (known.Add(KeyText(key)))
@@ -88,27 +87,6 @@ public sealed class McpPollNode : INode
         ctx.NodeState = state;
 
         return [[.. fresh]];
-    }
-
-    /// <summary>Значення за шляхом через крапку (<c>order.id</c>, <c>lines.0.sku</c>); <c>null</c>, якщо його немає.</summary>
-    private static JsonNode? Resolve(JsonNode? node, string path)
-    {
-        foreach (var segment in path.Split('.'))
-        {
-            node = node switch
-            {
-                JsonObject obj => obj[segment],
-                JsonArray array when int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var i) && i < array.Count => array[i],
-                _ => null,
-            };
-
-            if (node is null)
-            {
-                return null;
-            }
-        }
-
-        return node;
     }
 
     /// <summary>Канонічний текст ключа: <c>1</c> і <c>"1"</c> — різні ключі.</summary>

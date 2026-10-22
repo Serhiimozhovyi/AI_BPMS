@@ -10,7 +10,8 @@ namespace OpenBP.Mcp.Nodes;
 /// <summary>
 /// <c>mcp.tool</c> — виклик tool'а MCP-сервера для кожного item'а (docs/connectors.md §2).
 /// Аргументи — обчислені <c>arguments</c> (поля-вирази приводяться до типів з <c>inputSchema</c>);
-/// результат: <c>structuredContent</c> → один item, інакше по item на <c>content</c>-блок.
+/// результат: <c>structuredContent</c> → один item (або item на елемент масиву за <c>itemsPath</c>),
+/// інакше по item на <c>content</c>-блок.
 /// <c>isError: true</c> → <see cref="McpToolException"/>; недоступність і таймаут (<c>timeoutSec</c>, за замовчуванням
 /// <see cref="DefaultTimeout"/>) → <see cref="McpUnavailableException"/>.
 /// </summary>

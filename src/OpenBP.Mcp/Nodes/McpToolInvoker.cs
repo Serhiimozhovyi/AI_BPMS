@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -55,7 +56,8 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
                 $"Tool «{toolName}» на сервері «{serverName}» повернув помилку{(details.Length == 0 ? "." : $": {details}")}");
         }
 
-        return await ToItemsAsync(ctx, result, ct).ConfigureAwait(false);
+        var itemsPath = string.IsNullOrWhiteSpace(p.ItemsPath) ? null : p.ItemsPath;
+        return await ToItemsAsync(ctx, result, itemsPath, toolName, ct).ConfigureAwait(false);
     }
 
     /// <summary>Таймаут вузла: <c>timeoutSec</c> або <see cref="McpToolNode.DefaultTimeout"/>.</summary>
@@ -119,12 +121,19 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
         }
     }
 
-    private static async Task<List<Item>> ToItemsAsync(INodeContext ctx, CallToolResult result, CancellationToken ct)
+    private static async Task<List<Item>> ToItemsAsync(INodeContext ctx, CallToolResult result, string? itemsPath, string toolName, CancellationToken ct)
     {
         if (result.StructuredContent is { } structured)
         {
-            var json = JsonSerializer.SerializeToNode(structured, WorkflowJson.Options);
-            return [new Item { Json = json as JsonObject ?? new JsonObject { ["result"] = json } }];
+            // Не-об'єкт (SDK віддає колекцію як голий масив) загортається у { "result": … } — так і в item, і для itemsPath.
+            var json = JsonSerializer.SerializeToNode(structured, WorkflowJson.Options) as JsonObject
+                ?? new JsonObject { ["result"] = JsonSerializer.SerializeToNode(structured, WorkflowJson.Options) };
+            return itemsPath is null ? [new Item { Json = json }] : Expand(json, itemsPath, toolName);
+        }
+
+        if (itemsPath is not null)
+        {
+            throw new McpToolException($"Tool «{toolName}» не повернув structuredContent, тож itemsPath «{itemsPath}» нема до чого застосувати.");
         }
 
         var items = new List<Item>(result.Content.Count);
@@ -167,6 +176,46 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
         }
     }
 
+    /// <summary>
+    /// Розгортає масив за <paramref name="itemsPath"/> у <c>structuredContent</c> в item на елемент:
+    /// об'єкт → <c>json</c> як є, інше (рядок, число, масив) → <c>{ "value": … }</c>.
+    /// </summary>
+    private static List<Item> Expand(JsonObject structured, string itemsPath, string toolName)
+    {
+        var node = ResolvePath(structured, itemsPath);
+        if (node is not JsonArray array)
+        {
+            throw new McpToolException(
+                $"Tool «{toolName}»: за itemsPath «{itemsPath}» очікувався масив, а знайдено {(node is null ? "нічого" : node.GetValueKind().ToString())}.");
+        }
+
+        return [.. array.Select(element => new Item
+        {
+            Json = element?.DeepClone() is JsonObject obj ? obj : new JsonObject { ["value"] = element?.DeepClone() },
+        })];
+    }
+
+    /// <summary>Значення за шляхом через крапку (<c>order.id</c>, <c>lines.0.sku</c>); <c>null</c>, якщо його немає.</summary>
+    public static JsonNode? ResolvePath(JsonNode? node, string path)
+    {
+        foreach (var segment in path.Split('.'))
+        {
+            node = node switch
+            {
+                JsonObject obj => obj[segment],
+                JsonArray array when int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var i) && i < array.Count => array[i],
+                _ => null,
+            };
+
+            if (node is null)
+            {
+                return null;
+            }
+        }
+
+        return node;
+    }
+
     private static async Task<Item> BinaryItemAsync(
         INodeContext ctx, string type, ReadOnlyMemory<byte> data, string? mimeType, string? uri, string? fileName, CancellationToken ct)
     {
@@ -204,4 +253,7 @@ internal class McpCallParameters
     public string ToolName { get; set; } = "";
 
     public JsonNode? Arguments { get; set; }
+
+    /// <summary>Шлях до масиву записів у <c>structuredContent</c>; <c>null</c> — вся відповідь один item.</summary>
+    public string? ItemsPath { get; set; }
 }

@@ -91,6 +91,10 @@ public static class FakeTools
     [McpServerTool(Name = "order", UseStructuredContent = true), Description("Повертає замовлення з id.")]
     public static OrderResult Order(int id, string? customer = null) => new(new OrderInfo(id, customer ?? "ТОВ Агро"));
 
+    /// <summary>Список замовлень як structuredContent (SDK загортає колекцію в <c>{ "result": [ … ] }</c>).</summary>
+    [McpServerTool(Name = "orders", UseStructuredContent = true), Description("Повертає замовлення з переданими id.")]
+    public static IReadOnlyList<OrderInfo> Orders(int[] ids) => [.. ids.Select(id => new OrderInfo(id, $"Клієнт {id}"))];
+
     /// <summary>Картинка 1×1 як image-блок.</summary>
     [McpServerTool(Name = "pixel"), Description("Повертає PNG-картинку.")]
     public static ImageContentBlock Pixel() => ImageContentBlock.FromBytes(PixelBytes, "image/png");
