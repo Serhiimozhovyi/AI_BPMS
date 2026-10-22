@@ -26,7 +26,7 @@ dotnet format --verify-no-changes
 
 ### Запуск сценарію з CLI
 
-`openbp run <file.json> [--pin] [--servers servers.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
+`openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
 Приклад «Заявка з Telegram → 1С» з [docs/workflow-format.md](docs/workflow-format.md) проти мок-MCP-серверів 1С і Telegram:
 
 ```bash
@@ -37,9 +37,24 @@ dotnet run --project src/OpenBP.Cli -- run examples/telegram-1c.json --pin --ser
 - `--pin` — ручний тестовий запуск: вузли з `pinData` не виконуються, їхній вихід — закріплені items.
 - `--servers` — MCP-сервери для `serverId` вузлів `mcp.*`; моки 1С і Telegram — `tests/OpenBP.Mcp.Tests/FakeServer` з `--mock 1c|telegram`
   (стартують через `dotnet run --no-build`, тому спершу `dotnet build`).
-- `core.webhook` (F2-D) і `ai.llm` (F3-B) поки не реалізовані: CLI підставляє заглушки, які працюють лише з `pinData`.
+- `--credentials` — JSON `{ "<credentialId>": { … } }` з даними credentials для вузлів (зараз `ai.llm`). Без шифрування, лише для dev: бойові ключі в такий файл і в репо не кладіть.
+- `core.webhook` (F2-D) поки не реалізований: CLI підставляє заглушку, яка працює лише з `pinData`.
   Коли справжній вузол з'явиться, заглушка перестає реєструватись сама.
 - Коди виходу: `0` — успіх, `1` — виконання завершилось помилкою/скасуванням/таймаутом, `2` — помилка аргументів, файлу чи сценарію.
+
+#### Прогін з локальною Ollama (вручну, не в CI)
+
+`examples/telegram-1c-ollama.json` — той самий сценарій, але вузол `ai.llm` справді викликає модель (`openai-compatible`, без `pinData` для `n_llm`).
+
+```bash
+ollama pull qwen2.5:7b && ollama serve   # OpenAI-сумісний API: http://localhost:11434/v1
+dotnet build
+dotnet run --project src/OpenBP.Cli -- run examples/telegram-1c-ollama.json --pin \
+  --servers examples/servers.json --credentials examples/credentials.ollama.json
+```
+
+Іншу модель задайте в параметрі `model` вузла `n_llm`; для хмарного OpenAI-сумісного API додайте `apiKey` у свій (не комітьте!) файл credentials.
+Якщо модель повільна, збільште `timeoutSec` вузла (за замовчуванням 60 с; у прикладі 120 с).
 
 ### База даних для розробки
 

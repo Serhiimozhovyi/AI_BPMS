@@ -1,0 +1,162 @@
+{
+  "formatVersion": 1,
+  "name": "Заявка з Telegram → Ollama → 1С",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 300,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_webhook",
+      "name": "Нова заявка",
+      "type": "core.webhook",
+      "typeVersion": 1,
+      "position": [
+        100,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "path": "telegram-in"
+      }
+    },
+    {
+      "id": "n_llm",
+      "name": "Розібрати заявку",
+      "type": "ai.llm",
+      "typeVersion": 1,
+      "position": [
+        360,
+        200
+      ],
+      "parameters": {
+        "provider": "openai-compatible",
+        "model": "qwen2.5:7b",
+        "credentialId": "cred_ollama",
+        "prompt": "Витягни замовлення з тексту: {{ $json.body.message.text }}",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "customer",
+            "lines"
+          ],
+          "properties": {
+            "customer": {
+              "type": "string"
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sku": {
+                    "type": "string"
+                  },
+                  "qty": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "temperature": 0
+      },
+      "timeoutSec": 120
+    },
+    {
+      "id": "n_1c",
+      "name": "1С: створити замовлення",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        620,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_1c",
+        "toolName": "create_order",
+        "arguments": {
+          "customer": "{{ $json.customer }}",
+          "lines": "{{ $json.lines }}"
+        }
+      },
+      "timeoutSec": 30,
+      "retry": {
+        "maxTries": 3,
+        "waitMs": 2000
+      },
+      "continueOnFail": false,
+      "disabled": false,
+      "notes": ""
+    },
+    {
+      "id": "n_reply",
+      "name": "Відповісти в Telegram",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": {
+          "chat_id": "{{ $node[\"Нова заявка\"].json.body.message.chat.id }}",
+          "text": "Замовлення №{{ $json.number }} створено"
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_webhook",
+        "output": 0
+      },
+      "to": {
+        "node": "n_llm",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_llm",
+        "output": 0
+      },
+      "to": {
+        "node": "n_1c",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_1c",
+        "output": 0
+      },
+      "to": {
+        "node": "n_reply",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {
+    "n_webhook": [
+      {
+        "json": {
+          "body": {
+            "message": {
+              "chat": {
+                "id": 42
+              },
+              "text": "2 мішки добрива Петренку"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,3 +1,7 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using OpenBP.Engine.Nodes;
 using OpenBP.Engine.Testing;
@@ -83,6 +87,7 @@ public sealed class CliRunTests : IDisposable
     [InlineData("run", "a.json", "b.json")]
     [InlineData("run", "a.json", "--verbose")]
     [InlineData("run", "a.json", "--servers")]
+    [InlineData("run", "a.json", "--credentials")]
     public async Task BadArguments_ReturnUsageError(params string[] args)
     {
         var (code, _, stderr) = await RunAsync(args);
@@ -151,6 +156,63 @@ public sealed class CliRunTests : IDisposable
     }
 
     [Fact]
+    public async Task OllamaExample_RunsFromWebhookPinDataThroughLlmToTelegramReply()
+    {
+        using var llm = new ChatCompletionsStub("""{"customer":"Петренко","lines":[{"sku":"ДОБРИВО-50","qty":2}]}""");
+        var credentials = Path.Combine(_dir, "creds.json");
+        await File.WriteAllTextAsync(credentials, JsonSerializer.Serialize(new { cred_ollama = new { baseUrl = llm.BaseUrl } }));
+
+        var (code, stdout, stderr) = await RunAsync(
+            "run", OllamaExample, "--pin", "--servers", WriteServers(), "--credentials", credentials);
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("▶ Розібрати заявку [ai.llm] — Success", stdout, StringComparison.Ordinal);
+        Assert.DoesNotContain("Розібрати заявку [ai.llm] — Success · pinData", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"number\": 1001", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"text\": \"Замовлення №1001 створено\"", stdout, StringComparison.Ordinal);
+        Assert.Contains("Результат: Success", stdout, StringComparison.Ordinal);
+        var request = Assert.Single(llm.Requests);
+        using var body = JsonDocument.Parse(request);
+        Assert.Contains("2 мішки добрива Петренку", body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString(), StringComparison.Ordinal);
+        Assert.Equal("json_schema", body.RootElement.GetProperty("response_format").GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task OllamaExample_WithoutCredentials_LlmNodeFails()
+    {
+        var (code, stdout, _) = await RunAsync("run", OllamaExample, "--pin", "--servers", WriteServers());
+
+        Assert.Equal(CliApp.ExecutionFailed, code);
+        Assert.Contains("▶ Розібрати заявку [ai.llm] — Error", stdout, StringComparison.Ordinal);
+        Assert.Contains("cred_ollama", stdout, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("[]", "очікується JSON-об'єкт")]
+    [InlineData("""{ "a": 1 }""", "має бути JSON-об'єктом")]
+    [InlineData("не json", "Не вдалося прочитати файл credentials")]
+    public async Task InvalidCredentialsFile_ReturnsUsageError(string json, string message)
+    {
+        var path = Path.Combine(_dir, "creds.json");
+        await File.WriteAllTextAsync(path, json);
+
+        var (code, _, stderr) = await RunAsync("run", Example, "--pin", "--credentials", path);
+
+        Assert.Equal(CliApp.UsageError, code);
+        Assert.Contains(message, stderr, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExampleCredentialsFile_HasNoSecrets()
+    {
+        var provider = CredentialsFile.Load(Path.Combine(RepoRoot, "examples", "credentials.ollama.json"));
+
+        var data = await provider.GetAsync("cred_ollama", CancellationToken.None);
+        Assert.Equal("http://localhost:11434/v1", data["baseUrl"]!.GetValue<string>());
+        Assert.Null(data["apiKey"]);
+    }
+
+    [Fact]
     public void PinOnlyStubs_RegisteredOnlyForMissingTypes()
     {
         var real = new StubNode(new NodeDescriptor("ai.llm", 1, "LLM", NodeGroup.Ai, ["main"], ["main"], []));
@@ -163,6 +225,8 @@ public sealed class CliRunTests : IDisposable
     }
 
     private static string Example => Path.Combine(RepoRoot, "examples", "telegram-1c.json");
+
+    private static string OllamaExample => Path.Combine(RepoRoot, "examples", "telegram-1c-ollama.json");
 
     private static string RepoRoot
     {
@@ -206,5 +270,65 @@ public sealed class CliRunTests : IDisposable
         public NodeDescriptor Descriptor { get; } = descriptor;
 
         public Task<Item[][]> ExecuteAsync(INodeContext ctx, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    /// <summary>In-process HTTP-стаб <c>POST /v1/chat/completions</c> у форматі OpenAI: віддає задану відповідь моделі.</summary>
+    private sealed class ChatCompletionsStub : IDisposable
+    {
+        private readonly HttpListener _listener = new();
+        private readonly Task _loop;
+
+        public ChatCompletionsStub(string content)
+        {
+            int port;
+            using (var probe = new TcpListener(IPAddress.Loopback, 0))
+            {
+                probe.Start();
+                port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            }
+
+            BaseUrl = $"http://127.0.0.1:{port}/v1";
+            _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+            _listener.Start();
+            _loop = Task.Run(async () =>
+            {
+                try
+                {
+                    while (true)
+                    {
+                        var context = await _listener.GetContextAsync();
+                        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+                        var body = await reader.ReadToEndAsync();
+                        var ok = context.Request.Url!.AbsolutePath == "/v1/chat/completions" && context.Request.HttpMethod == "POST";
+                        if (ok)
+                        {
+                            Requests.Add(body);
+                        }
+
+                        var payload = Encoding.UTF8.GetBytes(ok
+                            ? JsonSerializer.Serialize(new { choices = new[] { new { message = new { role = "assistant", content } } } })
+                            : "{}");
+                        context.Response.StatusCode = ok ? 200 : 404;
+                        context.Response.ContentType = "application/json";
+                        await context.Response.OutputStream.WriteAsync(payload);
+                        context.Response.Close();
+                    }
+                }
+                catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException)
+                {
+                    // слухача зупинено
+                }
+            });
+        }
+
+        public string BaseUrl { get; }
+
+        public ConcurrentBag<string> Requests { get; } = [];
+
+        public void Dispose()
+        {
+            _listener.Close();
+            _loop.Wait(TimeSpan.FromSeconds(5));
+        }
     }
 }
