@@ -10,6 +10,8 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Worker/OpenBP.Worker.csproj" />
+    <!-- Моки 1С і Telegram для прикладу examples/telegram-1c.json. -->
+    <ProjectReference Include="../OpenBP.Mcp.Tests/FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>
 
 </Project>
