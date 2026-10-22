@@ -132,7 +132,7 @@
   - `connectors.md` §4 доповнено форматом credential `openai-compatible`.
 
 ### F3-02 · `ai.llm`: провайдери `anthropic` і `openai`
-- model: `sonnet` · status: `ready` · depends: F3-01
+- model: `sonnet` · status: `in-progress agent/F3-02-ai-llm-anthropic-openai` · depends: F3-01
 - Що: реалізації провайдерів поруч з `openai-compatible` через `HttpClient`:
   - Anthropic Messages API — structured output через tool use з `input_schema` = `outputSchema`;
   - OpenAI Chat Completions — `response_format: json_schema`;
