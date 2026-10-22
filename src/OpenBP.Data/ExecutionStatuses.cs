@@ -5,8 +5,14 @@ namespace OpenBP.Data;
 /// <summary>Значення колонки <c>executions.status</c>.</summary>
 public static class ExecutionStatuses
 {
-    /// <summary>Виконання створене і ще не завершене.</summary>
+    /// <summary>Рядок створено, job у черзі; воркер ще не взяв (docs/architecture.md §10.4).</summary>
+    public const string Queued = "queued";
+
+    /// <summary>Воркер виконує.</summary>
     public const string Running = "running";
+
+    /// <summary>Запитано скасування; воркер зупинить виконання на найближчому heartbeat (§10.4).</summary>
+    public const string Cancelling = "cancelling";
 
     /// <summary>Усі досяжні вузли виконано.</summary>
     public const string Success = "success";

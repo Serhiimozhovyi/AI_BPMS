@@ -38,6 +38,7 @@
 | `src/OpenBP.Mcp` | MCP-клієнт (реєстр серверів, discovery, `mcp.tool`) і MCP-сервер (`/mcp`) |
 | `src/OpenBP.Ai` | `ai.llm` — абстракція над провайдерами, structured output |
 | `src/OpenBP.Data` | EF Core: сутності, міграції, `PostgresExecutionStore`, `JobQueue` |
+| `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
 | `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
 | `src/OpenBP.Worker` | хост: бере job, виконує через Engine, пише кроки |
 | `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести) |
@@ -133,3 +134,149 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | Редактор | Monaco | MIT |
 | UI | Angular Material, Tailwind | MIT |
 | Тести | xUnit, Testcontainers, Playwright | Apache-2.0 / MIT |
+
+## 10. Application-шар і контракти Api/Worker (F2-00)
+
+Рішення цього розділу фіксують правило 4 `CLAUDE.md`: REST, UI і MCP-сервер викликають **один** application-шар.
+Код — проєкт `src/OpenBP.Application` (інтерфейси, DTO, помилки, контракти jobs); реалізації сервісів додають
+задачі F2-05…F2-13 у тому самому проєкті. Залежності: `Application → Shared, Engine, Data, Mcp`;
+`Api → Application`; `Worker → Application` (лише контракти jobs і станів — воркер працює через `Data`/`Engine`
+напряму, сервісів не викликає).
+
+### 10.1. Сервіси
+
+| Інтерфейс | Хто викликає | Що робить |
+|---|---|---|
+| `IWorkflowService` | REST, MCP `*_workflow` | список, створення, читання, збереження (нова версія + валідація), перейменування, активація/деактивація, видалення, версії |
+| `IExecutionService` | REST, MCP `run_workflow`/`get_execution`/`list_executions`, UI | ручний запуск, список/деталі (кроки вже очищені від секретів), скасування, повтор |
+| `IExecutionLauncher` | webhook (F2-10), Quartz (F2-11), `mcp.poll` (F2-12), `IExecutionService` | створює рядок `executions` і job без перевірки ролей — внутрішній вхід для тригерів |
+| `IExecutionEventSource` | SSE `/executions/{id}/events`, MCP-ресурс `openbp://executions/{id}` | потік подій кроків виконання |
+| `IConnectorService` | REST, MCP `describe_connectors`, UI | CRUD `mcp_servers`, discovery, тестовий виклик tool'а |
+
+Сигнатури — у коді (`OpenBP.Application`), вони є джерелом правди; тут — лише правила.
+
+- Ролі перевіряє сервіс, а не маршрут: `ICurrentUser.Require(UserRole.Editor)` → `ForbiddenException`.
+  `viewer` — читає все (без секретів); `editor` — + сценарії, запуски, скасування, тестові виклики tool'ів;
+  `admin` — + конектори, credentials, користувачі, API-ключі.
+- Сервіси кидають типізовані помилки `OpenBpException` (`NotFound`, `Forbidden`, `Conflict`, `WorkflowValidation`,
+  `ConnectorUnavailable`); Api перетворює їх на HTTP, MCP-сервер — на `isError` з тим самим `code`.
+- Секрети не виходять за межі сервісів: `ConnectorDetail.Config` ніколи не містить заголовків/змінних
+  із credentials; кроки виконань читаються вже очищеними (`SecretScrubber` пише їх такими, F2-04).
+
+### 10.2. Зберігання сценаріїв і версії
+
+- `workflows.name` — джерело правди для назви; `definition.name` при збереженні **перезаписується** з нього
+  (`PUT` з іншим `name` у визначенні не перейменовує; перейменування — окремий `PATCH`).
+- Кожне збереження (`SaveAsync`) — новий рядок `workflow_versions` (`version` = попередній + 1),
+  `workflows.current_version_id` → нова версія. Версії незмінні; «відкотитись» = зберегти старе визначення як нову версію.
+- Валідація при збереженні — `WorkflowValidator` з ланцюжком `NodeRegistrySchemaProvider` → `McpNodeSchemaProvider`
+  (правила 1–6 `workflow-format.md`). Для **активного** сценарію — з `IsActive = true` (правило 4); збереження, що
+  ламає активний сценарій, відхиляється цілком (`WorkflowValidationException`, 422), версія не створюється.
+- Активний сценарій завжди виконує **поточну** версію. Активація = валідація з `IsActive` + реєстрація тригерів
+  (`webhooks`, Quartz); збереження активного сценарію перереєстровує тригери; деактивація знімає їх.
+  Конфлікт `webhooks.path` — помилка валідації з кодом `WEBHOOK_PATH_CONFLICT` (F2-10 додає код у `WorkflowValidationCodes`).
+- Видалення — тільки неактивного сценарію (інакше 409); видаляє версії, `webhooks`, `node_state`, виконання і кроки.
+- Виконання завжди прив'язане до `version_id`, тож журнал показує саме те визначення, що виконувалось.
+
+### 10.3. REST
+
+Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}` і `/mcp` — поза префіксом.
+
+| Метод і шлях | Роль | Відповідь |
+|---|---|---|
+| `POST /auth/login` `{ email, password }` · `POST /auth/logout` · `GET /auth/me` | — / будь-яка | 204 + cookie · 204 · `UserInfo` |
+| `GET /api-keys` · `POST /api-keys { name }` · `DELETE /api-keys/{id}` | будь-яка (свої), admin (усі) | `ApiKeyInfo[]` · `ApiKeyCreated` (ключ показується один раз) · 204 |
+| `GET /workflows?page&pageSize&search` | viewer | `PageResult<WorkflowSummary>` |
+| `POST /workflows` (тіло — визначення) | editor | 201 `WorkflowDetail` |
+| `GET /workflows/{id}` | viewer | `WorkflowDetail` (визначення поточної версії) |
+| `PUT /workflows/{id}` (тіло — визначення) | editor | `WorkflowDetail` нової версії |
+| `PATCH /workflows/{id} { name }` | editor | `WorkflowDetail` |
+| `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
+| `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[] }` (200 навіть з помилками) |
+| `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
+| `GET /workflows/{id}/versions` · `GET /workflows/{id}/versions/{version}` | viewer | `WorkflowVersionSummary[]` · визначення |
+| `POST /workflows/{id}/executions { startNodeId?, startItems? }` | editor | 202 `ExecutionSummary` (ручний запуск) |
+| `GET /executions?workflowId&status&from&to&page&pageSize` | viewer | `PageResult<ExecutionSummary>` |
+| `GET /executions/{id}` | viewer | `ExecutionDetail` з кроками |
+| `POST /executions/{id}/cancel` · `POST /executions/{id}/retry` | editor | 202 `ExecutionSummary` |
+| `GET /executions/{id}/events` | viewer | SSE, див. 10.5 |
+| `GET /nodes` | viewer | дескриптори `core.*`/`ai.*`/`mcp.*` для палітри |
+| `GET /connectors` · `GET /connectors/{id}` · `GET /connectors/{id}/tools` | viewer | `PageResult<ConnectorSummary>` · `ConnectorDetail` · `McpToolInfo[]` |
+| `POST /connectors` · `PUT /connectors/{id}` · `DELETE /connectors/{id}` · `POST /connectors/{id}/refresh-tools` | admin | `ConnectorDetail`; 409 при видаленні, якщо є активні сценарії з цим сервером |
+| `POST /connectors/{id}/tools/{tool}/call { arguments }` | editor | `ToolCallResult` |
+
+Помилки — RFC 9457 `application/problem+json`: `{ type, title, status, detail, code, errors? }`.
+`code` — машинний код з `OpenBpException`; `errors` — список `WorkflowValidationError` для 422.
+Відображення: `NotFound` → 404, `Forbidden` → 403, не автентифіковано → 401, `Conflict` → 409,
+`WorkflowValidation` → 422, `ConnectorUnavailable` → 502, помилка аргументів → 400.
+
+Пагінація — offset: `page` (з 1), `pageSize` (за замовчуванням 50, максимум 200);
+відповідь `{ items, page, pageSize, total }`. Сортування фіксоване: сценарії за `updated_at desc`,
+виконання за `started_at desc` (для `queued` — за `id`).
+
+### 10.4. Jobs
+
+Черга — `JobQueue` (F2-03). Воркер бере лише `kind`, які вміє; payload — jsonb **без секретів**
+(credentials воркер читає сам через `PostgresCredentialProvider`).
+
+| `kind` | payload | Хто ставить | Що робить воркер |
+|---|---|---|---|
+| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems? }` | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
+| `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
+
+Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;
+`cancelling` — тимчасовий стан після запиту на скасування. Рядок `executions` створює `IExecutionLauncher`
+зі статусом `queued` (клієнт одразу отримує id для SSE), `started_at`/`heartbeat_at` ставить воркер при взятті job.
+
+Обробка job `execution` воркером (F2-07/F2-08):
+1. Прочитати `executions`. Фінальний статус або `cancelling` при `queued` → `CompleteAsync` (ідемпотентність: job міг повернутись після протухлого lock).
+2. `queued` → статус `running`, `started_at`, `heartbeat_at`; `WorkflowExecutor.RunAsync`.
+   `running` (повернутий job після падіння воркера) → `ResumeAsync` зі знімка `PostgresExecutionStore.LoadAsync`.
+3. Під час виконання кожні `HeartbeatInterval` (5 с): `JobQueue.ExtendLockAsync` + `executions.heartbeat_at`;
+   статус став `cancelling` → скасувати `CancellationToken`.
+4. Підсумок → `PostgresExecutionStore.FinishAsync`, `node_state` з `ExecutionResult.NodeStates`, `CompleteAsync`.
+5. Необроблена помилка воркера → `FailAsync` (повтор з backoff; наступна спроба йде через крок 2 як resume);
+   `Dropped` → статус виконання `error` з повідомленням про вичерпані спроби.
+6. Лічильник `attempts` job'а = кількість падінь воркера на цьому виконанні; помилки вузлів у нього не входять — їх обробляє движок (retry вузла, `continueOnFail`).
+
+Відновлення (F2-08): `ReleaseStaleLocksAsync` раз на `LockTimeout / 2` повертає job'и впалих воркерів;
+виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)
+отримує статус `error`. Паралельність воркера — `MaxConcurrentExecutions` (50 за замовчуванням, PRD §7):
+job береться лише за вільного слота.
+
+Скасування (`IExecutionService.CancelAsync`): `queued` → одразу `cancelled`; `running` → `cancelling`,
+далі — крок 3; воркер завершує виконання зі статусом `cancelled`. Затримка ≤ `HeartbeatInterval`.
+
+### 10.5. SSE
+
+Джерело подій — **опитування** `execution_steps` курсором за `id` (монотонний UUIDv7, F2-02) і рядка `executions`
+кожні 500 мс, без `LISTEN/NOTIFY`: немає постійних з'єднань на кожного клієнта, працює через pgbouncer, одна реалізація
+для Api і MCP-ресурсу. `LISTEN/NOTIFY` можна додати пізніше як пробудження без зміни контракту.
+
+`IExecutionEventSource.SubscribeAsync(executionId, afterStepId, ct)` → `IAsyncEnumerable<ExecutionEvent>`:
+- `step` — крок (`ExecutionStepDto`, очищений від секретів); `id` події = `execution_steps.id`, тому
+  `Last-Event-ID` при перепідключенні віддає лише нові кроки;
+- `status` — зміна статусу виконання; фінальний статус закриває потік;
+- коментар `: ping` кожні 15 с як keep-alive; `retry: 2000`.
+
+Для вже завершеного виконання потік віддає всі кроки після курсора і `status`, потім закривається.
+
+### 10.6. Автентифікація і ролі
+
+- UI — cookie. З ASP.NET Core Identity беремо лише `PasswordHasher<T>` і cookie-схему; без `UserManager`/`IdentityDbContext`,
+  бо таблиця `users` своя (§6). Перший `admin` створюється при старті з `OPENBP_ADMIN_EMAIL`/`OPENBP_ADMIN_PASSWORD`,
+  якщо користувачів немає.
+- REST і MCP — API-ключ у `Authorization: Bearer <ключ>`. Формат `obp_` + 32 випадкові байти base64url;
+  у `api_keys.hash` — SHA-256; `last_used_at` оновлюється не частіше раз на хвилину. Ключ має роль свого користувача;
+  відкликаний ключ → 401.
+- Обидві схеми дають `ClaimsPrincipal` з `sub` (id користувача), `email`, `role`; `ICurrentUser` в application-шарі
+  будується з нього. Воркер і тригери працюють без користувача (`IExecutionLauncher` ролей не перевіряє).
+- Ролі впорядковані: `viewer < editor < admin`; `Require(UserRole.Editor)` пропускає й admin.
+
+### 10.7. MCP-сервери (конектори) між процесами
+
+`IMcpServerRegistry` — по екземпляру в Api і Worker. Джерело правди — `mcp_servers`; реєстр синхронізується з ним:
+Api — при кожній зміні через `IConnectorService`; Worker — перед виконанням для серверів, на які посилається сценарій
+(реєструє відсутні, перереєстровує змінені за `config`/`credential_id`). Credential конектора — JSON
+`{ "headers": { … } }` (http) або `{ "env": { … } }` (stdio); хост зливає його в `McpServerConfig` перед реєстрацією,
+у `config` і відповідях API цих значень немає.
