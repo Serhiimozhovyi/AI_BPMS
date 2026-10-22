@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mcp.poll",
+  "type": "object",
+  "required": [
+    "serverId",
+    "toolName",
+    "cron",
+    "keyField"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "serverId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toolName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "cron": {
+      "type": "string",
+      "minLength": 1
+    },
+    "keyField": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -6,6 +6,12 @@
 
   <ItemGroup>
     <ProjectReference Include="../OpenBP.Engine/OpenBP.Engine.csproj" />
+    <!-- Приведення обчислених аргументів mcp.tool до типів з inputSchema (docs/connectors.md §2). -->
+    <ProjectReference Include="../OpenBP.Expressions/OpenBP.Expressions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Schemas/*.schema.json" LogicalName="OpenBP.Mcp.Schemas.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

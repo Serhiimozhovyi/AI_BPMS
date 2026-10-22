@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -76,7 +77,33 @@ public static class FakeTools
         await Task.Delay(ms, ct);
         return "ok";
     }
+
+    /// <summary>Завжди повертає результат з <c>isError: true</c>.</summary>
+    [McpServerTool(Name = "fail"), Description("Повертає помилку з переданим текстом.")]
+    public static string Fail(string reason) => throw new McpException(reason);
+
+    /// <summary>По text-блоку на кожен id — «стрічка записів» для mcp.poll.</summary>
+    [McpServerTool(Name = "feed"), Description("Повертає по text-блоку на кожен id.")]
+    public static IEnumerable<ContentBlock> Feed(string[] ids) =>
+        [.. ids.Select(id => new TextContentBlock { Text = id })];
+
+    /// <summary>Один запис замовлення як structuredContent.</summary>
+    [McpServerTool(Name = "order", UseStructuredContent = true), Description("Повертає замовлення з id.")]
+    public static OrderResult Order(int id, string? customer = null) => new(new OrderInfo(id, customer ?? "ТОВ Агро"));
+
+    /// <summary>Картинка 1×1 як image-блок.</summary>
+    [McpServerTool(Name = "pixel"), Description("Повертає PNG-картинку.")]
+    public static ImageContentBlock Pixel() => ImageContentBlock.FromBytes(PixelBytes, "image/png");
+
+    /// <summary>Байти, які повертає <c>pixel</c>.</summary>
+    public static readonly byte[] PixelBytes = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3];
 }
+
+/// <summary>Результат <c>order</c>.</summary>
+public sealed record OrderResult(OrderInfo Order);
+
+/// <summary>Замовлення.</summary>
+public sealed record OrderInfo(int Id, string Customer);
 
 /// <summary>Результат <c>add</c>.</summary>
 public sealed record SumResult(int Sum);
