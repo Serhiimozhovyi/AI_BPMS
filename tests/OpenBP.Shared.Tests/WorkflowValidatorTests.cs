@@ -366,6 +366,25 @@ public class WorkflowValidatorTests
         Assert.Equal(["n_webhook", "n_llm", "n_1c", "n_reply"], provider.Validated);
         var error = Assert.Single(errors);
         Assert.Equal("MCP_TOOL_UNKNOWN", error.Code);
+        Assert.Equal("/nodes/3/parameters/toolName", error.Path);
+    }
+
+    [Fact]
+    public async Task RelativeProviderPathsArePrefixedWithNodePointer()
+    {
+        var provider = new FakeProvider
+        {
+            NodeErrors =
+            {
+                ["n_llm"] = new(Codes.ParameterInvalid, "model обов'язковий", "n_llm", "/parameters/model"),
+                ["n_1c"] = new(Codes.NodeTypeUnknown, "невідомий тип", "n_1c", "/type"),
+                ["n_reply"] = new(Codes.McpToolUnknown, "без шляху", "n_reply"),
+            },
+        };
+
+        var errors = await new WorkflowValidator(provider).ValidateAsync(WorkflowTestData.ExampleJson, Active);
+
+        Assert.Equal(["/nodes/1/parameters/model", "/nodes/2/type", null], errors.Select(e => e.Path));
     }
 
     [Fact]

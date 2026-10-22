@@ -6,6 +6,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- FakeServer — окремий проєкт у підтеці; його файли не компілюються в тестову збірку. -->
+    <Compile Remove="FakeServer/**" />
+    <None Remove="FakeServer/**" />
+    <Content Remove="FakeServer/**" />
+    <EmbeddedResource Remove="FakeServer/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -18,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Mcp/OpenBP.Mcp.csproj" />
+    <ProjectReference Include="FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>
 
 </Project>

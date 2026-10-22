@@ -10,7 +10,7 @@ namespace OpenBP.Shared.Validation;
 /// <param name="Path">JSON Pointer на місце в документі, напр. <c>/connections/2/to/node</c>.</param>
 public sealed record WorkflowValidationError(string Code, string Message, string? NodeId = null, string? Path = null);
 
-/// <summary>Коди помилок <see cref="WorkflowValidator"/> для правил 1–4.</summary>
+/// <summary>Коди помилок <see cref="WorkflowValidator"/> (правила 1–4) і провайдерів <see cref="INodeSchemaProvider"/> (правила 5–6).</summary>
 public static class WorkflowValidationCodes
 {
     /// <summary>Правило 1: документ не відповідає JSON Schema формату.</summary>
@@ -36,4 +36,13 @@ public static class WorkflowValidationCodes
 
     /// <summary>Правило 4: активний сценарій без жодного увімкненого тригера.</summary>
     public const string TriggerMissing = "TRIGGER_MISSING";
+
+    /// <summary>Правило 5: тип або версія вузла невідомі — параметри перевірити неможливо.</summary>
+    public const string NodeTypeUnknown = "NODE_TYPE_UNKNOWN";
+
+    /// <summary>Правило 5: параметри вузла не відповідають його схемі.</summary>
+    public const string ParameterInvalid = "PARAMETER_INVALID";
+
+    /// <summary>Правила 5–6: <c>serverId</c> не зареєстровано або tool <c>toolName</c> не знайдено в кеші сервера.</summary>
+    public const string McpToolUnknown = "MCP_TOOL_UNKNOWN";
 }

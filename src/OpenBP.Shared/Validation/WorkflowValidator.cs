@@ -96,14 +96,28 @@ public sealed class WorkflowValidator
         }
 
         // Правила 5–6.
-        foreach (var node in workflow.Nodes)
+        for (var i = 0; i < workflow.Nodes.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            errors.AddRange(await _provider.ValidateNodeAsync(node, ct).ConfigureAwait(false));
+            var nodeErrors = await _provider.ValidateNodeAsync(workflow.Nodes[i], ct).ConfigureAwait(false);
+            errors.AddRange(nodeErrors.Select(e => ToDocumentPath(e, i)));
         }
 
         return errors;
     }
+
+    /// <summary>
+    /// Відносний до вузла шлях провайдера (<c>/type</c>, <c>/parameters/…</c>) → JSON Pointer у документі.
+    /// Шляхи, що вже починаються з <c>/nodes</c> чи <c>/connections</c>, лишаються як є.
+    /// </summary>
+    private static WorkflowValidationError ToDocumentPath(WorkflowValidationError error, int nodeIndex) =>
+        error.Path is { Length: > 0 } path
+        && !IsUnder(path, "/nodes") && !IsUnder(path, "/connections")
+            ? error with { Path = $"/nodes/{nodeIndex}{path}" }
+            : error;
+
+    private static bool IsUnder(string path, string prefix) =>
+        path == prefix || path.StartsWith(prefix + "/", StringComparison.Ordinal);
 
     private static List<WorkflowValidationError> ValidateSchema(JsonNode? document)
     {
