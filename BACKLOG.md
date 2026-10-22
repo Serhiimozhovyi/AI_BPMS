@@ -148,7 +148,7 @@
 Задачі, що торкаються `OpenBP.Api`/`OpenBP.Worker`, залежать від F2-00: там фіксується application-шар (правило 4 `CLAUDE.md`), щоб нічні задачі не вигадували контракти.
 
 ### F2-00 · Application-шар і контракти Api/Worker
-- model: `fable` · status: `ready` · depends: F1-10
+- model: `fable` · status: `in-progress agent/F2-00-application-layer` · depends: F1-10
 - Що: рішення й інтерфейси без реалізації. Зафіксувати в `architecture.md` (новий розділ) і в коді (інтерфейси + DTO):
   - **сервіси:** `WorkflowService`, `ExecutionService`, `ConnectorService` — де живуть (окремий проєкт чи `OpenBP.Api`), сигнатури;
   - **REST:** маршрути й DTO, формат помилок (зокрема `WorkflowValidationError`), пагінація;
