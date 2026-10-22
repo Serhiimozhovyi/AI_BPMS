@@ -1,0 +1,43 @@
+name: BACKLOG → done
+
+# Після мерджу PR з гілки agent/<ID>-<слаг> ставить задачі <ID> статус `done` прямо в main,
+# щоб не відкривати окремий PR «BACKLOG: … → done» після кожного мерджу.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backlog-done
+  cancel-in-progress: false
+
+jobs:
+  mark-done:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'agent/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Позначити задачу done
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          python3 scripts/backlog_mark_done.py "$BRANCH"
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "BACKLOG: ${BRANCH#agent/} → done (PR #${PR} змерджено)"
+          for attempt in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1
