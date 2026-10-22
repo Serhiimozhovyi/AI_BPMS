@@ -50,7 +50,7 @@
 - DoD: round-trip тест прикладу з `workflow-format.md`; схема валідує приклад і відхиляє 5 зламаних варіантів.
 
 ### F1-02 · `WorkflowValidator`
-- model: `opus` · status: `ready` · depends: F1-01
+- model: `opus` · status: `review #9` · depends: F1-01
 - Що: правила 1–4 з `workflow-format.md` §«Валідація» (схема, порти, DAG, тригер) з кодами помилок `{ code, nodeId, path, message }`. Правила 5–6 — заглушка-інтерфейс `INodeSchemaProvider` (реалізується у F1-08).
 - DoD: тести на кожне правило; детерміноване визначення циклу з вказанням вузлів.
 
@@ -81,7 +81,7 @@
 
 ### F1-08 · `OpenBP.Mcp`: клієнт і реєстр серверів
 - model: `opus` · status: `ready` · depends: F1-03
-- Що: `McpServerRegistry` на офіційному C# SDK: stdio і Streamable HTTP транспорти, `tools/list` → `ToolsCache`, пул сесій з таймаутами, `INodeSchemaProvider` для валідатора (правила 5–6).
+- Що: `McpServerRegistry` на офіційному C# SDK: stdio і Streamable HTTP транспорти, `tools/list` → `ToolsCache`, пул сесій з таймаутами, `INodeSchemaProvider` для валідатора (правила 5–6). Адаптер «`INodeRegistry.Descriptors` → `INodeSchemaProvider`» для `core.*` (порти, тригери) — тут або у F1-07 (`INodeSchemaProvider` у `Shared`, реєстр у `Engine`).
 - DoD: інтеграційний тест з тестовим MCP-сервером (у `tests/OpenBP.Mcp.Tests/FakeServer`, той самий SDK): discovery повертає схеми; падіння сервера → `McpUnavailableException` за ≤ таймаут.
 
 ### F1-09 · Вузли `mcp.tool` і `mcp.poll`

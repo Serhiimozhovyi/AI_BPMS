@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Schemas/workflow.schema.json" LogicalName="OpenBP.Shared.Schemas.workflow.schema.json" />
   </ItemGroup>
 
