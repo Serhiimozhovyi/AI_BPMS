@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.if",
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "required": [
+        "left",
+        "operator"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "description": "Ліве значення, зазвичай {{ $json.поле }}"
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "equals",
+            "notEquals",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "notContains",
+            "startsWith",
+            "endsWith",
+            "isEmpty",
+            "isNotEmpty",
+            "isTrue",
+            "isFalse"
+          ]
+        },
+        "right": {
+          "description": "Праве значення; не потрібне для isEmpty, isNotEmpty, isTrue, isFalse"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "required": [
+    "conditions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "conditions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/condition"
+      }
+    },
+    "combine": {
+      "type": "string",
+      "enum": [
+        "and",
+        "or"
+      ],
+      "default": "and"
+    }
+  }
+}

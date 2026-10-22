@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Nodes.Core/OpenBP.Nodes.Core.csproj" />
+    <ProjectReference Include="../../src/OpenBP.Engine.Testing/OpenBP.Engine.Testing.csproj" />
+    <ProjectReference Include="../../src/OpenBP.Expressions/OpenBP.Expressions.csproj" />
   </ItemGroup>
 
 </Project>

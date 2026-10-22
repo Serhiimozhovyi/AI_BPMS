@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.code",
+  "type": "object",
+  "required": [
+    "code"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Тіло JS-функції; повертає об'єкт або масив об'єктів"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "eachItem",
+        "allItems"
+      ],
+      "default": "eachItem"
+    }
+  }
+}

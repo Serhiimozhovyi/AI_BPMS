@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.loop",
+  "type": "object",
+  "required": [
+    "list"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "list": {
+      "type": "array",
+      "description": "Список для ітерації, зазвичай {{ $json.lines }}"
+    },
+    "batchSize": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    }
+  }
+}

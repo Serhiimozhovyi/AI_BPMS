@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.wait",
+  "type": "object",
+  "required": [
+    "amount"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "amount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "unit": {
+      "type": "string",
+      "enum": [
+        "milliseconds",
+        "seconds",
+        "minutes",
+        "hours"
+      ],
+      "default": "seconds"
+    }
+  }
+}
