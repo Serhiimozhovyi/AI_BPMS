@@ -13,6 +13,7 @@ namespace OpenBP.Mcp.FakeServer;
 /// <summary>
 /// Тестовий MCP-сервер. <c>dotnet OpenBP.Mcp.FakeServer.dll</c> — stdio;
 /// <c>--http &lt;url&gt;</c> — Streamable HTTP на <c>&lt;url&gt;/mcp</c>. У тестах HTTP-варіант хоститься в процесі через <see cref="BuildHttp"/>.
+/// <c>--mock 1c</c> / <c>--mock telegram</c> — stdio-мок 1С або Telegram для прикладу <c>examples/telegram-1c.json</c>.
 /// </summary>
 public static class FakeServerApp
 {
@@ -30,13 +31,31 @@ public static class FakeServerApp
             return 0;
         }
 
+        var mock = Array.IndexOf(args, "--mock");
+        Type[] tools = mock < 0
+            ? [typeof(FakeTools), typeof(CrashTools)]
+            : (mock + 1 < args.Length ? args[mock + 1] : null) switch
+            {
+                "1c" => [typeof(MockOneCTools)],
+                "telegram" => [typeof(MockTelegramTools)],
+                _ => [],
+            };
+        if (tools.Length == 0)
+        {
+            await Console.Error.WriteLineAsync("--mock: очікується 1c або telegram.");
+            return 2;
+        }
+
         var builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
-        builder.Services
+        var server = builder.Services
             .AddMcpServer(o => o.ServerInfo = new Implementation { Name = ServerName, Version = "1.0.0" })
-            .WithStdioServerTransport()
-            .WithTools([typeof(FakeTools)])
-            .WithTools([typeof(CrashTools)]);
+            .WithStdioServerTransport();
+        foreach (var type in tools)
+        {
+            server.WithTools([type]);
+        }
+
         await builder.Build().RunAsync();
         return 0;
     }
@@ -124,3 +143,45 @@ public static class CrashTools
         return "unreachable";
     }
 }
+
+/// <summary>Мок 1С для прикладу <c>examples/telegram-1c.json</c> (<c>--mock 1c</c>).</summary>
+[McpServerToolType]
+public static class MockOneCTools
+{
+    /// <summary>Номер першого замовлення, яке «створює» мок.</summary>
+    public const int FirstOrderNumber = 1001;
+
+    private static int _lastNumber = FirstOrderNumber - 1;
+
+    /// <summary>Створює замовлення покупця і повертає його номер.</summary>
+    [McpServerTool(Name = "create_order", Title = "Створити замовлення", UseStructuredContent = true)]
+    [Description("Створює замовлення покупця в 1С.")]
+    public static CreatedOrder CreateOrder(
+        [Description("Покупець")] string customer,
+        [Description("Рядки замовлення")] OrderLine[] lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        return new(Interlocked.Increment(ref _lastNumber), customer, lines.Length);
+    }
+}
+
+/// <summary>Рядок замовлення 1С.</summary>
+public sealed record OrderLine(string Sku, double Qty);
+
+/// <summary>Результат <c>create_order</c>.</summary>
+public sealed record CreatedOrder(int Number, string Customer, int LineCount);
+
+/// <summary>Мок Telegram Bot API для прикладу <c>examples/telegram-1c.json</c> (<c>--mock telegram</c>).</summary>
+[McpServerToolType]
+public static class MockTelegramTools
+{
+    /// <summary>«Надсилає» повідомлення в чат і повертає його як надіслане.</summary>
+    [McpServerTool(Name = "send_message", Title = "Надіслати повідомлення", UseStructuredContent = true)]
+    [Description("Надсилає текстове повідомлення в чат Telegram.")]
+    public static SentMessage SendMessage(
+        [Description("Id чату")] long chat_id,
+        [Description("Текст")] string text) => new(true, chat_id, text);
+}
+
+/// <summary>Результат <c>send_message</c>.</summary>
+public sealed record SentMessage(bool Ok, long ChatId, string Text);

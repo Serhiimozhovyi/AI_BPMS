@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Cli/OpenBP.Cli.csproj" />
+    <!-- Моки 1С і Telegram для прикладу examples/telegram-1c.json. -->
+    <ProjectReference Include="../OpenBP.Mcp.Tests/FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>
 
 </Project>
