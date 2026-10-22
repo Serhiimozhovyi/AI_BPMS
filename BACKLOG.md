@@ -159,7 +159,7 @@
 - DoD: рев'ю власником; інтерфейси компілюються; `architecture.md` оновлено.
 
 ### F2-01 · `OpenBP.Data`: EF Core сутності і перша міграція
-- model: `sonnet` · status: `in-progress agent/F2-01-data-ef-core-initial` · depends: F0-03
+- model: `sonnet` · status: `review #29` · depends: F0-03
 - Що:
   - EF Core + Npgsql (пакети в `Directory.Packages.props`);
   - `OpenBpDbContext` і сутності всіх таблиць з `architecture.md` §6 (крім Quartz): jsonb для `definition`, `config`, `tools_cache`, `payload`, `input`/`output`, `state`; індекси (`webhooks.path` unique, `jobs (run_at) where locked_by is null`, `execution_steps (execution_id)`);
