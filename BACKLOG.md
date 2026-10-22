@@ -75,7 +75,7 @@
 - DoD: тести на кожну змінну, на ліміти (нескінченний цикл → помилка за ≤ 100 мс), на ін'єкції (`import`, `require`, доступ до `System` → помилка).
 
 ### F1-07 · `OpenBP.Nodes.Core`: тригери і логіка
-- model: `sonnet` · status: `review #21` · depends: F1-04, F1-06
+- model: `sonnet` · status: `done` · depends: F1-04, F1-06
 - Що: `core.manualTrigger`, `core.set`, `core.if`, `core.switch`, `core.merge`, `core.loop`, `core.wait`, `core.code` (Jint, ліміт 5 с); JSON Schema параметрів кожного; реєстрація в `INodeRegistry`.
 - DoD: по тесту на успіх і помилку для кожного вузла; `core.code` не має доступу до файлів/мережі (тест).
 
