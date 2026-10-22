@@ -196,7 +196,7 @@
 - DoD: інтеграційні тести (`WebApplicationFactory` + Testcontainers): вхід, вихід, 401 без автентифікації, 403 для viewer на запис, API-ключ працює, відкликаний — ні.
 
 ### F2-06 · Api: CRUD сценаріїв і версій
-- model: `sonnet` · status: `in-progress agent/F2-06-workflows-crud` · depends: F2-05
+- model: `sonnet` · status: `review #35` · depends: F2-05
 - Що: `WorkflowService` + REST з F2-00: список, створення, читання, збереження (нова версія, `WorkflowValidator` з `NodeRegistrySchemaProvider` + `McpNodeSchemaProvider`), активація/деактивація (правило 4 — тригер), видалення.
 - DoD: тести на кожен маршрут, на помилки валідації з кодами, на права ролей; збережений приклад `telegram-1c.json` читається назад без втрат (round-trip невідомих полів).
 
