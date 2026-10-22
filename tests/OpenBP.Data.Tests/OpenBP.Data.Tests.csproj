@@ -20,6 +20,12 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Data/OpenBP.Data.csproj" />
+    <ProjectReference Include="../../src/OpenBP.Engine.Testing/OpenBP.Engine.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Спільний контракт IExecutionStore: ті самі тести, що й для InMemoryExecutionStore. -->
+    <Compile Include="../OpenBP.Engine.Testing.Tests/ExecutionStoreContractTests.cs" Link="Contracts/ExecutionStoreContractTests.cs" />
   </ItemGroup>
 
 </Project>
