@@ -174,7 +174,7 @@
 - DoD: спільний набір контрактних тестів `IExecutionStore` (той самий для in-memory і Postgres, винести в `OpenBP.Engine.Testing` або тестовий проєкт); resume через `WorkflowExecutor.ResumeAsync` зі знімка з Postgres дає той самий результат, що й без падіння.
 
 ### F2-03 · `JobQueue` (SKIP LOCKED)
-- model: `opus` · status: `in-progress agent/F2-03-job-queue` · depends: F2-01
+- model: `opus` · status: `review #31` · depends: F2-01
 - Що: черга над `jobs`:
   - `EnqueueAsync(kind, payload, runAt?)`;
   - `ClaimAsync(workerId, kinds, ct)` — `FOR UPDATE SKIP LOCKED`, `locked_by`/`locked_at`;
