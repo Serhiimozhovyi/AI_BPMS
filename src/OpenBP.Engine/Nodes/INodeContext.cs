@@ -1,0 +1,52 @@
+using System.Text.Json.Nodes;
+using OpenBP.Shared.Workflow;
+
+namespace OpenBP.Engine.Nodes;
+
+/// <summary>
+/// Усе, що вузол отримує від движка під час одного запуску (docs/connectors.md §1).
+/// Реалізацію для бою будує движок (F1-04); для тестів вузлів — <c>FakeNodeContext</c> у <c>OpenBP.Engine.Testing</c>.
+/// </summary>
+public interface INodeContext
+{
+    /// <summary>Визначення вузла зі сценарію: id, назва, параметри до обчислення, retry/timeout.</summary>
+    NodeDefinition Node { get; }
+
+    /// <summary>Ідентифікатор поточного виконання.</summary>
+    Guid ExecutionId { get; }
+
+    /// <summary>Items із вхідного порту в порядку <see cref="NodeDescriptor.Inputs"/>; для тригерів — порожній список.</summary>
+    /// <param name="input">Індекс входу (від 0).</param>
+    IReadOnlyList<Item> Items(int input = 0);
+
+    /// <summary>
+    /// Параметри вузла з обчисленими <c>{{ }}</c> для item'а з індексом <paramref name="itemIndex"/>
+    /// на основному вході, приведені до <typeparamref name="T"/>. Для вузлів без входу (тригери) —
+    /// індекс 0 з порожнім <c>$json</c>.
+    /// </summary>
+    /// <typeparam name="T">POCO, що відповідає JSON Schema параметрів вузла.</typeparam>
+    /// <param name="itemIndex">Індекс item'а на основному вході.</param>
+    T Params<T>(int itemIndex);
+
+    /// <summary>
+    /// Розшифровані дані credential'а за <b>назвою</b> з <see cref="NodeDescriptor.Credentials"/>:
+    /// id береться з параметра вузла, вказаного у <see cref="CredentialRequirement.Parameter"/>.
+    /// Доступно тільки у воркері; у CLI/тестах — з фейкового провайдера.
+    /// </summary>
+    /// <param name="name">Назва вимоги credential'а з Descriptor.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="CredentialNotFoundException">Credential не існує або параметр з id порожній.</exception>
+    Task<JsonObject> GetCredentialAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Журнал виконання; <c>nodeId</c> підставляє вузол сам (<see cref="Node"/>).</summary>
+    IExecutionLogger Logger { get; }
+
+    /// <summary>Файлове сховище для бінарних даних item'ів.</summary>
+    IBinaryStore Binary { get; }
+
+    /// <summary>
+    /// Стан вузла між виконаннями (таблиця <c>node_state</c>) — для polling-тригерів (<c>mcp.poll</c>: <c>seenKeys</c>).
+    /// Движок зберігає значення після успішного запуску вузла.
+    /// </summary>
+    JsonObject NodeState { get; set; }
+}

@@ -8,4 +8,5 @@
 
 - Фундамент (фаза 0): скелет .NET-рішення (F0-01), скелет Angular (F0-02), Docker Compose для розробки (F0-03), CI на GitHub Actions (F0-04).
 - `OpenBP.Shared`: моделі формату workflow і JSON Schema (F1-01).
+- `OpenBP.Engine`: інтерфейси движка (`IExecutionStore`, `ICredentialProvider`, `INodeRegistry`, `IExpressionEvaluator`, `IExecutionLogger`, `IBinaryStore`), контракт вузла `INode`/`INodeContext`; `OpenBP.Engine.Testing`: in-memory реалізації для тестів і CLI (F1-03).
 - Перевірка протоколу нічного агента: цей changelog додано автоматично за задачею F0-05 (2026-10-22).

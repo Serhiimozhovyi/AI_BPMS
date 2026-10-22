@@ -55,7 +55,7 @@
 - DoD: тести на кожне правило; детерміноване визначення циклу з вказанням вузлів.
 
 ### F1-03 · `OpenBP.Engine`: інтерфейси і in-memory реалізації
-- model: `fable` · status: `ready` · depends: F1-01
+- model: `fable` · status: `review #10` · depends: F1-01
 - Що: інтерфейси з `architecture.md` §2 (`IExecutionStore`, `ICredentialProvider`, `INodeRegistry`, `IExpressionEvaluator`, `IExecutionLogger`), `INode`/`INodeContext` з `connectors.md` §1, `OpenBP.Engine.Testing` з in-memory реалізаціями. **Без логіки виконання.**
 - DoD: інтерфейси задокументовані XML-коментарями; рев'ю власником перед F1-04.
 
