@@ -72,11 +72,16 @@ internal sealed class WorkerHarness : IAsyncDisposable
     private readonly HttpClient _http = new();
     private ExecutionWorker? _worker;
 
-    private WorkerHarness(string cs, WorkerOptions options)
+    private ExecutionRecoveryService? _recovery;
+
+    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions)
     {
+        ConnectionString = cs;
         Db = new Contexts(cs);
         Options = options;
-        Queue = new JobQueue(Db);
+        QueueOptions = queueOptions;
+        Queue = new JobQueue(Db, queueOptions);
+        Recovery = new ExecutionRecoveryService(Db, Queue, queueOptions, NullLogger<ExecutionRecoveryService>.Instance);
         Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))));
         Servers = new McpServerSync(Db, _mcp, Credentials);
         var nodes = CoreNodes.All().Concat(McpNodes.All(_mcp)).Concat(AiNodes.All(_http)).ToList();
@@ -99,9 +104,15 @@ internal sealed class WorkerHarness : IAsyncDisposable
             NullLogger<ExecutionJobProcessor>.Instance);
     }
 
+    public string ConnectionString { get; }
+
     public Contexts Db { get; }
 
     public WorkerOptions Options { get; }
+
+    public JobQueueOptions QueueOptions { get; }
+
+    public ExecutionRecoveryService Recovery { get; }
 
     public JobQueue Queue { get; }
 
@@ -113,27 +124,45 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
     public ExecutionJobProcessor Processor { get; }
 
-    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4)
+    /// <param name="postgres">Контейнер Postgres.</param>
+    /// <param name="maxConcurrent">Паралельність воркера.</param>
+    /// <param name="lockTimeout">Поріг протухання lock'а (і heartbeat виконання) для черги й відновлення; за замовчуванням 5 хв.</param>
+    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null)
     {
         var cs = await postgres.NewMigratedDatabaseAsync();
-        return new WorkerHarness(cs, new WorkerOptions
-        {
-            WorkerId = "test-worker",
-            MaxConcurrentExecutions = maxConcurrent,
-            HeartbeatInterval = TimeSpan.FromMilliseconds(100),
-            PollInterval = TimeSpan.FromMilliseconds(50),
-        });
+        return new WorkerHarness(
+            cs,
+            new WorkerOptions
+            {
+                WorkerId = "test-worker",
+                MaxConcurrentExecutions = maxConcurrent,
+                HeartbeatInterval = TimeSpan.FromMilliseconds(100),
+                PollInterval = TimeSpan.FromMilliseconds(50),
+            },
+            new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) });
     }
 
-    /// <summary>Запускає <see cref="ExecutionWorker"/> як hosted service.</summary>
-    public async Task StartAsync()
+    /// <summary>Запускає <see cref="ExecutionWorker"/> як hosted service; з <paramref name="withRecovery"/> — і <see cref="ExecutionRecoveryService"/>.</summary>
+    public async Task StartAsync(bool withRecovery = false)
     {
         _worker = new ExecutionWorker(Queue, Processor, Options, NullLogger<ExecutionWorker>.Instance);
         await _worker.StartAsync(CancellationToken.None);
+        if (withRecovery)
+        {
+            _recovery = new ExecutionRecoveryService(Db, Queue, QueueOptions, NullLogger<ExecutionRecoveryService>.Instance);
+            await _recovery.StartAsync(CancellationToken.None);
+        }
     }
 
     public async Task StopAsync()
     {
+        if (_recovery is not null)
+        {
+            await _recovery.StopAsync(CancellationToken.None);
+            _recovery.Dispose();
+            _recovery = null;
+        }
+
         if (_worker is not null)
         {
             await _worker.StopAsync(CancellationToken.None);
@@ -333,7 +362,30 @@ internal static class Workflows
         };
     }
 
-    private static string DotNet =>
+    /// <summary>
+    /// <c>core.manualTrigger</c> → <c>core.set</c> з випадковим <c>token</c> → <c>core.wait</c> на <paramref name="waitMs"/> →
+    /// <c>core.set</c> з <c>done</c>. Повторне виконання <c>n_token</c> дало б інший <c>token</c> у підсумку.
+    /// </summary>
+    public static WorkflowDefinition RandomTokenThenWait(int waitMs) => WorkflowJson.Deserialize($$$"""
+        {
+          "formatVersion": 1,
+          "name": "Токен і пауза",
+          "nodes": [
+            { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+            { "id": "n_token", "name": "Токен", "type": "core.set", "typeVersion": 1, "position": [200, 0], "parameters": { "fields": [ { "name": "token", "value": "{{ Math.random() }}" } ] } },
+            { "id": "n_wait", "name": "Пауза", "type": "core.wait", "typeVersion": 1, "position": [400, 0], "parameters": { "amount": {{{waitMs}}}, "unit": "milliseconds" } },
+            { "id": "n_set", "name": "Готово", "type": "core.set", "typeVersion": 1, "position": [600, 0], "parameters": { "fields": [ { "name": "done", "value": "так" } ] } }
+          ],
+          "connections": [
+            { "from": { "node": "n_start" }, "to": { "node": "n_token" } },
+            { "from": { "node": "n_token" }, "to": { "node": "n_wait" } },
+            { "from": { "node": "n_wait" }, "to": { "node": "n_set" } }
+          ]
+        }
+        """);
+
+    /// <summary>Хост <c>dotnet</c>, яким тест запускає дочірні процеси (FakeServer, окремий воркер).</summary>
+    public static string DotNet =>
         Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host : "dotnet";
 
     private static string RepoRoot
