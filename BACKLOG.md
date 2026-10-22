@@ -36,7 +36,7 @@
 - DoD: CI зелений на PR з цієї гілки.
 
 ### F0-05 · Протокол нічного агента — перевірка
-- model: `haiku` · status: `in-progress agent/F0-05-night-agent-check` · depends: F0-04
+- model: `haiku` · status: `review #8` · depends: F0-04
 - Що: агент виконує «порожню» задачу: додає `docs/CHANGELOG.md` з першим записом, відкриває PR за шаблоном `.github/PULL_REQUEST_TEMPLATE.md`, оновлює статус цієї задачі.
 - DoD: PR відкрито вночі без участі людини; у ньому є посилання на задачу і чекліст DoD.
 
