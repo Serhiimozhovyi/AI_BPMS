@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
 using OpenBP.Shared.Workflow;
@@ -16,13 +17,19 @@ namespace OpenBP.Data;
 /// <see cref="StepError"/> у текстовій колонці <c>error</c>.</item>
 /// <item>Id кроку — монотонний UUIDv7 (<see cref="SequentialGuid"/>): <see cref="LoadAsync"/> повертає кроки в порядку збереження.</item>
 /// <item>Визначення сценарію в знімку читається з <c>workflow_versions.definition</c> за <c>executions.version_id</c>.</item>
+/// <item>З <see cref="SecretScrubber"/> кроки (items, повідомлення помилки) і <c>executions.error</c> пишуться вже
+/// очищеними від секретів (docs/architecture.md §8). Scrubber — той самий, що в <see cref="PostgresCredentialProvider"/>
+/// виконання, тож воркер створює сховище на кожне виконання.</item>
 /// </list>
-/// Scrubbing секретів перед записом додає F2-04 (<c>SecretScrubber</c>). Потокобезпечний: кожен виклик бере
-/// власний <see cref="OpenBpDbContext"/> з фабрики.
+/// Потокобезпечний: кожен виклик бере власний <see cref="OpenBpDbContext"/> з фабрики.
 /// </summary>
 /// <param name="contexts">Фабрика контекстів БД.</param>
 /// <param name="time">Годинник для id кроків; за замовчуванням системний.</param>
-public sealed class PostgresExecutionStore(IDbContextFactory<OpenBpDbContext> contexts, TimeProvider? time = null) : IExecutionStore
+/// <param name="scrubber">Scrubber секретів виконання; <c>null</c> — кроки пишуться як є.</param>
+public sealed class PostgresExecutionStore(
+    IDbContextFactory<OpenBpDbContext> contexts,
+    TimeProvider? time = null,
+    SecretScrubber? scrubber = null) : IExecutionStore
 {
     private const string UniqueViolation = "23505";
 
@@ -107,6 +114,7 @@ public sealed class PostgresExecutionStore(IDbContextFactory<OpenBpDbContext> co
     public async Task FinishAsync(ExecutionResult result, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(result);
+        var error = result.Error is null ? null : Scrub(result.Error.Message);
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         var updated = await db.Executions
             .Where(e => e.Id == result.ExecutionId)
@@ -114,7 +122,7 @@ public sealed class PostgresExecutionStore(IDbContextFactory<OpenBpDbContext> co
                 s => s
                     .SetProperty(e => e.Status, ExecutionStatuses.ToDb(result.Status))
                     .SetProperty(e => e.FinishedAt, result.FinishedAt.ToUniversalTime())
-                    .SetProperty(e => e.Error, result.Error == null ? null : result.Error.Message),
+                    .SetProperty(e => e.Error, error),
                 ct)
             .ConfigureAwait(false);
         if (updated == 0)
@@ -174,19 +182,29 @@ public sealed class PostgresExecutionStore(IDbContextFactory<OpenBpDbContext> co
         };
     }
 
-    private ExecutionStepEntity ToEntity(StepRecord step) => new()
+    private string? Scrub(string? value) => scrubber is null ? value : scrubber.Scrub(value);
+
+    private ExecutionStepEntity ToEntity(StepRecord step)
     {
-        Id = SequentialGuid.Next(time),
-        ExecutionId = step.ExecutionId,
-        NodeId = step.NodeId,
-        RunIndex = step.RunIndex,
-        Status = StepStatuses.ToDb(step.Status),
-        Input = JsonSerializer.Serialize(step.Input, WorkflowJson.Options),
-        Output = JsonSerializer.Serialize(step.Output, WorkflowJson.Options),
-        Error = step.Error is null ? null : JsonSerializer.Serialize(step.Error, WorkflowJson.Options),
-        StartedAt = step.StartedAt.ToUniversalTime(),
-        FinishedAt = step.FinishedAt.ToUniversalTime(),
-    };
+        if (scrubber is not null)
+        {
+            step = scrubber.Scrub(step);
+        }
+
+        return new()
+        {
+            Id = SequentialGuid.Next(time),
+            ExecutionId = step.ExecutionId,
+            NodeId = step.NodeId,
+            RunIndex = step.RunIndex,
+            Status = StepStatuses.ToDb(step.Status),
+            Input = JsonSerializer.Serialize(step.Input, WorkflowJson.Options),
+            Output = JsonSerializer.Serialize(step.Output, WorkflowJson.Options),
+            Error = step.Error is null ? null : JsonSerializer.Serialize(step.Error, WorkflowJson.Options),
+            StartedAt = step.StartedAt.ToUniversalTime(),
+            FinishedAt = step.FinishedAt.ToUniversalTime(),
+        };
+    }
 
     private static StepRecord FromEntity(ExecutionStepEntity e) => new()
     {
