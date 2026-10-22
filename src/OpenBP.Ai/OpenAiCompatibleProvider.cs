@@ -11,8 +11,6 @@ namespace OpenBP.Ai;
 /// </summary>
 internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider
 {
-    private const int MaxErrorBodyChars = 500;
-
     /// <inheritdoc />
     public async Task<string> CompleteAsync(LlmRequest request, CancellationToken ct)
     {
@@ -22,26 +20,24 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider
             throw new LlmException("Credential openai-compatible: baseUrl має бути абсолютною http(s)-адресою.");
         }
 
-        var apiKey = request.Credential["apiKey"]?.GetValue<string>();
+        return await SendAsync(root, request.Credential["apiKey"]?.GetValue<string>(), request, "max_tokens", ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Виконує chat/completions проти <paramref name="root"/> (спільно з провайдером <c>openai</c>).</summary>
+    internal async Task<string> SendAsync(Uri root, string? apiKey, LlmRequest request, string maxTokensField, CancellationToken ct)
+    {
         var endpoint = new Uri(root.AbsoluteUri.TrimEnd('/') + "/chat/completions");
-        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(BuildBody(request)) };
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(BuildBody(request, maxTokensField)) };
         if (!string.IsNullOrEmpty(apiKey))
         {
             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         }
 
-        using var response = await http.SendAsync(message, ct).ConfigureAwait(false);
-        var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            var details = text.Length > MaxErrorBodyChars ? text[..MaxErrorBodyChars] + "…" : text;
-            throw new LlmException($"Провайдер відповів HTTP {(int)response.StatusCode}: {details}");
-        }
-
-        return ExtractContent(text);
+        return ExtractContent(await LlmHttp.SendAsync(http, message, ct).ConfigureAwait(false));
     }
 
-    private static JsonObject BuildBody(LlmRequest request)
+    /// <summary>Тіло запиту chat/completions; <paramref name="maxTokensField"/> — назва поля ліміту токенів.</summary>
+    internal static JsonObject BuildBody(LlmRequest request, string maxTokensField = "max_tokens")
     {
         var messages = new JsonArray();
         if (!string.IsNullOrEmpty(request.System))
@@ -58,7 +54,7 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider
 
         if (request.MaxTokens is { } maxTokens)
         {
-            body["max_tokens"] = maxTokens;
+            body[maxTokensField] = maxTokens;
         }
 
         if (request.OutputSchema is { } schema)
@@ -73,7 +69,7 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider
         return body;
     }
 
-    private static string ExtractContent(string responseText)
+    internal static string ExtractContent(string responseText)
     {
         try
         {

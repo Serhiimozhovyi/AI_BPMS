@@ -120,8 +120,6 @@ public sealed class AiLlmNodeTests
     }
 
     [Theory]
-    [InlineData("anthropic", "ще не підтримується")]
-    [InlineData("openai", "ще не підтримується")]
     [InlineData("gemini", "Невідомий провайдер")]
     public async Task UnsupportedProvider_Throws(string provider, string message)
     {
