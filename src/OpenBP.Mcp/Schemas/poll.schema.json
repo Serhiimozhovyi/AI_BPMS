@@ -21,6 +21,10 @@
     "arguments": {
       "type": "object"
     },
+    "itemsPath": {
+      "type": "string",
+      "minLength": 1
+    },
     "cron": {
       "type": "string",
       "minLength": 1

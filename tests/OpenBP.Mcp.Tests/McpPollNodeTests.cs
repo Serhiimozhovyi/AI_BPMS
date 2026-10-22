@@ -83,6 +83,49 @@ public sealed class McpPollNodeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ItemsPathExpandsListInStructuredContentAndFiltersNewRecords()
+    {
+        var node = new McpPollNode(_registry);
+        var first = Context("orders", """{"ids":[1,2]}""", "id", [], itemsPath: "result");
+
+        var fresh = await node.ExecuteAsync(first, CancellationToken.None);
+        var second = Context("orders", """{"ids":[2,3]}""", "id", first.NodeState, itemsPath: "result");
+        var next = await node.ExecuteAsync(second, CancellationToken.None);
+
+        Assert.Equal([(1, "Клієнт 1"), (2, "Клієнт 2")], fresh[0].Select(Order));
+        Assert.Equal((3, "Клієнт 3"), Order(Assert.Single(next[0])));
+        Assert.Equal("[1,2,3]", second.NodeState[McpPollNode.SeenKeysState]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task WithoutItemsPathListStaysOneItem()
+    {
+        var node = new McpPollNode(_registry);
+        var ctx = Context("orders", """{"ids":[1,2]}""", "result.0.id", []);
+
+        var output = await node.ExecuteAsync(ctx, CancellationToken.None);
+
+        var item = Assert.Single(output[0]);
+        Assert.Equal(2, item.Json["result"]!.AsArray().Count);
+        Assert.Equal("[1]", ctx.NodeState[McpPollNode.SeenKeysState]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("orders", """{"ids":[1]}""", "result.0")]
+    [InlineData("orders", """{"ids":[1]}""", "missing")]
+    [InlineData("feed", """{"ids":["a"]}""", "result")]
+    public async Task ItemsPathNotPointingToArrayFails(string tool, string arguments, string itemsPath)
+    {
+        var node = new McpPollNode(_registry);
+        var ctx = Context(tool, arguments, "id", [], itemsPath);
+
+        var ex = await Assert.ThrowsAsync<McpToolException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+
+        Assert.Contains(itemsPath, ex.Message);
+        Assert.Empty(ctx.NodeState);
+    }
+
+    [Fact]
     public async Task MissingKeyFieldFailsAndKeepsState()
     {
         var node = new McpPollNode(_registry);
@@ -133,6 +176,9 @@ public sealed class McpPollNodeTests : IAsyncLifetime
         Assert.Empty(second.OutputOf("t"));
     }
 
+    private static (int Id, string Customer) Order(Item item) =>
+        (item.Json["id"]!.GetValue<int>(), item.Json["customer"]!.GetValue<string>());
+
     private static async Task<ExecutionResult> RunAsync(InMemoryNodeRegistry registry, WorkflowDefinition workflow, IReadOnlyDictionary<string, JsonObject> states)
     {
         var store = new InMemoryExecutionStore();
@@ -172,7 +218,7 @@ public sealed class McpPollNodeTests : IAsyncLifetime
         return ([.. output[0].Select(i => i.Json["text"]!.GetValue<string>())], ctx.NodeState);
     }
 
-    private FakeNodeContext Context(string tool, string arguments, string keyField, JsonObject state)
+    private FakeNodeContext Context(string tool, string arguments, string keyField, JsonObject state, string? itemsPath = null)
     {
         var parameters = new JsonObject
         {
@@ -182,6 +228,11 @@ public sealed class McpPollNodeTests : IAsyncLifetime
             ["cron"] = "*/5 * * * *",
             ["keyField"] = keyField,
         };
+        if (itemsPath is not null)
+        {
+            parameters["itemsPath"] = itemsPath;
+        }
+
         return new FakeNodeContext
         {
             Node = new NodeDefinition { Id = "n_poll", Name = "Опитування", Type = "mcp.poll", Parameters = (JsonObject)parameters.DeepClone() },

@@ -78,11 +78,12 @@ public sealed class IfNode : INode
 - Форма в канвасі будується з `inputSchema` tool'а (кеш `mcp_servers.tools_cache`).
 - Будь-яке поле `arguments` може бути рядком `{{ }}`; після обчислення значення приводиться до типу зі схеми (рядок → число/об'єкт/масив за потреби).
 - Результат: `structuredContent` → один item; інакше по item на `content`-блок. `isError: true` у відповіді — помилка вузла (retry/continueOnFail як звичайно).
+- Необов'язковий `itemsPath` (шлях через крапку у `structuredContent`, напр. `result` або `data.orders`) розгортає масив у item на елемент: об'єкт → `json` як є, інше → `{ "value": … }`. Якщо `structuredContent` не об'єкт (tool повернув колекцію), OpenBP загортає його у `{ "result": [ … ] }`, тож для списку `itemsPath` = `result`. Якщо `structuredContent` немає або за шляхом не масив — помилка вузла.
 - У палітрі tool показується як «<Назва сервера>: <title або name tool'а>», група — назва сервера.
 
 ## 3. `mcp.poll` (тригер)
 
-Параметри: `serverId`, `toolName`, `arguments`, `cron`, `keyField` (шлях до унікального поля у результаті). Викликає tool за розкладом, порівнює ключі з `NodeState.seenKeys` (кільцевий буфер 1000), віддає лише нові items.
+Параметри: `serverId`, `toolName`, `arguments`, `cron`, `keyField` (шлях до унікального поля у `json` item'а), `itemsPath` (як у `mcp.tool`; для списку записів у `structuredContent` обов'язковий, інакше вся відповідь — один item). Викликає tool за розкладом, перетворює результат на items як `mcp.tool`, порівнює ключі з `NodeState.seenKeys` (кільцевий буфер 1000), віддає лише нові items. Item без ключа — помилка вузла, стан не змінюється.
 
 ## 4. `ai.llm`
 

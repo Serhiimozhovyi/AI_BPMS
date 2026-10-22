@@ -52,6 +52,28 @@ public sealed class McpToolNodeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ItemsPathExpandsListIntoItems()
+    {
+        var node = new McpToolNode(_registry);
+        var ctx = Context("orders", """{"ids":[5,6]}""", "{}");
+        ctx.Parameters!["itemsPath"] = "result";
+
+        var output = await node.ExecuteAsync(ctx, CancellationToken.None);
+
+        Assert.Equal([(5, "Клієнт 5"), (6, "Клієнт 6")], output[0].Select(i => (i.Json["id"]!.GetValue<int>(), i.Json["customer"]!.GetValue<string>())));
+    }
+
+    [Fact]
+    public async Task ItemsPathWithoutStructuredContentFails()
+    {
+        var node = new McpToolNode(_registry);
+        var ctx = Context("echo", """{"text":"x"}""", "{}");
+        ctx.Parameters!["itemsPath"] = "result";
+
+        await Assert.ThrowsAsync<McpToolException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ContentBlocksBecomeItemsWithText()
     {
         var node = new McpToolNode(_registry);
