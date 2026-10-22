@@ -331,6 +331,23 @@ public class WorkflowValidatorTests
         Assert.Empty(await new WorkflowValidator().ValidateAsync(doc, Active));
     }
 
+    [Fact]
+    public async Task TriggerIsDeterminedByProviderPortsWhenTypeIsKnown()
+    {
+        var doc = WorkflowTestData.ExampleNode;
+        doc["nodes"]![0]!["type"] = "acme.cron";
+        var validator = new WorkflowValidator(new FakeProvider());
+
+        Assert.Equal(Codes.TriggerMissing, Assert.Single(await validator.ValidateAsync(doc, Active)).Code);
+
+        var provider = new FakeProvider();
+        provider.Ports["acme.cron"] = new(0, 1);
+        Assert.Empty(await new WorkflowValidator(provider).ValidateAsync(doc, Active));
+
+        provider.Ports["acme.cron"] = new(1, 1);
+        Assert.Equal(Codes.TriggerMissing, Assert.Single(await new WorkflowValidator(provider).ValidateAsync(doc, Active)).Code);
+    }
+
     // ---------- Правила 5–6: INodeSchemaProvider ----------
 
     [Fact]
@@ -403,7 +420,7 @@ public class WorkflowValidatorTests
 
     private sealed class FakeProvider : INodeSchemaProvider
     {
-        private static readonly Dictionary<string, NodePorts> Ports = new()
+        public Dictionary<string, NodePorts> Ports { get; } = new()
         {
             ["core.webhook"] = new(0, 1),
             ["ai.llm"] = new(1, 1),

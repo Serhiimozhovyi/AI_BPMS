@@ -21,7 +21,10 @@ public sealed record WorkflowValidationOptions
 /// </summary>
 public sealed class WorkflowValidator
 {
-    /// <summary>Типи тригерів (docs/connectors.md §6).</summary>
+    /// <summary>
+    /// Відомі типи тригерів (docs/connectors.md §6). Fallback для правила 4, коли провайдер
+    /// не знає тип вузла; інакше тригер — вузол без входів за <see cref="INodeSchemaProvider.GetPorts"/>.
+    /// </summary>
     public static IReadOnlySet<string> TriggerTypes { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "core.manualTrigger",
@@ -38,6 +41,11 @@ public sealed class WorkflowValidator
 
     private readonly INodeSchemaProvider _provider;
 
+    /// <summary>Створює валідатор.</summary>
+    /// <param name="provider">
+    /// Знання про типи вузлів (порти, правила 5–6); <c>null</c> — <see cref="NullNodeSchemaProvider"/>,
+    /// тоді межі портів і правила 5–6 не перевіряються, а тригери визначаються за <see cref="TriggerTypes"/>.
+    /// </param>
     public WorkflowValidator(INodeSchemaProvider? provider = null)
     {
         _provider = provider ?? NullNodeSchemaProvider.Instance;
@@ -236,15 +244,21 @@ public sealed class WorkflowValidator
         }
     }
 
-    private static void ValidateTrigger(WorkflowDefinition workflow, List<WorkflowValidationError> errors)
+    private void ValidateTrigger(WorkflowDefinition workflow, List<WorkflowValidationError> errors)
     {
-        if (!workflow.Nodes.Any(n => n.Disabled != true && TriggerTypes.Contains(n.Type)))
+        if (!workflow.Nodes.Any(n => n.Disabled != true && IsTrigger(n)))
         {
             errors.Add(new(WorkflowValidationCodes.TriggerMissing,
                 $"Активний сценарій має містити хоча б один увімкнений тригер ({string.Join(", ", TriggerTypes)}).",
                 Path: "/nodes"));
         }
     }
+
+    /// <summary>Тригер — вузол без входів за дескриптором; якщо провайдер тип не знає — за <see cref="TriggerTypes"/>.</summary>
+    private bool IsTrigger(NodeDefinition node) =>
+        _provider.GetPorts(node.Type, node.TypeVersion) is { } ports
+            ? ports.Inputs == 0
+            : TriggerTypes.Contains(node.Type);
 
     /// <summary>Орієнтований граф над індексами вузлів; сусіди впорядковані за індексом для детермінізму.</summary>
     private sealed class Graph
