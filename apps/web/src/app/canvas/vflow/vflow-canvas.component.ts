@@ -21,8 +21,9 @@ const NODE_WIDTH = 220;
 const NODE_HEIGHT = 72;
 
 /**
- * Прототип канвасу на ngx-vflow (спайк F1-11): кастомна картка вузла через `ng-template[nodeHtml]`,
- * порти через `<handle>`, створення з'єднань мишею, drag/zoom/pan з коробки.
+ * Прототип канвасу на ngx-vflow — переможець спайку F1-11 (docs/adr/ADR-003-canvas.md):
+ * кастомна картка вузла через `ng-template[nodeHtml]`, порти через `<handle>`, створення з'єднань
+ * мишею, drag/zoom/pan з коробки. У F2-F обгортається у `CanvasComponent` з власним API.
  */
 @Component({
   selector: 'app-vflow-canvas',
@@ -127,8 +128,8 @@ export class VflowCanvasComponent {
   /** Граф для відображення. */
   readonly graph = input.required<SpikeGraph>();
 
-  /** Віртуалізація viewport'у (ngx-vflow рендерить лише видимі вузли). */
-  readonly virtualization = input(false);
+  /** Віртуалізація viewport'у: ngx-vflow рендерить лише видимі вузли (ADR-003: увімкнено за замовчуванням). */
+  readonly virtualization = input(true);
 
   protected readonly nodes = computed<Node<NodeData>[]>(() =>
     createNodes<NodeData>(
