@@ -90,7 +90,7 @@
 - DoD: тести проти FakeServer: успіх, `isError`, таймаут, poll віддає лише нові записи.
 
 ### F1-10 · CLI `openbp run`
-- model: `sonnet` · status: `ready` · depends: F1-05, F1-09
+- model: `sonnet` · status: `in-progress agent/F1-10-cli-run` · depends: F1-05, F1-09
 - Що: `OpenBP.Cli`: `openbp run <file.json> [--pin] [--servers servers.json]` — виконує сценарій з in-memory store, друкує input/output кожного вузла; `examples/telegram-1c.json` з `workflow-format.md` + мок-сервери 1С і Telegram на FakeServer.
 - DoD: критерій фази 1 з `docs/roadmap.md` виконується командою з README.
 
