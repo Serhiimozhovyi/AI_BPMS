@@ -201,7 +201,7 @@
 - DoD: тести на кожен маршрут, на помилки валідації з кодами, на права ролей; збережений приклад `telegram-1c.json` читається назад без втрат (round-trip невідомих полів).
 
 ### F2-07 · Worker: виконання jobs
-- model: `opus` · status: `review #36` · depends: F2-00, F2-02, F2-03, F2-04
+- model: `opus` · status: `done` · depends: F2-00, F2-02, F2-03, F2-04
 - Що: `OpenBP.Worker`:
   - `BackgroundService` бере job `execution` → `WorkflowExecutor` з `PostgresExecutionStore`, `PostgresCredentialProvider`, `McpServerRegistry` із серверами з `mcp_servers`;
   - heartbeat (`executions.heartbeat_at` + продовження lock);
