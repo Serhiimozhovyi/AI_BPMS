@@ -85,7 +85,7 @@
 - DoD: інтеграційний тест з тестовим MCP-сервером (у `tests/OpenBP.Mcp.Tests/FakeServer`, той самий SDK): discovery повертає схеми; падіння сервера → `McpUnavailableException` за ≤ таймаут.
 
 ### F1-09 · Вузли `mcp.tool` і `mcp.poll`
-- model: `opus` · status: `review #23` · depends: F1-07, F1-08
+- model: `opus` · status: `done` · depends: F1-07, F1-08
 - Що: за `connectors.md` §2–3: виклик `tools/call`, мапінг `structuredContent`/`content` → items, `isError`, таймаут; `mcp.poll` з `NodeState.seenKeys`.
 - DoD: тести проти FakeServer: успіх, `isError`, таймаут, poll віддає лише нові записи.
 
