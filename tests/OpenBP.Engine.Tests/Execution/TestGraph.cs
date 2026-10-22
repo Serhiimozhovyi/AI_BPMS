@@ -101,7 +101,11 @@ internal sealed class TestGraph
     public static void AlwaysRun(NodeDefinition node) =>
         node.ExtensionData = new() { ["alwaysRun"] = JsonSerializer.SerializeToElement(true) };
 
-    public WorkflowExecutor Executor() => new(Registry, Store, Expressions, Credentials, new InMemoryBinaryStore(), Logger);
+    /// <summary>Годинник виконавця; <c>null</c> — системний.</summary>
+    public TimeProvider? Time { get; set; }
+
+    public WorkflowExecutor Executor(IExecutionStore? store = null) =>
+        new(Registry, store ?? Store, Expressions, Credentials, new InMemoryBinaryStore(), Logger, Time);
 
     public ExecutionRequest Request(Func<ExecutionRequest, ExecutionRequest>? configure = null)
     {
@@ -112,15 +116,20 @@ internal sealed class TestGraph
     public async Task<ExecutionResult> RunAsync(Func<ExecutionRequest, ExecutionRequest>? configure = null, CancellationToken ct = default)
     {
         var request = Request(configure);
+        Register(request);
+        return await Executor().RunAsync(request, ct);
+    }
+
+    /// <summary>Реєструє виконання запиту в <see cref="Store"/> (у бою це робить хост).</summary>
+    public void Register(ExecutionRequest request) =>
         Store.Register(new ExecutionSnapshot
         {
             Id = request.ExecutionId,
             WorkflowId = "wf_test",
-            Workflow = _workflow,
+            Workflow = request.Workflow,
+            Mode = request.Mode,
             StartedAt = DateTimeOffset.UtcNow,
         });
-        return await Executor().RunAsync(request, ct);
-    }
 
     public static int[] Ns(IEnumerable<Item> items) => [.. items.Select(i => i.Json["n"]!.GetValue<int>())];
 }

@@ -28,13 +28,19 @@ public sealed record ExecutionResult
     /// <summary>Підсумковий статус.</summary>
     public required ExecutionStatus Status { get; init; }
 
-    /// <summary>Помилка, через яку виконання зупинилось; <c>null</c> для <see cref="ExecutionStatus.Success"/>.</summary>
+    /// <summary>
+    /// Помилка, через яку виконання зупинилось; <c>null</c> для <see cref="ExecutionStatus.Success"/> (помилки вузлів
+    /// з <c>continueOnFail</c> виконання не зупиняють і лишаються лише в їхніх кроках).
+    /// </summary>
     public StepError? Error { get; init; }
 
     /// <summary>Id вузла, на якому виконання зупинилось (помилка, скасування, таймаут); інакше <c>null</c>.</summary>
     public string? FailedNodeId { get; init; }
 
-    /// <summary>Кроки цього запуску в порядку збереження (ті самі, що передано в <see cref="IExecutionStore.SaveStepAsync"/>).</summary>
+    /// <summary>
+    /// Кроки виконання в порядку обходу графа: нові — ті самі, що передано в <see cref="IExecutionStore.SaveStepAsync"/>;
+    /// після <c>ResumeAsync</c> сюди входять і відновлені зі знімка кроки (повторно вони не зберігаються).
+    /// </summary>
     public required IReadOnlyList<StepRecord> Steps { get; init; }
 
     /// <summary>Стан вузлів після успішних запусків — хост зберігає його в <c>node_state</c>.</summary>
