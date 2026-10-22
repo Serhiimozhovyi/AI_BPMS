@@ -13,7 +13,12 @@ namespace OpenBP.Engine.Execution;
 /// items є на <b>всіх</b> входах. Інакше гілка згасає (<see cref="StepStatus.Skipped"/>), крім <c>alwaysRun: true</c>.</item>
 /// <item>Після кожного вузла — <see cref="IExecutionStore.SaveStepAsync"/>, зокрема для пропущених і невдалих.</item>
 /// <item><see cref="CancellationToken"/> і таймаут сценарію (<c>settings.executionTimeoutSec</c>) прокидаються у кожен вузол.</item>
-/// <item>Помилка вузла зупиняє виконання зі статусом <see cref="ExecutionStatus.Error"/> (retry і <c>continueOnFail</c> — F1-05).</item>
+/// <item>Помилка вузла — повтори за <c>retry</c> (<c>maxTries</c> спроб загалом, пауза <c>waitMs</c>, що подвоюється
+/// після кожної невдалої спроби). Після останньої спроби: з <c>continueOnFail: true</c> крок отримує статус
+/// <see cref="StepStatus.Error"/>, а помилка стає одним item на додатковому останньому виході <c>error</c> — виконання
+/// продовжується; інакше виконання зупиняється зі статусом <see cref="ExecutionStatus.Error"/>.</item>
+/// <item><see cref="ResumeAsync(ExecutionSnapshot, ExecutionRequest, CancellationToken)"/> продовжує виконання зі
+/// збережених кроків: завершені вузли не виконуються повторно, їхні виходи відновлюються зі знімка.</item>
 /// <item>У <see cref="ExecutionMode.Manual"/> вузол із <c>pinData</c> не виконується — закріплені items стають його виходом 0.</item>
 /// <item>Вимкнений вузол (<c>disabled: true</c>) не виконується — items з його входів проходять на вихід 0.</item>
 /// </list>
@@ -71,36 +76,131 @@ public sealed class WorkflowExecutor
     {
         ArgumentNullException.ThrowIfNull(request);
         var plan = ExecutionPlan.Build(request, _registry);
-        var workflow = request.Workflow;
-        var startedAt = _time.GetUtcNow();
-        var timeoutSec = workflow.Settings.ExecutionTimeoutSec;
+        var run = new RunState(request);
+        _services.Logger.Log(LogLevel.Info, null, $"Виконання «{request.Workflow.Name}» стартувало.");
+        return await ExecuteAsync(plan, run, new Dictionary<string, StepRecord>(StringComparer.Ordinal), _time.GetUtcNow(), ct)
+            .ConfigureAwait(false);
+    }
 
+    /// <summary>
+    /// Продовжує перерване виконання (падіння воркера) зі знімка, коли вихідного запиту немає: сценарій, id і режим
+    /// беруться зі <paramref name="snapshot"/>, стартують усі вузли без вхідних ребер. Якщо виконання стартувало з
+    /// конкретного тригера (<see cref="ExecutionRequest.StartNodeId"/>), <c>$env</c> чи <c>node_state</c>, використовуйте
+    /// <see cref="ResumeAsync(ExecutionSnapshot, ExecutionRequest, CancellationToken)"/>.
+    /// </summary>
+    /// <param name="snapshot">Знімок із <see cref="IExecutionStore.LoadAsync"/>.</param>
+    /// <param name="ct">Скасування з UI/API.</param>
+    public Task<ExecutionResult> ResumeAsync(ExecutionSnapshot snapshot, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var request = new ExecutionRequest { ExecutionId = snapshot.Id, Workflow = snapshot.Workflow, Mode = snapshot.Mode };
+        return ResumeAsync(snapshot, request, ct);
+    }
+
+    /// <summary>
+    /// Продовжує перерване виконання з останнього збереженого кроку.
+    /// <list type="bullet">
+    /// <item>Вузол, чий останній збережений крок <see cref="StepStatus.Success"/>, <see cref="StepStatus.Skipped"/> або
+    /// <see cref="StepStatus.Error"/> з виходом <c>error</c> (<c>continueOnFail</c>), повторно не виконується й не
+    /// зберігається — його вихід береться зі знімка. Інші вузли (без кроку, <see cref="StepStatus.Cancelled"/>,
+    /// <see cref="StepStatus.Error"/> без <c>continueOnFail</c>) виконуються заново.</item>
+    /// <item>Порядок обходу той самий, що й у <see cref="RunAsync"/>, тож результат збігається з виконанням без падіння.</item>
+    /// <item><see cref="ExecutionResult.Steps"/> містить і відновлені, і нові кроки; <see cref="ExecutionResult.StartedAt"/>
+    /// — <see cref="ExecutionSnapshot.StartedAt"/>. Таймаут сценарію відлічується від моменту відновлення.</item>
+    /// <item>Стан вузлів (<c>NodeState</c>), виконаних до падіння, кроки не містять — береться з
+    /// <see cref="ExecutionRequest.NodeStates"/>.</item>
+    /// </list>
+    /// </summary>
+    /// <param name="snapshot">Знімок із <see cref="IExecutionStore.LoadAsync"/>: збережені кроки виконання.</param>
+    /// <param name="request">
+    /// Вихідний запит виконання (з payload задачі воркера); <see cref="ExecutionRequest.ExecutionId"/> має збігатися
+    /// з <see cref="ExecutionSnapshot.Id"/>.
+    /// </param>
+    /// <param name="ct">Скасування з UI/API.</param>
+    /// <exception cref="ArgumentException">Id запиту або кроку не збігається з id знімка.</exception>
+    /// <exception cref="EngineException">
+    /// Сценарій структурно невиконуваний (як у <see cref="RunAsync"/>) або знімок містить крок вузла, якого в сценарії немає.
+    /// </exception>
+    public async Task<ExecutionResult> ResumeAsync(ExecutionSnapshot snapshot, ExecutionRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.ExecutionId != snapshot.Id)
+        {
+            throw new ArgumentException($"Запит виконання {request.ExecutionId} не відповідає знімку {snapshot.Id}.", nameof(request));
+        }
+
+        var plan = ExecutionPlan.Build(request, _registry);
+        var known = request.Workflow.Nodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+        var latest = new Dictionary<string, StepRecord>(StringComparer.Ordinal);
+        foreach (var step in snapshot.Steps)
+        {
+            if (step.ExecutionId != snapshot.Id)
+            {
+                throw new ArgumentException($"Крок вузла «{step.NodeId}» належить іншому виконанню ({step.ExecutionId}).", nameof(snapshot));
+            }
+
+            if (!known.Contains(step.NodeId))
+            {
+                throw new EngineException($"Знімок містить крок вузла «{step.NodeId}», якого немає в сценарії.");
+            }
+
+            latest[step.NodeId] = step;
+        }
+
+        var restored = latest
+            .Where(p => plan.Nodes.TryGetValue(p.Key, out var node) && IsCompleted(node, p.Value))
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+
+        var run = new RunState(request);
+        _services.Logger.Log(
+            LogLevel.Info,
+            null,
+            $"Виконання «{request.Workflow.Name}» відновлено: {restored.Count} вузл(ів) уже завершено.");
+        return await ExecuteAsync(plan, run, restored, snapshot.StartedAt, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Спільний цикл черги готових вузлів для запуску і відновлення.</summary>
+    private async Task<ExecutionResult> ExecuteAsync(
+        ExecutionPlan plan,
+        RunState run,
+        IReadOnlyDictionary<string, StepRecord> restored,
+        DateTimeOffset startedAt,
+        CancellationToken ct)
+    {
+        var timeoutSec = run.Request.Workflow.Settings.ExecutionTimeoutSec;
         using var timeout = timeoutSec > 0 ? new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec), _time) : null;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout?.Token ?? CancellationToken.None);
         var token = linked.Token;
 
-        var run = new RunState(request);
-        _services.Logger.Log(LogLevel.Info, null, $"Виконання «{workflow.Name}» стартувало.");
-
         var queue = new Queue<PlannedNode>(plan.Starts);
         while (queue.TryDequeue(out var node))
         {
-            if (token.IsCancellationRequested)
+            if (restored.TryGetValue(node.Definition.Id, out var step))
             {
-                return Finish(run, startedAt, Interrupted(ct, timeoutSec), null);
+                run.Steps.Add(step);
             }
-
-            var step = await RunNodeAsync(node, run, token).ConfigureAwait(false);
-            run.Steps.Add(step);
-            await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
-
-            switch (step.Status)
+            else
             {
-                case StepStatus.Cancelled:
+                if (token.IsCancellationRequested)
+                {
+                    return Finish(run, startedAt, Interrupted(ct, timeoutSec), null);
+                }
+
+                step = await RunNodeAsync(node, run, token).ConfigureAwait(false);
+                run.Steps.Add(step);
+                await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
+
+                if (step.Status == StepStatus.Cancelled)
+                {
                     return Finish(run, startedAt, Interrupted(ct, timeoutSec), node.Definition.Id);
-                case StepStatus.Error:
+                }
+
+                if (!IsCompleted(node, step))
+                {
                     _services.Logger.Log(LogLevel.Error, node.Definition.Id, $"Вузол «{node.Definition.Name}» завершився помилкою: {step.Error!.Message}");
                     return Finish(run, startedAt, (ExecutionStatus.Error, step.Error), node.Definition.Id);
+                }
             }
 
             run.Complete(node, step);
@@ -115,6 +215,17 @@ public sealed class WorkflowExecutor
 
         return Finish(run, startedAt, (ExecutionStatus.Success, null), null);
     }
+
+    /// <summary>
+    /// Чи дозволяє крок іти далі: успіх, згасання або помилка, передана на вихід <c>error</c> (<c>continueOnFail</c>).
+    /// </summary>
+    private static bool IsCompleted(PlannedNode node, StepRecord step) =>
+        step.Status switch
+        {
+            StepStatus.Success or StepStatus.Skipped => true,
+            StepStatus.Error => node.ContinueOnFail && step.Output.Length == node.OutputCount + 1,
+            _ => false,
+        };
 
     private static (ExecutionStatus, StepError) Interrupted(CancellationToken external, int timeoutSec) =>
         external.IsCancellationRequested
@@ -161,35 +272,112 @@ public sealed class WorkflowExecutor
             return Step(StepStatus.Success, Ports(node.OutputCount, inputs.SelectMany(i => i)));
         }
 
-        var state = request.NodeStates.TryGetValue(definition.Id, out var saved) ? (JsonObject)saved.DeepClone() : [];
-        var ctx = new EngineNodeContext(
-            definition, node.Impl.Descriptor, request.ExecutionId, inputs, _services,
-            run.NodeOutputsByName(), request.Env, request.Workflow.Settings.Timezone, startedAt, state);
-
-        try
+        var maxTries = Math.Max(1, definition.Retry?.MaxTries ?? 1);
+        var waitMs = Math.Max(0, definition.Retry?.WaitMs ?? 0);
+        for (var attempt = 1; ; attempt++)
         {
-            var output = await node.Impl.ExecuteAsync(ctx, token).ConfigureAwait(false);
-            EnsureShape(node, output);
-            if (ctx.NodeState.Count > 0 || request.NodeStates.ContainsKey(definition.Id))
+            var state = request.NodeStates.TryGetValue(definition.Id, out var saved) ? (JsonObject)saved.DeepClone() : [];
+            IReadOnlyList<Item>[] attemptInputs = [.. inputs.Select(i => (IReadOnlyList<Item>)[.. i.Select(RunState.Clone)])];
+            var ctx = new EngineNodeContext(
+                definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
+                run.NodeOutputsByName(), request.Env, request.Workflow.Settings.Timezone, startedAt, state);
+
+            try
             {
-                run.NodeStates[definition.Id] = ctx.NodeState;
+                var output = await node.Impl.ExecuteAsync(ctx, token).ConfigureAwait(false);
+                EnsureShape(node, output);
+                if (ctx.NodeState.Count > 0 || request.NodeStates.ContainsKey(definition.Id))
+                {
+                    run.NodeStates[definition.Id] = ctx.NodeState;
+                }
+
+                _services.Logger.Log(LogLevel.Info, definition.Id, $"Вузол «{definition.Name}» виконано.");
+                return Step(StepStatus.Success, output);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return Cancelled(attempt);
+            }
+#pragma warning disable CA1031 // Будь-яка помилка вузла стає кроком Error, а не падінням движка.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                var error = new StepError(ex.Message, ex.GetType().Name, attempt);
+                if (attempt >= maxTries)
+                {
+                    return Failed(error);
+                }
+
+                _services.Logger.Log(
+                    LogLevel.Warning,
+                    definition.Id,
+                    $"Вузол «{definition.Name}»: спроба {attempt} з {maxTries} невдала ({ex.Message}); повтор.");
             }
 
-            _services.Logger.Log(LogLevel.Info, definition.Id, $"Вузол «{definition.Name}» виконано.");
-            return Step(StepStatus.Success, output);
+            var wait = Backoff(waitMs, attempt);
+            if (wait > TimeSpan.Zero)
+            {
+                try
+                {
+                    await Task.Delay(wait, _time, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    return Cancelled(attempt);
+                }
+            }
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
+
+        StepRecord Cancelled(int attempts)
         {
             _services.Logger.Log(LogLevel.Warning, definition.Id, $"Вузол «{definition.Name}» перервано скасуванням.");
-            return Step(StepStatus.Cancelled, Ports(node.OutputCount, []), new StepError("Вузол перервано скасуванням.", "CANCELLED"));
+            return Step(StepStatus.Cancelled, Ports(node.OutputCount, []), new StepError("Вузол перервано скасуванням.", "CANCELLED", attempts));
         }
-#pragma warning disable CA1031 // Будь-яка помилка вузла стає кроком Error, а не падінням движка.
-        catch (Exception ex)
-#pragma warning restore CA1031
+
+        StepRecord Failed(StepError error)
         {
-            return Step(StepStatus.Error, Ports(node.OutputCount, []), new StepError(ex.Message, ex.GetType().Name));
+            if (!node.ContinueOnFail)
+            {
+                return Step(StepStatus.Error, Ports(node.OutputCount, []), error);
+            }
+
+            _services.Logger.Log(
+                LogLevel.Warning,
+                definition.Id,
+                $"Вузол «{definition.Name}» завершився помилкою; continueOnFail — помилку передано на вихід error: {error.Message}");
+            var ports = Ports(node.OutputCount + 1, []);
+            ports[^1] = [ErrorItem(error)];
+            return Step(StepStatus.Error, ports, error);
         }
     }
+
+    /// <summary>Пауза перед наступною спробою: <c>waitMs</c> після першої невдачі, далі подвоюється.</summary>
+    /// <param name="waitMs">Базова пауза з <c>retry.waitMs</c>.</param>
+    /// <param name="failedAttempt">Номер невдалої спроби, від 1.</param>
+    private static TimeSpan Backoff(int waitMs, int failedAttempt)
+    {
+        if (waitMs <= 0)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var ms = waitMs * Math.Pow(2, Math.Min(failedAttempt - 1, 30));
+        return TimeSpan.FromMilliseconds(Math.Min(ms, int.MaxValue));
+    }
+
+    /// <summary>Item виходу <c>error</c>: <c>{ "error": { "message", "type", "attempts" } }</c>.</summary>
+    private static Item ErrorItem(StepError error) => new()
+    {
+        Json = new JsonObject
+        {
+            ["error"] = new JsonObject
+            {
+                ["message"] = error.Message,
+                ["type"] = error.Type,
+                ["attempts"] = error.Attempts,
+            },
+        },
+    };
 
     /// <summary>Тригер (без входів) — завжди; один вхід — є items; кілька входів (Merge) — items на всіх.</summary>
     private static bool HasData(PlannedNode node, IReadOnlyList<Item>[] inputs) =>

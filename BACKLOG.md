@@ -65,7 +65,7 @@
 - DoD: тести: лінійний, розгалуження IF, Merge двох гілок, згасання, скасування, таймаут; покриття проєкту ≥ 80 %.
 
 ### F1-05 · `OpenBP.Engine`: retry, continueOnFail, resume
-- model: `opus` · status: `ready` · depends: F1-04
+- model: `opus` · status: `review #19` · depends: F1-04
 - Що: retry за налаштуваннями вузла з backoff; `continueOnFail` → вихід `error`; `ResumeAsync(snapshot)` продовжує з останнього збереженого кроку.
 - DoD: тести на кожен режим; resume після «падіння» посередині графа дає той самий результат, що й без падіння.
 
