@@ -36,7 +36,7 @@
 - DoD: CI зелений на PR з цієї гілки.
 
 ### F0-05 · Протокол нічного агента — перевірка
-- model: `haiku` · status: `review #8` · depends: F0-04
+- model: `haiku` · status: `done` · depends: F0-04
 - Що: агент виконує «порожню» задачу: додає `docs/CHANGELOG.md` з першим записом, відкриває PR за шаблоном `.github/PULL_REQUEST_TEMPLATE.md`, оновлює статус цієї задачі.
 - DoD: PR відкрито вночі без участі людини; у ньому є посилання на задачу і чекліст DoD.
 
@@ -55,7 +55,7 @@
 - DoD: тести на кожне правило; детерміноване визначення циклу з вказанням вузлів.
 
 ### F1-03 · `OpenBP.Engine`: інтерфейси і in-memory реалізації
-- model: `fable` · status: `review #10` · depends: F1-01
+- model: `fable` · status: `done` · depends: F1-01
 - Що: інтерфейси з `architecture.md` §2 (`IExecutionStore`, `ICredentialProvider`, `INodeRegistry`, `IExpressionEvaluator`, `IExecutionLogger`), `INode`/`INodeContext` з `connectors.md` §1, `OpenBP.Engine.Testing` з in-memory реалізаціями. **Без логіки виконання.**
 - DoD: інтерфейси задокументовані XML-коментарями; рев'ю власником перед F1-04.
 
