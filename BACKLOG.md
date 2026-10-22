@@ -112,7 +112,7 @@
 Піднято за рішенням власника: `ai.llm` потрібен уже для живого прогону прикладу `telegram-1c` локально з Ollama.
 
 ### F3-01 · `ai.llm`: провайдер OpenAI-compatible (Ollama) і structured output
-- model: `sonnet` · status: `ready` · depends: F1-10
+- model: `sonnet` · status: `review #27` · depends: F1-10
 - Що: за `connectors.md` §4 у `OpenBP.Ai`:
   - вузол `ai.llm` (Descriptor, JSON Schema параметрів: `provider`, `model`, `credentialId`, `system`, `prompt`, `outputSchema`, `temperature`, `maxTokens`);
   - внутрішня абстракція провайдера, реалізація лише `openai-compatible` через `HttpClient`, без нових SDK: `POST {baseUrl}/chat/completions`;

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBP.Ai;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
 using OpenBP.Engine.Testing;
@@ -11,7 +12,7 @@ using OpenBP.Shared.Workflow;
 namespace OpenBP.Cli;
 
 /// <summary>
-/// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json]</c> — виконання сценарію без БД
+/// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json] [--credentials creds.json]</c> — виконання сценарію без БД
 /// (docs/architecture.md §1): in-memory store, <c>core.*</c> і <c>mcp.*</c> вузли, Jint-вирази.
 /// Друкує input/output кожного вузла. Коди виходу: 0 — успіх, 1 — виконання завершилось не успіхом, 2 — помилка запуску.
 /// </summary>
@@ -27,10 +28,11 @@ public static class CliApp
     public const int UsageError = 2;
 
     private const string Usage = """
-        Використання: openbp run <file.json> [--pin] [--servers servers.json]
+        Використання: openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]
 
           --pin        ручний тестовий запуск: вузли з pinData не виконуються, їхній вихід — закріплені items
           --servers    JSON з MCP-серверами, на які посилаються вузли mcp.* (serverId)
+          --credentials JSON { "<credentialId>": { … } } з даними credentials для вузлів (напр. ai.llm)
         """;
 
     /// <summary>Розбирає аргументи і виконує команду.</summary>
@@ -72,8 +74,12 @@ public static class CliApp
             await mcp.RegisterAsync(server).ConfigureAwait(false);
         }
 
+        var credentials = options.CredentialsPath is null ? new FakeCredentialProvider() : CredentialsFile.Load(options.CredentialsPath);
+
+        // Таймаутом запиту до моделі керує сам вузол (timeoutSec), тож HttpClient без власного таймауту.
+        using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         var registry = new InMemoryNodeRegistry();
-        foreach (var node in CoreNodes.All().Concat(McpNodes.All(mcp)))
+        foreach (var node in CoreNodes.All().Concat(McpNodes.All(mcp)).Concat(AiNodes.All(http)))
         {
             registry.Register(node);
         }
@@ -96,7 +102,7 @@ public static class CliApp
             registry,
             store,
             new JintExpressionEvaluator(),
-            new FakeCredentialProvider(),
+            credentials,
             new InMemoryBinaryStore(),
             new InMemoryExecutionLogger());
 
@@ -129,7 +135,7 @@ public static class CliApp
     }
 
     /// <summary>Аргументи <c>openbp run</c>.</summary>
-    private sealed record RunOptions(string WorkflowPath, bool Pin, string? ServersPath)
+    private sealed record RunOptions(string WorkflowPath, bool Pin, string? ServersPath, string? CredentialsPath)
     {
         public static RunOptions Parse(string[] args)
         {
@@ -140,6 +146,7 @@ public static class CliApp
 
             string? file = null;
             string? servers = null;
+            string? credentials = null;
             var pin = false;
             for (var i = 1; i < args.Length; i++)
             {
@@ -153,6 +160,11 @@ public static class CliApp
                         break;
                     case "--servers":
                         throw new CliException("Після --servers очікується шлях до файлу.", showUsage: true);
+                    case "--credentials" when i + 1 < args.Length:
+                        credentials = args[++i];
+                        break;
+                    case "--credentials":
+                        throw new CliException("Після --credentials очікується шлях до файлу.", showUsage: true);
                     case var a when a.StartsWith("--", StringComparison.Ordinal):
                         throw new CliException($"Невідомий параметр «{a}».", showUsage: true);
                     case var a when file is null:
@@ -165,7 +177,7 @@ public static class CliApp
 
             return file is null
                 ? throw new CliException("Не вказано файл сценарію.", showUsage: true)
-                : new RunOptions(file, pin, servers);
+                : new RunOptions(file, pin, servers, credentials);
         }
     }
 }

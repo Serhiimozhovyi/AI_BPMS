@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ai.llm",
+  "type": "object",
+  "required": [
+    "provider",
+    "model",
+    "credentialId",
+    "prompt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": [
+        "anthropic",
+        "openai",
+        "openai-compatible"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "credentialId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "system": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outputSchema": {
+      "type": "object"
+    },
+    "temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "maxTokens": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

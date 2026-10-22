@@ -1,7 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- ai.llm — публічний контракт для хостів (воркер, API, CLI); відсутній XML-коментар є помилкою збірки. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Валідація відповіді моделі за outputSchema. -->
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../OpenBP.Engine/OpenBP.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Schemas/*.schema.json" LogicalName="OpenBP.Ai.Schemas.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

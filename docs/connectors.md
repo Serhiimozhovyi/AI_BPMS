@@ -91,6 +91,12 @@ public sealed class IfNode : INode
 З `outputSchema` вузол вимагає structured output і валідує відповідь схемою; без — віддає `{ text }`.
 Нода має один вихід; помилка валідації схеми — звичайна помилка вузла.
 
+Провайдери: `openai-compatible` (`POST {baseUrl}/chat/completions`; OpenAI, Ollama, vLLM…) — реалізовано; `anthropic` і `openai` — помилка вузла «ще не підтримується» до F3-02.
+Для кожного вхідного item'а робиться окремий запит. Таймаут — `timeoutSec` вузла, за замовчуванням 60 с.
+
+Credential типу `openai-compatible`: `{ "baseUrl": "http://localhost:11434/v1", "apiKey"?: "…" }`. `baseUrl` — абсолютна http(s)-адреса без `/chat/completions`;
+`apiKey` необов'язковий (Ollama працює без нього), іде лише в `Authorization: Bearer` і не потрапляє в тексти помилок.
+
 ## 5. Connector Kit (`tools/connector-template`)
 
 Шаблон .NET-проєкту MCP-сервера над REST/OData:
