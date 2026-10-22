@@ -1,7 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- core.* вузли — публічний контракт для хостів (воркер, API, CLI); відсутній XML-коментар є помилкою збірки. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Пісочниця core.code (CLAUDE.md, правило 5): користувацький код виконується тільки в Jint. -->
+    <PackageReference Include="Jint" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../OpenBP.Engine/OpenBP.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Schemas/*.schema.json" LogicalName="OpenBP.Nodes.Core.Schemas.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

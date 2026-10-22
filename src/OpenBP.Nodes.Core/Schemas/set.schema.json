@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.set",
+  "type": "object",
+  "required": [
+    "fields"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^.]+(\\.[^.]+)*$",
+            "description": "Шлях поля через крапку, напр. order.customer"
+          },
+          "value": {
+            "description": "Будь-яке JSON-значення або {{ }}"
+          }
+        }
+      }
+    },
+    "keepOnlySet": {
+      "type": "boolean",
+      "default": false,
+      "description": "Лишити тільки задані поля"
+    }
+  }
+}
