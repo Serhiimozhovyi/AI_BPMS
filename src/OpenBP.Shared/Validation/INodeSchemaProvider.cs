@@ -20,7 +20,8 @@ public interface INodeSchemaProvider
     /// Правила 5–6 для одного вузла: параметри відповідають схемі вузла (рядок <c>{{ }}</c> допустимий
     /// замість будь-якого типу; для <c>mcp.tool</c> — <c>inputSchema</c> tool'а, інакше <c>MCP_TOOL_UNKNOWN</c>),
     /// а <c>serverId</c>/<c>credentialId</c> існують і доступні користувачу.
-    /// Порожній список — порушень немає.
+    /// Порожній список — порушень немає. <c>Path</c> помилки може бути відносним до вузла
+    /// (<c>/type</c>, <c>/parameters/…</c>) — тоді <see cref="WorkflowValidator"/> додає префікс <c>/nodes/{i}</c>.
     /// </summary>
     Task<IReadOnlyList<WorkflowValidationError>> ValidateNodeAsync(NodeDefinition node, CancellationToken ct);
 }
