@@ -10,7 +10,7 @@ namespace OpenBP.Ai;
 /// <summary>
 /// <c>ai.llm</c> — запит до мовної моделі для кожного вхідного item'а (docs/connectors.md §4).
 /// Без <c>outputSchema</c> віддає <c>{ "text": … }</c>; з нею вимагає structured output і валідує відповідь схемою,
-/// item = розібраний JSON. Провайдер <c>openai-compatible</c> (OpenAI, Ollama…); <c>anthropic</c> і <c>openai</c> — F3-02.
+/// item = розібраний JSON. Провайдери: <c>openai-compatible</c> (Ollama…), <c>openai</c>, <c>anthropic</c>.
 /// Таймаут — <c>timeoutSec</c> вузла або <see cref="DefaultTimeout"/>.
 /// </summary>
 public sealed class AiLlmNode : INode
@@ -19,6 +19,8 @@ public sealed class AiLlmNode : INode
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
     private readonly OpenAiCompatibleProvider _openAiCompatible;
+    private readonly OpenAiProvider _openAi;
+    private readonly AnthropicProvider _anthropic;
 
     /// <summary>Створює вузол.</summary>
     /// <param name="http">
@@ -27,7 +29,10 @@ public sealed class AiLlmNode : INode
     /// </param>
     public AiLlmNode(HttpClient? http = null)
     {
-        _openAiCompatible = new OpenAiCompatibleProvider(http ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+        http ??= new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        _openAiCompatible = new OpenAiCompatibleProvider(http);
+        _openAi = new OpenAiProvider(_openAiCompatible);
+        _anthropic = new AnthropicProvider(http);
     }
 
     /// <inheritdoc />
@@ -116,7 +121,8 @@ public sealed class AiLlmNode : INode
         ILlmProvider provider = p.Provider switch
         {
             "openai-compatible" => _openAiCompatible,
-            "anthropic" or "openai" => throw new LlmException($"Провайдер «{p.Provider}» ще не підтримується (F3-02)."),
+            "openai" => _openAi,
+            "anthropic" => _anthropic,
             _ => throw new LlmException($"Невідомий провайдер «{p.Provider}»; очікується anthropic, openai або openai-compatible."),
         };
 

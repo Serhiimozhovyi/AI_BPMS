@@ -91,11 +91,15 @@ public sealed class IfNode : INode
 З `outputSchema` вузол вимагає structured output і валідує відповідь схемою; без — віддає `{ text }`.
 Нода має один вихід; помилка валідації схеми — звичайна помилка вузла.
 
-Провайдери: `openai-compatible` (`POST {baseUrl}/chat/completions`; OpenAI, Ollama, vLLM…) — реалізовано; `anthropic` і `openai` — помилка вузла «ще не підтримується» до F3-02.
+Провайдери (усі через `HttpClient`, без SDK):
+- `openai-compatible` — `POST {baseUrl}/chat/completions` (Ollama, vLLM…); structured output — `response_format: json_schema`.
+- `openai` — `POST https://api.openai.com/v1/chat/completions`; `response_format: json_schema`, ліміт токенів — `max_completion_tokens`.
+- `anthropic` — `POST https://api.anthropic.com/v1/messages`; structured output через tool use: `outputSchema` → `input_schema` інструмента `output` + `tool_choice`; `maxTokens` за замовчуванням 4096 (поле обов'язкове в API).
 Для кожного вхідного item'а робиться окремий запит. Таймаут — `timeoutSec` вузла, за замовчуванням 60 с.
 
 Credential типу `openai-compatible`: `{ "baseUrl": "http://localhost:11434/v1", "apiKey"?: "…" }`. `baseUrl` — абсолютна http(s)-адреса без `/chat/completions`;
 `apiKey` необов'язковий (Ollama працює без нього), іде лише в `Authorization: Bearer` і не потрапляє в тексти помилок.
+Credential типів `openai` і `anthropic`: `{ "apiKey": "…" }` (обов'язковий; `anthropic` — заголовок `x-api-key`). Спільне для всіх провайдерів: валідація `outputSchema`, таймаут, помилка вузла на будь-який не-2xx (401, 429, 5xx) без секретів у тексті.
 
 ## 5. Connector Kit (`tools/connector-template`)
 
