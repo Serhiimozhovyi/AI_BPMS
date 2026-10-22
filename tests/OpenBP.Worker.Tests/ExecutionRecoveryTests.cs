@@ -23,7 +23,9 @@ public sealed class ExecutionRecoveryTests(PostgresFixture postgres)
     [Fact]
     public async Task KilledWorker_NewWorkerFinishesFromLastSavedStep_NoNodeRunTwice()
     {
-        await using var worker = await WorkerHarness.CreateAsync(postgres, lockTimeout: TimeSpan.FromSeconds(1));
+        // Поріг із запасом: lock подовжується лише з першим heartbeat, а до нього воркер готує виконання (на холодному
+        // CI це може тривати понад секунду) — менший поріг дав би службі відновлення забрати job у живого воркера.
+        await using var worker = await WorkerHarness.CreateAsync(postgres, lockTimeout: TimeSpan.FromSeconds(5));
         var (workflowId, versionId) = await worker.SaveWorkflowAsync(Workflows.RandomTokenThenWait(waitMs: 3_000));
         var executionId = await worker.LaunchAsync(workflowId, versionId);
 
@@ -189,7 +191,8 @@ public sealed class ExecutionRecoveryTests(PostgresFixture postgres)
         start.Environment["Worker__WorkerId"] = KilledWorkerId;
         start.Environment["Worker__HeartbeatInterval"] = "00:00:00.200";
         start.Environment["Worker__PollInterval"] = "00:00:00.100";
-        start.Environment["Worker__Queue__LockTimeout"] = "00:00:01";
+        // Власна служба відновлення процесу не повинна забрати job у нього самого, поки він живий.
+        start.Environment["Worker__Queue__LockTimeout"] = "00:05:00";
         start.Environment["Logging__LogLevel__Default"] = "Warning";
         var process = Process.Start(start) ?? throw new InvalidOperationException("Не вдалося запустити процес воркера.");
 
