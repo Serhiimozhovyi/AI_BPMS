@@ -24,6 +24,23 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
+### Запуск сценарію з CLI
+
+`openbp run <file.json> [--pin] [--servers servers.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
+Приклад «Заявка з Telegram → 1С» з [docs/workflow-format.md](docs/workflow-format.md) проти мок-MCP-серверів 1С і Telegram:
+
+```bash
+dotnet build
+dotnet run --project src/OpenBP.Cli -- run examples/telegram-1c.json --pin --servers examples/servers.json
+```
+
+- `--pin` — ручний тестовий запуск: вузли з `pinData` не виконуються, їхній вихід — закріплені items.
+- `--servers` — MCP-сервери для `serverId` вузлів `mcp.*`; моки 1С і Telegram — `tests/OpenBP.Mcp.Tests/FakeServer` з `--mock 1c|telegram`
+  (стартують через `dotnet run --no-build`, тому спершу `dotnet build`).
+- `core.webhook` (F2-D) і `ai.llm` (F3-B) поки не реалізовані: CLI підставляє заглушки, які працюють лише з `pinData`.
+  Коли справжній вузол з'явиться, заглушка перестає реєструватись сама.
+- Коди виходу: `0` — успіх, `1` — виконання завершилось помилкою/скасуванням/таймаутом, `2` — помилка аргументів, файлу чи сценарію.
+
 ### База даних для розробки
 
 Потрібен Docker з Compose v2.
