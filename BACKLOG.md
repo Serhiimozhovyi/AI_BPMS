@@ -95,7 +95,7 @@
 - DoD: критерій фази 1 з `docs/roadmap.md` виконується командою з README.
 
 ### F1-11 · Spike: канвас для Angular
-- model: `fable` · status: `ready` · depends: F0-02
+- model: `fable` · status: `in-progress agent/F1-11-canvas-spike` · depends: F0-02
 - Що: за **один день** зібрати прототип на ngx-vflow і на Rete.js: 3 вузли, з'єднання, кастомний вигляд вузла, 200 вузлів без лагів. Результат — `docs/adr/ADR-003-canvas.md` з рішенням.
 - DoD: ADR-003 прийнято власником; прототип-переможець лежить у `apps/web/src/app/canvas/`.
 
