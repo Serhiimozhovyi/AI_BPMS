@@ -90,7 +90,7 @@
 - DoD: тести проти FakeServer: успіх, `isError`, таймаут, poll віддає лише нові записи.
 
 ### F1-10 · CLI `openbp run`
-- model: `sonnet` · status: `review #25` · depends: F1-05, F1-09
+- model: `sonnet` · status: `done` · depends: F1-05, F1-09
 - Що: `OpenBP.Cli`: `openbp run <file.json> [--pin] [--servers servers.json]` — виконує сценарій з in-memory store, друкує input/output кожного вузла; `examples/telegram-1c.json` з `workflow-format.md` + мок-сервери 1С і Telegram на FakeServer.
   Рішення власника (PR #25): `core.webhook` (F2-D) і `ai.llm` (F3-B) ще немає — CLI реєструє для них тимчасові pin-only заглушки (помилка, якщо вузол не закріплений), приклад отримує `pinData` і для `n_llm`.
 - DoD: критерій фази 1 з `docs/roadmap.md` виконується командою з README.
