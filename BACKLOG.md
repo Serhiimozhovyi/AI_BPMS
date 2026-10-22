@@ -70,7 +70,7 @@
 - DoD: тести на кожен режим; resume після «падіння» посередині графа дає той самий результат, що й без падіння.
 
 ### F1-06 · `OpenBP.Expressions`: Jint
-- model: `opus` · status: `in-progress agent/F1-06-jint-expressions` · depends: F1-03
+- model: `opus` · status: `review #13` · depends: F1-03
 - Що: `JintExpressionEvaluator`: `{{ }}` у рядках, змінні `$json/$input/$node/$now/$env/$execution`, ліміти (50 мс, 16 МБ, рекурсія 64), без CLR-interop; приведення результату до типу зі схеми.
 - DoD: тести на кожну змінну, на ліміти (нескінченний цикл → помилка за ≤ 100 мс), на ін'єкції (`import`, `require`, доступ до `System` → помилка).
 
