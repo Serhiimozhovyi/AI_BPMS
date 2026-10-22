@@ -90,7 +90,7 @@
 - DoD: тести проти FakeServer: успіх, `isError`, таймаут, poll віддає лише нові записи.
 
 ### F1-10 · CLI `openbp run`
-- model: `sonnet` · status: `in-progress agent/F1-10-cli-run` · depends: F1-05, F1-09
+- model: `sonnet` · status: `blocked приклад workflow-format.md використовує core.webhook (F2-D) і ai.llm (F3-B), яких ще немає в реєстрі — ExecutionPlan.Build падає на невідомому типі навіть для вузла з pinData. Питання: (а) CLI реєструє тимчасові pin-only заглушки core.webhook/ai.llm (помилка, якщо вузол не закріплений) і приклад отримує pinData для n_llm; (б) приклад без ai.llm (webhook-pinData → 1С → Telegram); (в) движок у Manual не резолвить закріплені вузли (зміна движка, fable)? Див. draft PR` · depends: F1-05, F1-09
 - Що: `OpenBP.Cli`: `openbp run <file.json> [--pin] [--servers servers.json]` — виконує сценарій з in-memory store, друкує input/output кожного вузла; `examples/telegram-1c.json` з `workflow-format.md` + мок-сервери 1С і Telegram на FakeServer.
 - DoD: критерій фази 1 з `docs/roadmap.md` виконується командою з README.
 
