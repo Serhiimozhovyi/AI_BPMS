@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <ProjectReference Include="../OpenBP.Application/OpenBP.Application.csproj" />
     <ProjectReference Include="../OpenBP.Data/OpenBP.Data.csproj" />
     <ProjectReference Include="../OpenBP.Mcp/OpenBP.Mcp.csproj" />
     <ProjectReference Include="../OpenBP.Nodes.Core/OpenBP.Nodes.Core.csproj" />

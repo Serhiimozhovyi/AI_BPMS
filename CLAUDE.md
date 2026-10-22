@@ -34,6 +34,7 @@ src/
   OpenBP.Mcp/           # MCP-клієнт (реєстр, mcp.tool) і MCP-сервер (/mcp)
   OpenBP.Ai/            # ai.llm
   OpenBP.Data/          # EF Core, міграції, PostgresExecutionStore, JobQueue
+  OpenBP.Application/   # application-шар: сервіси, DTO, помилки, контракти jobs (architecture.md §10)
   OpenBP.Api/           # REST, auth, SSE, /mcp, webhook, Quartz
   OpenBP.Worker/        # виконання jobs
   OpenBP.Cli/           # openbp run file.json
