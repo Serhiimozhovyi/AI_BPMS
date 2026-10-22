@@ -70,7 +70,7 @@
 - DoD: тести на кожен режим; resume після «падіння» посередині графа дає той самий результат, що й без падіння.
 
 ### F1-06 · `OpenBP.Expressions`: Jint
-- model: `opus` · status: `review #13` · depends: F1-03
+- model: `opus` · status: `done` · depends: F1-03
 - Що: `JintExpressionEvaluator`: `{{ }}` у рядках, змінні `$json/$input/$node/$now/$env/$execution`, ліміти (50 мс, 16 МБ, рекурсія 64), без CLR-interop; приведення результату до типу зі схеми.
 - DoD: тести на кожну змінну, на ліміти (нескінченний цикл → помилка за ≤ 100 мс), на ін'єкції (`import`, `require`, доступ до `System` → помилка).
 
@@ -80,7 +80,7 @@
 - DoD: по тесту на успіх і помилку для кожного вузла; `core.code` не має доступу до файлів/мережі (тест).
 
 ### F1-08 · `OpenBP.Mcp`: клієнт і реєстр серверів
-- model: `opus` · status: `review #14` · depends: F1-03
+- model: `opus` · status: `done` · depends: F1-03
 - Що: `McpServerRegistry` на офіційному C# SDK: stdio і Streamable HTTP транспорти, `tools/list` → `ToolsCache`, пул сесій з таймаутами, `INodeSchemaProvider` для валідатора (правила 5–6). Адаптер «`INodeRegistry.Descriptors` → `INodeSchemaProvider`» для `core.*` (порти, тригери) — тут або у F1-07 (`INodeSchemaProvider` у `Shared`, реєстр у `Engine`).
 - DoD: інтеграційний тест з тестовим MCP-сервером (у `tests/OpenBP.Mcp.Tests/FakeServer`, той самий SDK): discovery повертає схеми; падіння сервера → `McpUnavailableException` за ≤ таймаут.
 
@@ -95,7 +95,7 @@
 - DoD: критерій фази 1 з `docs/roadmap.md` виконується командою з README.
 
 ### F1-11 · Spike: канвас для Angular
-- model: `fable` · status: `review #12` · depends: F0-02
+- model: `fable` · status: `done` · depends: F0-02
 - Що: за **один день** зібрати прототип на ngx-vflow і на Rete.js: 3 вузли, з'єднання, кастомний вигляд вузла, 200 вузлів без лагів. Результат — `docs/adr/ADR-003-canvas.md` з рішенням.
 - DoD: ADR-003 прийнято власником; прототип-переможець лежить у `apps/web/src/app/canvas/`.
 
