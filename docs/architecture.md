@@ -168,7 +168,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 - `workflows.name` — джерело правди для назви; `definition.name` при збереженні **перезаписується** з нього
   (`PUT` з іншим `name` у визначенні не перейменовує; перейменування — окремий `PATCH`).
 - Кожне збереження (`SaveAsync`) — новий рядок `workflow_versions` (`version` = попередній + 1),
-  `workflows.current_version_id` → нова версія. Версії незмінні; «відкотитись» = зберегти старе визначення як нову версію.
+  `workflows.current_version_id` → нова версія. Два паралельні збереження з тим самим номером — друге отримує 409 `WORKFLOW_VERSION_CONFLICT`. Версії незмінні; «відкотитись» = зберегти старе визначення як нову версію.
 - Валідація при збереженні — `WorkflowValidator` з ланцюжком `NodeRegistrySchemaProvider` → `McpNodeSchemaProvider`
   (правила 1–6 `workflow-format.md`). Для **активного** сценарію — з `IsActive = true` (правило 4); збереження, що
   ламає активний сценарій, відхиляється цілком (`WorkflowValidationException`, 422), версія не створюється.
@@ -186,7 +186,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 |---|---|---|
 | `POST /auth/login` `{ email, password }` · `POST /auth/logout` · `GET /auth/me` | — / будь-яка | 204 + cookie · 204 · `UserInfo` |
 | `GET /api-keys` · `POST /api-keys { name }` · `DELETE /api-keys/{id}` | будь-яка (свої), admin (усі) | `ApiKeyInfo[]` · `ApiKeyCreated` (ключ показується один раз) · 204 |
-| `GET /workflows?page&pageSize&search` | viewer | `PageResult<WorkflowSummary>` |
+| `GET /workflows?page&pageSize&search&active` | viewer | `PageResult<WorkflowSummary>` |
 | `POST /workflows` (тіло — визначення) | editor | 201 `WorkflowDetail` |
 | `GET /workflows/{id}` | viewer | `WorkflowDetail` (визначення поточної версії) |
 | `PUT /workflows/{id}` (тіло — визначення) | editor | `WorkflowDetail` нової версії |
