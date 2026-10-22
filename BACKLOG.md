@@ -167,7 +167,7 @@
 - DoD: тест на Testcontainers — міграція застосовується на чистий postgres:16, по одному round-trip запису на кожну таблицю (з jsonb); `dotnet ef migrations` без змін моделі не генерує нову міграцію (тест або перевірка в CI).
 
 ### F2-02 · `PostgresExecutionStore`
-- model: `opus` · status: `ready` · depends: F2-01
+- model: `opus` · status: `review #30` · depends: F2-01
 - Що:
   - реалізація `IExecutionStore` над `executions`/`execution_steps`: `SaveStepAsync` (input/output у jsonb через `WorkflowJson.Options`, `run_index`), `LoadAsync` → `ExecutionSnapshot`;
   - створення рядка `executions` (аналог `InMemoryExecutionStore.Register`), оновлення статусу/`finished_at`/`error`.
