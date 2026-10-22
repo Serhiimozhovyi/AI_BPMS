@@ -1,0 +1,124 @@
+namespace OpenBP.Data;
+
+// Сутності відповідають docs/architecture.md §6. jsonb-колонки зберігаються як сирий JSON-рядок.
+
+public sealed class UserEntity
+{
+    public Guid Id { get; set; }
+    public string Email { get; set; } = "";
+    public string PasswordHash { get; set; } = "";
+    public string Role { get; set; } = "viewer";
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class ApiKeyEntity
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string Hash { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTimeOffset? LastUsedAt { get; set; }
+}
+
+public sealed class WorkflowEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool Active { get; set; }
+    public Guid? CurrentVersionId { get; set; }
+    public Guid? CreatedBy { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public sealed class WorkflowVersionEntity
+{
+    public Guid Id { get; set; }
+    public Guid WorkflowId { get; set; }
+    public int Version { get; set; }
+    /// <summary>jsonb: формат workflow.</summary>
+    public string Definition { get; set; } = "{}";
+    public Guid? CreatedBy { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class CredentialEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "";
+    public byte[] DataEncrypted { get; set; } = [];
+    public byte[] Nonce { get; set; } = [];
+    public Guid? CreatedBy { get; set; }
+}
+
+public sealed class McpServerEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Transport { get; set; } = "";
+    /// <summary>jsonb.</summary>
+    public string Config { get; set; } = "{}";
+    public Guid? CredentialId { get; set; }
+    public string Status { get; set; } = "";
+    /// <summary>jsonb.</summary>
+    public string? ToolsCache { get; set; }
+    public DateTimeOffset? ToolsCachedAt { get; set; }
+}
+
+public sealed class ExecutionEntity
+{
+    public Guid Id { get; set; }
+    public Guid WorkflowId { get; set; }
+    public Guid VersionId { get; set; }
+    public string Mode { get; set; } = "";
+    public string Status { get; set; } = "";
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
+    public DateTimeOffset? HeartbeatAt { get; set; }
+    public string? Error { get; set; }
+}
+
+public sealed class ExecutionStepEntity
+{
+    public Guid Id { get; set; }
+    public Guid ExecutionId { get; set; }
+    public string NodeId { get; set; } = "";
+    public int RunIndex { get; set; }
+    public string Status { get; set; } = "";
+    /// <summary>jsonb.</summary>
+    public string? Input { get; set; }
+    /// <summary>jsonb.</summary>
+    public string? Output { get; set; }
+    public string? Error { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
+}
+
+public sealed class JobEntity
+{
+    public Guid Id { get; set; }
+    public string Kind { get; set; } = "";
+    /// <summary>jsonb.</summary>
+    public string Payload { get; set; } = "{}";
+    public DateTimeOffset RunAt { get; set; }
+    public string? LockedBy { get; set; }
+    public DateTimeOffset? LockedAt { get; set; }
+    public int Attempts { get; set; }
+}
+
+public sealed class WebhookEntity
+{
+    public Guid Id { get; set; }
+    public Guid WorkflowId { get; set; }
+    public string NodeId { get; set; } = "";
+    public string Method { get; set; } = "POST";
+    public string Path { get; set; } = "";
+}
+
+public sealed class NodeStateEntity
+{
+    public Guid WorkflowId { get; set; }
+    public string NodeId { get; set; } = "";
+    /// <summary>jsonb: стан polling-тригера.</summary>
+    public string State { get; set; } = "{}";
+}
