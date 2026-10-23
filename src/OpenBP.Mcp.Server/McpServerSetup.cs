@@ -29,6 +29,7 @@ public static class McpServerSetup
             .WithHttpTransport(o => o.Stateless = true)
             .WithRequestFilters(filters => filters.AddCallToolFilter(McpErrors.Filter).AddReadResourceFilter(McpErrors.ResourceFilter))
             .WithTools<ConnectorTools>(McpJson.Options)
+            .WithTools<NodeTools>(McpJson.Options)
             .WithTools<WorkflowTools>(McpJson.Options)
             .WithTools<ExecutionTools>(McpJson.Options)
             .WithTools<TestNodeTool>(McpJson.Options)

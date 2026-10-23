@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Server;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Nodes;
 using OpenBP.Application.Workflows;
 using OpenBP.Shared.Workflow;
 
@@ -17,6 +18,9 @@ public sealed class OpenBpResources
 
     /// <summary>URI списку конекторів.</summary>
     public const string ConnectorsUri = "openbp://connectors";
+
+    /// <summary>URI каталогу типів вузлів.</summary>
+    public const string NodesUri = "openbp://nodes";
 
     /// <summary>Шаблон URI визначення сценарію.</summary>
     public const string WorkflowUriTemplate = "openbp://workflows/{id}";
@@ -36,6 +40,14 @@ public sealed class OpenBpResources
     [Description("Connected MCP servers and their tools; same content as the describe_connectors tool.")]
     public static async Task<string> Connectors(IConnectorService connectors, CancellationToken ct) =>
         JsonSerializer.Serialize(await ConnectorsDescription.BuildAsync(connectors, ct).ConfigureAwait(false), McpJson.Options);
+
+    /// <summary>Те саме, що <c>describe_nodes</c>.</summary>
+    /// <param name="nodes">Сервіс вузлів.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerResource(UriTemplate = NodesUri, Name = "nodes", Title = "Node types", MimeType = "application/json")]
+    [Description("Node types OpenBP can run, with ports and parameter schemas; same content as the describe_nodes tool.")]
+    public static async Task<string> Nodes(INodeService nodes, CancellationToken ct) =>
+        JsonSerializer.Serialize(await NodesDescription.BuildAsync(nodes, ct).ConfigureAwait(false), McpJson.Options);
 
     /// <summary>Визначення поточної версії сценарію (те саме, що <c>definition</c> у <c>get_workflow</c>).</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
