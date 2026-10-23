@@ -139,19 +139,21 @@ public sealed record StartExecutionRequest(
     IReadOnlyDictionary<string, Item[][]>? RunData = null);
 
 /// <summary>Внутрішній запит на запуск для <see cref="IExecutionLauncher"/> (тригери і сервіс запусків).</summary>
-/// <param name="WorkflowId">Сценарій; виконується його поточна версія.</param>
+/// <param name="WorkflowId">Сценарій; виконується його поточна версія, якщо не задано <paramref name="VersionId"/>.</param>
 /// <param name="Mode">Режим.</param>
 /// <param name="StartNodeId">Тригер, що спрацював; <c>null</c> — усі вузли без вхідних ребер.</param>
 /// <param name="StartItems">Items тригера (тіло webhook, нові записи <c>mcp.poll</c>).</param>
 /// <param name="DestinationNodeId">Лише <see cref="ExecutionMode.Manual"/>: «Виконати вузол» (див. <see cref="StartExecutionRequest"/>).</param>
 /// <param name="RunData">Лише <see cref="ExecutionMode.Manual"/>: виходи вузлів попереднього запуску.</param>
+/// <param name="VersionId">Конкретна версія сценарію (повтор, <see cref="ExecutionMode.Retry"/>); <c>null</c> — поточна.</param>
 public sealed record ExecutionLaunch(
     Guid WorkflowId,
     ExecutionMode Mode,
     string? StartNodeId = null,
     IReadOnlyList<Item>? StartItems = null,
     string? DestinationNodeId = null,
-    IReadOnlyDictionary<string, Item[][]>? RunData = null);
+    IReadOnlyDictionary<string, Item[][]>? RunData = null,
+    Guid? VersionId = null);
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

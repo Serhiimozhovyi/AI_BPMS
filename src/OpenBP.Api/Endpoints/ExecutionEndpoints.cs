@@ -14,8 +14,8 @@ namespace OpenBP.Api.Endpoints;
 public sealed record ExecutionStatusEvent(Guid ExecutionId, ExecutionState State, string? Error);
 
 /// <summary>
-/// Маршрути виконань (docs/architecture.md §10.3, §10.5): запуск, список, деталі, скасування, SSE.
-/// Ролі перевіряє application-шар. Повтор (<c>/retry</c>) — F3-G.
+/// Маршрути виконань (docs/architecture.md §10.3, §10.5): запуск, список, деталі, скасування, повтор, SSE.
+/// Ролі перевіряє application-шар.
 /// </summary>
 public static class ExecutionEndpoints
 {
@@ -46,6 +46,12 @@ public static class ExecutionEndpoints
 
         executions.MapPost("/{id:guid}/cancel", async (Guid id, IExecutionService service, CancellationToken ct) =>
             Results.Accepted($"/api/v1/executions/{id}", await service.CancelAsync(id, ct)));
+
+        executions.MapPost("/{id:guid}/retry", async (Guid id, IExecutionService service, CancellationToken ct) =>
+        {
+            var retried = await service.RetryAsync(id, ct);
+            return Results.Accepted($"/api/v1/executions/{retried.Id}", retried);
+        });
 
         executions.MapGet("/{id:guid}/events", StreamEventsAsync);
 

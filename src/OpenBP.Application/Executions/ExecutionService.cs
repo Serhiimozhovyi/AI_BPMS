@@ -11,7 +11,7 @@ namespace OpenBP.Application.Executions;
 /// <summary>
 /// Реалізація <see cref="IExecutionService"/> над <c>executions</c>/<c>execution_steps</c> (docs/architecture.md §10.1, §10.4).
 /// Запуск — через <see cref="IExecutionLauncher"/>; скасування — умовні <c>UPDATE</c> за поточним станом, щоб не
-/// затерти стан, який паралельно змінив воркер. Повтор (<see cref="RetryAsync"/>) — задача F3-G.
+/// затерти стан, який паралельно змінив воркер.
 /// </summary>
 public sealed class ExecutionService(
     OpenBpDbContext db,
@@ -19,6 +19,9 @@ public sealed class ExecutionService(
     IExecutionLauncher launcher,
     TimeProvider time) : IExecutionService
 {
+    /// <summary>Код конфлікту: повтор незавершеного виконання.</summary>
+    public const string ExecutionNotFinishedCode = "EXECUTION_NOT_FINISHED";
+
     private const string Entity = "execution";
 
     /// <inheritdoc />
@@ -229,7 +232,49 @@ public sealed class ExecutionService(
     }
 
     /// <inheritdoc />
-    /// <exception cref="NotSupportedException">Повтор реалізує F3-G.</exception>
-    public Task<ExecutionSummary> RetryAsync(Guid id, CancellationToken ct) =>
-        throw new NotSupportedException("Повтор виконання ще не реалізовано (F3-G).");
+    /// <remarks>
+    /// Стартові дані — з кроків вихідного виконання (docs/architecture.md §10.4): якщо рівно один вузол без вхідних
+    /// ребер має крок, повтор стартує з нього, а його вихід 0 стає <c>startItems</c> (тригер не виконується знову, як
+    /// webhook чи <c>mcp.poll</c> у першому запуску); інакше — з усіх вузлів без вхідних ребер. <c>pinData</c> у
+    /// режимі <see cref="ExecutionMode.Retry"/> не застосовується.
+    /// </remarks>
+    public async Task<ExecutionSummary> RetryAsync(Guid id, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        var original = await db.Executions.AsNoTracking()
+            .Where(e => e.Id == id)
+            .Select(e => new { e.WorkflowId, e.VersionId, e.Status })
+            .SingleOrDefaultAsync(ct)
+            ?? throw new NotFoundException(Entity, id);
+        if (original.Status is ExecutionStatuses.Queued or ExecutionStatuses.Running or ExecutionStatuses.Cancelling)
+        {
+            throw new ConflictException(ExecutionNotFinishedCode, $"Виконання «{id}» ще не завершене ({original.Status}); повторити можна лише завершене.");
+        }
+
+        var definition = WorkflowJson.Deserialize(await db.WorkflowVersions.AsNoTracking()
+            .Where(v => v.Id == original.VersionId)
+            .Select(v => v.Definition)
+            .SingleAsync(ct));
+        var roots = definition.Nodes
+            .Select(n => n.Id)
+            .Where(nodeId => !definition.Connections.Any(c => c.To.Node == nodeId))
+            .ToList();
+        var rootSteps = await db.ExecutionSteps.AsNoTracking()
+            .Where(s => s.ExecutionId == id && s.RunIndex == 0 && roots.Contains(s.NodeId))
+            .OrderBy(s => s.Id)
+            .ToListAsync(ct);
+
+        string? startNodeId = null;
+        IReadOnlyList<Item>? startItems = null;
+        if (rootSteps.Count == 1)
+        {
+            var step = ExecutionMapping.ToStep(rootSteps[0]);
+            startNodeId = step.NodeId;
+            startItems = step.Output.Length > 0 ? step.Output[0] : [];
+        }
+
+        return await launcher.LaunchAsync(
+            new ExecutionLaunch(original.WorkflowId, ExecutionMode.Retry, startNodeId, startItems, VersionId: original.VersionId),
+            ct);
+    }
 }
