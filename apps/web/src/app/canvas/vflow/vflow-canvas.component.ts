@@ -14,6 +14,8 @@ interface NodeData {
   errors: readonly string[];
   /** Статус вузла в останньому тестовому запуску; `null` — не виконувався. */
   runStatus: NodeRunStatus | null;
+  /** Output вузла закріплено (`pinData`): у тестовому запуску вузол не виконується. */
+  pinned: boolean;
 }
 
 /** Помилки валідації за id вузла. */
@@ -25,6 +27,8 @@ const NO_ERRORS: NodeErrors = new Map();
 export type NodeRunStatuses = ReadonlyMap<string, NodeRunStatus>;
 
 const NO_RUN: NodeRunStatuses = new Map();
+
+const NO_PINNED: ReadonlySet<string> = new Set();
 
 export const NODE_WIDTH = 220;
 const MIN_NODE_HEIGHT = 72;
@@ -87,6 +91,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           [class.invalid]="ctx.data().errors.length > 0"
           [attr.data-invalid]="ctx.data().errors.length > 0 ? true : null"
           [attr.data-run-status]="ctx.data().runStatus"
+          [attr.data-pinned]="ctx.data().pinned ? true : null"
           [class.run-success]="ctx.data().runStatus === 'success'"
           [class.run-error]="ctx.data().runStatus === 'error'"
           [class.run-skipped]="ctx.data().runStatus === 'skipped' || ctx.data().runStatus === 'cancelled'"
@@ -112,6 +117,9 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           }
           <div class="node__head">
             <span class="node__group">{{ ctx.data().groupLabel }}</span>
+            @if (ctx.data().pinned) {
+              <span class="node__pin" data-testid="node-pinned" role="img" title="Output закріплено" i18n-title="@@canvas.pinned">📌</span>
+            }
             @if (ctx.data().runStatus === 'success') {
               <span class="node__run node__run--success" data-testid="node-run-badge" role="img" title="Виконано" i18n-title="@@canvas.run.success">✓</span>
             } @else if (ctx.data().runStatus === 'error') {
@@ -189,10 +197,19 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       opacity: 0.7;
     }
 
+    .node__pin {
+      margin-left: auto;
+      font-size: 11px;
+    }
+
     .node__run {
       margin-left: auto;
       margin-right: 4px;
       font-weight: 700;
+    }
+
+    .node__pin + .node__run {
+      margin-left: 4px;
     }
 
     .node__run--success {
@@ -280,6 +297,9 @@ export class VflowCanvasComponent {
   /** Статуси вузлів останнього тестового запуску — вузол зеленіє/червоніє. */
   readonly runStatuses = input<NodeRunStatuses>(NO_RUN);
 
+  /** Вузли із закріпленим output (`pinData`). */
+  readonly pinnedNodes = input<ReadonlySet<string>>(NO_PINNED);
+
   /** Виділення (вузли за id, ребра за індексом у `connections`); змінюється і ззовні (вставка, видалення). */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
@@ -303,6 +323,7 @@ export class VflowCanvasComponent {
   protected readonly nodes = computed<Node<NodeData>[]>(() => {
     const errors = this.nodeErrors();
     const run = this.runStatuses();
+    const pinned = this.pinnedNodes();
     // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
     const selected = new Set(untracked(this.selection).nodes);
     return createNodes<NodeData>(
@@ -315,7 +336,7 @@ export class VflowCanvasComponent {
           width: NODE_WIDTH,
           height,
           selected: selected.has(n.id),
-          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null },
+          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id) },
         };
       }),
     );

@@ -204,7 +204,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[] }` (200 навіть з помилками) |
 | `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
 | `GET /workflows/{id}/versions` · `GET /workflows/{id}/versions/{version}` | viewer | `WorkflowVersionSummary[]` · визначення |
-| `POST /workflows/{id}/executions { startNodeId?, startItems? }` | editor | 202 `ExecutionSummary` (ручний запуск) |
+| `POST /workflows/{id}/executions { startNodeId?, startItems?, destinationNodeId?, runData? }` | editor | 202 `ExecutionSummary` (ручний запуск; `destinationNodeId` — «Виконати вузол»: лише вузол і його попередники, сам вузол виконується навіть із `pinData`; `runData` — виходи вузлів попереднього запуску `{ nodeId: Item[][] }` по портах, такі вузли не виконуються, мають пріоритет над `pinData`; невідомий вузол → 422 `START_NODE_UNKNOWN`/`DESTINATION_NODE_UNKNOWN`) |
 | `GET /executions?workflowId&status&from&to&page&pageSize` | viewer | `PageResult<ExecutionSummary>` |
 | `GET /executions/{id}` | viewer | `ExecutionDetail` з кроками |
 | `POST /executions/{id}/cancel` · `POST /executions/{id}/retry` | editor | 202 `ExecutionSummary` |
@@ -230,7 +230,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 | `kind` | payload | Хто ставить | Що робить воркер |
 |---|---|---|---|
-| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems? }` | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
+| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData? }` (останні два — лише `manual`) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
 | `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
 
 Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;

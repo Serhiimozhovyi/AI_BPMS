@@ -1,5 +1,6 @@
 import { ExecutionStep } from '../executions/executions-api.service';
-import { applyEvent, isRunning, nodeStatuses, runOutputs, startedRun, streamFailed } from './test-run';
+import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
+import { ancestorIds, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed } from './test-run';
 
 function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success', runIndex = 0, output: ExecutionStep['output'] = [[{ json: { node: nodeId } }]]): ExecutionStep {
   return { id, nodeId, runIndex, status, input: [], output, error: status === 'error' ? { message: 'збій' } : null, startedAt: '', finishedAt: '' };
@@ -49,5 +50,40 @@ describe('test-run', () => {
     run = applyEvent(run, { kind: 'step', step: step('c', 's3', 'success', 0, []) });
     expect(runOutputs(run)).toEqual({ a: [{ json: { node: 'a' } }], c: [] });
     expect(runOutputs(null)).toEqual({});
+  });
+
+  it('новий запуск зберігає кроки попереднього, але приймає для них нові кроки (навіть з тим самим runIndex)', () => {
+    const first = applyEvent(applyEvent(startedRun('e1'), { kind: 'step', step: step('a', 's1') }), { kind: 'step', step: step('b', 's2') });
+    let next = startedRun('e2', 'queued', first.steps);
+    expect([...nodeStatuses(next).keys()]).toEqual(['a', 'b']);
+    next = applyEvent(next, { kind: 'step', step: step('b', 's3', 'error') });
+    expect(next.steps.get('b')?.id).toBe('s3');
+    expect(next.steps.get('a')?.id).toBe('s1');
+    expect([...next.current]).toEqual(['b']);
+  });
+
+  it('singleNodeRequest: лише попередники з успіхом/згаслою гілкою йдуть у runData, по всіх портах', () => {
+    const definition: WorkflowDefinition = {
+      ...emptyWorkflowDefinition('w'),
+      connections: [
+        { from: { node: 'a', output: 0 }, to: { node: 'b', input: 0 } },
+        { from: { node: 'b', output: 1 }, to: { node: 'c', input: 0 } },
+        { from: { node: 'x', output: 0 }, to: { node: 'c', input: 0 } },
+        { from: { node: 'c', output: 0 }, to: { node: 'd', input: 0 } },
+      ],
+    } as WorkflowDefinition;
+    expect([...ancestorIds(definition, 'c')].sort()).toEqual(['a', 'b', 'x']);
+    expect(ancestorIds(definition, 'a').size).toBe(0);
+
+    let run = startedRun('e1');
+    run = applyEvent(run, { kind: 'step', step: step('a', 's1') });
+    run = applyEvent(run, { kind: 'step', step: step('b', 's2', 'success', 0, [[], [{ json: { yes: true } }]]) });
+    run = applyEvent(run, { kind: 'step', step: step('x', 's3', 'error') });
+    run = applyEvent(run, { kind: 'step', step: step('d', 's4') });
+    expect(singleNodeRequest(definition, run, 'c')).toEqual({
+      destinationNodeId: 'c',
+      runData: { a: [[{ json: { node: 'a' } }]], b: [[], [{ json: { yes: true } }]] },
+    });
+    expect(singleNodeRequest(definition, null, 'c')).toEqual({ destinationNodeId: 'c', runData: {} });
   });
 });

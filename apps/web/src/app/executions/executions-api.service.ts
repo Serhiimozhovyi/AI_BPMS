@@ -53,6 +53,10 @@ export interface ExecutionDetail {
 export interface StartExecutionRequest {
   startNodeId?: string | null;
   startItems?: ExecutionItem[] | null;
+  /** «Виконати вузол»: лише цей вузол і його попередники (сам вузол виконується навіть із `pinData`). */
+  destinationNodeId?: string | null;
+  /** Виходи вузлів (по портах) з попереднього запуску: такі вузли не виконуються. */
+  runData?: Record<string, ExecutionItem[][]> | null;
 }
 
 /** Подія SSE `/executions/{id}/events` (docs/architecture.md §10.5). */

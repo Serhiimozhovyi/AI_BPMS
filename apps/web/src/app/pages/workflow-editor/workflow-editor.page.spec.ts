@@ -453,4 +453,84 @@ describe('WorkflowEditorPage', () => {
       expect(host.querySelector('[data-testid="run-error"]')?.textContent).toContain('Недостатньо прав');
     });
   });
+
+  describe('вузол: виконати один, закріпити output (F2-21)', () => {
+    const queued = (id: string) => ({ id, workflowId: 'w1', versionId: 'v3', mode: 'manual', state: 'queued', startedAt: null, finishedAt: null, error: null });
+    const step = (nodeId: string, id: string): ExecutionStep => ({
+      id,
+      nodeId,
+      runIndex: 0,
+      status: 'success',
+      input: [],
+      output: [[{ json: { from: nodeId, id } }]],
+      error: null,
+      startedAt: '',
+      finishedAt: '',
+    });
+
+    beforeEach(() => (FakeEventSource.last = null));
+
+    /** Повний запуск, у якому обидва вузли успішні. */
+    async function ran() {
+      const ctx = await loaded();
+      click(ctx.host, '[data-testid="run"]');
+      await render(ctx.fixture);
+      ctx.http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).flush(queued('e1'));
+      await render(ctx.fixture);
+      FakeEventSource.last!.emit('step', step('n_hook', 's1'));
+      FakeEventSource.last!.emit('step', step('n_set', 's2'));
+      FakeEventSource.last!.emit('status', { executionId: 'e1', state: 'success', error: null });
+      await render(ctx.fixture);
+      return ctx;
+    }
+
+    it('«Виконати вузол»: лише вузол і попередники, виходи попередників з останнього запуску — у runData', async () => {
+      const { fixture, http, host } = await ran();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      click(host, '[data-testid="run-node"]');
+      await render(fixture);
+
+      const start = http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' });
+      expect(start.request.body).toEqual({ destinationNodeId: 'n_set', runData: { n_hook: [[{ json: { from: 'n_hook', id: 's1' } }]] } });
+      start.flush(queued('e2'));
+      await render(fixture);
+      // Кроки попереднього запуску лишаються, поки новий їх не замінить.
+      expect(Object.fromEntries(canvasComponent(fixture).runStatuses())).toEqual({ n_hook: 'success', n_set: 'success' });
+      FakeEventSource.last!.emit('step', step('n_set', 's4'));
+      await render(fixture);
+      expect(host.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"id": "s4"');
+    });
+
+    it('«Закріпити output» пише вихід 0 у pinData (бейдж на канвасі, зберігається); «Відкріпити» прибирає', async () => {
+      const { fixture, http, host } = await ran();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      expect(button(host, 'unpin-output')).toBeNull();
+      click(host, '[data-testid="pin-output"]');
+      await render(fixture);
+      expect(Object.keys(canvasComponent(fixture).definition().pinData)).toEqual(['n_set']);
+      expect(button(host, 'pin-output')).toBeNull();
+
+      // «Виконати» одразу зберігає відкладену зміну — у тілі вже є pinData.
+      click(host, '[data-testid="run"]');
+      await render(fixture);
+      const put = http.expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' });
+      const body = put.request.body as WorkflowDefinition;
+      expect(body.pinData).toEqual({ n_set: [{ json: { from: 'n_set', id: 's2' } }] });
+      put.flush(saved(4, body));
+      await render(fixture);
+      http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).flush(queued('e2'));
+      // Закріплений вузол не виконується: рушій віддає pinData як його крок.
+      FakeEventSource.last!.emit('step', step('n_set', 's2'));
+      FakeEventSource.last!.emit('status', { executionId: 'e2', state: 'success', error: null });
+      await render(fixture);
+
+      click(host, '[data-testid="unpin-output"]');
+      await render(fixture);
+      expect(canvasComponent(fixture).definition().pinData).toEqual({});
+      expect(button(host, 'pin-output')).not.toBeNull();
+    });
+  });
 });
+
