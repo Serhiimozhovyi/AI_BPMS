@@ -38,6 +38,23 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
     /// <summary>Ключ шифрування credentials тестового хоста (base64, 32 байти).</summary>
     public static string EncryptionKey { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(CredentialEncryptionKey.KeySize));
 
+    /// <summary>Корінь репозиторію (тека з <c>OpenBP.sln</c>) — для прикладів з <c>examples/</c>.</summary>
+    public static string RepoRoot
+    {
+        get
+        {
+            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+            {
+                if (File.Exists(Path.Combine(dir.FullName, "OpenBP.sln")))
+                {
+                    return dir.FullName;
+                }
+            }
+
+            throw new InvalidOperationException("OpenBP.sln не знайдено.");
+        }
+    }
+
     /// <summary>Адреса MCP-ендпойнта тестового хоста.</summary>
     public Uri McpEndpoint => new(Server.BaseAddress, "/mcp");
 
@@ -95,13 +112,13 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
     }
 
     /// <summary>
-    /// Конектор stdio-моку FakeServer (<c>--mock 1c|telegram</c>) з необов'язковим credential (<c>{ "env": { … } }</c>):
+    /// Конектор stdio FakeServer (<c>--mock 1c|telegram</c> або загальні tools) з необов'язковим credential (<c>{ "env": { … } }</c>):
     /// через REST адміністратором, як у продукті, — тож discovery виконується і tools потрапляють у реєстр Api, за яким
     /// валідуються вузли <c>mcp.*</c>.
     /// </summary>
-    /// <param name="mock"><c>1c</c> або <c>telegram</c>.</param>
+    /// <param name="mock"><c>1c</c> або <c>telegram</c>; <c>null</c> — загальні tools FakeServer (<c>echo</c>, <c>add</c>, <c>fail</c>…).</param>
     /// <param name="credentialId">Credential зі змінними середовища.</param>
-    public async Task<Guid> CreateMockConnectorAsync(string mock, Guid? credentialId = null)
+    public async Task<Guid> CreateMockConnectorAsync(string? mock, Guid? credentialId = null)
     {
         var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host : "dotnet";
         var (_, key) = await CreateApiKeyAsync(UserRole.Admin);
@@ -109,9 +126,15 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key.Key);
         var response = await http.PostAsJsonAsync("/api/v1/connectors", new
         {
-            name = $"{mock} (мок) {Guid.NewGuid():N}",
+            name = $"{mock ?? "fake"} (мок) {Guid.NewGuid():N}",
             transport = "stdio",
-            config = new { command = dotnet, arguments = new[] { Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll"), "--mock", mock } },
+            config = new
+            {
+                command = dotnet,
+                arguments = mock is null
+                    ? [Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll")]
+                    : new[] { Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll"), "--mock", mock },
+            },
             credentialId,
         });
         response.EnsureSuccessStatusCode();
