@@ -287,7 +287,7 @@
 - DoD: Playwright проти Api + Worker + моків 1С/Telegram: приклад `telegram-1c` запускається з браузера і всі вузли зеленіють — **критерій фази 2**.
 
 ### F2-21 · Запуск одного вузла і pinned data
-- model: `opus` · status: `review #51` · depends: F2-20
+- model: `opus` · status: `done` · depends: F2-20
 - Що: «Виконати вузол» на вхідних даних з останнього запуску; закріпити/відкріпити output вузла як `pinData`.
 - DoD: Playwright — закріпити output, перезапустити, вузол не виконується і віддає закріплені дані; тест запуску одного `mcp.tool`.
 
