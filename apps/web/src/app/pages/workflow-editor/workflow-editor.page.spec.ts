@@ -121,6 +121,12 @@ describe('WorkflowEditorPage', () => {
     expect(host.querySelector('[data-testid="dirty"]')).toBeNull();
   });
 
+  it('посилання «Журнал виконань» веде на журнал цього сценарію', async () => {
+    const { host } = await loaded();
+    const link = host.querySelector<HTMLAnchorElement>('[data-testid="executions-link"]')!;
+    expect(link.getAttribute('href')).toBe('/executions?workflowId=w1');
+  });
+
   it('клік по tool-у в палітрі додає вузол mcp.tool на канвас', async () => {
     const { fixture, http, host } = setup();
     http.expectOne('/api/v1/workflows/w1').flush(workflow);

@@ -80,4 +80,27 @@ describe('ExecutionsApiService', () => {
     expect(FakeEventSource.last!.closed).toBe(true);
     sub.unsubscribe();
   });
+
+  it('list → GET /executions з непорожніми фільтрами і пагінацією', () => {
+    let total = -1;
+    api.list({ workflowId: 'w1', status: 'error', from: '2026-10-01T00:00:00.000Z', to: null }, 2, 20).subscribe((p) => (total = p.total));
+    const req = http.expectOne((r) => r.url === '/api/v1/executions');
+    expect(req.request.params.get('workflowId')).toBe('w1');
+    expect(req.request.params.get('status')).toBe('error');
+    expect(req.request.params.get('from')).toBe('2026-10-01T00:00:00.000Z');
+    expect(req.request.params.has('to')).toBe(false);
+    expect(req.request.params.get('page')).toBe('2');
+    expect(req.request.params.get('pageSize')).toBe('20');
+    req.flush({ items: [], page: 2, pageSize: 20, total: 0 });
+    expect(total).toBe(0);
+  });
+
+  it('retry → POST /executions/{id}/retry', () => {
+    let mode = '';
+    api.retry('e1').subscribe((s) => (mode = s.mode));
+    http
+      .expectOne({ method: 'POST', url: '/api/v1/executions/e1/retry' })
+      .flush({ id: 'e2', workflowId: 'w', versionId: 'v', mode: 'retry', state: 'queued', startedAt: null, finishedAt: null, error: null });
+    expect(mode).toBe('retry');
+  });
 });

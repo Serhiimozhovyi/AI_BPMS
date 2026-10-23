@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { API_BASE } from '../connectors/connectors-api.service';
+import { API_BASE, PageResult } from '../connectors/connectors-api.service';
 
 /** `ExecutionState` (snake_case, як у БД): `queued → running → success | error | cancelled | timed_out`. */
 export type ExecutionState = 'queued' | 'running' | 'cancelling' | 'success' | 'error' | 'cancelled' | 'timed_out';
@@ -69,6 +69,16 @@ export function isFinalState(state: ExecutionState): boolean {
   return state === 'success' || state === 'error' || state === 'cancelled' || state === 'timed_out';
 }
 
+/** Фільтр журналу `GET /executions` (усі поля необов'язкові). */
+export interface ExecutionFilter {
+  workflowId?: string | null;
+  status?: ExecutionState | null;
+  /** ISO 8601: `started_at >= from`. */
+  from?: string | null;
+  /** ISO 8601: `started_at <= to`. */
+  to?: string | null;
+}
+
 /** Мінімум `EventSource`, який потрібен клієнту; у тестах підміняється. */
 export interface EventSourceLike {
   addEventListener(type: string, listener: (e: MessageEvent<string>) => void): void;
@@ -93,12 +103,27 @@ export class ExecutionsApiService {
     return this.http.post<ExecutionSummary>(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/executions`, request);
   }
 
+  /** `GET /executions` — журнал, новіші першими (для `queued` — за id). */
+  list(filter: ExecutionFilter = {}, page = 1, pageSize = 50): Observable<PageResult<ExecutionSummary>> {
+    const params: Record<string, string | number> = { page, pageSize };
+    for (const key of ['workflowId', 'status', 'from', 'to'] as const) {
+      const value = filter[key];
+      if (value) params[key] = value;
+    }
+    return this.http.get<PageResult<ExecutionSummary>>(`${API_BASE}/executions`, { params });
+  }
+
   get(id: string): Observable<ExecutionDetail> {
     return this.http.get<ExecutionDetail>(this.url(id));
   }
 
   cancel(id: string): Observable<ExecutionSummary> {
     return this.http.post<ExecutionSummary>(`${this.url(id)}/cancel`, null);
+  }
+
+  /** `POST /executions/{id}/retry` — нове виконання тієї самої версії з тими самими стартовими даними. */
+  retry(id: string): Observable<ExecutionSummary> {
+    return this.http.post<ExecutionSummary>(`${this.url(id)}/retry`, null);
   }
 
   /**
@@ -129,5 +154,40 @@ export class ExecutionsApiService {
 
   private url(id: string): string {
     return `${API_BASE}/executions/${encodeURIComponent(id)}`;
+  }
+}
+
+/** Усі стани для фільтра журналу. */
+export const EXECUTION_STATES: readonly ExecutionState[] = ['queued', 'running', 'cancelling', 'success', 'error', 'cancelled', 'timed_out'];
+
+/** Назва стану українською. */
+export function executionStateLabel(state: ExecutionState): string {
+  switch (state) {
+    case 'queued':
+      return $localize`:@@executions.state.queued:У черзі`;
+    case 'running':
+      return $localize`:@@executions.state.running:Виконується`;
+    case 'cancelling':
+      return $localize`:@@executions.state.cancelling:Скасовується`;
+    case 'success':
+      return $localize`:@@executions.state.success:Успіх`;
+    case 'error':
+      return $localize`:@@executions.state.error:Помилка`;
+    case 'cancelled':
+      return $localize`:@@executions.state.cancelled:Скасовано`;
+    case 'timed_out':
+      return $localize`:@@executions.state.timedOut:Перевищено час`;
+  }
+}
+
+/** Назва режиму запуску українською. */
+export function executionModeLabel(mode: ExecutionSummary['mode']): string {
+  switch (mode) {
+    case 'manual':
+      return $localize`:@@executions.mode.manual:Вручну`;
+    case 'trigger':
+      return $localize`:@@executions.mode.trigger:Тригер`;
+    case 'retry':
+      return $localize`:@@executions.mode.retry:Повтор`;
   }
 }
