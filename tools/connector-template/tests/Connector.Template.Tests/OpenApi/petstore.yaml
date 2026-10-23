@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: Petstore (тестова специфікація)
+  version: 1.0.0
+servers:
+  - url: https://petstore.example.com/api
+tags:
+  - name: pets
+  - name: store
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [pets]
+      summary: List pets
+      description: Returns pets, optionally filtered by tags.
+      parameters:
+        - name: limit
+          in: query
+          description: Max number of pets.
+          schema:
+            type: integer
+            format: int32
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        - name: X-Request-Id
+          in: header
+          schema:
+            type: string
+        - name: session
+          in: cookie
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+    post:
+      operationId: createPet
+      tags: [pets]
+      summary: Create a pet
+      requestBody:
+        required: true
+        description: The pet to create.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+      responses:
+        "201":
+          description: Created.
+  /pets/{petId}:
+    parameters:
+      - name: petId
+        in: path
+        required: true
+        description: Pet id.
+        schema:
+          type: integer
+          format: int64
+    get:
+      operationId: getPetById
+      tags: [pets]
+      summary: Get a pet by id
+      responses:
+        "200":
+          description: Pet.
+    delete:
+      operationId: deletePet
+      tags: [pets]
+      summary: Delete a pet
+      responses:
+        "204":
+          description: Deleted.
+  /pets/{petId}/photo:
+    put:
+      operationId: uploadPhoto
+      tags: [pets]
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Uploaded.
+  /store/inventory:
+    get:
+      tags: [store]
+      summary: Inventory by status
+      responses:
+        "200":
+          description: Counts.
+components:
+  schemas:
+    NewPet:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        tag:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [available, sold]
+        owner:
+          $ref: "#/components/schemas/Owner"
+    Pet:
+      allOf:
+        - $ref: "#/components/schemas/NewPet"
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+    Owner:
+      type: object
+      properties:
+        name:
+          type: string
+        friends:
+          type: array
+          items:
+            $ref: "#/components/schemas/Owner"
