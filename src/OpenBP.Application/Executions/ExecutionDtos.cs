@@ -122,21 +122,36 @@ public sealed record ExecutionStepDto(
 /// <param name="To">Початок не пізніше.</param>
 public sealed record ExecutionFilter(Guid? WorkflowId = null, ExecutionState? State = null, DateTimeOffset? From = null, DateTimeOffset? To = null);
 
-/// <summary>Параметри ручного запуску (<c>POST /workflows/{id}/executions</c>, MCP <c>run_workflow</c>).</summary>
+/// <summary>Параметри ручного запуску (<c>POST /workflows/{id}/executions</c>, MCP <c>run_workflow</c>, <c>test_node</c>).</summary>
 /// <param name="StartNodeId">Тригер, з якого стартувати; <c>null</c> — усі вузли без вхідних ребер.</param>
 /// <param name="StartItems">Items тригера замість його виконання (тестові дані webhook); потребує <paramref name="StartNodeId"/>.</param>
-public sealed record StartExecutionRequest(string? StartNodeId = null, IReadOnlyList<Item>? StartItems = null);
+/// <param name="DestinationNodeId">
+/// «Виконати вузол» (F2-21): лише цей вузол і його попередники; сам вузол виконується навіть із <c>pinData</c>.
+/// </param>
+/// <param name="RunData">
+/// Виходи вузлів з попереднього тестового запуску (id вузла → items по портах): такі вузли не виконуються, їхній
+/// вихід береться звідси (поверх <c>pinData</c>). Зазвичай — попередники <paramref name="DestinationNodeId"/>.
+/// </param>
+public sealed record StartExecutionRequest(
+    string? StartNodeId = null,
+    IReadOnlyList<Item>? StartItems = null,
+    string? DestinationNodeId = null,
+    IReadOnlyDictionary<string, Item[][]>? RunData = null);
 
 /// <summary>Внутрішній запит на запуск для <see cref="IExecutionLauncher"/> (тригери і сервіс запусків).</summary>
 /// <param name="WorkflowId">Сценарій; виконується його поточна версія.</param>
 /// <param name="Mode">Режим.</param>
 /// <param name="StartNodeId">Тригер, що спрацював; <c>null</c> — усі вузли без вхідних ребер.</param>
 /// <param name="StartItems">Items тригера (тіло webhook, нові записи <c>mcp.poll</c>).</param>
+/// <param name="DestinationNodeId">Лише <see cref="ExecutionMode.Manual"/>: «Виконати вузол» (див. <see cref="StartExecutionRequest"/>).</param>
+/// <param name="RunData">Лише <see cref="ExecutionMode.Manual"/>: виходи вузлів попереднього запуску.</param>
 public sealed record ExecutionLaunch(
     Guid WorkflowId,
     ExecutionMode Mode,
     string? StartNodeId = null,
-    IReadOnlyList<Item>? StartItems = null);
+    IReadOnlyList<Item>? StartItems = null,
+    string? DestinationNodeId = null,
+    IReadOnlyDictionary<string, Item[][]>? RunData = null);
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

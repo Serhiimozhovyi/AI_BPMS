@@ -8,6 +8,7 @@ public sealed record ExecutionRequest
 {
     private static readonly IReadOnlyDictionary<string, string> EmptyEnv = new Dictionary<string, string>();
     private static readonly IReadOnlyDictionary<string, JsonObject> EmptyStates = new Dictionary<string, JsonObject>();
+    private static readonly IReadOnlyDictionary<string, Item[][]> EmptyRunData = new Dictionary<string, Item[][]>();
 
     /// <summary>
     /// Ідентифікатор виконання. Рядок <c>executions</c> створює хост до запуску (у тестах і CLI —
@@ -32,6 +33,21 @@ public sealed record ExecutionRequest
     /// <see cref="StartNodeId"/>, стартовий вузол не виконується — ці items стають його виходом 0.
     /// </summary>
     public IReadOnlyList<Item>? StartItems { get; init; }
+
+    /// <summary>
+    /// «Виконати вузол» (F2-21): виконуються лише цей вузол і його досяжні зі стартових попередники; решта графа — ні.
+    /// Сам вузол виконується завжди, навіть якщо для нього є <see cref="WorkflowDefinition.PinData"/> чи <see cref="RunData"/>.
+    /// <c>null</c> — увесь сценарій.
+    /// </summary>
+    public string? DestinationNodeId { get; init; }
+
+    /// <summary>
+    /// Лише в <see cref="ExecutionMode.Manual"/>: виходи вузлів (по масиву items на порт) з попереднього тестового запуску.
+    /// Вузол із тут заданим виходом не виконується — крок <see cref="StepStatus.Success"/> з цим виходом; має пріоритет
+    /// над <see cref="WorkflowDefinition.PinData"/>. Так «Виконати вузол» бере вхідні дані й <c>$node["…"]</c> з останнього
+    /// запуску, не викликаючи попередників удруге.
+    /// </summary>
+    public IReadOnlyDictionary<string, Item[][]> RunData { get; init; } = EmptyRunData;
 
     /// <summary>Дозволені змінні середовища для виразів (<c>$env</c>); лише білий список, без секретів.</summary>
     public IReadOnlyDictionary<string, string> Env { get; init; } = EmptyEnv;

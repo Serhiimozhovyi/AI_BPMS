@@ -19,7 +19,10 @@ namespace OpenBP.Engine.Execution;
 /// продовжується; інакше виконання зупиняється зі статусом <see cref="ExecutionStatus.Error"/>.</item>
 /// <item><see cref="ResumeAsync(ExecutionSnapshot, ExecutionRequest, CancellationToken)"/> продовжує виконання зі
 /// збережених кроків: завершені вузли не виконуються повторно, їхні виходи відновлюються зі знімка.</item>
-/// <item>У <see cref="ExecutionMode.Manual"/> вузол із <c>pinData</c> не виконується — закріплені items стають його виходом 0.</item>
+/// <item>У <see cref="ExecutionMode.Manual"/> вузол із <c>pinData</c> не виконується — закріплені items стають його виходом 0;
+/// так само вузол із <see cref="ExecutionRequest.RunData"/> (вихід попереднього запуску, усі порти).</item>
+/// <item><see cref="ExecutionRequest.DestinationNodeId"/> («Виконати вузол»): виконуються лише цей вузол і його попередники,
+/// а сам він — навіть із <c>pinData</c>/<c>RunData</c>.</item>
 /// <item>Вимкнений вузол (<c>disabled: true</c>) не виконується — items з його входів проходять на вихід 0.</item>
 /// </list>
 /// </summary>
@@ -251,9 +254,17 @@ public sealed class WorkflowExecutor
             FinishedAt = _time.GetUtcNow(),
         };
 
-        if (request.Mode == ExecutionMode.Manual && request.Workflow.PinData.TryGetValue(definition.Id, out var pinned))
+        if (request.Mode == ExecutionMode.Manual && definition.Id != request.DestinationNodeId)
         {
-            return Step(StepStatus.Success, Ports(node.OutputCount, pinned));
+            if (request.RunData.TryGetValue(definition.Id, out var previous))
+            {
+                return Step(StepStatus.Success, RunDataPorts(node, previous));
+            }
+
+            if (request.Workflow.PinData.TryGetValue(definition.Id, out var pinned))
+            {
+                return Step(StepStatus.Success, Ports(node.OutputCount, pinned));
+            }
         }
 
         if (request.StartItems is { } startItems && definition.Id == request.StartNodeId)
@@ -395,6 +406,27 @@ public sealed class WorkflowExecutor
             throw new EngineException(
                 $"Вузол «{node.Definition.Name}» має повернути {node.OutputCount} масив(и) items — по одному на кожен вихід.");
         }
+    }
+
+    /// <summary>
+    /// Вихід з <see cref="ExecutionRequest.RunData"/> у формі портів вузла: зайві порти відкидаються (крім <c>error</c> за
+    /// <c>continueOnFail</c>), бракуючі — порожні, items копіюються.
+    /// </summary>
+    private static Item[][] RunDataPorts(PlannedNode node, Item[][] previous)
+    {
+        var count = Math.Max(node.OutputCount, 1);
+        if (node.ContinueOnFail && previous.Length > count)
+        {
+            count++;
+        }
+
+        var ports = new Item[count][];
+        for (var i = 0; i < ports.Length; i++)
+        {
+            ports[i] = i < previous.Length && previous[i] is { } items ? [.. items.Select(RunState.Clone)] : [];
+        }
+
+        return ports;
     }
 
     private static Item[][] Ports(int count, IEnumerable<Item> first)

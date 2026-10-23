@@ -199,6 +199,8 @@ public sealed partial class ExecutionJobProcessor
             Mode = payload.Mode,
             StartNodeId = payload.StartNodeId,
             StartItems = payload.StartItems,
+            DestinationNodeId = payload.DestinationNodeId,
+            RunData = payload.RunData ?? new Dictionary<string, Item[][]>(),
             NodeStates = loadedStates,
         };
 

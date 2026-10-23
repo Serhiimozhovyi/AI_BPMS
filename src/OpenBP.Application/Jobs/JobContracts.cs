@@ -38,6 +38,12 @@ public sealed record ExecutionJobPayload
 
     /// <summary>Items тригера (тіло webhook, нові записи <c>mcp.poll</c>); стартовий вузол тоді не виконується.</summary>
     public IReadOnlyList<Item>? StartItems { get; init; }
+
+    /// <summary>«Виконати вузол» (<see cref="ExecutionRequest.DestinationNodeId"/>); <c>null</c> — увесь сценарій.</summary>
+    public string? DestinationNodeId { get; init; }
+
+    /// <summary>Виходи вузлів попереднього тестового запуску (<see cref="ExecutionRequest.RunData"/>).</summary>
+    public IReadOnlyDictionary<string, Item[][]>? RunData { get; init; }
 }
 
 /// <summary>Payload job <see cref="JobKinds.Poll"/>: який вузол опитати. Стан вузла воркер читає з <c>node_state</c>.</summary>

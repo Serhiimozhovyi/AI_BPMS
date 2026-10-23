@@ -217,6 +217,41 @@ public class ExecutionTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Start_DestinationNodeAndRunData_GoToJobPayload()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor);
+
+        var started = await StartAsync(editor, workflowId, new
+        {
+            destinationNodeId = "n_set",
+            runData = new Dictionary<string, object> { ["n_start"] = new[] { new[] { new { json = new { order = 7 } } } } },
+        });
+
+        var executionId = started.GetProperty("id").GetGuid();
+        await using var db = api.CreateDbContext();
+        var payload = (await db.Jobs.Where(j => j.Kind == JobKinds.Execution).Select(j => j.Payload).ToListAsync())
+            .Select(JobJson.Deserialize<ExecutionJobPayload>)
+            .Single(p => p.ExecutionId == executionId);
+        Assert.Equal("n_set", payload.DestinationNodeId);
+        Assert.Equal(7, payload.RunData!["n_start"][0].Single().Json["order"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Start_UnknownDestinationNode_Returns422()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor);
+
+        var response = await editor.PostAsJsonAsync($"/api/v1/workflows/{workflowId}/executions", new { destinationNodeId = "n_missing" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var error = (await JsonAsync(response)).GetProperty("errors").EnumerateArray().Single();
+        Assert.Equal("DESTINATION_NODE_UNKNOWN", error.GetProperty("code").GetString());
+        Assert.Equal("n_missing", error.GetProperty("nodeId").GetString());
+    }
+
+    [Fact]
     public async Task Start_ItemsWithoutStartNode_Returns400()
     {
         var editor = await LoginAsync(UserRole.Editor);

@@ -95,13 +95,32 @@ internal sealed class ExecutionPlan
         }
 
         var reachable = Reachable(starts);
-        foreach (var node in reachable.Values)
+        CountPending(reachable);
+        EnsureAcyclic(starts, reachable);
+
+        if (request.DestinationNodeId is { } destinationId)
         {
-            node.Pending = node.Incoming.Select(e => e.From).Where(f => reachable.ContainsKey(f.Definition.Id)).Distinct().Count();
+            var destination = Find(all, destinationId);
+            if (!reachable.ContainsKey(destinationId))
+            {
+                throw new EngineException($"Вузол «{destination.Definition.Name}» недосяжний зі стартових вузлів.");
+            }
+
+            reachable = Ancestors(destination, reachable);
+            starts = [.. starts.Where(s => reachable.ContainsKey(s.Definition.Id))];
+            CountPending(reachable);
         }
 
-        EnsureAcyclic(starts, reachable);
         return new ExecutionPlan(starts, reachable);
+    }
+
+    /// <summary>Скільки попередників кожного вузла входить у план — вузол стає в чергу, коли їх 0.</summary>
+    private static void CountPending(Dictionary<string, PlannedNode> nodes)
+    {
+        foreach (var node in nodes.Values)
+        {
+            node.Pending = node.Incoming.Select(e => e.From).Where(f => nodes.ContainsKey(f.Definition.Id)).Distinct().Count();
+        }
     }
 
     private static PlannedNode Find(Dictionary<string, PlannedNode> nodes, string id) =>
@@ -118,6 +137,25 @@ internal sealed class ExecutionPlan
                 foreach (var next in node.Successors)
                 {
                     stack.Push(next);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Вузол і всі його попередники в межах <paramref name="reachable"/>.</summary>
+    private static Dictionary<string, PlannedNode> Ancestors(PlannedNode destination, Dictionary<string, PlannedNode> reachable)
+    {
+        var result = new Dictionary<string, PlannedNode>(StringComparer.Ordinal);
+        var stack = new Stack<PlannedNode>([destination]);
+        while (stack.TryPop(out var node))
+        {
+            if (reachable.ContainsKey(node.Definition.Id) && result.TryAdd(node.Definition.Id, node))
+            {
+                foreach (var edge in node.Incoming)
+                {
+                    stack.Push(edge.From);
                 }
             }
         }

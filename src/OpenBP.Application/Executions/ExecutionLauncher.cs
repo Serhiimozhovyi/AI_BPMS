@@ -21,6 +21,9 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
     /// <summary>Код помилки валідації: <c>startNodeId</c> не знайдено в поточній версії сценарію.</summary>
     public const string StartNodeUnknownCode = "START_NODE_UNKNOWN";
 
+    /// <summary>Код помилки валідації: <c>destinationNodeId</c> не знайдено в поточній версії сценарію.</summary>
+    public const string DestinationNodeUnknownCode = "DESTINATION_NODE_UNKNOWN";
+
     /// <inheritdoc />
     public async Task<ExecutionSummary> LaunchAsync(ExecutionLaunch launch, CancellationToken ct)
     {
@@ -28,6 +31,11 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
         if (launch.StartItems is not null && launch.StartNodeId is null)
         {
             throw new ArgumentException("startItems задаються лише разом із startNodeId.", nameof(launch));
+        }
+
+        if (launch.Mode != ExecutionMode.Manual && (launch.DestinationNodeId is not null || launch.RunData is { Count: > 0 }))
+        {
+            throw new ArgumentException("destinationNodeId і runData — лише для ручного запуску.", nameof(launch));
         }
 
         var workflow = await db.Workflows.AsNoTracking()
@@ -42,22 +50,29 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
 
         var versionId = workflow.CurrentVersionId
                         ?? throw new InvalidOperationException($"Сценарій «{launch.WorkflowId}» без поточної версії.");
-        if (launch.StartNodeId is { } startNodeId)
+        if (launch.StartNodeId is not null || launch.DestinationNodeId is not null)
         {
             var definition = await db.WorkflowVersions.AsNoTracking()
                 .Where(v => v.Id == versionId)
                 .Select(v => v.Definition)
                 .SingleAsync(ct);
-            if (!WorkflowJson.Deserialize(definition).Nodes.Any(n => n.Id == startNodeId))
+            var nodeIds = WorkflowJson.Deserialize(definition).Nodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+            List<WorkflowValidationError> errors = [];
+            if (launch.StartNodeId is { } startNodeId && !nodeIds.Contains(startNodeId))
             {
-                throw new WorkflowValidationException(
-                [
-                    new WorkflowValidationError(
-                        StartNodeUnknownCode,
-                        $"Вузла «{startNodeId}» немає в поточній версії сценарію.",
-                        startNodeId,
-                        "startNodeId"),
-                ]);
+                errors.Add(new WorkflowValidationError(
+                    StartNodeUnknownCode, $"Вузла «{startNodeId}» немає в поточній версії сценарію.", startNodeId, "startNodeId"));
+            }
+
+            if (launch.DestinationNodeId is { } destinationNodeId && !nodeIds.Contains(destinationNodeId))
+            {
+                errors.Add(new WorkflowValidationError(
+                    DestinationNodeUnknownCode, $"Вузла «{destinationNodeId}» немає в поточній версії сценарію.", destinationNodeId, "destinationNodeId"));
+            }
+
+            if (errors.Count > 0)
+            {
+                throw new WorkflowValidationException(errors);
             }
         }
 
@@ -78,6 +93,8 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             Mode = launch.Mode,
             StartNodeId = launch.StartNodeId,
             StartItems = launch.StartItems,
+            DestinationNodeId = launch.DestinationNodeId,
+            RunData = launch.RunData is { Count: > 0 } runData ? runData : null,
         };
         db.Executions.Add(execution);
         db.Jobs.Add(new JobEntity
