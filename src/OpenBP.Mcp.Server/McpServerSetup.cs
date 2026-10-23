@@ -30,6 +30,7 @@ public static class McpServerSetup
             .WithRequestFilters(filters => filters.AddCallToolFilter(McpErrors.Filter).AddReadResourceFilter(McpErrors.ResourceFilter))
             .WithTools<ConnectorTools>(McpJson.Options)
             .WithTools<WorkflowTools>(McpJson.Options)
+            .WithTools<ExecutionTools>(McpJson.Options)
             .WithResources<OpenBpResources>();
         return services;
     }
