@@ -262,6 +262,36 @@ describe('WorkflowEditorPage', () => {
     http.expectOne({ method: 'PUT' }).flush(saved(4, canvas.definition()));
   });
 
+  it('панель вузла: один виділений вузол — форма; зміна у формі — крок історії й автозбереження; Delete у формі не видаляє вузол', async () => {
+    const { fixture, http, host } = await loaded();
+    const canvas = canvasComponent(fixture);
+    expect(host.querySelector('app-node-panel')).toBeNull();
+
+    canvas.selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="node-panel-name"]')?.textContent).toContain('Поля');
+
+    const notes = host.querySelector('[data-testid="field-notes"]') as HTMLTextAreaElement;
+    notes.value = 'Нотатка';
+    notes.dispatchEvent(new Event('input'));
+    const del = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true });
+    notes.dispatchEvent(del);
+    await render(fixture);
+    expect(del.defaultPrevented).toBe(false);
+    expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
+    expect(canvasNodes(fixture)[1].notes).toBe('Нотатка');
+    expect(button(host, 'undo').disabled).toBe(false);
+
+    fixture.componentInstance['autosave'].flush();
+    const req = http.expectOne({ method: 'PUT' });
+    expect(req.request.body.nodes[1]).toEqual({ ...workflow.definition.nodes[1], notes: 'Нотатка' });
+    req.flush(saved(4, req.request.body));
+
+    canvas.selectionChange.emit({ nodes: ['n_set', 'n_hook'], edges: [] });
+    await render(fixture);
+    expect(host.querySelector('app-node-panel')).toBeNull();
+  });
+
   it('422: помилки валідації — на вузлах канвасу, загальні — у панелі; зміни лишаються незбереженими', async () => {
     const { fixture, http, host } = await loaded();
     click(host, '[data-item="core.set"]');
