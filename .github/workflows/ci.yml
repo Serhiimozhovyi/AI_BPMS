@@ -62,6 +62,30 @@ jobs:
       - run: dotnet test --no-build
         working-directory: ${{ runner.temp }}/acme
 
+  connectors:
+    name: Конектори (build + format + test)
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        connector: [telegram]
+    defaults:
+      run:
+        working-directory: connectors/${{ matrix.connector }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - run: dotnet build -warnaserror
+      - run: dotnet format --verify-no-changes --no-restore
+      - run: dotnet test --no-build
+
   web:
     name: Angular lint + test + build
     runs-on: ubuntu-latest
