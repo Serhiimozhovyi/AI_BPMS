@@ -224,7 +224,7 @@
 - DoD: інтеграційний тест — запуск → SSE віддає події кожного кроку і фінал; viewer бачить, але не запускає.
 
 ### F2-10 · Тригер `core.webhook`
-- model: `sonnet` · status: `review #39` · depends: F2-06, F2-03
+- model: `sonnet` · status: `done` · depends: F2-06, F2-03
 - Що:
   - вузол `core.webhook` у `OpenBP.Nodes.Core` (`connectors.md` §6: `method`, `path`, `auth?`);
   - таблиця `webhooks` заповнюється при активації сценарію;
