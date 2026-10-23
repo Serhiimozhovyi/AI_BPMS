@@ -168,7 +168,7 @@ export function addNode(definition: WorkflowDefinition, item: PaletteItem, posit
 }
 
 /** `n_` + 12 hex; `getRandomValues`, а не `randomUUID`, — працює і поза secure context (http у локальній мережі). */
-function randomNodeId(): string {
+export function randomNodeId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(6));
   return `n_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
 }

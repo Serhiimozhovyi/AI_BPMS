@@ -6,6 +6,11 @@
 /out-tsc
 /bazel-out
 
+# Playwright
+/test-results
+/playwright-report
+/blob-report
+
 # Node
 /node_modules
 npm-debug.log

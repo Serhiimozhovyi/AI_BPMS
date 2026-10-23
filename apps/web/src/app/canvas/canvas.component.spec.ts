@@ -116,4 +116,69 @@ describe('CanvasComponent', () => {
     const nodes = (vflow(fixture) as unknown as { nodes: () => unknown[] }).nodes();
     expect(nodes).toHaveLength(200);
   });
+
+  it('з’єднання портів у vflow додає ребро в кінець connections; петля — без змін', async () => {
+    const def = demo();
+    const fixture = await create(def);
+    const changes: WorkflowDefinition[] = [];
+    fixture.componentInstance.definitionChange.subscribe((d) => changes.push(d));
+    const inner = vflow(fixture) as unknown as { connected(c: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): void };
+
+    inner.connected({ source: 'n_webhook', sourceHandle: 'out-0', target: 'n_1c', targetHandle: 'in-0' });
+    inner.connected({ source: 'n_if', sourceHandle: 'out-0', target: 'n_if', targetHandle: 'in-0' });
+    inner.connected({ source: 'n_webhook', sourceHandle: 'out-0', target: 'n_if', targetHandle: 'in-0' });
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0].connections).toHaveLength(4);
+    expect(changes[0].connections[3]).toEqual({ from: { node: 'n_webhook', output: 0 }, to: { node: 'n_1c', input: 0 } });
+    expect(changes[0].connections.slice(0, 3)).toEqual(def.connections);
+  });
+
+  it('виділення з бібліотеки віддається назовні: вузли за id, ребра за індексом у connections', async () => {
+    const fixture = await create(demo());
+    const selections: unknown[] = [];
+    fixture.componentInstance.selectionChange.subscribe((s) => selections.push(s));
+    const inner = vflow(fixture) as unknown as {
+      nodes: () => { id: string; selected: { set(v: boolean): void } }[];
+      edges: () => { selected: { set(v: boolean): void } }[];
+      selectionChanged(): void;
+    };
+
+    inner.nodes()[2].selected.set(true);
+    inner.edges()[1].selected.set(true);
+    inner.selectionChanged();
+
+    expect(selections).toEqual([{ nodes: ['n_1c'], edges: [1] }]);
+  });
+
+  it('виділення ззовні (вставка) позначає вузли на канвасі', async () => {
+    const fixture = await create(demo());
+    fixture.componentRef.setInput('selection', { nodes: ['n_if'], edges: [] });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-node-id="n_if"]')?.classList).toContain('selected');
+    expect(host.querySelector('[data-node-id="n_webhook"]')?.classList).not.toContain('selected');
+  });
+
+  it('помилки валідації з nodeId підсвічують вузол і показують текст у підказці', async () => {
+    const fixture = await create(demo());
+    fixture.componentRef.setInput('errors', [
+      { code: 'SCHEMA_VIOLATION', message: 'Поле condition обов’язкове', nodeId: 'n_if', path: '/nodes/1/parameters' },
+      { code: 'MCP_TOOL_UNKNOWN', message: 'Tool не знайдено', nodeId: 'n_if' },
+      { code: 'TRIGGER_MISSING', message: 'Немає тригера' },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const card = host.querySelector('[data-node-id="n_if"]')!;
+    expect(card.getAttribute('data-invalid')).toBe('true');
+    const badge = card.querySelector('[data-testid="node-errors"]')!;
+    expect(badge.textContent).toContain('2');
+    expect(badge.getAttribute('title')).toBe('Поле condition обов’язкове\nTool не знайдено');
+    expect(host.querySelector('[data-node-id="n_webhook"]')?.getAttribute('data-invalid')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="node-errors"]')).toHaveLength(1);
+  });
 });
