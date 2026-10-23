@@ -8,6 +8,7 @@ using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Nodes;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Schedules;
 using OpenBP.Application.Webhooks;
 using OpenBP.Application.Workflows;
 using OpenBP.Data;
@@ -16,6 +17,7 @@ using OpenBP.Engine;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Nodes.Core;
+using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +47,10 @@ builder.Services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
 builder.Services.AddScoped<ICredentialProvider>(sp => new PostgresCredentialProvider(new CredentialStore(
     sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
 builder.Services.AddOpenBpWebhookServices();
+
+// Розклади core.schedule (F2-11): Quartz у Postgres; планувальник живе в Api і стартує разом із ним.
+builder.Services.AddOpenBpScheduleServices();
+builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 

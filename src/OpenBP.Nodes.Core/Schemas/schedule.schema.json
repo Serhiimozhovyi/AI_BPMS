@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.schedule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cron"],
+  "properties": {
+    "cron": {
+      "title": "Розклад (cron)",
+      "description": "5 полів crontab («хвилина година день місяць день-тижня», напр. 0 7 * * 1-5) або 6–7 полів Quartz із секундами (напр. 0 0 7 ? * MON-FRI).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "timezone": {
+      "title": "Часовий пояс",
+      "description": "IANA, напр. Europe/Kyiv. Не задано — часовий пояс сценарію (settings.timezone).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    }
+  }
+}
