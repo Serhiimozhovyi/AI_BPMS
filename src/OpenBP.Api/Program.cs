@@ -18,6 +18,7 @@ using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
+using OpenBP.Mcp.Server;
 using OpenBP.Nodes.Core;
 using Quartz;
 
@@ -60,6 +61,9 @@ builder.Services.AddHostedService<ConnectorRegistryLoader>();
 builder.Services.AddOpenBpScheduleServices();
 builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
+// MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
+builder.Services.AddOpenBpMcpServer();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -70,6 +74,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
+app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);
 
 app.Run();
 

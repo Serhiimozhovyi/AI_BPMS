@@ -7,6 +7,7 @@
     <ProjectReference Include="../OpenBP.Nodes.Core/OpenBP.Nodes.Core.csproj" />
     <ProjectReference Include="../OpenBP.Expressions/OpenBP.Expressions.csproj" />
     <ProjectReference Include="../OpenBP.Ai/OpenBP.Ai.csproj" />
+    <ProjectReference Include="../OpenBP.Mcp.Server/OpenBP.Mcp.Server.csproj" />
   </ItemGroup>
 
 </Project>
