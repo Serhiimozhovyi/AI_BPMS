@@ -334,7 +334,7 @@
 - DoD: Vitest на сторінку і сервіс API (створення показує ключ один раз, відкликання прибирає зі списку); `npm run lint|test|build` зелені.
 
 ### F3-08 · Api: повтор виконання (`POST /executions/{id}/retry`)
-- model: `sonnet` · status: `review #57` · depends: F2-09
+- model: `sonnet` · status: `done` · depends: F2-09
 - Що: `IExecutionService.RetryAsync` (досі заглушка F3-G): нове виконання `mode = retry` тієї самої `version_id` з тими самими стартовими даними (`startNodeId`/`startItems` з payload або items кроку тригера — обрати одне джерело і зафіксувати в `architecture.md` §10.4); незавершене → 409 `EXECUTION_NOT_FINISHED`; маршрут у `ExecutionEndpoints`; воркер обробляє `retry` як `execution`.
 - DoD: інтеграційні тести — повтор `error`-виконання з FakeServer-моком дає `success` з тими самими стартовими items; повтор `running` → 409; viewer → 403.
 
