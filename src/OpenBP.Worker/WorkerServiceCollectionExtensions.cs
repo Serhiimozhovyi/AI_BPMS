@@ -23,7 +23,7 @@ public static class WorkerServiceCollectionExtensions
     /// <c>OPENBP_ENCRYPTION_KEY</c> — без нього старт неможливий), реєстри MCP-серверів і вузлів, Jint і
     /// <see cref="ExecutionWorker"/> (виконання і опитування <c>mcp.poll</c>, <see cref="PollJobProcessor"/>) з налаштуваннями секції <see cref="WorkerOptions.Section"/>, а також
     /// <see cref="ExecutionRecoveryService"/> (відновлення після падіння воркера) з налаштуваннями черги з підсекції
-    /// <see cref="QueueSection"/>.
+    /// <see cref="QueueSection"/>; файли — у <see cref="LocalBinaryStore"/>, якщо задано <c>Storage:LocalPath</c>.
     /// </summary>
     /// <param name="services">Колекція сервісів.</param>
     /// <param name="configuration">Конфігурація.</param>
@@ -47,6 +47,13 @@ public static class WorkerServiceCollectionExtensions
         }
 
         services.AddSingleton(queueOptions);
+
+        var storage = new BinaryStorageOptions();
+        configuration.GetSection(BinaryStorageOptions.Section).Bind(storage);
+        if (!string.IsNullOrWhiteSpace(storage.LocalPath))
+        {
+            services.AddSingleton<IBinaryStore>(sp => new LocalBinaryStore(storage.LocalPath, sp.GetRequiredService<TimeProvider>()));
+        }
 
         services.AddDbContextFactory<OpenBpDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("Default")));
         services.AddSingleton(TimeProvider.System);

@@ -34,3 +34,16 @@ public sealed class WorkerOptions
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PollInterval, TimeSpan.Zero, nameof(PollInterval));
     }
 }
+
+/// <summary>Файлове сховище бінарних даних (секція <c>Storage</c>, docs/architecture.md §6).</summary>
+public sealed class BinaryStorageOptions
+{
+    /// <summary>Назва секції конфігурації.</summary>
+    public const string Section = "Storage";
+
+    /// <summary>
+    /// Папка для файлів (<c>Storage:LocalPath</c>, змінна <c>Storage__LocalPath</c>); у Docker — шлях усередині volume.
+    /// Не задано — сховища немає, і вузли з файлами завершуються помилкою.
+    /// </summary>
+    public string? LocalPath { get; set; }
+}

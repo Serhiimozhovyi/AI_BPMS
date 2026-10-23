@@ -74,8 +74,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
     private ExecutionRecoveryService? _recovery;
 
-    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null)
+    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null, IBinaryStore? binary = null)
     {
+        Binary = binary;
         EncryptionKey = encryptionKey ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         ConnectionString = cs;
         Db = new Contexts(cs);
@@ -101,7 +102,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
             registry,
             Servers,
             new JintExpressionEvaluator(),
-            null,
+            binary,
             options,
             NullLogger<ExecutionJobProcessor>.Instance);
         Poll = new PollJobProcessor(
@@ -111,7 +112,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
             registry,
             Servers,
             new JintExpressionEvaluator(),
-            null,
+            binary,
             options,
             NullLogger<PollJobProcessor>.Instance);
     }
@@ -120,6 +121,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public string EncryptionKey { get; }
 
     public PollJobProcessor Poll { get; }
+
+    /// <summary>Файлове сховище воркера; <c>null</c> — як без <c>Storage:LocalPath</c>.</summary>
+    public IBinaryStore? Binary { get; }
 
     public string ConnectionString { get; }
 
@@ -144,7 +148,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
     /// <param name="postgres">Контейнер Postgres.</param>
     /// <param name="maxConcurrent">Паралельність воркера.</param>
     /// <param name="lockTimeout">Поріг протухання lock'а (і heartbeat виконання) для черги й відновлення; за замовчуванням 5 хв.</param>
-    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null)
+    /// <param name="binary">Файлове сховище; <c>null</c> — немає.</param>
+    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null)
     {
         var cs = await postgres.NewMigratedDatabaseAsync();
         return new WorkerHarness(
@@ -156,7 +161,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
                 HeartbeatInterval = TimeSpan.FromMilliseconds(100),
                 PollInterval = TimeSpan.FromMilliseconds(50),
             },
-            new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) });
+            new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) },
+            binary: binary);
     }
 
     /// <summary>
@@ -166,7 +172,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public async Task<WorkerHarness> RestartAsync()
     {
         await StopAsync();
-        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey);
+        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey, Binary);
     }
 
     /// <summary>Запускає <see cref="ExecutionWorker"/> як hosted service; з <paramref name="withRecovery"/> — і <see cref="ExecutionRecoveryService"/>.</summary>

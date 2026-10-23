@@ -116,6 +116,12 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 
 Quartz тримає власні таблиці для розкладів. Бінарні дані — у файловому сховищі (локальна папка / S3-сумісне), в jsonb лише `BinaryRef`.
 
+Файлове сховище воркера — локальна папка `Storage:LocalPath` (змінна `Storage__LocalPath`; у Docker — шлях у volume):
+файл лежить у `<папка>/<рік>/<місяць>/<id>`, у `BinaryRef` — `storage: local`, `directory: рік/місяць`, `sha256`,
+`fileSize`. Читаються лише посилання, які створило сховище (ключ — 32 hex, каталог — `рік/місяць`), тож підроблений
+`BinaryRef` у `pinData` чи `startItems` не відкриє файл поза папкою. Без `Storage:LocalPath` вузол із файлом завершується
+помилкою з назвою налаштування. S3-сумісне сховище — пізніше.
+
 ## 7. Frontend (Angular)
 
 - Standalone-компоненти, Signals, роутинг: `/workflows`, `/workflows/:id` (канвас), `/executions`, `/connectors`, `/credentials`, `/settings`.
