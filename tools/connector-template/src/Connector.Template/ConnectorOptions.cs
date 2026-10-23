@@ -26,6 +26,7 @@ public sealed class ConnectorOptions
     public const string Section = "Connector";
 
     private const string OpenApiPrefix = "openapi:";
+    private const string ODataPrefix = "odata:";
 
     /// <summary>Базова адреса REST API, напр. <c>https://api.example.com/</c>.</summary>
     public Uri? BaseUrl { get; set; }
@@ -35,21 +36,30 @@ public sealed class ConnectorOptions
 
     /// <summary>
     /// Джерело згенерованих tools: порожньо — лише tools, описані вручну; <c>openapi:&lt;url або файл&gt;</c> — ще й tool на
-    /// кожну операцію OpenAPI 3.x (<see cref="OpenApi.OpenApiToolFactory"/>). Відносний шлях файлу — від теки застосунку.
+    /// кожну операцію OpenAPI 3.x (<see cref="OpenApi.OpenApiToolFactory"/>); <c>odata:&lt;url $metadata або файл&gt;</c> —
+    /// tools на кожен entity set OData (<see cref="OData.ODataToolFactory"/>). Відносний шлях файлу — від теки застосунку.
     /// </summary>
     public string? Source { get; set; }
 
     /// <summary>Фільтр операцій OpenAPI.</summary>
     public OpenApiOptions OpenApi { get; set; } = new();
 
+    /// <summary>Фільтр entity sets і особливості сервера OData.</summary>
+    public ODataOptions OData { get; set; } = new();
+
     /// <summary>Розташування специфікації OpenAPI з <see cref="Source"/> або <c>null</c>, якщо джерело інше чи не задане.</summary>
-    public string? OpenApiLocation =>
-        Source?.Trim() is { } source && source.StartsWith(OpenApiPrefix, StringComparison.OrdinalIgnoreCase)
-            ? source[OpenApiPrefix.Length..].Trim()
-            : null;
+    public string? OpenApiLocation => Location(OpenApiPrefix);
+
+    /// <summary>Розташування OData <c>$metadata</c> з <see cref="Source"/> або <c>null</c>, якщо джерело інше чи не задане.</summary>
+    public string? ODataLocation => Location(ODataPrefix);
 
     /// <summary><see cref="Source"/> порожнє або відомого виду.</summary>
-    public bool IsSourceValid => string.IsNullOrWhiteSpace(Source) || OpenApiLocation is { Length: > 0 };
+    public bool IsSourceValid => string.IsNullOrWhiteSpace(Source) || OpenApiLocation is { Length: > 0 } || ODataLocation is { Length: > 0 };
+
+    private string? Location(string prefix) =>
+        Source?.Trim() is { } source && source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? source[prefix.Length..].Trim()
+            : null;
 }
 
 /// <summary>
@@ -98,4 +108,20 @@ public sealed class AuthOptions
         type = parsed ?? AuthType.None;
         return parsed is not null;
     }
+}
+
+/// <summary>Генератор tools з OData <c>$metadata</c>.</summary>
+public sealed class ODataOptions
+{
+    /// <summary>Лише entity sets, назва яких відповідає хоча б одному шаблону (<c>*</c> — будь-які символи); порожньо — усі.</summary>
+    public List<string> Include { get; set; } = [];
+
+    /// <summary>Крім entity sets, назва яких відповідає хоча б одному шаблону.</summary>
+    public List<string> Exclude { get; set; } = [];
+
+    /// <summary>
+    /// Додавати до запитів <c>$format=json</c>: деякі сервери (зокрема 1С) без нього віддають Atom XML, навіть коли
+    /// <c>Accept: application/json</c>.
+    /// </summary>
+    public bool FormatParameter { get; set; }
 }

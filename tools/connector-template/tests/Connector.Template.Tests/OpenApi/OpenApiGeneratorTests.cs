@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Connector.Template.Generated;
 using Connector.Template.OpenApi;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
@@ -251,5 +252,7 @@ public sealed class OpenApiGeneratorTests : IAsyncLifetime
     [InlineData("list-pets", "list_pets")]
     [InlineData("get_/pets/{petId}", "get_pets_pet_id")]
     [InlineData("v2.users.get", "v2_users_get")]
-    public void Tool_name_is_snake_case(string source, string expected) => Assert.Equal(expected, OpenApiToolFactory.ToolName(source));
+    [InlineData("Catalog_Контрагенты", "catalog_kontragenty")]
+    [InlineData("Document_ЗаказКлиента", "document_zakaz_klienta")]
+    public void Tool_name_is_snake_case(string source, string expected) => Assert.Equal(expected, ToolNaming.ToolName(source));
 }

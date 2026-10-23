@@ -14,11 +14,11 @@
     (bearer), `CONNECTOR_API_KEY` (api-key). У відповідях tools і текстах помилок їх немає (`ConnectorSecrets.Scrub`);
   - `RestClient` — типізований `HttpClient` до вашого API (приклад — фейкове API товарів `/items`);
   - `Tools/ItemTools.cs` — tools, описані вручну атрибутами `[McpServerTool]`: `list_items`, `get_item`;
-  - `OpenApi/` — генератор tools з OpenAPI 3.x (`Connector:Source = openapi:…`, див. нижче);
+  - `OpenApi/`, `OData/` — генератори tools з OpenAPI 3.x і OData `$metadata` (`Connector:Source`, див. нижче);
   - транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
 - `tests/Connector.Template.Tests` — контрактні тести: `tools/list` віддає схеми, `tools/call` проти in-process
   мок-REST повертає `structuredContent`, помилка REST → `isError` без секретів, stdio-запуск; генератор OpenAPI — на
-  petstore-подібній специфікації (`tests/…/OpenApi/petstore.yaml`).
+  petstore-подібній специфікації (`tests/…/OpenApi/petstore.yaml`), генератор OData — на CSDL `tests/…/OData/trade.xml`.
 
 ## Від нуля до підключеного в OpenBP за годину
 
@@ -56,6 +56,24 @@ dotnet test
   не-JSON пропускаються (попередження в журналі).
 - Ручні tools працюють поруч зі згенерованими; приклад `ItemTools` видаліть (і рядок `WithTools<ItemTools>()` у
   `ConnectorHost.cs`), якщо він вам не потрібен.
+
+**Сервіс OData (напр. публікація 1С)?** Tools з `$metadata`:
+
+```json
+"Connector": {
+  "BaseUrl": "http://server/base/odata/standard.odata/",
+  "Auth": { "Type": "basic" },
+  "Source": "odata:http://server/base/odata/standard.odata/$metadata",
+  "OData": { "Include": [ "Catalog_*", "Document_ЗаказКлиента" ], "FormatParameter": true }
+}
+```
+
+- По кожному entity set — `list_<set>` (`filter`, `select`, `expand`, `orderby`, `top`, `skip`; відповідь
+  `{ "result": [...] }`), `get_<set>` (за ключем), `create_<set>` (POST) і `update_<set>` (PATCH). Кирилиця в назвах
+  транслітерується: `Catalog_Контрагенты` → `list_catalog_kontragenty`.
+- `$metadata` під `BaseUrl` читається з тим самим логіном/паролем, що й дані; можна вказати і файл.
+- `Include`/`Exclude` — шаблони назв entity sets з `*` (у 1С їх сотні — залишайте лише потрібні). `FormatParameter`
+  додає `$format=json` — потрібен для 1С.
 
 **Описати tools вручну:**
 
@@ -106,5 +124,4 @@ OpenBP сам є MCP-сервером: агент бачить ваш конек
 що в OpenBP) і `.editorconfig`. CI репозиторію створює з нього проєкт `dotnet new` і запускає
 `dotnet build -warnaserror`, `dotnet format --verify-no-changes` і `dotnet test`.
 
-Генератор tools з OData `$metadata` — наступний крок Connector Kit (F3-12). Сторонні залежності шаблону (MIT) — у
-`THIRD_PARTY_NOTICES.md` репозиторію OpenBP.
+Сторонні залежності шаблону (MIT) — у `THIRD_PARTY_NOTICES.md` репозиторію OpenBP.

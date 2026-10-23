@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Connector.Template.Generated;
 using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 namespace Connector.Template.OpenApi;
 
@@ -21,52 +21,25 @@ public sealed record OpenApiBinding(HttpMethod Method, string Path, IReadOnlyLis
 }
 
 /// <summary>
-/// Згенерований tool операції OpenAPI: підставляє аргументи в шлях, query, заголовки й тіло, викликає REST API через
-/// <see cref="RestClient"/> (автентифікація й очищення секретів — ті самі, що в ручних tools). JSON-об'єкт у відповіді —
-/// <c>structuredContent</c>, масив — <c>{ "result": [...] }</c>; помилка REST чи аргументів — <c>isError</c>.
+/// Згенерований tool операції OpenAPI: підставляє аргументи в шлях, query, заголовки й тіло (<see cref="RestTool"/>).
 /// </summary>
 /// <param name="tool">Опис для <c>tools/list</c>.</param>
 /// <param name="binding">Прив'язка аргументів.</param>
 /// <param name="rest">Клієнт REST API.</param>
-public sealed class OpenApiTool(Tool tool, OpenApiBinding binding, Func<RestClient> rest) : McpServerTool
+public sealed class OpenApiTool(Tool tool, OpenApiBinding binding, Func<RestClient> rest) : RestTool(tool, rest)
 {
-    /// <inheritdoc />
-    public override Tool ProtocolTool => tool;
-
-    /// <inheritdoc />
-    public override IReadOnlyList<object> Metadata => [];
-
     /// <summary>Прив'язка аргументів до запиту.</summary>
     public OpenApiBinding Binding => binding;
 
     /// <inheritdoc />
-    public override async ValueTask<CallToolResult> InvokeAsync(RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
-    {
-        var arguments = request.Params?.Arguments ?? new Dictionary<string, JsonElement>();
-        try
-        {
-            using var message = BuildRequest(arguments);
-            using var response = await rest().SendAsync(message, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            return ToResult((int)response.StatusCode, body);
-        }
-        catch (ConnectorException ex)
-        {
-            return new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = ex.Message }] };
-        }
-    }
-
-    /// <summary>HTTP-запит з аргументів (шлях — відносно базової адреси конектора).</summary>
-    /// <param name="arguments">Аргументи <c>tools/call</c>.</param>
-    /// <exception cref="ConnectorException">Бракує обов'язкового аргументу.</exception>
-    public HttpRequestMessage BuildRequest(IDictionary<string, JsonElement> arguments)
+    public override HttpRequestMessage BuildRequest(IDictionary<string, JsonElement> arguments)
     {
         var path = binding.Path;
         var query = new List<string>();
         var headers = new List<(string Name, string Value)>();
         foreach (var parameter in binding.Parameters)
         {
-            if (!arguments.TryGetValue(parameter.Argument, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            if (Argument(arguments, parameter.Argument) is not { } value)
             {
                 if (parameter.Required)
                 {
@@ -113,36 +86,4 @@ public sealed class OpenApiTool(Tool tool, OpenApiBinding binding, Func<RestClie
         JsonValueKind.Array => value.EnumerateArray().Select(Scalar),
         _ => [Scalar(value)],
     };
-
-    private static string Scalar(JsonElement value) => value.ValueKind == JsonValueKind.String ? value.GetString()! : value.GetRawText();
-
-    private static CallToolResult ToResult(int status, string body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return new CallToolResult { Content = [new TextContentBlock { Text = $"HTTP {status}" }] };
-        }
-
-        JsonElement json;
-        try
-        {
-            json = JsonSerializer.Deserialize<JsonElement>(body);
-        }
-        catch (JsonException)
-        {
-            return new CallToolResult { Content = [new TextContentBlock { Text = body }] };
-        }
-
-        JsonElement? structured = json.ValueKind switch
-        {
-            JsonValueKind.Object => json,
-            JsonValueKind.Array => JsonSerializer.SerializeToElement(new { result = json }),
-            _ => null,
-        };
-        return new CallToolResult
-        {
-            StructuredContent = structured,
-            Content = [new TextContentBlock { Text = structured?.GetRawText() ?? body }],
-        };
-    }
 }

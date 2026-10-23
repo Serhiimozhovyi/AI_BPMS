@@ -133,10 +133,23 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
   - операції з тілом не-JSON (multipart тощо) пропускаються з попередженням у журналі;
   - фільтр: `Connector:OpenApi:Include` / `Exclude` — елементи `tag:<тег>` або шаблон шляху з `*` (`/pets/*`);
     порожній `Include` — усі операції.
-- Генератор з OData `$metadata` — `odata: <url $metadata>` (F3-12).
+- Генератор tools з OData `$metadata`: `Connector:Source = odata:<url $metadata або файл>`. CSDL XML розбирається за
+  локальними назвами елементів — і v4, і v3 (так публікує 1С; для v3 ключі в URL мають вигляд `guid'…'`,
+  `datetime'…'`). URL під `Connector:BaseUrl` читається з автентифікацією конектора. По кожному entity set:
+  - `list_<set>` — `filter`, `select`, `expand`, `orderby`, `top`, `skip` → `$filter`… ; відповідь `value` →
+    `{ "result": [...] }` (у `mcp.poll` — `itemsPath = result`);
+  - `get_<set>` — аргументи-ключі (складений ключ → `Set(K1=…,K2=…)`), `select`, `expand`;
+  - `create_<set>` — POST, `body` — сутність; `update_<set>` — PATCH за ключем, `body` — змінені властивості;
+  - назва — з назви entity set у snake_case, кирилиця транслітерується (`Catalog_Контрагенты` → `catalog_kontragenty`);
+  - `inputSchema` — з типів CSDL: Edm.* → JSON Schema (`Edm.Guid` → `uuid`, `Edm.DateTimeOffset` → `date-time`,
+    `Edm.Decimal` → `number`, `MaxLength` → `maxLength`), складні типи й `Collection(…)` розгортаються, перелічення →
+    `enum`, успадковані властивості й ключі (`BaseType`) враховуються; `select`/`expand` мають `enum` з назв
+    властивостей і навігацій;
+  - фільтр: `Connector:OData:Include` / `Exclude` — шаблони назв entity sets з `*`; `Connector:OData:FormatParameter`
+    додає `$format=json` (1С без нього віддає Atom XML); помилка сервісу → `isError` без секретів.
 - Транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
 - Тести: контрактний тест «`tools/list` повертає схеми, `tools/call` на мок-сервері повертає `structuredContent`,
-  помилка REST → `isError` без секретів» + запуск через stdio; генератор OpenAPI — на petstore-подібній специфікації.
+  помилка REST → `isError` без секретів» + запуск через stdio; генератори — на petstore-подібній специфікації OpenAPI і CSDL-прикладі (3 entity sets, навігація, складений ключ).
 - README «від нуля до підключеного в OpenBP за годину».
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.

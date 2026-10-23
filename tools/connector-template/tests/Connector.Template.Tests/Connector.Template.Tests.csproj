@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <None Include="OpenApi/petstore.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="OData/trade.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
