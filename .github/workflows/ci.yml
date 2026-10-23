@@ -39,6 +39,29 @@ jobs:
       # Testcontainers (OpenBP.Data.Tests) використовує Docker, що є на ubuntu-latest
       - run: dotnet test --no-build
 
+  connector-template:
+    name: Connector Kit (dotnet new + build + test)
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Проєкт із шаблону — поза репозиторієм, як у користувача: лише власні Directory.*.props і .editorconfig шаблону.
+      - run: dotnet new install tools/connector-template
+      - run: dotnet new openbp-connector -n Acme.Connector -o "$RUNNER_TEMP/acme"
+      - run: dotnet build -warnaserror
+        working-directory: ${{ runner.temp }}/acme
+      - run: dotnet format --verify-no-changes --no-restore
+        working-directory: ${{ runner.temp }}/acme
+      - run: dotnet test --no-build
+        working-directory: ${{ runner.temp }}/acme
+
   web:
     name: Angular lint + test + build
     runs-on: ubuntu-latest

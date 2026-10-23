@@ -105,13 +105,25 @@ Credential типів `openai` і `anthropic`: `{ "apiKey": "…" }` (обов'�
 
 ## 5. Connector Kit (`tools/connector-template`)
 
-Шаблон .NET-проєкту MCP-сервера над REST/OData:
+Шаблон .NET-проєкту MCP-сервера над REST/OData (`dotnet new openbp-connector -n My.Connector`, ліцензія MIT).
+Живе поза `OpenBP.sln`: власні `Directory.Build.props`/`Directory.Packages.props` (ті самі версії пакетів, що в
+OpenBP) і `.editorconfig`; CI створює з нього проєкт і проганяє `build -warnaserror`, `format`, `test`.
 
-- `appsettings.json`: `BaseUrl`, `Auth` (basic/bearer/api-key), `Source` (`openapi: <url або файл>` або `odata: <url $metadata>`).
-- Генератор читає OpenAPI/`$metadata` і створює по tool на операцію/entity set з `inputSchema`, або розробник описує tools вручну атрибутами `[McpServerTool]`.
-- Транспорт: stdio за замовчуванням, `--http` для Streamable HTTP.
-- Тести: контрактний тест «tools/list повертає схеми, tools/call на мок-сервері повертає structuredContent».
-- Readme з кроками «від нуля до підключеного в OpenBP за годину».
+- Налаштування — `appsettings.json` або змінні середовища (`Connector__BaseUrl`): `Connector:BaseUrl`,
+  `Connector:Auth:Type` (`none` | `basic` | `bearer` | `api-key`), `Connector:Auth:HeaderName` (для `api-key`,
+  за замовчуванням `X-API-Key`). Невалідні налаштування — помилка при старті.
+- Секрети — **лише змінні середовища**: `CONNECTOR_USERNAME`/`CONNECTOR_PASSWORD`, `CONNECTOR_TOKEN`,
+  `CONNECTOR_API_KEY`. OpenBP передає їх stdio-процесу з credential конектора `{ "env": { … } }` (architecture.md
+  §10.7). У відповідях tools і текстах помилок значень секретів немає (замінюються на `***`).
+- Tools описуються вручну атрибутами `[McpServerTool]` поверх типізованого `HttpClient`; описи — англійською.
+  Об'єкт → `structuredContent`; колекція — обгорткою `{ "result": [...] }` (`ListResult<T>`), щоб у `mcp.tool`
+  працював `itemsPath = result`. Неуспішна відповідь REST → `isError` з HTTP-статусом і початком тіла (без секретів).
+- `Source` з генератором tools: `openapi: <url або файл>` (F3-11) або `odata: <url $metadata>` (F3-12) — по tool на
+  операцію/entity set з `inputSchema`.
+- Транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
+- Тести: контрактний тест «`tools/list` повертає схеми, `tools/call` на мок-сервері повертає `structuredContent`,
+  помилка REST → `isError` без секретів» + запуск через stdio.
+- README «від нуля до підключеного в OpenBP за годину».
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.
 
