@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -54,7 +56,7 @@ describe('routes', () => {
   });
 
   it('кожен маршрут відкриває сторінку з заголовком', async () => {
-    TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
+    TestBed.configureTestingModule({ providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()] });
     const harness = await RouterTestingHarness.create();
     for (const url of ['/workflows/abc', '/executions', '/connectors', '/credentials', '/settings']) {
       await harness.navigateByUrl(url);
