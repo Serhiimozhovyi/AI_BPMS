@@ -314,7 +314,7 @@
 - DoD: тести — `initialize`/`tools/list`/`resources/list` з ключем працюють; без ключа 401; viewer-ключ бачить `describe_connectors`; credentials і `config` у відповіді відсутні; `architecture.md` §4 оновлено (проєкт, stateless, формат помилок).
 
 ### F3-04 · `/mcp`: tools сценаріїв і resource `openbp://workflows/{id}`
-- model: `sonnet` · status: `ready` · depends: F3-03
+- model: `sonnet` · status: `review #53` · depends: F3-03
 - Що: tools над `IWorkflowService`: `list_workflows { search?, active?, page? }`, `get_workflow { id }` (визначення поточної версії), `create_workflow { definition }`, `update_workflow { id, definition }`, `validate_workflow { definition, active? }` (список помилок без збереження, 200 навіть з помилками); resource `openbp://workflows/{id}` (JSON визначення). Описи tool'ів англійською (так пишуть агенти), з посиланням на `openbp://schema/workflow-format`.
 - DoD: тести через хелпер F3-03: створити → валідувати → оновити → прочитати (round-trip невідомих полів); `WorkflowValidationException` → `isError` з `errors[]` і кодами; viewer-ключ: читання так, `create_workflow` → `isError` з `FORBIDDEN`; 409 версії → `WORKFLOW_VERSION_CONFLICT`.
 
