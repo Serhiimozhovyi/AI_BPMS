@@ -282,7 +282,7 @@
 - DoD: Vitest на підказки; `npm run lint|test|build` зелені.
 
 ### F2-20 · Тестовий запуск з канвасу
-- model: `opus` · status: `review #50` · depends: F2-09, F2-16
+- model: `opus` · status: `done` · depends: F2-09, F2-16
 - Що: кнопка «Виконати»: запуск через API з `pinData`, живий статус вузлів через SSE, input/output кожного вузла в панелі.
 - DoD: Playwright проти Api + Worker + моків 1С/Telegram: приклад `telegram-1c` запускається з браузера і всі вузли зеленіють — **критерій фази 2**.
 
