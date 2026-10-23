@@ -365,7 +365,7 @@
 - DoD: тести на CSDL-прикладі (3 entity sets, навігація, складені ключі): схеми tools; `tools/call` формує правильний OData-URL/тіло проти мок-сервера; помилки → `isError`.
 
 ### F3-13 · Конектор Telegram Bot API
-- model: `sonnet` · status: `review #63` · depends: F3-10
+- model: `sonnet` · status: `done` · depends: F3-10
 - Що: `connectors/telegram/` на шаблоні, tools вручну: `send_message { chat_id, text, parse_mode? }`, `send_document { chat_id, document_url або base64, caption? }`, `get_updates { offset?, limit? }` (для `mcp.poll`: `itemsPath = result`, `keyField = update_id`), `get_chat { chat_id }`; токен бота лише зі змінної `TELEGRAM_BOT_TOKEN`; README: створити бота, зареєструвати в «Конекторах», два сценарії — webhook (`core.webhook` як URL `setWebhook`) і polling.
 - DoD: тести проти in-process фейку Bot API (успіх кожного tool'а, 401/429 → `isError`, токен не з'являється у відповідях і помилках); `examples/servers.json` отримує варіант запису для справжнього конектора (без секретів).
 
@@ -375,7 +375,7 @@
 - DoD: тести проти мок-OData (CSDL + дані у тестах): `create_order` робить очікувані запити і повертає `{ number }`; `sales_report` → `{ result: [...] }`; помилки автентифікації → `isError`; мок `--mock 1c` із `FakeServer` лишається для прикладів і CI.
 
 ### F3-15 · Конектор Microsoft Graph (пошта, Teams)
-- model: `sonnet` · status: `ready` · depends: F3-10
+- model: `sonnet` · status: `review #64` · depends: F3-10
 - Що: `connectors/msgraph/` на шаблоні, tools вручну (Graph OpenAPI завеликий для генератора): автентифікація client credentials (`TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, токен кешується); `list_messages { mailbox, folder?, filter?, since?, top? }` (→ `{ result }`, для `mcp.poll` `keyField = id`), `get_message { mailbox, id }`, `list_attachments`/`get_attachment` (вміст як `resource`-блок → binary item), `send_mail { from, to[], subject, html, attachments? }`, `send_teams_message { teamId, channelId, html }`; README: реєстрація застосунку в Entra і потрібні application permissions.
 - DoD: тести проти in-process фейку Graph і token endpoint (успіх, 401 → повторне отримання токена один раз, 429 з `Retry-After` → `isError`); секрет і токен не потрапляють у відповіді й помилки.
 
