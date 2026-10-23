@@ -66,3 +66,61 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
+
+  e2e-live:
+    name: E2E (Api + Worker + браузер)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: openbp
+          POSTGRES_USER: openbp
+          POSTGRES_PASSWORD: openbp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbp -d openbp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      ConnectionStrings__Default: Host=localhost;Port=5432;Database=openbp;Username=openbp;Password=openbp
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Кеш NuGet
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # Api, Worker і FakeServer-моки запускаються з --no-build; dotnet-ef — для міграцій.
+      - run: dotnet tool restore
+      - run: dotnet build
+
+      - run: npm ci
+        working-directory: apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run e2e:live
+        working-directory: apps/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-live
+          path: apps/web/playwright-report-live
+          retention-days: 7

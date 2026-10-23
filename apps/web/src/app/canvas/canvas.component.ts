@@ -3,7 +3,7 @@ import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workflows-api.service';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
-import { NodeErrors, VflowCanvasComponent } from './vflow/vflow-canvas.component';
+import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
 
 /**
  * Канвас сценарію з власним API (docs/architecture.md §7, ADR-003): вхід — `WorkflowDefinition`, дескриптори
@@ -18,6 +18,7 @@ import { NodeErrors, VflowCanvasComponent } from './vflow/vflow-canvas.component
     [model]="model()"
     [virtualization]="virtualization()"
     [nodeErrors]="nodeErrors()"
+    [runStatuses]="runStatuses()"
     [selection]="selection()"
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
@@ -43,6 +44,9 @@ export class CanvasComponent {
 
   /** Помилки валідації з Api; ті, що мають `nodeId`, показуються на вузлах. */
   readonly errors = input<readonly WorkflowValidationError[]>([]);
+
+  /** Статуси вузлів тестового запуску (F2-20). */
+  readonly runStatuses = input<NodeRunStatuses>(new Map());
 
   /** Виділені вузли й ребра. */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);

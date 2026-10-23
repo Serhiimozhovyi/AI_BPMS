@@ -9,6 +9,7 @@
 # Playwright
 /test-results
 /playwright-report
+/playwright-report-live
 /blob-report
 
 # Node

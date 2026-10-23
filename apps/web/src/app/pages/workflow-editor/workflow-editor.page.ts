@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Observable, catchError, forkJoin, map, of, switchMap, tap } from 'rxjs';
+import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
 import { Autosave } from '../../canvas/autosave';
 import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../../canvas/canvas-edit';
 import { DescriptorIndex } from '../../canvas/canvas-model';
@@ -12,6 +12,9 @@ import { CanvasClipboardService } from '../../canvas/clipboard.service';
 import { EditHistory } from '../../canvas/edit-history';
 import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../../canvas/palette';
 import { PaletteComponent } from '../../canvas/palette.component';
+import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
+import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, startedRun, streamFailed } from '../../canvas/test-run';
+import { ExecutionsApiService } from '../../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorMessage } from '../../connectors/connectors-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../../node-form/expression-suggest';
 import { MCP_TOOL_TYPES, updateNode } from '../../node-form/node-form';
@@ -28,13 +31,14 @@ interface SaveRequest {
 /**
  * `/workflows/:id` — редактор сценарію: сценарій з Api на канвасі, палітра `core.*` і tools MCP-серверів (F2-16);
  * з'єднання портів, видалення, копіювання/вставка, переміщення, undo/redo і автозбереження кожної зміни в нову
- * версію з помилками валідації на вузлах (F2-17); панель з формою виділеного вузла (F2-18).
+ * версію з помилками валідації на вузлах (F2-17); панель з формою виділеного вузла (F2-18); тестовий запуск
+ * «Виконати» з живим статусом вузлів через SSE та input/output вузла в панелі (F2-20).
  */
 @Component({
   selector: 'app-workflow-editor-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, NodePanelComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, NodePanelComponent, NodeRunDataComponent],
   template: `
     <section class="editor">
       <header class="editor__bar">
@@ -47,14 +51,24 @@ interface SaveRequest {
             вузлів: {{ def.nodes.length }} · ребер: {{ def.connections.length }}
           </span>
         }
-        @if (definition()) {
+        @if (definition(); as def) {
           <span class="editor__tools">
             <button mat-button type="button" data-testid="undo" [disabled]="!canUndo()" (click)="undo()" i18n-title="@@workfloweditor.undo.hint" title="Скасувати (Ctrl+Z)" i18n="@@workfloweditor.undo">Скасувати</button>
             <button mat-button type="button" data-testid="redo" [disabled]="!canRedo()" (click)="redo()" i18n-title="@@workfloweditor.redo.hint" title="Повторити (Ctrl+Shift+Z)" i18n="@@workfloweditor.redo">Повторити</button>
             <button mat-button type="button" data-testid="copy" [disabled]="!hasNodeSelection()" (click)="copy()" i18n-title="@@workfloweditor.copy.hint" title="Копіювати (Ctrl+C)" i18n="@@workfloweditor.copy">Копіювати</button>
             <button mat-button type="button" data-testid="paste" [disabled]="!canPaste()" (click)="paste()" i18n-title="@@workfloweditor.paste.hint" title="Вставити (Ctrl+V)" i18n="@@workfloweditor.paste">Вставити</button>
             <button mat-button type="button" data-testid="delete" [disabled]="!hasSelection()" (click)="deleteSelected()" i18n-title="@@workfloweditor.delete.hint" title="Видалити (Delete)" i18n="@@workfloweditor.delete">Видалити</button>
+            <button mat-flat-button type="button" data-testid="run" [disabled]="running() || def.nodes.length === 0" (click)="runWorkflow()" i18n-title="@@workfloweditor.run.hint" title="Зберегти і виконати з тестовими даними (pinData)">
+              @if (running()) {
+                <ng-container i18n="@@workfloweditor.running">Виконується…</ng-container>
+              } @else {
+                <ng-container i18n="@@workfloweditor.run">Виконати</ng-container>
+              }
+            </button>
           </span>
+        }
+        @if (testRun(); as r) {
+          <span class="editor__run editor__run--{{ r.state }}" data-testid="run-status" [attr.data-state]="r.state">{{ runStateLabel(r) }}</span>
         }
         @switch (saveStatus()) {
           @case ('pending') {
@@ -71,6 +85,9 @@ interface SaveRequest {
           }
         }
       </header>
+      @if (runError(); as message) {
+        <p role="alert" class="editor__errors" data-testid="run-error">{{ message }}</p>
+      }
       @if (saveError(); as message) {
         <div role="alert" class="editor__errors" data-testid="save-error">
           <p class="m-0">{{ message }}</p>
@@ -102,6 +119,7 @@ interface SaveRequest {
               [definition]="def"
               [descriptors]="descriptors()"
               [errors]="validationErrors()"
+              [runStatuses]="runStatuses()"
               [selection]="selection()"
               (definitionChange)="changed($event)"
               (selectionChange)="selection.set($event)"
@@ -110,6 +128,9 @@ interface SaveRequest {
           @if (selectedNode(); as node) {
             <aside class="editor__panel">
               <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [expressionContext]="selectedExpressionContext()" (nodeChange)="nodeEdited($event)" />
+              @if (selectedStep(); as step) {
+                <app-node-run-data [step]="step" [inputNames]="selectedDescriptor()?.inputs ?? []" [outputNames]="selectedDescriptor()?.outputs ?? []" />
+              }
             </aside>
           }
         </div>
@@ -152,6 +173,24 @@ interface SaveRequest {
       font-size: 13px;
       color: var(--mat-sys-error);
       border-bottom: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    .editor__run {
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      background: var(--mat-sys-surface-variant);
+    }
+
+    .editor__run--success {
+      color: #fff;
+      background: #2e7d32;
+    }
+
+    .editor__run--error,
+    .editor__run--timed_out {
+      color: #fff;
+      background: #c62828;
     }
 
     .editor__count {
@@ -203,6 +242,7 @@ export class WorkflowEditorPage implements OnInit {
   private readonly connectors = inject(ConnectorsApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly clipboard = inject(CanvasClipboardService);
+  private readonly executions = inject(ExecutionsApiService);
 
   protected readonly defaultTitle = $localize`:@@workfloweditor.title:Редактор сценарію`;
 
@@ -214,6 +254,11 @@ export class WorkflowEditorPage implements OnInit {
   protected readonly descriptors = signal<NodeTypeInfo[]>([]);
   private readonly servers = signal<PaletteServer[]>([]);
   protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
+  /** Останній тестовий запуск цього сценарію. */
+  protected readonly testRun = signal<TestRun | null>(null);
+  /** Запуск не вдалося почати (сценарій не збережено, помилка Api). */
+  protected readonly runError = signal<string | null>(null);
+  private runSubscription: Subscription | null = null;
 
   private readonly history = new EditHistory<WorkflowDefinition | null>(null);
   private readonly autosave = new Autosave<SaveRequest, WorkflowDetail>(
@@ -245,15 +290,19 @@ export class WorkflowEditorPage implements OnInit {
     const { serverId, toolName } = node.parameters ?? {};
     return this.servers().find((s) => s.id === serverId)?.tools.find((t) => t.name === toolName) ?? null;
   });
-  /**
-   * Підказки виразів для виділеного вузла (F2-19). Останній тестовий output — поки `pinData` сценарію;
-   * результати тестового запуску додасть F2-20.
-   */
+  /** Підказки виразів для виділеного вузла (F2-19): output останнього тестового запуску, де його немає — `pinData`. */
   protected readonly selectedExpressionContext = computed(() => {
     const node = this.selectedNode();
     const def = this.definition();
-    return node && def ? expressionContext(def, node.id, def.pinData ?? {}) : EMPTY_EXPRESSION_CONTEXT;
+    return node && def ? expressionContext(def, node.id, { ...(def.pinData ?? {}), ...runOutputs(this.testRun()) }) : EMPTY_EXPRESSION_CONTEXT;
   });
+  /** Крок виділеного вузла в останньому тестовому запуску. */
+  protected readonly selectedStep = computed(() => {
+    const node = this.selectedNode();
+    return node ? (this.testRun()?.steps.get(node.id) ?? null) : null;
+  });
+  protected readonly runStatuses = computed(() => nodeStatuses(this.testRun()));
+  protected readonly running = computed(() => isRunning(this.testRun()));
   protected readonly canUndo = this.history.canUndo;
   protected readonly canRedo = this.history.canRedo;
   protected readonly canPaste = computed(() => this.clipboard.clipboard() !== null);
@@ -264,10 +313,19 @@ export class WorkflowEditorPage implements OnInit {
   protected readonly saveError = this.autosave.errorMessage;
   /** Помилки валідації без вузла (ребра, налаштування) — у панелі над канвасом. */
   protected readonly generalErrors = computed(() => this.validationErrors().filter((e) => !e.nodeId));
+  /** Автозбереження завершилось (немає відкладених змін і запиту в дорозі): `true` — збережено. */
+  private readonly saveSettled$ = toObservable(this.saveStatus).pipe(
+    filter((s) => s !== 'pending' && s !== 'saving'),
+    take(1),
+    map((s) => s !== 'error'),
+  );
 
   constructor() {
     // Незбережені зміни не губляться при виході з редактора: відправляємо їх одразу.
-    this.destroyRef.onDestroy(() => this.autosave.flush());
+    this.destroyRef.onDestroy(() => {
+      this.autosave.flush();
+      this.stopRun();
+    });
   }
 
   ngOnInit(): void {
@@ -285,6 +343,9 @@ export class WorkflowEditorPage implements OnInit {
           this.definition.set(null);
           this.history.reset(null);
           this.selection.set(EMPTY_SELECTION);
+          this.stopRun();
+          this.testRun.set(null);
+          this.runError.set(null);
         }),
         switchMap((id) =>
           forkJoin({ workflow: this.workflows.get(id), descriptors: this.nodes.list() }).pipe(
@@ -361,6 +422,65 @@ export class WorkflowEditorPage implements OnInit {
     const { definition, nodeIds } = pasteClipboard(def, clipboard, randomNodeId, this.clipboard.nextPaste());
     this.changed(definition);
     this.selection.set({ nodes: nodeIds, edges: [] });
+  }
+
+  /**
+   * «Виконати»: дочекатися збереження змін (виконується поточна версія сценарію з її `pinData`), запустити
+   * виконання через Api і стежити за ним через SSE — статуси вузлів на канвасі, кроки в панелі.
+   */
+  protected runWorkflow(): void {
+    const id = this.workflow()?.id;
+    if (!id || this.running()) return;
+    this.stopRun();
+    this.runError.set(null);
+    this.autosave.flush();
+    this.runSubscription = this.saveSettled$
+      .pipe(
+        switchMap((saved) =>
+          saved
+            ? this.executions.start(id)
+            : throwError(() => new Error($localize`:@@workfloweditor.run.unsaved:Сценарій не збережено — виправте помилки, щоб виконати.`)),
+        ),
+        switchMap((started) => {
+          this.testRun.set(startedRun(started.id, started.state));
+          return this.executions.events(started.id);
+        }),
+      )
+      .subscribe({
+        next: (event) => this.testRun.update((run) => (run ? applyEvent(run, event) : run)),
+        error: (e: unknown) => {
+          // Error — наша помилка (не збережено, обрив SSE); HttpErrorResponse — помилка Api.
+          const message = e instanceof Error ? e.message : apiErrorMessage(e);
+          const run = this.testRun();
+          if (run) this.testRun.set(streamFailed(run, message));
+          else this.runError.set(message);
+        },
+      });
+  }
+
+  protected runStateLabel(run: TestRun): string {
+    if (run.error && run.state !== 'error' && run.state !== 'timed_out') return run.error;
+    switch (run.state) {
+      case 'queued':
+        return $localize`:@@workfloweditor.run.queued:У черзі`;
+      case 'running':
+        return $localize`:@@workfloweditor.run.running:Виконується`;
+      case 'cancelling':
+        return $localize`:@@workfloweditor.run.cancelling:Скасовується`;
+      case 'success':
+        return $localize`:@@workfloweditor.run.success:Виконано успішно`;
+      case 'error':
+        return $localize`:@@workfloweditor.run.error:Помилка: ${run.error ?? ''}:error:`;
+      case 'cancelled':
+        return $localize`:@@workfloweditor.run.cancelled:Скасовано`;
+      case 'timed_out':
+        return $localize`:@@workfloweditor.run.timedOut:Перевищено час виконання`;
+    }
+  }
+
+  private stopRun(): void {
+    this.runSubscription?.unsubscribe();
+    this.runSubscription = null;
   }
 
   /** Гарячі клавіші редактора; у полях введення не перехоплюються. */

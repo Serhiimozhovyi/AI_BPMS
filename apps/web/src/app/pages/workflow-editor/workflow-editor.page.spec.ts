@@ -8,6 +8,8 @@ import { SAMPLE_DESCRIPTORS } from '../../canvas/sample-workflows';
 import { ConnectorDetail, ConnectorSummary } from '../../connectors/connectors-api.service';
 import { AUTOSAVE_DEBOUNCE_MS } from '../../canvas/autosave';
 import { WorkflowDefinition, WorkflowDetail, emptyWorkflowDefinition } from '../../workflows/workflows-api.service';
+import { EVENT_SOURCE_FACTORY, ExecutionStep } from '../../executions/executions-api.service';
+import { FakeEventSource } from '../../executions/fake-event-source';
 import { WorkflowEditorPage } from './workflow-editor.page';
 
 const workflow: WorkflowDetail = {
@@ -44,6 +46,7 @@ describe('WorkflowEditorPage', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: 'w1' })) } },
+        { provide: EVENT_SOURCE_FACTORY, useValue: (url: string) => new FakeEventSource(url) },
       ],
     });
     const fixture = TestBed.createComponent(WorkflowEditorPage);
@@ -343,5 +346,111 @@ describe('WorkflowEditorPage', () => {
     expect(host.querySelector('[data-testid="tools-error"]')).not.toBeNull();
     expect(host.querySelector('[data-item="core.if"]')).not.toBeNull();
     expect(canvasNodes(fixture)).toHaveLength(2);
+  });
+
+  describe('тестовий запуск (F2-20)', () => {
+    function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success'): ExecutionStep {
+      return {
+        id,
+        nodeId,
+        runIndex: 0,
+        status,
+        input: [[{ json: { from: 'input' } }]],
+        output: [[{ json: { from: nodeId } }]],
+        error: status === 'error' ? { message: 'Вузол упав' } : null,
+        startedAt: '',
+        finishedAt: '',
+      };
+    }
+
+    function runStatuses(fixture: ReturnType<typeof setup>['fixture']) {
+      return Object.fromEntries(canvasComponent(fixture).runStatuses());
+    }
+
+    beforeEach(() => (FakeEventSource.last = null));
+
+    it('«Виконати» спершу зберігає зміни, потім запускає; SSE зафарбовує вузли, у панелі — input/output вузла', async () => {
+      const { fixture, http, host } = await loaded();
+      click(host, '[data-item="core.set"]');
+      await render(fixture);
+
+      click(host, '[data-testid="run"]');
+      await render(fixture);
+      // Відкладена зміна йде одразу, запуск — лише після збереження.
+      const put = http.expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' });
+      http.expectNone({ method: 'POST' });
+      put.flush(saved(4, put.request.body as WorkflowDefinition));
+      await render(fixture);
+
+      const start = http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' });
+      start.flush({ id: 'e1', workflowId: 'w1', versionId: 'v4', mode: 'manual', state: 'queued', startedAt: null, finishedAt: null, error: null });
+      await render(fixture);
+      expect(button(host, 'run').disabled).toBe(true);
+      expect(host.querySelector('[data-testid="run-status"]')?.getAttribute('data-state')).toBe('queued');
+
+      const source = FakeEventSource.last!;
+      expect(source.url).toBe('/api/v1/executions/e1/events');
+      source.emit('step', step('n_hook', 's1'));
+      source.emit('step', step('n_set', 's2', 'error'));
+      await render(fixture);
+      expect(runStatuses(fixture)).toEqual({ n_hook: 'success', n_set: 'error' });
+      expect(host.querySelector('[data-testid="run-status"]')?.getAttribute('data-state')).toBe('running');
+
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      const run = host.querySelector('[data-testid="node-run"]');
+      expect(run?.getAttribute('data-status')).toBe('error');
+      expect(run?.textContent).toContain('Вузол упав');
+      expect(run?.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('"from": "input"');
+      expect(run?.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"from": "n_set"');
+
+      source.emit('status', { executionId: 'e1', state: 'error', error: 'Вузол упав' });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="run-status"]')?.textContent).toContain('Вузол упав');
+      expect(button(host, 'run').disabled).toBe(false);
+      expect(source.closed).toBe(true);
+    });
+
+    it('без змін запускає одразу; output запуску потрапляє в підказки виразів', async () => {
+      const { fixture, http, host } = await loaded();
+      click(host, '[data-testid="run"]');
+      await render(fixture);
+      http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).flush({ id: 'e1', workflowId: 'w1', versionId: 'v3', mode: 'manual', state: 'queued', startedAt: null, finishedAt: null, error: null });
+      await render(fixture);
+      FakeEventSource.last!.emit('step', step('n_hook', 's1'));
+      FakeEventSource.last!.emit('status', { executionId: 'e1', state: 'success', error: null });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="run-status"]')?.getAttribute('data-state')).toBe('success');
+
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      const panel = fixture.debugElement.query((d) => d.name === 'app-node-panel').componentInstance as { expressionContext: () => { input?: unknown } };
+      expect(panel.expressionContext().input).toEqual({ from: 'n_hook' });
+    });
+
+    it('сценарій не зберігся (422) — запуск не починається, показано причину', async () => {
+      const { fixture, http, host } = await loaded();
+      click(host, '[data-item="core.set"]');
+      await render(fixture);
+      click(host, '[data-testid="run"]');
+      await render(fixture);
+      http
+        .expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' })
+        .flush({ title: 'Invalid', errors: [{ code: 'GRAPH_CYCLE', message: 'Граф містить цикл' }] }, { status: 422, statusText: 'Unprocessable Entity' });
+      await render(fixture);
+
+      http.expectNone({ method: 'POST' });
+      expect(host.querySelector('[data-testid="run-error"]')?.textContent).toContain('не збережено');
+      expect(button(host, 'run').disabled).toBe(false);
+    });
+
+    it('помилка запуску з Api — повідомлення', async () => {
+      const { fixture, http, host } = await loaded();
+      click(host, '[data-testid="run"]');
+      await render(fixture);
+      http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).flush({ title: 'Forbidden', detail: 'Недостатньо прав' }, { status: 403, statusText: 'Forbidden' });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="run-error"]')?.textContent).toContain('Недостатньо прав');
+    });
   });
 });
