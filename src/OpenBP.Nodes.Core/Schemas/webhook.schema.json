@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.webhook",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path"],
+  "properties": {
+    "method": {
+      "title": "HTTP-метод",
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+      "default": "POST"
+    },
+    "path": {
+      "title": "Шлях",
+      "description": "Частина адреси після /webhook/, напр. telegram-in або orders/new. Унікальна серед активних сценаріїв.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*$"
+    },
+    "auth": {
+      "title": "Автентифікація",
+      "description": "Без неї webhook приймає будь-який запит. Секрет — у credential: header → { token }, basic → { username, password }.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "credentialId"],
+      "properties": {
+        "type": { "type": "string", "enum": ["header", "basic"] },
+        "credentialId": { "type": "string", "minLength": 1 },
+        "headerName": {
+          "title": "Заголовок з токеном (для header)",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9-]+$",
+          "default": "X-Webhook-Token"
+        }
+      }
+    }
+  }
+}

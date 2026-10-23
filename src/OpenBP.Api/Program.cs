@@ -8,8 +8,10 @@ using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Nodes;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Webhooks;
 using OpenBP.Application.Workflows;
 using OpenBP.Data;
+using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
@@ -17,7 +19,9 @@ using OpenBP.Nodes.Core;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<OpenBpDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+// Фабрика (для CredentialStore) і scoped-контекст для сервісів application-шару.
+builder.Services.AddDbContextFactory<OpenBpDbContext>(
+    o => o.UseNpgsql(builder.Configuration.GetConnectionString("Default")), ServiceLifetime.Scoped);
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     // Стани виконань у JSON — snake_case, як у БД (timed_out); перший підхожий конвертер має пріоритет.
@@ -36,6 +40,12 @@ builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
 builder.Services.AddOpenBpWorkflowServices();
 builder.Services.AddOpenBpExecutionServices();
 
+// Credentials для auth webhook-ів (F2-10): ключ OPENBP_ENCRYPTION_KEY читається при першому запиті до webhook-а з auth.
+builder.Services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
+builder.Services.AddScoped<ICredentialProvider>(sp => new PostgresCredentialProvider(new CredentialStore(
+    sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
+builder.Services.AddOpenBpWebhookServices();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -45,6 +55,7 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints();
+app.MapWebhookEndpoints();
 
 app.Run();
 

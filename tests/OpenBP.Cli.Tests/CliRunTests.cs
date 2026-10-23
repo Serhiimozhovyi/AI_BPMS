@@ -35,14 +35,14 @@ public sealed class CliRunTests : IDisposable
     }
 
     [Fact]
-    public async Task Example_WithoutPin_StubNodeFailsWithHint()
+    public async Task Example_WithoutPin_WebhookNodeFailsWithHint()
     {
         var (code, stdout, _) = await RunAsync("run", Example, "--servers", WriteServers());
 
         Assert.Equal(CliApp.ExecutionFailed, code);
         Assert.Contains("▶ Нова заявка [core.webhook] — Error", stdout, StringComparison.Ordinal);
-        Assert.Contains("ще не реалізований (F2-D)", stdout, StringComparison.Ordinal);
-        Assert.Contains("--pin", stdout, StringComparison.Ordinal);
+        Assert.Contains("/webhook/", stdout, StringComparison.Ordinal);
+        Assert.Contains("pinData", stdout, StringComparison.Ordinal);
         Assert.Contains("Результат: Error", stdout, StringComparison.Ordinal);
     }
 
