@@ -378,6 +378,7 @@
 - model: `sonnet` · status: `done` · depends: F3-10
 - Що: `connectors/msgraph/` на шаблоні, tools вручну (Graph OpenAPI завеликий для генератора): автентифікація client credentials (`TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, токен кешується); `list_messages { mailbox, folder?, filter?, since?, top? }` (→ `{ result }`, для `mcp.poll` `keyField = id`), `get_message { mailbox, id }`, `list_attachments`/`get_attachment` (вміст як `resource`-блок → binary item), `send_mail { from, to[], subject, html, attachments? }`, `send_teams_message { teamId, channelId, html }`; README: реєстрація застосунку в Entra і потрібні application permissions.
 - DoD: тести проти in-process фейку Graph і token endpoint (успіх, 401 → повторне отримання токена один раз, 429 з `Retry-After` → `isError`); секрет і токен не потрапляють у відповіді й помилки.
+- Примітка: зроблено лише пошту; Teams винесено в F3-20 (рішення власника 2026-10-23: application-дозволи Graph не дають застосунку писати в канали від свого імені).
 
 ### F3-16 · Приклад «Щоденний звіт» (PRD №2)
 - model: `sonnet` · status: `done` · depends: F3-14, F3-15
@@ -393,6 +394,11 @@
 - model: `sonnet` · status: `done` · depends: F2-07
 - Що: `IBinaryStore` у локальній папці для `OpenBP.Worker` за `architecture.md` §6: налаштування `Storage:LocalPath`, файл у `<папка>/<рік>/<місяць>/<id>`, `BinaryRef` з `storage: local`, `directory`, `fileSize`, `sha256`; читання лише своїх посилань (без виходу за папку); без налаштування — зрозуміла помилка з назвою налаштування. Знайдено під час F3-17: `get_attachment` віддає binary item, а у воркері була заглушка.
 - DoD: тести сховища (запис/читання, хеш, відмова на підроблені `BinaryRef`, реєстрація за конфігом) і воркера (`mcp.tool` з файлом → файл у папці); `architecture.md` і `.env.example` оновлено.
+
+### F3-20 · Повідомлення в Teams
+- model: `fable` · status: `blocked потрібне рішення власника: як надсилати в Teams` · depends: F3-15
+- Що: tool надсилання повідомлення в канал Teams для конектора `connectors/msgraph` (або окремого конектора). Graph з application-дозволами (client credentials, як у F3-15) не дає застосунку постити в канали від свого імені, тому спершу власник обирає спосіб: (а) вхідний вебхук каналу через Power Automate Workflows, без Graph; (б) делегований вхід від імені службового користувача (device code, refresh token у credentials); (в) інше. Після рішення задачу уточнити (DoD, model) і зняти `blocked`.
+- DoD: визначається після рішення; мінімум — тести проти in-process фейку (успіх, помилка автентифікації → `isError`), секрети й токени не потрапляють у відповіді й помилки, README конектора оновлено.
 
 ### F3-18 · Пілот: PRD №1–3 у реальній компанії
 - model: `fable` · status: `blocked потрібна компанія для пілоту і доступ до її 1С (PRD §9)` · depends: F3-16, F3-17
