@@ -160,6 +160,10 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 - `connectors/telegram` — Telegram Bot API (F3-13): `send_message`, `send_document` (URL або base64),
   `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`), `get_chat`; токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
+- `connectors/msgraph` — Microsoft Graph, пошта (F3-15): `list_messages` (`{ result }`, для `mcp.poll` —
+  `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
+  `send_mail`; client credentials з `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, токен кешується, на 401 — одне повторне
+  отримання токена, 429/503 → `isError` з `Retry-After`. Канали Teams — ні: `ChannelMessage.Send` лише делегований.
 
 ## 6. Тригери
 
