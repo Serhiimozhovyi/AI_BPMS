@@ -3,7 +3,7 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowNode } from '../workflows/workflows-api.service';
 import { isPlainObject } from './node-value';
-import { NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
+import { CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
 
 /**
  * Форма вузла (F2-18): які поля показати і як зміни форми потрапляють у вузол сценарію.
@@ -13,9 +13,13 @@ import { NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './sc
 /** Типи, чиї `arguments` описує `inputSchema` tool'а з `tools_cache` (docs/connectors.md). */
 export const MCP_TOOL_TYPES: readonly string[] = ['mcp.tool', 'mcp.poll'];
 
-/** Поля параметрів: зі схеми дескриптора; для `mcp.tool` `arguments` — з `inputSchema` tool'а (невідомий tool — JSON). */
+/** Тип вузла, чий параметр `code` редагується в Monaco (F2-19). */
+export const CODE_NODE_TYPE = 'core.code';
+
+/** Поля параметрів: зі схеми дескриптора; для `mcp.tool` `arguments` — з `inputSchema` tool'а (невідомий tool — JSON); `code` у `core.code` — Monaco. */
 export function parameterFields(type: string, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null | undefined): FormlyFieldConfig[] {
   if (!descriptor) return [];
+  if (type === CODE_NODE_TYPE) return schemaFields(descriptor.parametersSchema).map((f) => (f.key === 'code' ? { ...f, type: CODE_FIELD } : f));
   if (!MCP_TOOL_TYPES.includes(type)) return schemaFields(descriptor.parametersSchema);
   const argumentsSchema = isPlainObject(tool?.inputSchema)
     ? { ...tool.inputSchema, title: $localize`:@@nodeform.arguments:Аргументи` }

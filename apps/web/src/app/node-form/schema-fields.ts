@@ -14,6 +14,7 @@ export type JsonSchema = Record<string, unknown>;
 /** Типи полів, які реєструє `provideNodeForm()`. */
 export const VALUE_FIELD = 'app-value';
 export const ARRAY_FIELD = 'app-array';
+export const CODE_FIELD = 'app-code';
 export const SECTION_WRAPPER = 'app-section';
 
 /** Глибина вкладеності, після якої об'єкти й масиви редагуються як JSON (захист від рекурсивних `$ref`). */

@@ -38,7 +38,10 @@
             ],
             "polyfills": [
               "@angular/localize/init"
-            ]
+            ],
+            "loader": {
+              ".ttf": "file"
+            }
           },
           "configurations": {
             "production": {
