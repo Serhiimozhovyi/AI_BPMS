@@ -262,7 +262,7 @@
 - DoD: Vitest на компоненти і сервіс API; `npm run lint|test|build` зелені.
 
 ### F2-16 · Канвас: відображення і палітра
-- model: `opus` · status: `ready` · depends: F2-06, F2-13
+- model: `opus` · status: `in-progress agent/F2-16-canvas-view` · depends: F2-06, F2-13
 - Що: `/workflows/:id` на ngx-vflow (ADR-003) у `CanvasComponent`: завантаження сценарію з API, вузли й ребра за `position`/`connections`, порти за дескрипторами; палітра `core.*` + tools з `tools_cache` (пошук, групи за сервером), додавання вузла.
 - DoD: Vitest — перетворення workflow ↔ модель канвасу без втрат (round-trip невідомих полів); 200 вузлів рендеряться (тест продуктивності зі спайку).
 
