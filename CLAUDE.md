@@ -31,7 +31,8 @@ src/
   OpenBP.Engine.Testing/# in-memory реалізації для тестів і CLI
   OpenBP.Expressions/   # Jint-обчислювач {{ }}
   OpenBP.Nodes.Core/    # core.* вузли
-  OpenBP.Mcp/           # MCP-клієнт (реєстр, mcp.tool) і MCP-сервер (/mcp)
+  OpenBP.Mcp/           # MCP-клієнт (реєстр, mcp.tool, mcp.poll)
+  OpenBP.Mcp.Server/    # MCP-сервер (/mcp) поверх application-шару
   OpenBP.Ai/            # ai.llm
   OpenBP.Data/          # EF Core, міграції, PostgresExecutionStore, JobQueue
   OpenBP.Application/   # application-шар: сервіси, DTO, помилки, контракти jobs (architecture.md §10)
@@ -40,7 +41,8 @@ src/
   OpenBP.Cli/           # openbp run file.json
 tests/                  # по проєкту на кожен src/*
 apps/web/               # Angular SPA
-tools/connector-template/
+tools/connector-template/ # Connector Kit (MIT)
+connectors/             # наші конектори на шаблоні: telegram, onec, msgraph
 examples/
 docs/
 ```

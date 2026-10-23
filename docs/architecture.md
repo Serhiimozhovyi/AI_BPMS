@@ -35,7 +35,8 @@
 | `src/OpenBP.Shared` | DTO, JSON-схема і валідатор формату workflow, помилки |
 | `src/OpenBP.Engine` | чиста бібліотека виконання графа; не знає про БД, HTTP, MCP — тільки інтерфейси |
 | `src/OpenBP.Nodes.Core` | `core.*` вузли: тригери і логіка |
-| `src/OpenBP.Mcp` | MCP-клієнт (реєстр серверів, discovery, `mcp.tool`) і MCP-сервер (`/mcp`) |
+| `src/OpenBP.Mcp` | MCP-клієнт: реєстр серверів, discovery, `mcp.tool`, `mcp.poll` |
+| `src/OpenBP.Mcp.Server` | MCP-сервер `/mcp` поверх application-шару (фаза 3) |
 | `src/OpenBP.Ai` | `ai.llm` — абстракція над провайдерами, structured output |
 | `src/OpenBP.Data` | EF Core: сутності, міграції, `PostgresExecutionStore`, `JobQueue` |
 | `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
@@ -79,6 +80,13 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 ## 4. MCP-сервер (`/mcp`)
 
 Реалізація в `OpenBP.Mcp.Server`, хоститься в `apps/api`, транспорт Streamable HTTP. Tools і resources — за ADR-002. Кожен tool викликає **той самий application-шар**, що й REST (`WorkflowService`, `ExecutionService`) — жодної окремої логіки для ШІ. Авторизація: API-ключ користувача у заголовку; права ті ж, що у користувача.
+
+Рішення фази 3 (F3-03…F3-06, F3-17):
+- Окремий проєкт `src/OpenBP.Mcp.Server` (`→ Application`), а не частина `OpenBP.Mcp`: `Application` уже залежить від `OpenBP.Mcp`, зворотна залежність дала б цикл. `OpenBP.Api` лише підключає його (`AddOpenBpMcpServer()`, `MapOpenBpMcp("/mcp")`).
+- Транспорт — Streamable HTTP у stateless-режимі SDK: без серверних сесій і прив'язки клієнта до екземпляра Api; кожен запит автентифікується окремо.
+- Автентифікація — лише API-ключ (`Authorization: Bearer obp_…`, §10.6); cookie на `/mcp` не приймається. Без ключа — 401 до MCP-обміну.
+- Помилки: `OpenBpException` → результат tool'а з `isError: true` і `structuredContent = { code, message, errors? }` (`errors` — `WorkflowValidationError[]` для `WORKFLOW_VALIDATION`), ті самі коди, що в REST.
+- Tools (ADR-002): `describe_connectors`, `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `run_workflow` (з `wait`), `get_execution`, `list_executions`, `cancel_execution`, `test_node`. Resources: `openbp://schema/workflow-format`, `openbp://connectors`, `openbp://workflows/{id}`, `openbp://executions/{id}` (знімок; підписки — поза MVP). Детальний опис — `docs/mcp-server.md` (F3-17).
 
 ## 5. Вирази і Code-вузол
 
