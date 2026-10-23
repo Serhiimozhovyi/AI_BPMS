@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "OpenBP",
+  "classifications": ["OpenBP", "MCP", "Connector"],
+  "identity": "OpenBP.Connector.Template",
+  "name": "OpenBP MCP-конектор (REST)",
+  "description": "MCP-сервер над REST API для підключення в OpenBP: stdio або Streamable HTTP, автентифікація з змінних середовища, контрактні тести.",
+  "shortName": "openbp-connector",
+  "sourceName": "Connector.Template",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "sources": [
+    {
+      "modifiers": [
+        {
+          "exclude": ["**/bin/**", "**/obj/**", ".template.config/**"]
+        }
+      ]
+    }
+  ]
+}

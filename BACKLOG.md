@@ -344,7 +344,7 @@
 - DoD: Vitest на список, фільтри, деталі, дії; `npm run lint|test|build` зелені.
 
 ### F3-10 · Connector Kit: шаблон `tools/connector-template`
-- model: `opus` · status: `ready` · depends: F1-08
+- model: `opus` · status: `review #60` · depends: F1-08
 - Що: за `connectors.md` §5 — проєкт-шаблон MCP-сервера на `ModelContextProtocol` SDK поза `OpenBP.sln` (власний `.sln`, ті самі версії пакетів):
   - `appsettings.json` + змінні середовища: `BaseUrl`, `Auth` (`none` | `basic` | `bearer` | `api-key` з назвою заголовка); секрети лише зі змінних середовища (OpenBP передає їх через credential `{ env }` конектора);
   - tools описуються вручну атрибутами `[McpServerTool]` поверх типізованого `HttpClient` (приклад: два tool'и над фейковим REST); `structuredContent` для об'єктів і колекцій (колекція → `{ "result": [...] }`, щоб працював `itemsPath`);
