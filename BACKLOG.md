@@ -293,14 +293,106 @@
 
 ## Фаза 3 — MCP-сервер + Connector Kit
 
-- F3-A `/mcp`: tools і resources з ADR-002, API-ключі — `opus`
-- F3-B `ai.llm` — нарізано вище: F3-01, F3-02 (Ollama/OpenAI-compatible, потім Anthropic/OpenAI)
-- F3-C Connector Kit: шаблон, генератор з OpenAPI/OData, тести, readme — `opus`
-- F3-D Конектор 1С (OData) — `sonnet`
-- F3-E Конектор Telegram Bot API — `sonnet`
-- F3-F Конектор Microsoft Graph (пошта, Teams) — `sonnet`
-- F3-G Журнал виконань: список, фільтри, деталі, повтор, скасування — `sonnet`
-- F3-H Пілот: PRD №1–3 у реальній компанії — `fable` (вдень)
+Критерій фази (`docs/roadmap.md`): сценарій PRD №3 — Claude Desktop створює робочий сценарій через `/mcp`; PRD №1–2 працюють у пілотної компанії.
+`ai.llm` (F3-B) нарізано вище: F3-01, F3-02 — `done`.
+
+Рішення для фази (зафіксовано в `architecture.md` §4):
+- MCP-сервер — окремий проєкт `src/OpenBP.Mcp.Server` (→ `Application`), бо `Application` уже залежить від `OpenBP.Mcp`; хоститься в `OpenBP.Api` на `/mcp`.
+- Транспорт — Streamable HTTP у **stateless**-режимі SDK: без серверних сесій, жодної прив'язки клієнта до екземпляра Api.
+- Кожен tool `/mcp` — тонка обгортка над сервісом application-шару; `OpenBpException` → `isError: true` з `{ code, message, errors? }` у `structuredContent`.
+- Конектори, які робимо самі, живуть у `connectors/<назва>/` цього репо на шаблоні з `tools/connector-template`; виносити в окремі репозиторії чи ні — рішення власника перед пілотом (F3-18).
+
+### F3-03 · `OpenBP.Mcp.Server`: хостинг `/mcp`, API-ключ, `describe_connectors`
+- model: `opus` · status: `ready` · depends: F2-13
+- Що:
+  - проєкт `src/OpenBP.Mcp.Server` на `ModelContextProtocol.AspNetCore` (вже у `Directory.Packages.props`): `AddOpenBpMcpServer()` + `MapOpenBpMcp("/mcp")`, Streamable HTTP, stateless; `ServerInfo` = `openbp`;
+  - автентифікація лише API-ключем (`Authorization: Bearer obp_…`, схема з F2-05); cookie на `/mcp` не приймається; без ключа або з відкликаним → 401 ще до MCP-обміну; `ICurrentUser` всередині tool'а = власник ключа;
+  - перший tool `describe_connectors` → `IConnectorService`: сервери (id, name, transport, status) і tools з `tools_cache` (name, title, description, inputSchema), без config/credentials;
+  - resource `openbp://schema/workflow-format` → JSON Schema з `OpenBP.Shared`;
+  - resource `openbp://connectors` → той самий результат, що `describe_connectors`;
+  - тестовий проєкт `tests/OpenBP.Mcp.Server.Tests` з хелпером «MCP-клієнт SDK → `WebApplicationFactory<Program>` + Testcontainers», яким користуються F3-04…F3-06, F3-17.
+- DoD: тести — `initialize`/`tools/list`/`resources/list` з ключем працюють; без ключа 401; viewer-ключ бачить `describe_connectors`; credentials і `config` у відповіді відсутні; `architecture.md` §4 оновлено (проєкт, stateless, формат помилок).
+
+### F3-04 · `/mcp`: tools сценаріїв і resource `openbp://workflows/{id}`
+- model: `sonnet` · status: `ready` · depends: F3-03
+- Що: tools над `IWorkflowService`: `list_workflows { search?, active?, page? }`, `get_workflow { id }` (визначення поточної версії), `create_workflow { definition }`, `update_workflow { id, definition }`, `validate_workflow { definition, active? }` (список помилок без збереження, 200 навіть з помилками); resource `openbp://workflows/{id}` (JSON визначення). Описи tool'ів англійською (так пишуть агенти), з посиланням на `openbp://schema/workflow-format`.
+- DoD: тести через хелпер F3-03: створити → валідувати → оновити → прочитати (round-trip невідомих полів); `WorkflowValidationException` → `isError` з `errors[]` і кодами; viewer-ключ: читання так, `create_workflow` → `isError` з `FORBIDDEN`; 409 версії → `WORKFLOW_VERSION_CONFLICT`.
+
+### F3-05 · `/mcp`: tools виконань і resource `openbp://executions/{id}`
+- model: `sonnet` · status: `ready` · depends: F3-03
+- Що: tools над `IExecutionService`: `run_workflow { id, startNodeId?, startItems?, wait? }` — `wait: true` (за замовчуванням, до 60 с або `timeoutSec` аргументу) чекає фінального стану через `IExecutionEventSource` і віддає `ExecutionDetail` з кроками; `get_execution { id }`, `list_executions { workflowId?, status?, page? }`, `cancel_execution { id }`; resource `openbp://executions/{id}` — знімок деталей (підписки на ресурси — поза MVP).
+- DoD: тести — запуск сценарію з `pinData` на FakeServer-моках: `run_workflow` з `wait` повертає `success` і кроки без секретів; без `wait` — `queued` і далі `get_execution`; viewer не запускає; невідомий id → `isError` `NOT_FOUND`.
+
+### F3-06 · `/mcp`: `test_node`
+- model: `opus` · status: `ready` · depends: F3-05, F2-21
+- Що: tool `test_node { workflowId, nodeId, items? }` — виконати один вузол на переданих items (або на `pinData`/output попереднього вузла з останнього ручного запуску, як у F2-21) через той самий механізм запуску одного вузла, що й UI; чекає завершення й віддає `{ output: Item[][], error? }`. Логіку не дублювати: якщо F2-21 поклала запуск одного вузла у `IExecutionService`, tool — лише обгортка; якщо ні — винести спочатку туди (без змін контракту REST).
+- DoD: тести — `test_node` для `core.set` і для `mcp.tool` на FakeServer; помилка вузла → `isError` з текстом помилки без секретів; `pinData` поважається.
+
+### F3-07 · UI: API-ключі на `/settings`
+- model: `sonnet` · status: `ready` · depends: F2-15
+- Що: сторінка `/settings`: список своїх ключів (`GET /api-keys`), створення з назвою (ключ показується один раз з кнопкою «Скопіювати»), відкликання; блок «Підключити ШІ-агента» з готовим фрагментом конфігурації MCP-клієнта (URL `/mcp`, заголовок `Authorization`) — текст з i18n.
+- DoD: Vitest на сторінку і сервіс API (створення показує ключ один раз, відкликання прибирає зі списку); `npm run lint|test|build` зелені.
+
+### F3-08 · Api: повтор виконання (`POST /executions/{id}/retry`)
+- model: `sonnet` · status: `ready` · depends: F2-09
+- Що: `IExecutionService.RetryAsync` (досі заглушка F3-G): нове виконання `mode = retry` тієї самої `version_id` з тими самими стартовими даними (`startNodeId`/`startItems` з payload або items кроку тригера — обрати одне джерело і зафіксувати в `architecture.md` §10.4); незавершене → 409 `EXECUTION_NOT_FINISHED`; маршрут у `ExecutionEndpoints`; воркер обробляє `retry` як `execution`.
+- DoD: інтеграційні тести — повтор `error`-виконання з FakeServer-моком дає `success` з тими самими стартовими items; повтор `running` → 409; viewer → 403.
+
+### F3-09 · UI: журнал виконань `/executions`
+- model: `sonnet` · status: `ready` · depends: F3-08, F2-20
+- Що: список з фільтрами (сценарій, статус, період) і пагінацією; деталі виконання: кроки по вузлах з input/output (та сама панель кроку, що в тестовому запуску F2-20), помилка; живе оновлення `running` через SSE; кнопки «Скасувати» (для `queued`/`running`) і «Повторити» (для фінальних); з канвасу — посилання на журнал цього сценарію. Заглушку `ExecutionsPage` замінити.
+- DoD: Vitest на список, фільтри, деталі, дії; `npm run lint|test|build` зелені.
+
+### F3-10 · Connector Kit: шаблон `tools/connector-template`
+- model: `opus` · status: `ready` · depends: F1-08
+- Що: за `connectors.md` §5 — проєкт-шаблон MCP-сервера на `ModelContextProtocol` SDK поза `OpenBP.sln` (власний `.sln`, ті самі версії пакетів):
+  - `appsettings.json` + змінні середовища: `BaseUrl`, `Auth` (`none` | `basic` | `bearer` | `api-key` з назвою заголовка); секрети лише зі змінних середовища (OpenBP передає їх через credential `{ env }` конектора);
+  - tools описуються вручну атрибутами `[McpServerTool]` поверх типізованого `HttpClient` (приклад: два tool'и над фейковим REST); `structuredContent` для об'єктів і колекцій (колекція → `{ "result": [...] }`, щоб працював `itemsPath`);
+  - транспорт stdio за замовчуванням, `--http <url>` для Streamable HTTP;
+  - контрактний тест: `tools/list` віддає схеми; `tools/call` проти in-process мок-REST повертає `structuredContent`; помилка REST → `isError` без секретів;
+  - `.template.config` для `dotnet new openbp-connector -n My.Connector`; README «від нуля до підключеного в OpenBP за годину» з кроками реєстрації в «Конекторах»;
+  - `LICENSE` MIT для шаблону (PRD §8). Генератори з OpenAPI/OData — F3-11/F3-12.
+- DoD: `dotnet new` із шаблону збирається і проходить власні тести (перевірка в CI окремим кроком); `dotnet build -warnaserror` і `dotnet format` зелені для шаблону; `connectors.md` §5 уточнено.
+
+### F3-11 · Connector Kit: генератор tools з OpenAPI
+- model: `opus` · status: `ready` · depends: F3-10
+- Що: у шаблоні — `Source: openapi: <url або файл>`; при старті сервер читає OpenAPI 3.x (JSON/YAML; парсер — існуючий MIT/Apache-пакет, записати в `THIRD_PARTY_NOTICES.md`) і створює по tool на операцію: назва з `operationId` (або `<method>_<path>`), `inputSchema` з path/query/body-параметрів, виклик HTTP з підстановкою; `description` з `summary`; фільтр операцій у конфігу (`Include`/`Exclude` за тегами чи шаблоном шляху).
+- DoD: тести на OpenAPI-прикладі (petstore-подібний файл у тестах): `tools/list` містить очікувані tools і схеми; `tools/call` формує правильний запит до мок-REST; відповідь 4xx/5xx → `isError`.
+
+### F3-12 · Connector Kit: генератор tools з OData `$metadata`
+- model: `opus` · status: `ready` · depends: F3-10
+- Що: `Source: odata: <url $metadata>` (OData v4 CSDL XML — формат публікацій 1С): по entity set — tools `list_<set>` (`$filter`, `$select`, `$top`, `$orderby`; відповідь `value` → `{ "result": [...] }`), `get_<set>` (за ключем), `create_<set>`, `update_<set>`; `inputSchema` з типів CSDL (Edm.* → JSON Schema); фільтр entity sets у конфігу.
+- DoD: тести на CSDL-прикладі (3 entity sets, навігація, складені ключі): схеми tools; `tools/call` формує правильний OData-URL/тіло проти мок-сервера; помилки → `isError`.
+
+### F3-13 · Конектор Telegram Bot API
+- model: `sonnet` · status: `ready` · depends: F3-10
+- Що: `connectors/telegram/` на шаблоні, tools вручну: `send_message { chat_id, text, parse_mode? }`, `send_document { chat_id, document_url або base64, caption? }`, `get_updates { offset?, limit? }` (для `mcp.poll`: `itemsPath = result`, `keyField = update_id`), `get_chat { chat_id }`; токен бота лише зі змінної `TELEGRAM_BOT_TOKEN`; README: створити бота, зареєструвати в «Конекторах», два сценарії — webhook (`core.webhook` як URL `setWebhook`) і polling.
+- DoD: тести проти in-process фейку Bot API (успіх кожного tool'а, 401/429 → `isError`, токен не з'являється у відповідях і помилках); `examples/servers.json` отримує варіант запису для справжнього конектора (без секретів).
+
+### F3-14 · Конектор 1С (OData)
+- model: `sonnet` · status: `ready` · depends: F3-12
+- Що: `connectors/onec/` на шаблоні з генератором OData (F3-12) + ручні tools для PRD №1–2: `create_order { customer, lines[] }` (документ «Замовлення покупця»: пошук контрагента за назвою, номенклатури за артикулом, запис документа) і `sales_report { from, to }` (вибірка за період); базова адреса публікації і логін/пароль — зі змінних середовища; README: як увімкнути OData-публікацію в 1С і які об'єкти відкрити.
+- DoD: тести проти мок-OData (CSDL + дані у тестах): `create_order` робить очікувані запити і повертає `{ number }`; `sales_report` → `{ result: [...] }`; помилки автентифікації → `isError`; мок `--mock 1c` із `FakeServer` лишається для прикладів і CI.
+
+### F3-15 · Конектор Microsoft Graph (пошта, Teams)
+- model: `sonnet` · status: `ready` · depends: F3-10
+- Що: `connectors/msgraph/` на шаблоні, tools вручну (Graph OpenAPI завеликий для генератора): автентифікація client credentials (`TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, токен кешується); `list_messages { mailbox, folder?, filter?, since?, top? }` (→ `{ result }`, для `mcp.poll` `keyField = id`), `get_message { mailbox, id }`, `list_attachments`/`get_attachment` (вміст як `resource`-блок → binary item), `send_mail { from, to[], subject, html, attachments? }`, `send_teams_message { teamId, channelId, html }`; README: реєстрація застосунку в Entra і потрібні application permissions.
+- DoD: тести проти in-process фейку Graph і token endpoint (успіх, 401 → повторне отримання токена один раз, 429 з `Retry-After` → `isError`); секрет і токен не потрапляють у відповіді й помилки.
+
+### F3-16 · Приклад «Щоденний звіт» (PRD №2)
+- model: `sonnet` · status: `ready` · depends: F3-14, F3-15
+- Що: `examples/daily-report.json`: `core.schedule` 07:00 → `mcp.tool` 1С `sales_report` → `core.code` (агрегація по контрагентах, HTML-таблиця) → `mcp.tool` Graph `send_mail`; `examples/servers.json` — записи для конекторів 1С і Graph у режимі моків; моки `--mock 1c` розширити `sales_report`, додати `--mock msgraph` у `FakeServer`.
+- DoD: тест CLI — `openbp run examples/daily-report.json` на моках проходить до `send_mail` з таблицею в тілі листа; README прикладів оновлено.
+
+### F3-17 · PRD №3 наскрізь: агент збирає сценарій через `/mcp`
+- model: `opus` · status: `ready` · depends: F3-04, F3-05, F3-06, F3-07, F3-13
+- Що: інтеграційний тест-сценарій (`tests/OpenBP.Mcp.Server.Tests`) MCP-клієнтом проти Api + Worker + FakeServer-моків: `describe_connectors` → `create_workflow` («лист з темою "Рахунок" → зберегти вкладення → повідомити в Telegram»; тригер — `mcp.poll` над моком пошти) → `validate_workflow` (навмисна помилка → виправлення за кодом) → `run_workflow` з тестовими items → `get_execution` = `success`; сценарій видно через `GET /workflows`. Плюс `docs/mcp-server.md`: усі tools/resources з прикладами, конфіг Claude Desktop / Claude Code (`mcpServers` з URL і заголовком) і типовий діалог.
+- DoD: тест зелений у CI; документація перевірена вручну з Claude Desktop (запис у PR, як саме); `README.md` посилається на `docs/mcp-server.md`. **Критерій фази 3.**
+
+### F3-18 · Пілот: PRD №1–3 у реальній компанії
+- model: `fable` · status: `blocked потрібна компанія для пілоту і доступ до її 1С (PRD §9)` · depends: F3-16, F3-17
+- Що: розгорнути OpenBP у пілотної компанії, підключити справжні 1С/Telegram/Graph, зібрати PRD №1–2 без коду, PRD №3 — через Claude Desktop; зафіксувати, що зламалось, у беклозі фази 4. Вдень з власником.
+- DoD: три сценарії працюють у компанії ≥ 1 тиждень; звіт пілоту в `docs/`.
 
 ## Фаза 4 — Продуктова готовність
 
