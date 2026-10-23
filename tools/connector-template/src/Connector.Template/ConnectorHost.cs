@@ -1,4 +1,4 @@
-using Connector.Template.OpenApi;
+using Connector.Template.Generated;
 using Connector.Template.Tools;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Protocol;
@@ -38,7 +38,7 @@ public static class ConnectorHost
         return app;
     }
 
-    /// <summary>Налаштування, секрети, типізований <see cref="RestClient"/> з автентифікацією і генератор tools з OpenAPI.</summary>
+    /// <summary>Налаштування, секрети, типізований <see cref="RestClient"/> з автентифікацією і генератори tools (OpenAPI, OData).</summary>
     /// <param name="services">Сервіси.</param>
     /// <param name="configuration">Конфігурація.</param>
     /// <param name="environment">Джерело змінних середовища; <c>null</c> — середовище процесу.</param>
@@ -48,7 +48,7 @@ public static class ConnectorHost
             .Bind(configuration.GetSection(ConnectorOptions.Section))
             .Validate(o => o.BaseUrl is { IsAbsoluteUri: true }, "Connector:BaseUrl — абсолютна адреса REST API.")
             .Validate(o => o.Auth.TryParse(out _), "Connector:Auth:Type — none, basic, bearer або api-key.")
-            .Validate(o => o.IsSourceValid, "Connector:Source — порожньо або openapi:<url чи файл>.")
+            .Validate(o => o.IsSourceValid, "Connector:Source — порожньо, openapi:<url чи файл> або odata:<url $metadata чи файл>.")
             .ValidateOnStart();
         services.AddSingleton(new ConnectorSecrets(environment ?? Environment.GetEnvironmentVariable));
         services.AddTransient<AuthHandler>();
@@ -60,11 +60,11 @@ public static class ConnectorHost
             })
             .AddHttpMessageHandler<AuthHandler>();
 
-        // Згенеровані tools (Connector:Source): специфікація читається при старті й додається до кожного MCP-сервера.
-        services.AddHttpClient(nameof(OpenApiToolSource));
-        services.AddSingleton<OpenApiToolSource>();
-        services.AddHostedService<OpenApiToolLoader>();
-        services.AddSingleton<IPostConfigureOptions<ModelContextProtocol.Server.McpServerOptions>, OpenApiToolsSetup>();
+        // Згенеровані tools (Connector:Source): джерело читається при старті, tools додаються до кожного MCP-сервера.
+        services.AddHttpClient(nameof(GeneratedToolSource));
+        services.AddSingleton<GeneratedToolSource>();
+        services.AddHostedService<GeneratedToolLoader>();
+        services.AddSingleton<IPostConfigureOptions<ModelContextProtocol.Server.McpServerOptions>, GeneratedToolsSetup>();
     }
 
     private static void Configure(ModelContextProtocol.Server.McpServerOptions options) =>

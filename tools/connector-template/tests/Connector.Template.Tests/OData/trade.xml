@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="Trade.Model" Alias="self" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EnumType Name="OrderStatus">
+        <Member Name="New" Value="0" />
+        <Member Name="Closed" Value="1" />
+      </EnumType>
+      <ComplexType Name="Address">
+        <Property Name="City" Type="Edm.String" />
+        <Property Name="Street" Type="Edm.String" />
+      </ComplexType>
+      <EntityType Name="Catalog">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="Description" Type="Edm.String" MaxLength="100" />
+      </EntityType>
+      <EntityType Name="Customer" BaseType="self.Catalog">
+        <Property Name="Code" Type="Edm.String" MaxLength="9" />
+        <Property Name="IsFolder" Type="Edm.Boolean" />
+        <Property Name="Addresses" Type="Collection(self.Address)" />
+        <NavigationProperty Name="Orders" Type="Collection(self.Order)" />
+      </EntityType>
+      <EntityType Name="Order">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="Number" Type="Edm.String" />
+        <Property Name="Date" Type="Edm.DateTimeOffset" />
+        <Property Name="Customer_Key" Type="Edm.Guid" />
+        <Property Name="Amount" Type="Edm.Decimal" />
+        <Property Name="Status" Type="Trade.Model.OrderStatus" />
+        <NavigationProperty Name="Customer" Type="self.Customer" />
+        <NavigationProperty Name="Lines" Type="Collection(self.OrderLine)" />
+      </EntityType>
+      <EntityType Name="OrderLine">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+          <PropertyRef Name="LineNumber" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="LineNumber" Type="Edm.Int64" Nullable="false" />
+        <Property Name="Product" Type="Edm.String" />
+        <Property Name="Quantity" Type="Edm.Decimal" />
+      </EntityType>
+      <EntityContainer Name="Container">
+        <EntitySet Name="Catalog_Контрагенты" EntityType="self.Customer" />
+        <EntitySet Name="Document_Orders" EntityType="Trade.Model.Order" />
+        <EntitySet Name="OrderLines" EntityType="self.OrderLine" />
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

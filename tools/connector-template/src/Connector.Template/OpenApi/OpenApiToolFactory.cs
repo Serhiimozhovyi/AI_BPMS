@@ -1,7 +1,7 @@
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Connector.Template.Generated;
 using Microsoft.OpenApi;
 using ModelContextProtocol.Protocol;
 
@@ -12,7 +12,7 @@ namespace Connector.Template.OpenApi;
 /// <c>description</c> — <c>summary</c> (і <c>description</c>), <c>inputSchema</c> — параметри path/query/header за назвами
 /// та JSON-тіло у властивості <c>body</c>. Операції з тілом не-JSON пропускаються (див. <see cref="Result.Skipped"/>).
 /// </summary>
-public static partial class OpenApiToolFactory
+public static class OpenApiToolFactory
 {
     /// <summary>Аргумент із тілом запиту.</summary>
     public const string BodyArgument = "body";
@@ -52,7 +52,7 @@ public static partial class OpenApiToolFactory
                     continue;
                 }
 
-                var name = Unique(ToolName(operation.OperationId) ?? ToolName($"{method.Method}_{path}") ?? "operation", names);
+                var name = ToolNaming.Unique(ToolNaming.ToolName(operation.OperationId) ?? ToolNaming.ToolName($"{method.Method}_{path}") ?? "operation", names);
                 var readOnly = method == HttpMethod.Get || method == HttpMethod.Head;
                 var tool = new Tool
                 {
@@ -169,54 +169,6 @@ public static partial class OpenApiToolFactory
             .ToList();
         return parts.Count > 0 ? string.Join("\n\n", parts) : title;
     }
-
-    /// <summary><c>findPetsByStatus</c> → <c>find_pets_by_status</c>, <c>get_/pets/{petId}</c> → <c>get_pets_pet_id</c>.</summary>
-    /// <param name="source">operationId або «method_path».</param>
-    internal static string? ToolName(string? source)
-    {
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            return null;
-        }
-
-        var name = new StringBuilder();
-        for (var i = 0; i < source.Length; i++)
-        {
-            var c = source[i];
-            if (!char.IsAsciiLetterOrDigit(c))
-            {
-                name.Append('_');
-                continue;
-            }
-
-            var previous = i > 0 ? source[i - 1] : '\0';
-            var next = i + 1 < source.Length ? source[i + 1] : '\0';
-            if (char.IsAsciiLetterUpper(c) && (char.IsAsciiLetterLower(previous) || char.IsAsciiDigit(previous) ||
-                                               (char.IsAsciiLetterUpper(previous) && char.IsAsciiLetterLower(next))))
-            {
-                name.Append('_');
-            }
-
-            name.Append(char.ToLowerInvariant(c));
-        }
-
-        var result = Underscores().Replace(name.ToString(), "_").Trim('_');
-        return result.Length == 0 ? null : result.Length > 120 ? result[..120] : result;
-    }
-
-    private static string Unique(string name, HashSet<string> names)
-    {
-        var candidate = name;
-        for (var i = 2; !names.Add(candidate); i++)
-        {
-            candidate = $"{name}_{i}";
-        }
-
-        return candidate;
-    }
-
-    [GeneratedRegex("_+")]
-    private static partial Regex Underscores();
 
     /// <summary>Елемент фільтра: <c>tag:&lt;тег&gt;</c> або шаблон шляху з <c>*</c>.</summary>
     private sealed record Matcher(string? Tag, Regex? Path)
