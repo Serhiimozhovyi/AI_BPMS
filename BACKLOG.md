@@ -390,7 +390,7 @@
 - DoD: тест зелений у CI; документація перевірена вручну з Claude Desktop (запис у PR, як саме); `README.md` посилається на `docs/mcp-server.md`. **Критерій фази 3.**
 
 ### F3-19 · Файлове сховище у воркері (локальна папка)
-- model: `sonnet` · status: `in-progress` · depends: F2-07
+- model: `sonnet` · status: `review #67` · depends: F2-07
 - Що: `IBinaryStore` у локальній папці для `OpenBP.Worker` за `architecture.md` §6: налаштування `Storage:LocalPath`, файл у `<папка>/<рік>/<місяць>/<id>`, `BinaryRef` з `storage: local`, `directory`, `fileSize`, `sha256`; читання лише своїх посилань (без виходу за папку); без налаштування — зрозуміла помилка з назвою налаштування. Знайдено під час F3-17: `get_attachment` віддає binary item, а у воркері була заглушка.
 - DoD: тести сховища (запис/читання, хеш, відмова на підроблені `BinaryRef`, реєстрація за конфігом) і воркера (`mcp.tool` з файлом → файл у папці); `architecture.md` і `.env.example` оновлено.
 
