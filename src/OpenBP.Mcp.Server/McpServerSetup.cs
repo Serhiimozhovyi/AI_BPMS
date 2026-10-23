@@ -27,8 +27,9 @@ public static class McpServerSetup
             })
             // Без серверних сесій: кожен POST автентифікується окремо, клієнт не прив'язаний до екземпляра Api.
             .WithHttpTransport(o => o.Stateless = true)
-            .WithRequestFilters(filters => filters.AddCallToolFilter(McpErrors.Filter))
+            .WithRequestFilters(filters => filters.AddCallToolFilter(McpErrors.Filter).AddReadResourceFilter(McpErrors.ResourceFilter))
             .WithTools<ConnectorTools>(McpJson.Options)
+            .WithTools<WorkflowTools>(McpJson.Options)
             .WithResources<OpenBpResources>();
         return services;
     }

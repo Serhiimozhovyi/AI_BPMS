@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
 using OpenBP.Application.Connectors;
+using OpenBP.Application.Workflows;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Mcp.Server;
@@ -16,6 +17,9 @@ public sealed class OpenBpResources
     /// <summary>URI списку конекторів.</summary>
     public const string ConnectorsUri = "openbp://connectors";
 
+    /// <summary>Шаблон URI визначення сценарію.</summary>
+    public const string WorkflowUriTemplate = "openbp://workflows/{id}";
+
     /// <summary>JSON Schema формату workflow з <c>OpenBP.Shared</c> — джерело правди для <c>create_workflow</c>/<c>update_workflow</c>.</summary>
     [McpServerResource(UriTemplate = WorkflowSchemaUri, Name = "workflow-format", Title = "Workflow format JSON Schema", MimeType = "application/schema+json")]
     [Description("JSON Schema of the OpenBP workflow definition (nodes, connections, settings, pinData).")]
@@ -28,4 +32,13 @@ public sealed class OpenBpResources
     [Description("Connected MCP servers and their tools; same content as the describe_connectors tool.")]
     public static async Task<string> Connectors(IConnectorService connectors, CancellationToken ct) =>
         JsonSerializer.Serialize(await ConnectorsDescription.BuildAsync(connectors, ct).ConfigureAwait(false), McpJson.Options);
+
+    /// <summary>Визначення поточної версії сценарію (те саме, що <c>definition</c> у <c>get_workflow</c>).</summary>
+    /// <param name="workflows">Сервіс сценаріїв.</param>
+    /// <param name="id">Id сценарію.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerResource(UriTemplate = WorkflowUriTemplate, Name = "workflow", Title = "Workflow definition", MimeType = "application/json")]
+    [Description("Definition of the current version of a workflow in the OpenBP workflow format.")]
+    public static async Task<string> Workflow(IWorkflowService workflows, Guid id, CancellationToken ct) =>
+        WorkflowDefinitions.ToJson((await workflows.GetAsync(id, ct).ConfigureAwait(false)).Definition).ToJsonString(McpJson.Options);
 }
