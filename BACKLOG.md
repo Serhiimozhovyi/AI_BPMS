@@ -257,7 +257,7 @@
 - DoD: Vitest на компоненти і сервіс API; `npm run lint|test|build` зелені.
 
 ### F2-15 · UI: список сценаріїв
-- model: `sonnet` · status: `in-progress agent/F2-15-ui-workflows` · depends: F2-06
+- model: `sonnet` · status: `review #44` · depends: F2-06
 - Що: `/workflows`: список, створення, перейменування, активація, видалення; перехід у канвас.
 - DoD: Vitest на компоненти і сервіс API; `npm run lint|test|build` зелені.
 
