@@ -1,0 +1,79 @@
+using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
+using OpenBP.Connectors.OneC.OData;
+
+namespace OpenBP.Connectors.OneC.Generated;
+
+/// <summary>
+/// Згенеровані tools з <c>Connector:Source</c> (<c>odata:…</c>): джерело читається один раз (за
+/// першим зверненням — при старті через <see cref="GeneratedToolLoader"/>), збіг назви з ручним tool'ом — помилка.
+/// </summary>
+/// <param name="options">Налаштування конектора.</param>
+/// <param name="services">Сервіси — для <see cref="RestClient"/> і ручних tools.</param>
+/// <param name="http">Фабрика клієнтів — для завантаження специфікації за URL.</param>
+/// <param name="logger">Журнал.</param>
+internal sealed class GeneratedToolSource(
+    IOptions<ConnectorOptions> options,
+    IServiceProvider services,
+    IHttpClientFactory http,
+    ILogger<GeneratedToolSource> logger)
+{
+    private readonly Lazy<Task<IReadOnlyList<RestTool>>> _tools = new(() => LoadAsync(options.Value, services, http, logger));
+
+    /// <summary>Tools (порожньо, якщо джерело не задане).</summary>
+    public Task<IReadOnlyList<RestTool>> GetAsync() => _tools.Value;
+
+    private static async Task<IReadOnlyList<RestTool>> LoadAsync(
+        ConnectorOptions options, IServiceProvider services, IHttpClientFactory http, ILogger logger)
+    {
+        if (options.ODataLocation is not { } odata)
+        {
+            return [];
+        }
+
+        var model = await CsdlModel.LoadAsync(odata, options.BaseUrl, services.GetRequiredService<RestClient>(), http.CreateClient(nameof(GeneratedToolSource)), CancellationToken.None).ConfigureAwait(false);
+        var tools = ODataToolFactory.Create(model, options.OData, services.GetRequiredService<RestClient>);
+
+        var manual = services.GetServices<McpServerTool>().Select(t => t.ProtocolTool.Name).ToHashSet(StringComparer.Ordinal);
+        if (tools.FirstOrDefault(t => manual.Contains(t.ProtocolTool.Name)) is { } clash)
+        {
+            throw new InvalidOperationException(
+                $"OData: tool «{clash.ProtocolTool.Name}» уже описано вручну — виключіть його фільтром Connector:OData:Exclude.");
+        }
+
+        logger.LogInformation("OData {Location}: {Count} tools", odata, tools.Count);
+        return tools;
+    }
+}
+
+/// <summary>Читає специфікацію при старті: помилка джерела — помилка старту, а не першого запиту.</summary>
+/// <param name="source">Джерело tools.</param>
+internal sealed class GeneratedToolLoader(GeneratedToolSource source) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken) => source.GetAsync();
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+/// <summary>
+/// Додає згенеровані tools до налаштувань кожного MCP-сервера (у stateless HTTP сервер створюється на запит, у stdio —
+/// один, іноді ще до старту hosted services, тому тут чекаємо на завантаження синхронно).
+/// </summary>
+/// <param name="source">Джерело tools.</param>
+internal sealed class GeneratedToolsSetup(GeneratedToolSource source) : IPostConfigureOptions<McpServerOptions>
+{
+    public void PostConfigure(string? name, McpServerOptions options)
+    {
+        var tools = source.GetAsync().GetAwaiter().GetResult();
+        if (tools.Count == 0)
+        {
+            return;
+        }
+
+        options.ToolCollection ??= [];
+        foreach (var tool in tools)
+        {
+            options.ToolCollection.TryAdd(tool);
+        }
+    }
+}
