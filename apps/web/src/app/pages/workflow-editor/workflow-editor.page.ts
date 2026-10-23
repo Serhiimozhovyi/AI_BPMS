@@ -13,6 +13,7 @@ import { EditHistory } from '../../canvas/edit-history';
 import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../../canvas/palette';
 import { PaletteComponent } from '../../canvas/palette.component';
 import { ConnectorsApiService, McpToolInfo, apiErrorMessage } from '../../connectors/connectors-api.service';
+import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../../node-form/expression-suggest';
 import { MCP_TOOL_TYPES, updateNode } from '../../node-form/node-form';
 import { NodePanelComponent } from '../../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
@@ -108,7 +109,7 @@ interface SaveRequest {
           </div>
           @if (selectedNode(); as node) {
             <aside class="editor__panel">
-              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" (nodeChange)="nodeEdited($event)" />
+              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [expressionContext]="selectedExpressionContext()" (nodeChange)="nodeEdited($event)" />
             </aside>
           }
         </div>
@@ -243,6 +244,15 @@ export class WorkflowEditorPage implements OnInit {
     if (!node || !MCP_TOOL_TYPES.includes(node.type)) return null;
     const { serverId, toolName } = node.parameters ?? {};
     return this.servers().find((s) => s.id === serverId)?.tools.find((t) => t.name === toolName) ?? null;
+  });
+  /**
+   * Підказки виразів для виділеного вузла (F2-19). Останній тестовий output — поки `pinData` сценарію;
+   * результати тестового запуску додасть F2-20.
+   */
+  protected readonly selectedExpressionContext = computed(() => {
+    const node = this.selectedNode();
+    const def = this.definition();
+    return node && def ? expressionContext(def, node.id, def.pinData ?? {}) : EMPTY_EXPRESSION_CONTEXT;
   });
   protected readonly canUndo = this.history.canUndo;
   protected readonly canRedo = this.history.canRedo;

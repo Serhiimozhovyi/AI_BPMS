@@ -1,11 +1,12 @@
-import { ChangeDetectionStrategy, Component, input, linkedSignal, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, input, linkedSignal, output } from '@angular/core';
 import { FormGroup } from '@angular/forms';
-import { FormlyFieldConfig, FormlyForm } from '@ngx-formly/core';
+import { FormlyFieldConfig, FormlyForm, FormlyFormOptions } from '@ngx-formly/core';
 import { McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
 import { CommonModel, MCP_TOOL_TYPES, applyCommon, applyParameters, commonFields, commonModel, parameterFields, parametersModel } from './node-form';
-import { provideNodeForm } from './node-form-fields';
+import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext } from './expression-suggest';
+import { NodeFormState, provideNodeForm } from './node-form-fields';
 
 /** Стан форм для одного вузла: моделі (копії) і поля formly. Новий стан — нові екземпляри форм. */
 interface PanelState {
@@ -17,6 +18,8 @@ interface PanelState {
   paramsForm: FormGroup;
   paramsModel: Record<string, unknown>;
   paramsFields: FormlyFieldConfig[];
+  /** Опції форми параметрів: `formState` спільний для всіх станів панелі (контекст підказок виразів). */
+  paramsOptions: FormlyFormOptions;
   commonForm: FormGroup;
   commonModel: CommonModel;
   commonFields: FormlyFieldConfig[];
@@ -58,7 +61,7 @@ interface PanelState {
         }
         @for (k of [s]; track k.id) {
           <div class="panel__form" data-testid="node-parameters">
-            <formly-form [form]="k.paramsForm" [fields]="k.paramsFields" [model]="k.paramsModel" (modelChange)="parametersChanged($event)" />
+            <formly-form [form]="k.paramsForm" [fields]="k.paramsFields" [model]="k.paramsModel" [options]="k.paramsOptions" (modelChange)="parametersChanged($event)" />
           </div>
         }
       }
@@ -114,8 +117,20 @@ export class NodePanelComponent {
   /** Для `mcp.tool`: tool із `tools_cache` (його `inputSchema` описує `arguments`). */
   readonly tool = input<McpToolInfo | null>(null);
 
+  /** Що підказувати в полях виразів `{{ }}` (F2-19): інші вузли, поля останнього тестового output. */
+  readonly expressionContext = input<ExpressionContext>(EMPTY_EXPRESSION_CONTEXT);
+
   /** Змінений вузол після кожної зміни у формі. */
   readonly nodeChange = output<WorkflowNode>();
+
+  /** Спільний `formState` форм параметрів; поля читають контекст у момент підказки — форму не перебудовуємо. */
+  private readonly formState: NodeFormState = {};
+
+  constructor() {
+    effect(() => {
+      this.formState.expressionContext = this.expressionContext();
+    });
+  }
 
   /** Останній вузол, відправлений з панелі: коли він повертається через `node`, форму не перебудовуємо. */
   private lastEmitted: WorkflowNode | null = null;
@@ -127,7 +142,7 @@ export class NodePanelComponent {
       if (prev && src.node === this.lastEmitted && src.descriptor === prev.descriptor && src.tool === prev.tool) {
         return { ...prev, node: src.node };
       }
-      return createState(src.node, src.descriptor, src.tool);
+      return createState(src.node, src.descriptor, src.tool, this.formState);
     },
   });
 
@@ -153,7 +168,7 @@ export class NodePanelComponent {
 
 let nextStateId = 0;
 
-function createState(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null): PanelState {
+function createState(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null, formState: NodeFormState): PanelState {
   return {
     id: ++nextStateId,
     node,
@@ -162,6 +177,7 @@ function createState(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, t
     paramsForm: new FormGroup({}),
     paramsModel: parametersModel(node),
     paramsFields: parameterFields(node.type, descriptor, tool),
+    paramsOptions: { formState },
     commonForm: new FormGroup({}),
     commonModel: commonModel(node),
     commonFields: commonFields(),

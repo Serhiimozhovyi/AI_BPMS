@@ -72,6 +72,18 @@ export const MCP_TOOL_SCHEMA: JsonSchema = {
 };
 
 /** FakeServer: `order(int id, string? customer = null)` — як його описує MCP C# SDK. */
+export const CODE_SCHEMA: JsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  title: 'core.code',
+  type: 'object',
+  required: ['code'],
+  additionalProperties: false,
+  properties: {
+    code: { type: 'string', minLength: 1, description: "Тіло JS-функції; повертає об'єкт або масив об'єктів" },
+    mode: { type: 'string', enum: ['eachItem', 'allItems'], default: 'eachItem' },
+  },
+};
+
 export const FAKE_ORDER_TOOL: McpToolInfo = {
   name: 'order',
   description: 'Повертає замовлення з id.',
@@ -91,4 +103,5 @@ function descriptor(type: string, group: NodeTypeInfo['group'], outputs: string[
 
 export const SET_DESCRIPTOR = descriptor('core.set', 'transform', ['main'], SET_SCHEMA);
 export const IF_DESCRIPTOR = descriptor('core.if', 'logic', ['true', 'false'], IF_SCHEMA);
+export const CODE_DESCRIPTOR = descriptor('core.code', 'transform', ['main'], CODE_SCHEMA);
 export const MCP_TOOL_DESCRIPTOR = descriptor('mcp.tool', 'integration', ['main'], MCP_TOOL_SCHEMA);
