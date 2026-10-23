@@ -7,6 +7,7 @@ using OpenBP.Api.Auth;
 using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Nodes;
+using OpenBP.Application.Executions;
 using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Engine;
@@ -19,6 +20,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<OpenBpDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
+    // Стани виконань у JSON — snake_case, як у БД (timed_out); перший підхожий конвертер має пріоритет.
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter<ExecutionState>(JsonNamingPolicy.SnakeCaseLower));
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     o.SerializerOptions.Converters.Add(new WorkflowDefinitionJsonConverter());
 });
@@ -31,6 +34,7 @@ builder.Services.AddSingleton<IMcpServerRegistry>(_ => new McpServerRegistry());
 builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
     CoreNodes.All().Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>())).Concat(AiNodes.All())));
 builder.Services.AddOpenBpWorkflowServices();
+builder.Services.AddOpenBpExecutionServices();
 
 var app = builder.Build();
 
@@ -40,7 +44,7 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints();
 
 app.Run();
 

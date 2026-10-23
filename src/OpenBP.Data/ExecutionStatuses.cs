@@ -39,7 +39,7 @@ public static class ExecutionStatuses
 }
 
 /// <summary>Значення колонки <c>executions.mode</c>.</summary>
-internal static class ExecutionModes
+public static class ExecutionModes
 {
     public static string ToDb(ExecutionMode mode) => mode switch
     {
@@ -59,7 +59,7 @@ internal static class ExecutionModes
 }
 
 /// <summary>Значення колонки <c>execution_steps.status</c>.</summary>
-internal static class StepStatuses
+public static class StepStatuses
 {
     public static string ToDb(StepStatus status) => status switch
     {
