@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        connector: [telegram]
+        connector: [telegram, onec]
     defaults:
       run:
         working-directory: connectors/${{ matrix.connector }}

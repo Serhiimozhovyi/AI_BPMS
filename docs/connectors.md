@@ -160,6 +160,10 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 - `connectors/telegram` — Telegram Bot API (F3-13): `send_message`, `send_document` (URL або base64),
   `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`), `get_chat`; токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
+- `connectors/onec` — 1С через OData `standard.odata` (F3-14): `create_order` (контрагент за назвою, номенклатура за
+  артикулом, запис документа → `{ number }`), `sales_report` (`{ result }`: проведені продажі за період з назвами
+  контрагентів), плюс згенеровані з `$metadata` tools (`Connector:Source`); імена об'єктів 1С — налаштування
+  `Connector:OneC:*`, логін і пароль — лише змінні `ONEC_USERNAME`/`ONEC_PASSWORD`.
 
 ## 6. Тригери
 

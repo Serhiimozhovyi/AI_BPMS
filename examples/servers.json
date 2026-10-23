@@ -40,6 +40,17 @@
         "--project",
         "../connectors/telegram/src/OpenBP.Connectors.Telegram"
       ]
+    },
+    {
+      "id": "srv_onec_odata",
+      "name": "1С OData (справжній; адреса і логін — зі змінних Connector__BaseUrl, ONEC_USERNAME, ONEC_PASSWORD оболонки)",
+      "transport": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "../connectors/onec/src/OpenBP.Connectors.OneC"
+      ]
     }
   ]
 }
