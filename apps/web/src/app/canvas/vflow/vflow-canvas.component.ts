@@ -3,6 +3,7 @@ import { Connection, ConnectionSettings, Edge, Node, Vflow, createEdges, createN
 import { CanvasSelection, EMPTY_SELECTION, NewConnection } from '../canvas-edit';
 import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition } from '../canvas-model';
 import { groupLabel } from '../palette';
+import { NodeRunStatus } from '../test-run';
 
 interface NodeData {
   node: CanvasNode;
@@ -11,12 +12,19 @@ interface NodeData {
   height: number;
   /** Помилки валідації з Api для цього вузла. */
   errors: readonly string[];
+  /** Статус вузла в останньому тестовому запуску; `null` — не виконувався. */
+  runStatus: NodeRunStatus | null;
 }
 
 /** Помилки валідації за id вузла. */
 export type NodeErrors = ReadonlyMap<string, readonly string[]>;
 
 const NO_ERRORS: NodeErrors = new Map();
+
+/** Статуси вузлів тестового запуску за id вузла. */
+export type NodeRunStatuses = ReadonlyMap<string, NodeRunStatus>;
+
+const NO_RUN: NodeRunStatuses = new Map();
 
 export const NODE_WIDTH = 220;
 const MIN_NODE_HEIGHT = 72;
@@ -78,6 +86,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           [class.disabled]="ctx.data().node.disabled"
           [class.invalid]="ctx.data().errors.length > 0"
           [attr.data-invalid]="ctx.data().errors.length > 0 ? true : null"
+          [attr.data-run-status]="ctx.data().runStatus"
+          [class.run-success]="ctx.data().runStatus === 'success'"
+          [class.run-error]="ctx.data().runStatus === 'error'"
+          [class.run-skipped]="ctx.data().runStatus === 'skipped' || ctx.data().runStatus === 'cancelled'"
           [style.--node-color]="ctx.data().color"
           [style.height.px]="ctx.data().height"
           [attr.data-node-id]="ctx.node.id"
@@ -100,6 +112,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           }
           <div class="node__head">
             <span class="node__group">{{ ctx.data().groupLabel }}</span>
+            @if (ctx.data().runStatus === 'success') {
+              <span class="node__run node__run--success" data-testid="node-run-badge" role="img" title="Виконано" i18n-title="@@canvas.run.success">✓</span>
+            } @else if (ctx.data().runStatus === 'error') {
+              <span class="node__run node__run--error" data-testid="node-run-badge" role="img" title="Помилка" i18n-title="@@canvas.run.error">✕</span>
+            }
             @if (ctx.data().errors.length > 0) {
               <span class="node__errors" data-testid="node-errors" role="img" [title]="ctx.data().errors.join('\n')"
                 >! {{ ctx.data().errors.length }}</span
@@ -156,6 +173,34 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .node.invalid {
       border-color: #c62828;
       box-shadow: 0 0 0 2px rgb(198 40 40 / 0.35);
+    }
+
+    .node.run-success {
+      border-color: #2e7d32;
+      background: #f1f8f1;
+    }
+
+    .node.run-error {
+      border-color: #c62828;
+      background: #fdf1f1;
+    }
+
+    .node.run-skipped {
+      opacity: 0.7;
+    }
+
+    .node__run {
+      margin-left: auto;
+      margin-right: 4px;
+      font-weight: 700;
+    }
+
+    .node__run--success {
+      color: #2e7d32;
+    }
+
+    .node__run--error {
+      color: #c62828;
     }
 
     .node.disabled {
@@ -232,6 +277,9 @@ export class VflowCanvasComponent {
   /** Помилки валідації за id вузла — вузол підсвічується, текст у підказці. */
   readonly nodeErrors = input<NodeErrors>(NO_ERRORS);
 
+  /** Статуси вузлів останнього тестового запуску — вузол зеленіє/червоніє. */
+  readonly runStatuses = input<NodeRunStatuses>(NO_RUN);
+
   /** Виділення (вузли за id, ребра за індексом у `connections`); змінюється і ззовні (вставка, видалення). */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
@@ -254,6 +302,7 @@ export class VflowCanvasComponent {
 
   protected readonly nodes = computed<Node<NodeData>[]>(() => {
     const errors = this.nodeErrors();
+    const run = this.runStatuses();
     // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
     const selected = new Set(untracked(this.selection).nodes);
     return createNodes<NodeData>(
@@ -266,7 +315,7 @@ export class VflowCanvasComponent {
           width: NODE_WIDTH,
           height,
           selected: selected.has(n.id),
-          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [] },
+          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null },
         };
       }),
     );

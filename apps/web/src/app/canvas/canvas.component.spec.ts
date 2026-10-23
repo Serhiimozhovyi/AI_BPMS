@@ -181,4 +181,24 @@ describe('CanvasComponent', () => {
     expect(host.querySelector('[data-node-id="n_webhook"]')?.getAttribute('data-invalid')).toBeNull();
     expect(host.querySelectorAll('[data-testid="node-errors"]')).toHaveLength(1);
   });
+
+  it('статуси тестового запуску (F2-20) зафарбовують вузли: успіх — ✓, помилка — ✕, без кроку — без позначки', async () => {
+    const fixture = await create(demo());
+    fixture.componentRef.setInput('runStatuses', new Map([
+      ['n_webhook', 'success'],
+      ['n_if', 'error'],
+    ]));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const card = (id: string) => host.querySelector(`[data-node-id="${id}"]`)!;
+    expect(card('n_webhook').getAttribute('data-run-status')).toBe('success');
+    expect(card('n_webhook').classList).toContain('run-success');
+    expect(card('n_webhook').querySelector('[data-testid="node-run-badge"]')?.textContent).toContain('✓');
+    expect(card('n_if').getAttribute('data-run-status')).toBe('error');
+    expect(card('n_if').querySelector('[data-testid="node-run-badge"]')?.textContent).toContain('✕');
+    expect(card('n_1c').getAttribute('data-run-status')).toBeNull();
+    expect(card('n_1c').querySelector('[data-testid="node-run-badge"]')).toBeNull();
+  });
 });

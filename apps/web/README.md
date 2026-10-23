@@ -12,6 +12,8 @@ npm test          # одноразовий прогін Vitest; npm run test:wat
 npm run build
 npm start         # dev-сервер на http://localhost:4200
 npm run e2e       # Playwright (e2e/*.e2e.ts); Api підміняється в тестах, браузер — npx playwright install chromium
+npm run e2e:live  # Playwright (e2e-live/*.live.ts) проти справжніх Api + Worker і моків 1С/Telegram:
+                  # спершу `dotnet build` і Postgres (`scripts/dev.sh up`); БД — ConnectionStrings__Default
 ```
 
 Маршрути (`docs/architecture.md` §7): `/workflows`, `/workflows/:id`, `/executions`, `/connectors`, `/credentials`, `/settings` — поки заглушки.

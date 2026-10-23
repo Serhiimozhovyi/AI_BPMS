@@ -9,6 +9,7 @@
     "test": "ng test --watch=false",
     "lint": "ng lint",
     "e2e": "playwright test",
+    "e2e:live": "playwright test --config playwright.live.config.ts",
     "test:watch": "ng test"
   },
   "private": true,
