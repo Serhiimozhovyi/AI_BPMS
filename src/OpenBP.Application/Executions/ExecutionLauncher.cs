@@ -48,12 +48,13 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             throw new ConflictException(WorkflowInactiveCode, $"Сценарій «{launch.WorkflowId}» неактивний; тригери його не запускають.");
         }
 
-        var versionId = workflow.CurrentVersionId
+        var versionId = launch.VersionId
+                        ?? workflow.CurrentVersionId
                         ?? throw new InvalidOperationException($"Сценарій «{launch.WorkflowId}» без поточної версії.");
         if (launch.StartNodeId is not null || launch.DestinationNodeId is not null)
         {
             var definition = await db.WorkflowVersions.AsNoTracking()
-                .Where(v => v.Id == versionId)
+                .Where(v => v.Id == versionId && v.WorkflowId == launch.WorkflowId)
                 .Select(v => v.Definition)
                 .SingleAsync(ct);
             var nodeIds = WorkflowJson.Deserialize(definition).Nodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);

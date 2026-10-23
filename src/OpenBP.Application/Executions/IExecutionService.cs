@@ -7,7 +7,7 @@ namespace OpenBP.Application.Executions;
 
 /// <summary>
 /// Виконання для користувача (docs/architecture.md §10.1, §10.4): REST <c>/executions</c>, UI, MCP-tools
-/// <c>run_workflow</c>/<c>get_execution</c>/<c>list_executions</c>. Реалізація — F2-09 (повтор — F3-G).
+/// <c>run_workflow</c>/<c>get_execution</c>/<c>list_executions</c>. Реалізація — F2-09, повтор — F3-08.
 /// Ролі: читання — <see cref="UserRole.Viewer"/>; запуск, скасування, повтор — <see cref="UserRole.Editor"/>.
 /// Кроки віддаються такими, як збережені, — уже очищені від секретів (F2-04).
 /// </summary>
@@ -67,7 +67,7 @@ public interface IExecutionService
     /// <exception cref="NotFoundException">Виконання немає.</exception>
     Task<ExecutionSummary> CancelAsync(Guid id, CancellationToken ct);
 
-    /// <summary>Повторний запуск тієї самої версії сценарію з тими самими стартовими даними (<see cref="Engine.Execution.ExecutionMode.Retry"/>). F3-G.</summary>
+    /// <summary>Повторний запуск тієї самої версії сценарію з тими самими стартовими даними (<see cref="Engine.Execution.ExecutionMode.Retry"/>, docs/architecture.md §10.4).</summary>
     /// <param name="id">Виконання, яке повторити; має бути у фінальному стані.</param>
     /// <param name="ct">Скасування.</param>
     /// <returns>Нове виконання в стані <see cref="ExecutionState.Queued"/>.</returns>

@@ -420,6 +420,59 @@ public class ExecutionTests(ApiFactory api)
             HttpStatusCode.NotFound, "NOT_FOUND");
     }
 
+    // ---------- повтор (F3-08) ----------
+
+    [Fact]
+    public async Task Retry_FinishedExecution_QueuesRetryOfSameVersionWithStartItemsOfTriggerStep()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var viewer = await LoginAsync(UserRole.Viewer);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        await MarkRunningAsync(executionId);
+
+        await AssertProblemAsync(
+            await editor.PostAsync($"/api/v1/executions/{executionId}/retry", null),
+            HttpStatusCode.Conflict, "EXECUTION_NOT_FINISHED");
+
+        var store = new PostgresExecutionStore(new Contexts(api));
+        await store.SaveStepAsync(Step(executionId, "n_start", "з тригера"), default);
+        await store.FinishAsync(Finished(executionId, ExecutionStatus.Error, "Вузол упав."), default);
+
+        await AssertProblemAsync(
+            await viewer.PostAsync($"/api/v1/executions/{executionId}/retry", null),
+            HttpStatusCode.Forbidden, "FORBIDDEN");
+
+        var response = await editor.PostAsync($"/api/v1/executions/{executionId}/retry", null);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var retried = await JsonAsync(response);
+        var retryId = retried.GetProperty("id").GetGuid();
+        Assert.Equal($"/api/v1/executions/{retryId}", response.Headers.Location?.OriginalString);
+        Assert.Equal("queued", retried.GetProperty("state").GetString());
+        Assert.Equal("retry", retried.GetProperty("mode").GetString());
+
+        await using var db = api.CreateDbContext();
+        var original = await db.Executions.SingleAsync(e => e.Id == executionId);
+        Assert.Equal(original.VersionId, (await db.Executions.SingleAsync(e => e.Id == retryId)).VersionId);
+        var payload = (await db.Jobs.Where(j => j.Kind == JobKinds.Execution).Select(j => j.Payload).ToListAsync())
+            .Select(JobJson.Deserialize<ExecutionJobPayload>)
+            .Single(p => p.ExecutionId == retryId);
+        Assert.Equal(ExecutionMode.Retry, payload.Mode);
+        Assert.Equal(original.VersionId, payload.VersionId);
+        Assert.Equal("n_start", payload.StartNodeId);
+        Assert.Equal("з тригера", payload.StartItems!.Single().Json["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Retry_Unknown_Returns404()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+
+        await AssertProblemAsync(
+            await editor.PostAsync($"/api/v1/executions/{Guid.NewGuid()}/retry", null),
+            HttpStatusCode.NotFound, "NOT_FOUND");
+    }
+
     // ---------- SSE ----------
 
     [Fact]

@@ -261,6 +261,15 @@ job береться лише за вільного слота.
 Скасування (`IExecutionService.CancelAsync`): `queued` → одразу `cancelled`; `running` → `cancelling`,
 далі — крок 3; воркер завершує виконання зі статусом `cancelled`. Затримка ≤ `HeartbeatInterval`.
 
+Повтор (`IExecutionService.RetryAsync`, `POST /executions/{id}/retry`, F3-08): нове виконання `mode = retry`
+**тієї самої** `version_id`, що й вихідне (не поточної версії), через `IExecutionLauncher` (`ExecutionLaunch.VersionId`);
+воркер обробляє його як звичайний job `execution`. Стартові дані — одне джерело: **кроки вихідного виконання**
+(payload job'а після завершення вже видалено). Якщо рівно один вузол без вхідних ребер має крок (`runIndex = 0`) —
+`startNodeId` = цей вузол, `startItems` = його вихід 0 (тригер не виконується знову, тож webhook/`mcp.poll`/розклад
+повторюються з тими самими items); інакше — старт з усіх вузлів без вхідних ребер. `pinData` у `retry` не
+застосовується, `destinationNodeId`/`runData` ручного запуску не переносяться (повторюється весь граф).
+Незавершене (`queued`/`running`/`cancelling`) → 409 `EXECUTION_NOT_FINISHED`; потрібна роль editor.
+
 ### 10.5. SSE
 
 Джерело подій — **опитування** `execution_steps` курсором за `id` (монотонний UUIDv7, F2-02) і рядка `executions`
