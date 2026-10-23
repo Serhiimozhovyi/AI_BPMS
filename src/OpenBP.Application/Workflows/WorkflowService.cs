@@ -5,6 +5,7 @@ using Npgsql;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
+using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Shared.Validation;
 using OpenBP.Shared.Workflow;
@@ -14,8 +15,9 @@ namespace OpenBP.Application.Workflows;
 /// <summary>
 /// Реалізація <see cref="IWorkflowService"/> над <c>workflows</c>/<c>workflow_versions</c> (docs/architecture.md §10.2).
 /// Валідація — <see cref="WorkflowValidator"/> з провайдером із контейнера (ланцюжок
-/// <c>NodeRegistrySchemaProvider</c> → <c>McpNodeSchemaProvider</c>). Реєстрацію тригерів (<c>webhooks</c>, Quartz)
-/// при активації додають F2-10/F2-11; тут активація — валідація з <c>IsActive = true</c> і прапорець <c>active</c>.
+/// <c>NodeRegistrySchemaProvider</c> → <c>McpNodeSchemaProvider</c>). Активація, збереження активного сценарію і
+/// деактивація в одній транзакції з прапорцем <c>active</c> перереєстровують тригери: <c>webhooks</c> (F2-10);
+/// Quartz додає F2-11.
 /// </summary>
 public sealed class WorkflowService(
     OpenBpDbContext db,
@@ -122,9 +124,20 @@ public sealed class WorkflowService(
         workflow.UpdatedAt = now;
         db.WorkflowVersions.Add(version);
 
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        if (workflow.Active)
+        {
+            // Активний сценарій виконує поточну версію — її тригери замінюють попередні.
+            await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
+        }
+
         try
         {
             await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (WebhookRegistrar.IsPathConflict(ex))
+        {
+            throw WebhookRegistrar.PathConflictRace();
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
@@ -132,6 +145,7 @@ public sealed class WorkflowService(
                 $"Сценарій «{id}» щойно збережено іншим запитом; оновіть його і збережіть ще раз.");
         }
 
+        await tx.CommitAsync(ct);
         return ToDetail(workflow, version);
     }
 
@@ -172,9 +186,20 @@ public sealed class WorkflowService(
         }
 
         await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
         workflow.Active = true;
         workflow.UpdatedAt = time.GetUtcNow();
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (WebhookRegistrar.IsPathConflict(ex))
+        {
+            throw WebhookRegistrar.PathConflictRace();
+        }
+
+        await tx.CommitAsync(ct);
         return ToDetail(workflow, version);
     }
 
@@ -185,9 +210,12 @@ public sealed class WorkflowService(
         var workflow = await FindAsync(id, ct);
         if (workflow.Active)
         {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await WebhookRegistrar.RemoveAsync(db, id, ct);
             workflow.Active = false;
             workflow.UpdatedAt = time.GetUtcNow();
             await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
 
         return await DetailAsync(workflow, ct);

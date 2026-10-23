@@ -4,18 +4,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OpenBP.Ai;
-using OpenBP.Api.Nodes;
 using OpenBP.Application.Auth;
 using OpenBP.Data;
 using OpenBP.Engine;
-using OpenBP.Engine.Nodes;
 using OpenBP.Mcp.Client;
-using OpenBP.Mcp.Nodes;
-using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Api.Tests;
@@ -493,14 +487,8 @@ public class WorkflowTests(ApiFactory api)
     [Fact]
     public async Task Example_telegram_1c_round_trips_without_losing_unknown_fields()
     {
-        await using var factory = api.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
-            // core.webhook з'явиться в CoreNodes у F2-10; до того — дескриптор-заглушка, щоб приклад проходив правило 5.
-            services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
-                CoreNodes.All()
-                    .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>()))
-                    .Concat(AiNodes.All())
-                    .Append(new DescriptorOnlyNode(new NodeDescriptor(
-                        "core.webhook", 1, "Webhook", NodeGroup.Trigger, [], ["main"], new JsonObject())))))));
+        // Окремий хост: реєстр MCP-серверів із tool'ами прикладу не впливає на інші тести.
+        await using var factory = api.WithWebHostBuilder(_ => { });
         await RegisterExampleServersAsync(factory.Services.GetRequiredService<IMcpServerRegistry>());
         var editor = await LoginAsync(UserRole.Editor, factory);
 
@@ -590,12 +578,5 @@ public class WorkflowTests(ApiFactory api)
 
             throw new InvalidOperationException("Не знайдено корінь репозиторію (OpenBP.sln).");
         }
-    }
-
-    private sealed class DescriptorOnlyNode(NodeDescriptor descriptor) : INode
-    {
-        public NodeDescriptor Descriptor { get; } = descriptor;
-
-        public Task<Item[][]> ExecuteAsync(INodeContext ctx, CancellationToken ct) => throw new NotSupportedException();
     }
 }

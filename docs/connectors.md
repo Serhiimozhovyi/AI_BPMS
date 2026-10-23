@@ -117,5 +117,8 @@ Credential типів `openai` і `anthropic`: `{ "apiKey": "…" }` (обов'�
 
 - `core.manualTrigger` — для тестового запуску.
 - `core.webhook` — `{ method, path, auth? }`; api реєструє маршрут `/webhook/{path}`, payload (`headers`, `query`, `body`) стає першим item.
+  `auth` — `{ type: "header" | "basic", credentialId, headerName? }`: секрет у credential (`header` → `{ token }`, заголовок `headerName`, за замовчуванням `X-Webhook-Token`; `basic` → `{ username, password }`).
+  Шлях реєструється в `webhooks` при активації (конфлікт — `WEBHOOK_PATH_CONFLICT`); відповіді: 202 `{ executionId }`, невідомий/неактивний шлях або інший метод — 404, невдала автентифікація — 401.
+  Заголовок із секретом автентифікації і `cookie` в item не потрапляють.
 - `core.schedule` — `{ cron, timezone }`; api реєструє Quartz-job.
 - `mcp.poll` — див. вище.

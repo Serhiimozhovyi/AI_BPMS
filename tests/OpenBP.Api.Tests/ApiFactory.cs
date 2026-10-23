@@ -1,8 +1,10 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Auth;
 using OpenBP.Data;
+using OpenBP.Data.Credentials;
 using Testcontainers.PostgreSql;
 
 namespace OpenBP.Api.Tests;
@@ -17,6 +19,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string AdminPassword = "Admin-pass-1";
 
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16").Build();
+
+    static ApiFactory()
+    {
+        // Ключ credentials (auth webhook-ів) Api читає зі змінної середовища — як у продукті.
+        Environment.SetEnvironmentVariable(CredentialEncryptionKey.EnvironmentVariable, EncryptionKey);
+    }
+
+    /// <summary>Ключ шифрування credentials тестового хоста (base64, 32 байти).</summary>
+    public static string EncryptionKey { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(CredentialEncryptionKey.KeySize));
 
     public string ConnectionString => _container.GetConnectionString();
 
@@ -37,6 +48,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public OpenBpDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<OpenBpDbContext>().UseNpgsql(ConnectionString).Options);
+
+    /// <summary>Створює зашифрований credential тим самим ключем, що й у хоста.</summary>
+    public Task<Guid> CreateCredentialAsync(string type, System.Text.Json.Nodes.JsonObject data)
+    {
+        var factory = new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<OpenBpDbContext>(
+            new DbContextOptionsBuilder<OpenBpDbContext>().UseNpgsql(ConnectionString).Options);
+        var store = new CredentialStore(factory, CredentialEncryptionKey.FromBase64(EncryptionKey));
+        return store.CreateAsync($"test {type}", type, data, createdBy: null, CancellationToken.None);
+    }
 
     /// <summary>Додає користувача з роллю напряму в БД.</summary>
     public async Task<UserEntity> CreateUserAsync(UserRole role, string password = "User-pass-1")

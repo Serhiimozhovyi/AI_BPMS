@@ -13,6 +13,7 @@ public static class CoreNodes
     public static IReadOnlyList<INode> All(TimeProvider? time = null) =>
     [
         new ManualTriggerNode(),
+        new WebhookNode(),
         new SetNode(),
         new IfNode(),
         new SwitchNode(),

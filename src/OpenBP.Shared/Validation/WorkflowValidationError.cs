@@ -45,4 +45,7 @@ public static class WorkflowValidationCodes
 
     /// <summary>Правила 5–6: <c>serverId</c> не зареєстровано або tool <c>toolName</c> не знайдено в кеші сервера.</summary>
     public const string McpToolUnknown = "MCP_TOOL_UNKNOWN";
+
+    /// <summary>Активація: шлях <c>core.webhook</c> уже зайнятий іншим активним сценарієм або іншим вузлом цього.</summary>
+    public const string WebhookPathConflict = "WEBHOOK_PATH_CONFLICT";
 }
