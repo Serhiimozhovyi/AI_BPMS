@@ -29,6 +29,17 @@
         "--mock",
         "telegram"
       ]
+    },
+    {
+      "id": "srv_telegram_bot",
+      "name": "Telegram Bot API (справжній; токен — зі змінної TELEGRAM_BOT_TOKEN оболонки)",
+      "transport": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "../connectors/telegram/src/OpenBP.Connectors.Telegram"
+      ]
     }
   ]
 }

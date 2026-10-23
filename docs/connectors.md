@@ -154,6 +154,13 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.
 
+Наші конектори лежать у `connectors/<назва>`: це проєкти, створені з шаблону (`dotnet new openbp-connector`), з
+власними sln і `Directory.*.props`, поза `OpenBP.sln`; CI job «Конектори» збирає, форматує й тестує кожен.
+
+- `connectors/telegram` — Telegram Bot API (F3-13): `send_message`, `send_document` (URL або base64),
+  `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`), `get_chat`; токен — лише змінна
+  `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
+
 ## 6. Тригери
 
 - `core.manualTrigger` — для тестового запуску.
