@@ -182,6 +182,7 @@ public sealed partial class ExecutionJobProcessor
             return;
         }
 
+        var loadedStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false);
         var store = new PostgresExecutionStore(_contexts, _time, scrubber);
         var executor = new WorkflowExecutor(
             _nodes,
@@ -198,7 +199,7 @@ public sealed partial class ExecutionJobProcessor
             Mode = payload.Mode,
             StartNodeId = payload.StartNodeId,
             StartItems = payload.StartItems,
-            NodeStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false),
+            NodeStates = loadedStates,
         };
 
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -249,7 +250,7 @@ public sealed partial class ExecutionJobProcessor
         else
         {
             await store.FinishAsync(result!, CancellationToken.None).ConfigureAwait(false);
-            await SaveNodeStatesAsync(payload.WorkflowId, result!.NodeStates).ConfigureAwait(false);
+            await SaveNodeStatesAsync(payload.WorkflowId, loadedStates, result!.NodeStates).ConfigureAwait(false);
         }
 
         await CompleteJobAsync(job).ConfigureAwait(false);
@@ -373,8 +374,15 @@ public sealed partial class ExecutionJobProcessor
         return result;
     }
 
-    private async Task SaveNodeStatesAsync(Guid workflowId, IReadOnlyDictionary<string, JsonObject> states)
+    /// <summary>
+    /// Пише лише стани, які виконання змінило: незмінений стан (напр. <c>mcp.poll</c>, що стартував зі <c>startItems</c>)
+    /// не перезаписує новіший, який тим часом зберегло опитування (F2-12).
+    /// </summary>
+    private async Task SaveNodeStatesAsync(Guid workflowId, IReadOnlyDictionary<string, JsonObject> loaded, IReadOnlyDictionary<string, JsonObject> result)
     {
+        var states = result
+            .Where(p => !loaded.TryGetValue(p.Key, out var before) || !JsonNode.DeepEquals(before, p.Value))
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         if (states.Count == 0)
         {
             return;

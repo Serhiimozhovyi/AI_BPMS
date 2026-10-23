@@ -74,15 +74,16 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
     private ExecutionRecoveryService? _recovery;
 
-    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions)
+    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null)
     {
+        EncryptionKey = encryptionKey ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         ConnectionString = cs;
         Db = new Contexts(cs);
         Options = options;
         QueueOptions = queueOptions;
         Queue = new JobQueue(Db, queueOptions);
         Recovery = new ExecutionRecoveryService(Db, Queue, queueOptions, NullLogger<ExecutionRecoveryService>.Instance);
-        Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))));
+        Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(EncryptionKey));
         Servers = new McpServerSync(Db, _mcp, Credentials);
         var nodes = CoreNodes.All().Concat(McpNodes.All(_mcp)).Concat(AiNodes.All(_http)).ToList();
 
@@ -92,17 +93,33 @@ internal sealed class WorkerHarness : IAsyncDisposable
             nodes.Add(new WebhookStub());
         }
 
+        var registry = new WorkerNodeRegistry(nodes);
         Processor = new ExecutionJobProcessor(
             Db,
             Queue,
             Credentials,
-            new WorkerNodeRegistry(nodes),
+            registry,
             Servers,
             new JintExpressionEvaluator(),
             null,
             options,
             NullLogger<ExecutionJobProcessor>.Instance);
+        Poll = new PollJobProcessor(
+            Db,
+            Queue,
+            Credentials,
+            registry,
+            Servers,
+            new JintExpressionEvaluator(),
+            null,
+            options,
+            NullLogger<PollJobProcessor>.Instance);
     }
+
+    /// <summary>Ключ шифрування credentials (base64): <see cref="RestartAsync"/> передає його новому воркеру.</summary>
+    public string EncryptionKey { get; }
+
+    public PollJobProcessor Poll { get; }
 
     public string ConnectionString { get; }
 
@@ -142,10 +159,20 @@ internal sealed class WorkerHarness : IAsyncDisposable
             new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) });
     }
 
+    /// <summary>
+    /// «Перезапуск воркера»: зупиняє цей і повертає новий над тією самою БД — з новими процесами MCP-серверів і без
+    /// стану в пам'яті. Старий harness після цього лише звільнити.
+    /// </summary>
+    public async Task<WorkerHarness> RestartAsync()
+    {
+        await StopAsync();
+        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey);
+    }
+
     /// <summary>Запускає <see cref="ExecutionWorker"/> як hosted service; з <paramref name="withRecovery"/> — і <see cref="ExecutionRecoveryService"/>.</summary>
     public async Task StartAsync(bool withRecovery = false)
     {
-        _worker = new ExecutionWorker(Queue, Processor, Options, NullLogger<ExecutionWorker>.Instance);
+        _worker = new ExecutionWorker(Queue, Processor, Options, NullLogger<ExecutionWorker>.Instance, poll: Poll);
         await _worker.StartAsync(CancellationToken.None);
         if (withRecovery)
         {
@@ -291,6 +318,13 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
         await Processor.ProcessAsync(job, stoppingToken);
         return true;
+    }
+
+    /// <summary>Бере job опитування <c>mcp.poll</c> і обробляє його синхронно; <c>null</c> — job'а немає або його не оброблено.</summary>
+    public async Task<PollResult?> PollNextAsync()
+    {
+        var job = await Queue.ClaimAsync(Options.WorkerId, [JobKinds.Poll]);
+        return job is null ? null : await Poll.ProcessAsync(job, CancellationToken.None);
     }
 
     public async ValueTask DisposeAsync()
