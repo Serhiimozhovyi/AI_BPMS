@@ -62,6 +62,13 @@ describe('WorkflowsApiService', () => {
     expect(id).toBe('w1');
   });
 
+  it('get → GET /api/v1/workflows/{id}', () => {
+    let version = 0;
+    api.get('w 1').subscribe((d) => (version = d.version));
+    http.expectOne({ method: 'GET', url: '/api/v1/workflows/w%201' }).flush(detail);
+    expect(version).toBe(detail.version);
+  });
+
   it('rename → PATCH /api/v1/workflows/{id} { name }', () => {
     api.rename('w1', 'Нова').subscribe();
     const req = http.expectOne({ method: 'PATCH', url: '/api/v1/workflows/w1' });

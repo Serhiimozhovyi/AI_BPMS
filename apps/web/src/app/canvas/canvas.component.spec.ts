@@ -1,0 +1,119 @@
+import { TestBed } from '@angular/core/testing';
+import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
+import { CanvasComponent } from './canvas.component';
+import { SAMPLE_DESCRIPTORS, largeWorkflow } from './sample-workflows';
+import { VflowCanvasComponent } from './vflow/vflow-canvas.component';
+
+function demo(): WorkflowDefinition {
+  return {
+    ...emptyWorkflowDefinition('Демо'),
+    nodes: [
+      { id: 'n_webhook', name: 'Нова заявка', type: 'core.webhook', typeVersion: 1, position: [80, 160], parameters: {} },
+      { id: 'n_if', name: 'Умова', type: 'core.if', typeVersion: 1, position: [380, 160], parameters: {} },
+      {
+        id: 'n_1c',
+        name: '1С: створити замовлення',
+        type: 'mcp.tool',
+        typeVersion: 1,
+        position: [680, 160],
+        parameters: { serverId: 's', toolName: 'create_order' },
+        continueOnFail: true,
+      },
+    ],
+    connections: [
+      { from: { node: 'n_webhook', output: 0 }, to: { node: 'n_if', input: 0 } },
+      { from: { node: 'n_if', output: 1 }, to: { node: 'n_1c', input: 0 } },
+      { from: { node: 'n_1c', output: 0 }, to: { node: 'ghost', input: 0 } },
+    ],
+  };
+}
+
+describe('CanvasComponent', () => {
+  async function create(definition: WorkflowDefinition, virtualization = false) {
+    const fixture = TestBed.createComponent(CanvasComponent);
+    fixture.componentRef.setInput('definition', definition);
+    fixture.componentRef.setInput('descriptors', SAMPLE_DESCRIPTORS);
+    fixture.componentRef.setInput('virtualization', virtualization);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  }
+
+  function vflow(fixture: Awaited<ReturnType<typeof create>>) {
+    return fixture.debugElement.query((d) => d.componentInstance instanceof VflowCanvasComponent)
+      .componentInstance as VflowCanvasComponent;
+  }
+
+  it('рендерить картку для кожного вузла з назвою, групою і типом', async () => {
+    const fixture = await create(demo());
+
+    const cards = (fixture.nativeElement as HTMLElement).querySelectorAll('[data-node-id]');
+    expect(Array.from(cards).map((c) => c.getAttribute('data-node-id'))).toEqual(['n_webhook', 'n_if', 'n_1c']);
+    expect(cards[0].textContent).toContain('Нова заявка');
+    expect(cards[0].textContent).toContain('core.webhook');
+    expect(cards[0].textContent).toContain('Тригери');
+    expect(cards[2].textContent).toContain('mcp.tool · create_order');
+  });
+
+  it('порти — за дескрипторами: тригер без входу, IF з двома виходами, continueOnFail додає error', async () => {
+    const fixture = await create(demo());
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('[data-node-id="n_webhook"] handle').length).toBe(1);
+    const ifCard = host.querySelector('[data-node-id="n_if"]')!;
+    expect(ifCard.querySelectorAll('handle').length).toBe(3);
+    expect(ifCard.textContent).toContain('true');
+    expect(ifCard.textContent).toContain('false');
+    const tool = host.querySelector('[data-node-id="n_1c"]')!;
+    expect(tool.querySelectorAll('handle').length).toBe(3);
+    expect(tool.textContent).toContain('error');
+  });
+
+  it('передає у vflow ребра за connections з портами за індексами; ребро на неіснуючий вузол не малюється', async () => {
+    const fixture = await create(demo());
+
+    const edges = (vflow(fixture) as unknown as { edges: () => { sourceHandle: string; targetHandle: string }[] }).edges();
+    expect(edges.map((e) => [e.sourceHandle, e.targetHandle])).toEqual([
+      ['out-0', 'in-0'],
+      ['out-1', 'in-0'],
+    ]);
+  });
+
+  it('перетягування вузла віддає визначення з новою position, решта без змін', async () => {
+    const def = demo();
+    const fixture = await create(def);
+    let changed: WorkflowDefinition | null = null;
+    fixture.componentInstance.definitionChange.subscribe((d) => (changed = d));
+
+    const inner = vflow(fixture) as unknown as { nodes: () => { id: string; point: { set(p: { x: number; y: number }): void } }[]; dragEnded(): void };
+    inner.nodes()[1].point.set({ x: 400, y: 300 });
+    inner.dragEnded();
+
+    expect(changed!.nodes[1].position).toEqual([400, 300]);
+    expect(changed!.nodes[0]).toBe(def.nodes[0]);
+    expect(changed!.connections[0]).toBe(def.connections[0]);
+    expect(changed!.connections).toStrictEqual(def.connections);
+  });
+
+  it('200 вузлів зі спайку рендеряться повністю (без віртуалізації) і швидко', async () => {
+    const def = largeWorkflow(200);
+    const started = performance.now();
+
+    const fixture = await create(def);
+
+    const elapsed = performance.now() - started;
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelectorAll('[data-node-id]').length).toBe(200);
+    const edges = (vflow(fixture) as unknown as { edges: () => unknown[] }).edges();
+    expect(edges).toHaveLength(def.connections.length);
+    // jsdom у CI повільніший за браузер; межа — від регресій на порядок (O(n²) і т. п.), не від мілісекунд.
+    expect(elapsed).toBeLessThan(10_000);
+  });
+
+  it('200 вузлів з віртуалізацією за замовчуванням створюють модель без помилок', async () => {
+    const fixture = await create(largeWorkflow(200), true);
+
+    const nodes = (vflow(fixture) as unknown as { nodes: () => unknown[] }).nodes();
+    expect(nodes).toHaveLength(200);
+  });
+});
