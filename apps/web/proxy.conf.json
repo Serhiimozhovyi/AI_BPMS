@@ -6,5 +6,9 @@
   "/webhook": {
     "target": "http://localhost:5080",
     "secure": false
+  },
+  "/mcp": {
+    "target": "http://localhost:5080",
+    "secure": false
   }
 }
