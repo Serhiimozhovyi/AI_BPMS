@@ -252,7 +252,7 @@
 - DoD: інтеграційні тести проти FakeServer (stdio і http): реєстрація → discovery зберігає схеми; недоступний сервер → статус помилки; тестовий виклик повертає результат; credentials не віддаються у відповідях.
 
 ### F2-14 · UI: сторінка «Конектори»
-- model: `sonnet` · status: `ready` · depends: F2-13
+- model: `sonnet` · status: `review #43` · depends: F2-13
 - Що: `/connectors`: список серверів зі статусом, форма додавання (stdio/http), «Оновити tools», перелік tools зі схемами, тестовий виклик; українською через i18n.
 - DoD: Vitest на компоненти і сервіс API; `npm run lint|test|build` зелені.
 
