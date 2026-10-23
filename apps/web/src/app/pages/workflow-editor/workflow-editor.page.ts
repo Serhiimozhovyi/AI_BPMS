@@ -6,14 +6,17 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, catchError, forkJoin, map, of, switchMap, tap } from 'rxjs';
 import { Autosave } from '../../canvas/autosave';
 import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../../canvas/canvas-edit';
+import { DescriptorIndex } from '../../canvas/canvas-model';
 import { CanvasComponent } from '../../canvas/canvas.component';
 import { CanvasClipboardService } from '../../canvas/clipboard.service';
 import { EditHistory } from '../../canvas/edit-history';
 import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../../canvas/palette';
 import { PaletteComponent } from '../../canvas/palette.component';
-import { ConnectorsApiService, apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ConnectorsApiService, McpToolInfo, apiErrorMessage } from '../../connectors/connectors-api.service';
+import { MCP_TOOL_TYPES, updateNode } from '../../node-form/node-form';
+import { NodePanelComponent } from '../../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
-import { WorkflowDefinition, WorkflowDetail, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowsApiService } from '../../workflows/workflows-api.service';
 
 /** Що зберігає автозбереження: визначення разом з id сценарію, якому воно належить. */
 interface SaveRequest {
@@ -24,13 +27,13 @@ interface SaveRequest {
 /**
  * `/workflows/:id` — редактор сценарію: сценарій з Api на канвасі, палітра `core.*` і tools MCP-серверів (F2-16);
  * з'єднання портів, видалення, копіювання/вставка, переміщення, undo/redo і автозбереження кожної зміни в нову
- * версію з помилками валідації на вузлах (F2-17).
+ * версію з помилками валідації на вузлах (F2-17); панель з формою виділеного вузла (F2-18).
  */
 @Component({
   selector: 'app-workflow-editor-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, NodePanelComponent],
   template: `
     <section class="editor">
       <header class="editor__bar">
@@ -103,6 +106,11 @@ interface SaveRequest {
               (selectionChange)="selection.set($event)"
             />
           </div>
+          @if (selectedNode(); as node) {
+            <aside class="editor__panel">
+              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" (nodeChange)="nodeEdited($event)" />
+            </aside>
+          }
         </div>
       }
     </section>
@@ -179,6 +187,12 @@ interface SaveRequest {
       flex: 1;
       min-width: 0;
     }
+
+    .editor__panel {
+      width: 360px;
+      border-left: 1px solid var(--mat-sys-outline-variant);
+      overflow-y: auto;
+    }
   `,
 })
 export class WorkflowEditorPage implements OnInit {
@@ -211,6 +225,25 @@ export class WorkflowEditorPage implements OnInit {
   );
 
   protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers()));
+  private readonly descriptorIndex = computed(() => new DescriptorIndex(this.descriptors()));
+
+  /** Вузол для панелі — коли виділено рівно один. */
+  protected readonly selectedNode = computed<WorkflowNode | null>(() => {
+    const ids = this.selection().nodes;
+    if (ids.length !== 1) return null;
+    return this.definition()?.nodes.find((n) => n.id === ids[0]) ?? null;
+  });
+  protected readonly selectedDescriptor = computed(() => {
+    const node = this.selectedNode();
+    return node ? this.descriptorIndex().find(node.type, node.typeVersion) : undefined;
+  });
+  /** Tool виділеного `mcp.tool`/`mcp.poll` з кешу конектора; не знайдено — `null`. */
+  protected readonly selectedTool = computed<McpToolInfo | null>(() => {
+    const node = this.selectedNode();
+    if (!node || !MCP_TOOL_TYPES.includes(node.type)) return null;
+    const { serverId, toolName } = node.parameters ?? {};
+    return this.servers().find((s) => s.id === serverId)?.tools.find((t) => t.name === toolName) ?? null;
+  });
   protected readonly canUndo = this.history.canUndo;
   protected readonly canRedo = this.history.canRedo;
   protected readonly canPaste = computed(() => this.clipboard.clipboard() !== null);
@@ -272,6 +305,12 @@ export class WorkflowEditorPage implements OnInit {
     const def = this.definition();
     if (!def) return;
     this.changed(addNode(def, item));
+  }
+
+  /** Зміна вузла з панелі. */
+  protected nodeEdited(node: WorkflowNode): void {
+    const def = this.definition();
+    if (def) this.changed(updateNode(def, node));
   }
 
   /** Зміна від користувача: новий крок історії й автозбереження. */
@@ -364,5 +403,7 @@ export class WorkflowEditorPage implements OnInit {
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+  // Панель вузла (прапорці, списки, кнопки) — клавіші належать формі, а не канвасу.
+  if (target.closest('app-node-panel')) return true;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
