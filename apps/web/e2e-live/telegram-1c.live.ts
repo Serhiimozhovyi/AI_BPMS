@@ -53,9 +53,21 @@ async function openExample(page: Page): Promise<{ id: string; nodes: { id: strin
   return { id: workflow.id, nodes: definition.nodes };
 }
 
-/** Запускає кнопкою (`run` або `run-node`) і чекає успіху. */
+/**
+ * Запускає кнопкою (`run` або `run-node`) і чекає успіху **саме цього** виконання: до відповіді на запуск (редактор
+ * спершу дочікується автозбереження) на канвасі ще статус попереднього запуску, тож id беремо з відповіді Api.
+ */
 async function runAndWait(page: Page, testId: 'run' | 'run-node'): Promise<void> {
+  const started = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && /^\/api\/v1\/workflows\/[^/]+\/executions$/.test(new URL(r.url()).pathname),
+  );
   await page.getByTestId(testId).click();
+  const { id } = (await (await started).json()) as { id: string };
+  await expect
+    .poll(async () => (await json<{ summary: { state: string } }>(await page.request.get(`/api/v1/executions/${id}`))).summary.state, {
+      timeout: 90_000,
+    })
+    .toBe('success');
   await expect(page.getByTestId('run-status')).toHaveAttribute('data-state', 'success', { timeout: 90_000 });
   await expect(page.getByTestId('run')).toBeEnabled();
 }
