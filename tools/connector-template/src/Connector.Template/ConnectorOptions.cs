@@ -25,11 +25,44 @@ public sealed class ConnectorOptions
     /// <summary>Назва секції конфігурації.</summary>
     public const string Section = "Connector";
 
+    private const string OpenApiPrefix = "openapi:";
+
     /// <summary>Базова адреса REST API, напр. <c>https://api.example.com/</c>.</summary>
     public Uri? BaseUrl { get; set; }
 
     /// <summary>Автентифікація.</summary>
     public AuthOptions Auth { get; set; } = new();
+
+    /// <summary>
+    /// Джерело згенерованих tools: порожньо — лише tools, описані вручну; <c>openapi:&lt;url або файл&gt;</c> — ще й tool на
+    /// кожну операцію OpenAPI 3.x (<see cref="OpenApi.OpenApiToolFactory"/>). Відносний шлях файлу — від теки застосунку.
+    /// </summary>
+    public string? Source { get; set; }
+
+    /// <summary>Фільтр операцій OpenAPI.</summary>
+    public OpenApiOptions OpenApi { get; set; } = new();
+
+    /// <summary>Розташування специфікації OpenAPI з <see cref="Source"/> або <c>null</c>, якщо джерело інше чи не задане.</summary>
+    public string? OpenApiLocation =>
+        Source?.Trim() is { } source && source.StartsWith(OpenApiPrefix, StringComparison.OrdinalIgnoreCase)
+            ? source[OpenApiPrefix.Length..].Trim()
+            : null;
+
+    /// <summary><see cref="Source"/> порожнє або відомого виду.</summary>
+    public bool IsSourceValid => string.IsNullOrWhiteSpace(Source) || OpenApiLocation is { Length: > 0 };
+}
+
+/// <summary>
+/// Які операції OpenAPI стають tools. Елемент — <c>tag:&lt;тег&gt;</c> або шаблон шляху, де <c>*</c> — будь-які символи
+/// (напр. <c>/pets/*</c>). Порожній <see cref="Include"/> — усі операції; <see cref="Exclude"/> застосовується після нього.
+/// </summary>
+public sealed class OpenApiOptions
+{
+    /// <summary>Лише операції, що відповідають хоча б одному елементу.</summary>
+    public List<string> Include { get; set; } = [];
+
+    /// <summary>Крім операцій, що відповідають хоча б одному елементу.</summary>
+    public List<string> Exclude { get; set; } = [];
 }
 
 /// <summary>Налаштування автентифікації (без секретів).</summary>

@@ -14,9 +14,11 @@
     (bearer), `CONNECTOR_API_KEY` (api-key). У відповідях tools і текстах помилок їх немає (`ConnectorSecrets.Scrub`);
   - `RestClient` — типізований `HttpClient` до вашого API (приклад — фейкове API товарів `/items`);
   - `Tools/ItemTools.cs` — tools, описані вручну атрибутами `[McpServerTool]`: `list_items`, `get_item`;
+  - `OpenApi/` — генератор tools з OpenAPI 3.x (`Connector:Source = openapi:…`, див. нижче);
   - транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
 - `tests/Connector.Template.Tests` — контрактні тести: `tools/list` віддає схеми, `tools/call` проти in-process
-  мок-REST повертає `structuredContent`, помилка REST → `isError` без секретів, stdio-запуск.
+  мок-REST повертає `structuredContent`, помилка REST → `isError` без секретів, stdio-запуск; генератор OpenAPI — на
+  petstore-подібній специфікації (`tests/…/OpenApi/petstore.yaml`).
 
 ## Від нуля до підключеного в OpenBP за годину
 
@@ -34,6 +36,28 @@ dotnet test
 `Connector.Template` у назвах файлів, просторів імен і рішення замінюється на `Acme.Crm`.
 
 ### 2. Описати свій API (30 хв)
+
+**Є OpenAPI-специфікація?** Можна не писати tools вручну:
+
+```json
+"Connector": {
+  "BaseUrl": "https://api.example.com/v1/",
+  "Source": "openapi:openapi.yaml",
+  "OpenApi": { "Include": [ "tag:orders" ], "Exclude": [ "/admin/*" ] }
+}
+```
+
+- `Source` — `openapi:` і URL або шлях до файлу JSON/YAML (відносний — від теки застосунку; додайте файл у csproj з
+  `CopyToOutputDirectory`). URL читається без автентифікації конектора.
+- При старті кожна операція стає tool'ом: назва з `operationId` у snake_case (або `<method>_<path>`), опис — з
+  `summary`, аргументи — параметри path/query/header і `body` для JSON-тіла. Запити йдуть на `BaseUrl` (враховуйте
+  префікс із `servers` специфікації) з автентифікацією конектора.
+- `Include`/`Exclude` — `tag:<тег>` або шаблон шляху з `*`; порожній `Include` — усі операції. Операції з тілом
+  не-JSON пропускаються (попередження в журналі).
+- Ручні tools працюють поруч зі згенерованими; приклад `ItemTools` видаліть (і рядок `WithTools<ItemTools>()` у
+  `ConnectorHost.cs`), якщо він вам не потрібен.
+
+**Описати tools вручну:**
 
 1. У `appsettings.json` — `Connector:BaseUrl` вашого API і `Connector:Auth:Type`.
 2. У `RestClient.cs` — методи над вашими ендпойнтами (замість `ListItemsAsync`/`GetItemAsync`) і моделі відповідей.
@@ -82,4 +106,5 @@ OpenBP сам є MCP-сервером: агент бачить ваш конек
 що в OpenBP) і `.editorconfig`. CI репозиторію створює з нього проєкт `dotnet new` і запускає
 `dotnet build -warnaserror`, `dotnet format --verify-no-changes` і `dotnet test`.
 
-Генератори tools з OpenAPI та OData `$metadata` — наступні кроки Connector Kit (F3-11, F3-12).
+Генератор tools з OData `$metadata` — наступний крок Connector Kit (F3-12). Сторонні залежності шаблону (MIT) — у
+`THIRD_PARTY_NOTICES.md` репозиторію OpenBP.

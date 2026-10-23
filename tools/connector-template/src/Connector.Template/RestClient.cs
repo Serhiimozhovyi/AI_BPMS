@@ -36,7 +36,13 @@ public sealed class RestClient(HttpClient http, ConnectorSecrets secrets)
                ?? throw new ConnectorException($"REST {path}: порожня відповідь.");
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    /// <summary>
+    /// Надсилає запит (шлях — відносно базової адреси) і повертає успішну відповідь; інакше — <see cref="ConnectorException"/>.
+    /// Ним користуються й згенеровані tools (<see cref="OpenApi.OpenApiTool"/>).
+    /// </summary>
+    /// <param name="request">Запит.</param>
+    /// <param name="ct">Скасування.</param>
+    public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         HttpResponseMessage response;
         try

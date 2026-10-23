@@ -118,11 +118,25 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 - Tools описуються вручну атрибутами `[McpServerTool]` поверх типізованого `HttpClient`; описи — англійською.
   Об'єкт → `structuredContent`; колекція — обгорткою `{ "result": [...] }` (`ListResult<T>`), щоб у `mcp.tool`
   працював `itemsPath = result`. Неуспішна відповідь REST → `isError` з HTTP-статусом і початком тіла (без секретів).
-- `Source` з генератором tools: `openapi: <url або файл>` (F3-11) або `odata: <url $metadata>` (F3-12) — по tool на
-  операцію/entity set з `inputSchema`.
+- Генератор tools з OpenAPI 3.x (JSON/YAML, парсер `Microsoft.OpenApi`, MIT): `Connector:Source = openapi:<url або
+  файл>` (відносний шлях — від теки застосунку). При старті сервер читає специфікацію і додає до ручних tools по tool
+  на операцію:
+  - назва — `operationId` у snake_case (`findPetsByStatus` → `find_pets_by_status`), без нього —
+    `<method>_<path>` (`get_store_inventory`); дублікати отримують суфікс `_2`; збіг з ручним tool'ом — помилка старту;
+  - `description` — `summary` (і `description` операції); `annotations`: GET — `readOnlyHint`, DELETE —
+    `destructiveHint`;
+  - `inputSchema` — параметри path/query/header за назвами (cookie не передаються), JSON-тіло — властивість `body`;
+    схеми — JSON Schema з підставленими `$ref` (цикл обривається порожньою схемою);
+  - виклик: аргументи підставляються в шлях, query (масив — повторений параметр), заголовки й тіло; запит іде на
+    `Connector:BaseUrl` з автентифікацією конектора. JSON-об'єкт у відповіді → `structuredContent`, масив →
+    `{ "result": [...] }`, 4xx/5xx → `isError` (без секретів);
+  - операції з тілом не-JSON (multipart тощо) пропускаються з попередженням у журналі;
+  - фільтр: `Connector:OpenApi:Include` / `Exclude` — елементи `tag:<тег>` або шаблон шляху з `*` (`/pets/*`);
+    порожній `Include` — усі операції.
+- Генератор з OData `$metadata` — `odata: <url $metadata>` (F3-12).
 - Транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
 - Тести: контрактний тест «`tools/list` повертає схеми, `tools/call` на мок-сервері повертає `structuredContent`,
-  помилка REST → `isError` без секретів» + запуск через stdio.
+  помилка REST → `isError` без секретів» + запуск через stdio; генератор OpenAPI — на petstore-подібній специфікації.
 - README «від нуля до підключеного в OpenBP за годину».
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.
