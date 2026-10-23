@@ -360,7 +360,7 @@
 - DoD: тести на OpenAPI-прикладі (petstore-подібний файл у тестах): `tools/list` містить очікувані tools і схеми; `tools/call` формує правильний запит до мок-REST; відповідь 4xx/5xx → `isError`.
 
 ### F3-12 · Connector Kit: генератор tools з OData `$metadata`
-- model: `opus` · status: `review #62` · depends: F3-10
+- model: `opus` · status: `done` · depends: F3-10
 - Що: `Source: odata: <url $metadata>` (OData v4 CSDL XML — формат публікацій 1С): по entity set — tools `list_<set>` (`$filter`, `$select`, `$top`, `$orderby`; відповідь `value` → `{ "result": [...] }`), `get_<set>` (за ключем), `create_<set>`, `update_<set>`; `inputSchema` з типів CSDL (Edm.* → JSON Schema); фільтр entity sets у конфігу.
 - DoD: тести на CSDL-прикладі (3 entity sets, навігація, складені ключі): схеми tools; `tools/call` формує правильний OData-URL/тіло проти мок-сервера; помилки → `isError`.
 
