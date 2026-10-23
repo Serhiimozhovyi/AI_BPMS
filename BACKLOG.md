@@ -303,7 +303,7 @@
 - Конектори, які робимо самі, живуть у `connectors/<назва>/` цього репо на шаблоні з `tools/connector-template`; виносити в окремі репозиторії чи ні — рішення власника перед пілотом (F3-18).
 
 ### F3-03 · `OpenBP.Mcp.Server`: хостинг `/mcp`, API-ключ, `describe_connectors`
-- model: `opus` · status: `review #52` · depends: F2-13
+- model: `opus` · status: `done` · depends: F2-13
 - Що:
   - проєкт `src/OpenBP.Mcp.Server` на `ModelContextProtocol.AspNetCore` (вже у `Directory.Packages.props`): `AddOpenBpMcpServer()` + `MapOpenBpMcp("/mcp")`, Streamable HTTP, stateless; `ServerInfo` = `openbp`;
   - автентифікація лише API-ключем (`Authorization: Bearer obp_…`, схема з F2-05); cookie на `/mcp` не приймається; без ключа або з відкликаним → 401 ще до MCP-обміну; `ICurrentUser` всередині tool'а = власник ключа;
