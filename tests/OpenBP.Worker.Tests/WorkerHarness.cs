@@ -224,7 +224,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
         ExecutionMode mode = ExecutionMode.Manual,
         string status = ExecutionStatuses.Queued,
         string? startNodeId = null,
-        IReadOnlyList<Item>? startItems = null)
+        IReadOnlyList<Item>? startItems = null,
+        string? destinationNodeId = null,
+        IReadOnlyDictionary<string, Item[][]>? runData = null)
     {
         var executionId = Guid.NewGuid();
         await using (var db = Db.CreateDbContext())
@@ -249,6 +251,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
             Mode = mode,
             StartNodeId = startNodeId,
             StartItems = startItems,
+            DestinationNodeId = destinationNodeId,
+            RunData = runData,
         }));
         return executionId;
     }

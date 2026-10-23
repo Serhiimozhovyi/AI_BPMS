@@ -25,7 +25,7 @@ public sealed class ExecutionService(
     {
         currentUser.Require(UserRole.Editor);
         return launcher.LaunchAsync(
-            new ExecutionLaunch(workflowId, ExecutionMode.Manual, request?.StartNodeId, request?.StartItems),
+            new ExecutionLaunch(workflowId, ExecutionMode.Manual, request?.StartNodeId, request?.StartItems, request?.DestinationNodeId, request?.RunData),
             ct);
     }
 

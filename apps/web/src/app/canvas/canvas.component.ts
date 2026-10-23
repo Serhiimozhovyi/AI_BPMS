@@ -19,6 +19,7 @@ import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow
     [virtualization]="virtualization()"
     [nodeErrors]="nodeErrors()"
     [runStatuses]="runStatuses()"
+    [pinnedNodes]="pinnedNodes()"
     [selection]="selection()"
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
@@ -60,6 +61,8 @@ export class CanvasComponent {
   private readonly index = computed(() => new DescriptorIndex(this.descriptors()));
 
   protected readonly model = computed(() => toCanvasModel(this.definition(), this.index()));
+
+  protected readonly pinnedNodes = computed(() => new Set(Object.keys(this.definition().pinData ?? {})));
 
   protected readonly nodeErrors = computed<NodeErrors>(() => {
     const byNode = new Map<string, string[]>();

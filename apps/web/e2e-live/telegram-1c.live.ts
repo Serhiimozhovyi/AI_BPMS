@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { APIRequestContext, expect, test } from '@playwright/test';
+import { APIRequestContext, Page, expect, test } from '@playwright/test';
 import { E2E_ADMIN } from './env';
 
 /**
@@ -35,7 +35,8 @@ async function mockConnector(api: APIRequestContext, name: string, mock: '1c' | 
   return id;
 }
 
-test('telegram-1c: «Виконати» з канвасу — усі вузли зеленіють, у панелі output 1С', async ({ page }) => {
+/** Вхід, конектори-моки і сценарій прикладу; відкриває його редактор. */
+async function openExample(page: Page): Promise<{ id: string; nodes: { id: string; name: string }[] }> {
   // Cookie входу спільна для page.request і сторінки.
   const api = page.request;
   expect((await api.post('/api/v1/auth/login', { data: E2E_ADMIN })).status()).toBe(204);
@@ -48,8 +49,29 @@ test('telegram-1c: «Виконати» з канвасу — усі вузли 
   const workflow = await json<{ id: string }>(await api.post('/api/v1/workflows', { data: definition }));
 
   await page.goto(`/workflows/${workflow.id}`);
-  const cards = page.locator('[data-node-id]');
-  await expect(cards).toHaveCount(definition.nodes.length);
+  await expect(page.locator('[data-node-id]')).toHaveCount(definition.nodes.length);
+  return { id: workflow.id, nodes: definition.nodes };
+}
+
+/** Запускає кнопкою (`run` або `run-node`) і чекає успіху. */
+async function runAndWait(page: Page, testId: 'run' | 'run-node'): Promise<void> {
+  await page.getByTestId(testId).click();
+  await expect(page.getByTestId('run-status')).toHaveAttribute('data-state', 'success', { timeout: 90_000 });
+  await expect(page.getByTestId('run')).toBeEnabled();
+}
+
+/** Номер замовлення з виходу вузла 1С у панелі (мок видає новий номер на кожен виклик). */
+async function orderNumber(page: Page): Promise<number> {
+  await page.locator('[data-node-id="n_1c"]').click();
+  await expect(page.getByTestId('node-run-output')).toContainText('"number"');
+  const text = (await page.getByTestId('node-run-output').textContent()) ?? '';
+  const match = /"number":\s*(\d+)/.exec(text);
+  expect(match, text).not.toBeNull();
+  return Number(match![1]);
+}
+
+test('telegram-1c: «Виконати» з канвасу — усі вузли зеленіють, у панелі output 1С', async ({ page }) => {
+  const definition = await openExample(page);
 
   await page.getByTestId('run').click();
   await expect(page.getByTestId('run-status')).toHaveAttribute('data-state', 'success', { timeout: 90_000 });
@@ -65,3 +87,35 @@ test('telegram-1c: «Виконати» з канвасу — усі вузли 
   await expect(run.getByTestId('node-run-input')).toContainText('Петренко');
   await expect(run.getByTestId('node-run-output')).toContainText('"number"');
 });
+
+test('telegram-1c: закріплений output 1С не викликає 1С; «Виконати вузол» бере вхід з останнього запуску (F2-21)', async ({ page }) => {
+  const workflow = await openExample(page);
+  await runAndWait(page, 'run');
+  const first = await orderNumber(page);
+
+  // Закріпити: наступний повний запуск не викликає 1С — той самий номер, бейдж 📌 на вузлі, pinData збережено.
+  await page.getByTestId('pin-output').click();
+  await expect(page.locator('[data-node-id="n_1c"]')).toHaveAttribute('data-pinned', 'true');
+  await runAndWait(page, 'run');
+  expect(await orderNumber(page)).toBe(first);
+  const saved = await json<{ definition: { pinData: Record<string, unknown> } }>(await page.request.get(`/api/v1/workflows/${workflow.id}`));
+  expect(Object.keys(saved.definition.pinData)).toContain('n_1c');
+
+  // Відкріпити: 1С викликається знову — новий номер.
+  await page.getByTestId('unpin-output').click();
+  await expect(page.locator('[data-node-id="n_1c"]')).not.toHaveAttribute('data-pinned', 'true');
+  await runAndWait(page, 'run');
+  const second = await orderNumber(page);
+  expect(second).not.toBe(first);
+
+  // «Виконати вузол» на відповіді Telegram: 1С не викликається, відповідь — з номером останнього запуску.
+  // Панель вузла 1С перекриває правий край канвасу: спершу знімаємо виділення кліком по порожньому місцю.
+  await page.locator('app-canvas').click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId('node-run')).toHaveCount(0);
+  await page.locator('[data-node-id="n_reply"]').click();
+  await runAndWait(page, 'run-node');
+  await expect(page.getByTestId('node-run')).toHaveAttribute('data-status', 'success');
+  await expect(page.getByTestId('node-run-output')).toContainText(String(second));
+  expect(await orderNumber(page)).toBe(second);
+});
+

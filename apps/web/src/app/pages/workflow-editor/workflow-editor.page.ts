@@ -13,8 +13,8 @@ import { EditHistory } from '../../canvas/edit-history';
 import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../../canvas/palette';
 import { PaletteComponent } from '../../canvas/palette.component';
 import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
-import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, startedRun, streamFailed } from '../../canvas/test-run';
-import { ExecutionsApiService } from '../../executions/executions-api.service';
+import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed } from '../../canvas/test-run';
+import { ExecutionsApiService, StartExecutionRequest } from '../../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorMessage } from '../../connectors/connectors-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../../node-form/expression-suggest';
 import { MCP_TOOL_TYPES, updateNode } from '../../node-form/node-form';
@@ -32,7 +32,8 @@ interface SaveRequest {
  * `/workflows/:id` — редактор сценарію: сценарій з Api на канвасі, палітра `core.*` і tools MCP-серверів (F2-16);
  * з'єднання портів, видалення, копіювання/вставка, переміщення, undo/redo і автозбереження кожної зміни в нову
  * версію з помилками валідації на вузлах (F2-17); панель з формою виділеного вузла (F2-18); тестовий запуск
- * «Виконати» з живим статусом вузлів через SSE та input/output вузла в панелі (F2-20).
+ * «Виконати» з живим статусом вузлів через SSE та input/output вузла в панелі (F2-20); «Виконати вузол» на даних
+ * останнього запуску і закріплення output вузла в `pinData` (F2-21).
  */
 @Component({
   selector: 'app-workflow-editor-page',
@@ -128,6 +129,14 @@ interface SaveRequest {
           @if (selectedNode(); as node) {
             <aside class="editor__panel">
               <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [expressionContext]="selectedExpressionContext()" (nodeChange)="nodeEdited($event)" />
+              <div class="editor__node-actions" data-testid="node-actions">
+                <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску" i18n="@@workfloweditor.runNode">Виконати вузол</button>
+                @if (selectedPinned()) {
+                  <button mat-button type="button" data-testid="unpin-output" (click)="unpin(node.id)" i18n="@@workfloweditor.unpin">Відкріпити output</button>
+                } @else if (selectedStep()?.status === 'success') {
+                  <button mat-button type="button" data-testid="pin-output" (click)="pin(node.id)" i18n-title="@@workfloweditor.pin.hint" title="Тестові запуски віддаватимуть цей output, не виконуючи вузол" i18n="@@workfloweditor.pin">Закріпити output</button>
+                }
+              </div>
               @if (selectedStep(); as step) {
                 <app-node-run-data [step]="step" [inputNames]="selectedDescriptor()?.inputs ?? []" [outputNames]="selectedDescriptor()?.outputs ?? []" />
               }
@@ -173,6 +182,13 @@ interface SaveRequest {
       font-size: 13px;
       color: var(--mat-sys-error);
       border-bottom: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    .editor__node-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0 16px 12px;
     }
 
     .editor__run {
@@ -300,6 +316,11 @@ export class WorkflowEditorPage implements OnInit {
   protected readonly selectedStep = computed(() => {
     const node = this.selectedNode();
     return node ? (this.testRun()?.steps.get(node.id) ?? null) : null;
+  });
+  /** У виділеного вузла закріплений output. */
+  protected readonly selectedPinned = computed(() => {
+    const node = this.selectedNode();
+    return !!node && Object.hasOwn(this.definition()?.pinData ?? {}, node.id);
   });
   protected readonly runStatuses = computed(() => nodeStatuses(this.testRun()));
   protected readonly running = computed(() => isRunning(this.testRun()));
@@ -429,6 +450,35 @@ export class WorkflowEditorPage implements OnInit {
    * виконання через Api і стежити за ним через SSE — статуси вузлів на канвасі, кроки в панелі.
    */
   protected runWorkflow(): void {
+    this.launch({});
+  }
+
+  /**
+   * «Виконати вузол» (F2-21): лише цей вузол і його попередники; попередники з останнього запуску не виконуються вдруге —
+   * їхні виходи йдуть як `runData`. Кроки інших вузлів попереднього запуску лишаються на канвасі.
+   */
+  protected runNode(nodeId: string): void {
+    const def = this.definition();
+    if (def) this.launch(singleNodeRequest(def, this.testRun(), nodeId), this.testRun()?.steps);
+  }
+
+  /** Закріпити output (вихід 0) останнього запуску вузла: далі тестові запуски віддають його, не виконуючи вузол. */
+  protected pin(nodeId: string): void {
+    const def = this.definition();
+    const step = this.testRun()?.steps.get(nodeId);
+    if (!def || step?.status !== 'success') return;
+    this.changed({ ...def, pinData: { ...def.pinData, [nodeId]: step.output[0] ?? [] } });
+  }
+
+  protected unpin(nodeId: string): void {
+    const def = this.definition();
+    if (!def || !Object.hasOwn(def.pinData ?? {}, nodeId)) return;
+    const pinData = { ...def.pinData };
+    delete pinData[nodeId];
+    this.changed({ ...def, pinData });
+  }
+
+  private launch(request: StartExecutionRequest, previous?: TestRun['steps']): void {
     const id = this.workflow()?.id;
     if (!id || this.running()) return;
     this.stopRun();
@@ -438,11 +488,11 @@ export class WorkflowEditorPage implements OnInit {
       .pipe(
         switchMap((saved) =>
           saved
-            ? this.executions.start(id)
+            ? this.executions.start(id, request)
             : throwError(() => new Error($localize`:@@workfloweditor.run.unsaved:Сценарій не збережено — виправте помилки, щоб виконати.`)),
         ),
         switchMap((started) => {
-          this.testRun.set(startedRun(started.id, started.state));
+          this.testRun.set(startedRun(started.id, started.state, previous));
           return this.executions.events(started.id);
         }),
       )

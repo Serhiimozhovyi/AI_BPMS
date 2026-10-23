@@ -421,6 +421,96 @@ public sealed class WorkflowExecutorTests
     }
 
     [Fact]
+    public async Task DestinationNodeRunsOnlyItAndItsAncestors()
+    {
+        var g = new TestGraph()
+            .Node("t", Trigger)
+            .Node("a", Pass)
+            .Node("b", Pass)
+            .Node("c", Pass)
+            .Edge("t", "a")
+            .Edge("a", "b")
+            .Edge("t", "c");
+
+        var result = await g.RunAsync(r => r with { DestinationNodeId = "a" });
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        Assert.Equal(["t", "a"], result.Steps.Select(s => s.NodeId));
+        Assert.Equal([0], Ns(result.OutputOf("a")));
+    }
+
+    [Fact]
+    public async Task DestinationNodeIsExecutedEvenIfPinned()
+    {
+        var g = new TestGraph()
+            .Node("t", Trigger)
+            .Node("a", Pass)
+            .Edge("t", "a");
+        g.Workflow.PinData["a"] = [ItemOf(new JsonObject { ["n"] = 42 })];
+
+        var single = await g.RunAsync(r => r with { DestinationNodeId = "a" });
+        var full = await g.RunAsync();
+
+        Assert.Equal([0], Ns(single.OutputOf("a")));
+        Assert.Equal([42], Ns(full.OutputOf("a")));
+    }
+
+    [Fact]
+    public async Task RunDataReplacesOutputsOnAllPortsAndOverridesPinData()
+    {
+        var g = new TestGraph()
+            .Node("t", Trigger)
+            .Node("if", If)
+            .Node("a", Pass)
+            .Edge("t", "if")
+            .Edge("if", "a", output: 1);
+        g.Workflow.PinData["t"] = [ItemOf(new JsonObject { ["n"] = 42 })];
+        var runData = new Dictionary<string, Item[][]>
+        {
+            ["t"] = [[ItemOf(new JsonObject { ["n"] = 0 })]],
+            // Зайвий порт відкидається; вихід 1 (false) іде на «a».
+            ["if"] = [[], [ItemOf(new JsonObject { ["n"] = 9 })], [ItemOf(new JsonObject { ["n"] = 100 })]],
+        };
+
+        var result = await g.RunAsync(r => r with { DestinationNodeId = "a", RunData = runData });
+
+        Assert.Equal(["t", "if", "a"], result.Steps.Select(s => s.NodeId));
+        Assert.All(result.Steps, s => Assert.Equal(StepStatus.Success, s.Status));
+        Assert.Equal(2, result.Steps.Single(s => s.NodeId == "if").Output.Length);
+        Assert.Equal([0], Ns(result.Steps.Single(s => s.NodeId == "t").Output[0]));
+        Assert.Equal([9], Ns(result.OutputOf("a")));
+        Assert.Equal(0, ((FuncNode)g.Registry.Resolve(Trigger, 1)).Calls);
+        Assert.Equal(0, ((FuncNode)g.Registry.Resolve(If, 1)).Calls);
+    }
+
+    [Fact]
+    public async Task RunDataIsIgnoredOutsideManualMode()
+    {
+        var g = new TestGraph()
+            .Node("t", Trigger)
+            .Node("a", Pass)
+            .Edge("t", "a");
+        var runData = new Dictionary<string, Item[][]> { ["t"] = [[ItemOf(new JsonObject { ["n"] = 5 })]] };
+
+        var result = await g.RunAsync(r => r with { Mode = ExecutionMode.Trigger, RunData = runData });
+
+        Assert.Equal([0], Ns(result.OutputOf("a")));
+    }
+
+    [Fact]
+    public async Task UnreachableDestinationIsRejected()
+    {
+        var g = new TestGraph()
+            .Node("t1", Trigger)
+            .Node("t2", Trigger)
+            .Node("a", Pass)
+            .Edge("t2", "a");
+
+        await Assert.ThrowsAsync<EngineException>(() => g.RunAsync(r => r with { StartNodeId = "t1", DestinationNodeId = "a" }));
+        await Assert.ThrowsAsync<EngineException>(() => g.RunAsync(r => r with { DestinationNodeId = "ghost" }));
+    }
+
+    [Fact]
     public async Task StartNodeAndItemsSelectTrigger()
     {
         var g = new TestGraph()

@@ -46,6 +46,41 @@ public sealed class ExecutionWorkerTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task SingleMcpToolNode_RunsOnDataOfPreviousRun()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var oneC = Workflows.FakeServer("1С (мок)", "1c");
+        var telegram = Workflows.FakeServer("Telegram (мок)", "telegram");
+        await using (var db = worker.Db.CreateDbContext())
+        {
+            db.McpServers.AddRange(oneC, telegram);
+            await db.SaveChangesAsync();
+        }
+
+        var (workflowId, versionId) = await worker.SaveWorkflowAsync(Workflows.Telegram1C(oneC.Id, telegram.Id));
+        static Item[][] Output(string json) => [[new Item { Json = JsonNode.Parse(json)!.AsObject() }]];
+        var runData = new Dictionary<string, Item[][]>
+        {
+            ["n_webhook"] = Output("""{ "body": { "message": { "chat": { "id": 77 }, "text": "x" } } }"""),
+            ["n_llm"] = Output("""{ "customer": "Петренко", "lines": [] }"""),
+            ["n_1c"] = Output("""{ "number": 777 }"""),
+        };
+        var executionId = await worker.LaunchAsync(workflowId, versionId, destinationNodeId: "n_reply", runData: runData);
+
+        await worker.StartAsync();
+        var execution = await worker.WaitForFinalAsync(executionId);
+
+        Assert.True(execution.Status == ExecutionStatuses.Success, execution.Error);
+        var steps = await worker.StepsAsync(executionId);
+        Assert.Equal(["n_webhook", "n_llm", "n_1c", "n_reply"], steps.Select(s => s.NodeId));
+        // Вихід 1С — з попереднього запуску (мок 1С не викликався), $node["Нова заявка"] — теж.
+        Assert.Equal(777, JsonNode.Parse(steps[2].Output!)![0]![0]!["json"]!["number"]!.GetValue<int>());
+        var reply = JsonNode.Parse(steps[^1].Output!)![0]![0]!["json"]!;
+        Assert.Equal(77, reply["chatId"]!.GetValue<long>());
+        Assert.Equal("Замовлення №777 створено", reply["text"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task CancelRequest_StopsRunningExecution()
     {
         await using var worker = await WorkerHarness.CreateAsync(postgres);
