@@ -375,7 +375,7 @@
 - DoD: тести проти мок-OData (CSDL + дані у тестах): `create_order` робить очікувані запити і повертає `{ number }`; `sales_report` → `{ result: [...] }`; помилки автентифікації → `isError`; мок `--mock 1c` із `FakeServer` лишається для прикладів і CI.
 
 ### F3-15 · Конектор Microsoft Graph (пошта, Teams)
-- model: `sonnet` · status: `in-progress` · depends: F3-10
+- model: `sonnet` · status: `review #64` · depends: F3-10
 - Що: `connectors/msgraph/` на шаблоні, tools вручну (Graph OpenAPI завеликий для генератора): автентифікація client credentials (`TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, токен кешується); `list_messages { mailbox, folder?, filter?, since?, top? }` (→ `{ result }`, для `mcp.poll` `keyField = id`), `get_message { mailbox, id }`, `list_attachments`/`get_attachment` (вміст як `resource`-блок → binary item), `send_mail { from, to[], subject, html, attachments? }`, `send_teams_message { teamId, channelId, html }`; README: реєстрація застосунку в Entra і потрібні application permissions.
 - DoD: тести проти in-process фейку Graph і token endpoint (успіх, 401 → повторне отримання токена один раз, 429 з `Retry-After` → `isError`); секрет і токен не потрапляють у відповіді й помилки.
 
