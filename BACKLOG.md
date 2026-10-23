@@ -319,7 +319,7 @@
 - DoD: тести через хелпер F3-03: створити → валідувати → оновити → прочитати (round-trip невідомих полів); `WorkflowValidationException` → `isError` з `errors[]` і кодами; viewer-ключ: читання так, `create_workflow` → `isError` з `FORBIDDEN`; 409 версії → `WORKFLOW_VERSION_CONFLICT`.
 
 ### F3-05 · `/mcp`: tools виконань і resource `openbp://executions/{id}`
-- model: `sonnet` · status: `in-progress agent/F3-05-mcp-execution-tools` · depends: F3-03
+- model: `sonnet` · status: `review #54` · depends: F3-03
 - Що: tools над `IExecutionService`: `run_workflow { id, startNodeId?, startItems?, wait? }` — `wait: true` (за замовчуванням, до 60 с або `timeoutSec` аргументу) чекає фінального стану через `IExecutionEventSource` і віддає `ExecutionDetail` з кроками; `get_execution { id }`, `list_executions { workflowId?, status?, page? }`, `cancel_execution { id }`; resource `openbp://executions/{id}` — знімок деталей (підписки на ресурси — поза MVP).
 - DoD: тести — запуск сценарію з `pinData` на FakeServer-моках: `run_workflow` з `wait` повертає `success` і кроки без секретів; без `wait` — `queued` і далі `get_execution`; viewer не запускає; невідомий id → `isError` `NOT_FOUND`.
 
