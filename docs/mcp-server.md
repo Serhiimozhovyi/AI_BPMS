@@ -65,7 +65,8 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 
 ## 2. Tools
 
-Усі відповіді — `structuredContent` (і той самий JSON текстом). Дані кроків виконань уже очищені від секретів
+Усі відповіді — `structuredContent` (і той самий JSON текстом), що відповідає `outputSchema` tool'а; порожні поля
+приходять як `null`, а не пропускаються (клієнти на TypeScript SDK перевіряють відповідь за схемою). Дані кроків виконань уже очищені від секретів
 (`architecture.md` §8); `config` конекторів і credentials у відповіді не потрапляють ніколи.
 
 | Tool | Роль | Аргументи | Що повертає |

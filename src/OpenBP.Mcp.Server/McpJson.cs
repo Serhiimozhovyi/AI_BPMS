@@ -6,8 +6,9 @@ using OpenBP.Application.Executions;
 namespace OpenBP.Mcp.Server;
 
 /// <summary>
-/// JSON відповідей MCP-сервера: camelCase, переліки рядками, без <c>null</c>-полів — як у REST; стани виконань — snake_case
-/// (<c>timed_out</c>), як у БД і REST.
+/// JSON відповідей MCP-сервера: camelCase, переліки рядками; стани виконань — snake_case (<c>timed_out</c>), як у БД і REST.
+/// <c>null</c>-поля пишуться: <c>outputSchema</c> tools робить nullable-властивості записів обов'язковими, і клієнти на
+/// TypeScript SDK (Claude Desktop, Claude Code) відкидають <c>structuredContent</c> без них.
 /// </summary>
 public static class McpJson
 {
@@ -18,7 +19,6 @@ public static class McpJson
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
         options.Converters.Add(new JsonStringEnumConverter<ExecutionState>(JsonNamingPolicy.SnakeCaseLower));

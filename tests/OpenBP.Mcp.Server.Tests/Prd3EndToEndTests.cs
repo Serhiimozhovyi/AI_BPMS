@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Json.Schema;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using OpenBP.Application.Auth;
@@ -19,10 +20,23 @@ public class Prd3EndToEndTests(McpServerFactory mcp)
 {
     private static JsonNode Structured(CallToolResult result) => JsonNode.Parse(result.StructuredContent!.Value.GetRawText())!;
 
+    /// <summary>
+    /// Виклик tool'а, як його бачить клієнт на TypeScript SDK (Claude Desktop, Claude Code): <c>structuredContent</c> успішного
+    /// результату має відповідати <c>outputSchema</c> tool'а, інакше клієнт відкидає відповідь.
+    /// </summary>
     private static async Task<JsonNode> CallAsync(McpClient client, string tool, Dictionary<string, object?> arguments)
     {
         var result = await client.CallToolAsync(tool, arguments);
         Assert.True(result.IsError != true, $"{tool}: {Structured(result).ToJsonString()}");
+
+        var outputSchema = (await client.ListToolsAsync()).Single(t => t.Name == tool).ProtocolTool.OutputSchema;
+        Assert.NotNull(outputSchema);
+        var evaluation = JsonSchema.FromText(outputSchema.Value.GetRawText())
+            .Evaluate(result.StructuredContent!.Value, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        var violations = (evaluation.Details ?? [evaluation])
+            .Where(d => !d.IsValid && d.Errors is not null)
+            .SelectMany(d => d.Errors!.Select(e => $"{d.InstanceLocation}: {e.Value}"));
+        Assert.True(evaluation.IsValid, $"{tool}: structuredContent не відповідає outputSchema: {string.Join("; ", violations)}");
         return Structured(result);
     }
 
