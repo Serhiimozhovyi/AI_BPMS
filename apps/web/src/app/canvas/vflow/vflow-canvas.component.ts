@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { Edge, Node, Vflow, createEdges, createNodes } from 'ngx-vflow';
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, untracked } from '@angular/core';
+import { Connection, ConnectionSettings, Edge, Node, Vflow, createEdges, createNodes } from 'ngx-vflow';
+import { CanvasSelection, EMPTY_SELECTION, NewConnection } from '../canvas-edit';
 import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition } from '../canvas-model';
 import { groupLabel } from '../palette';
 
@@ -8,7 +9,14 @@ interface NodeData {
   color: string;
   groupLabel: string;
   height: number;
+  /** Помилки валідації з Api для цього вузла. */
+  errors: readonly string[];
 }
+
+/** Помилки валідації за id вузла. */
+export type NodeErrors = ReadonlyMap<string, readonly string[]>;
+
+const NO_ERRORS: NodeErrors = new Map();
 
 export const NODE_WIDTH = 220;
 const MIN_NODE_HEIGHT = 72;
@@ -34,6 +42,12 @@ export function outputHandle(index: number): string {
   return `out-${index}`;
 }
 
+/** Індекс порту з id `in-N`/`out-N`; інший id — `-1`. */
+export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): number {
+  const match = handle ? new RegExp(`^${prefix}-(\\d+)$`).exec(handle) : null;
+  return match ? Number(match[1]) : -1;
+}
+
 /**
  * Рендер {@link CanvasModel} на ngx-vflow (ADR-003): картка вузла через `ng-template[nodeHtml]`, порти через
  * `<handle>`, drag/zoom/pan з коробки. Знає лише про бібліотеку; формат workflow — у `CanvasComponent`.
@@ -50,13 +64,20 @@ export function outputHandle(index: number): string {
       [optimization]="{ virtualization: virtualization() }"
       background="#f4f6f8"
       [snapGrid]="[10, 10]"
+      [connection]="connectionSettings"
       (nodeDragEnd)="dragEnded()"
+      (connect)="connected($event)"
+      (nodesChanges.select)="selectionChanged()"
+      (edgesChanges.select)="selectionChanged()"
     >
       <ng-template nodeHtml let-ctx>
         <div
           class="node"
+          selectable
           [class.selected]="ctx.selected()"
           [class.disabled]="ctx.data().node.disabled"
+          [class.invalid]="ctx.data().errors.length > 0"
+          [attr.data-invalid]="ctx.data().errors.length > 0 ? true : null"
           [style.--node-color]="ctx.data().color"
           [style.height.px]="ctx.data().height"
           [attr.data-node-id]="ctx.node.id"
@@ -79,6 +100,11 @@ export function outputHandle(index: number): string {
           }
           <div class="node__head">
             <span class="node__group">{{ ctx.data().groupLabel }}</span>
+            @if (ctx.data().errors.length > 0) {
+              <span class="node__errors" data-testid="node-errors" role="img" [title]="ctx.data().errors.join('\n')"
+                >! {{ ctx.data().errors.length }}</span
+              >
+            }
           </div>
           <div class="node__name" [title]="ctx.data().node.name">{{ ctx.data().node.name }}</div>
           <div class="node__type" [title]="ctx.data().node.subtitle">{{ ctx.data().node.subtitle }}</div>
@@ -127,13 +153,29 @@ export function outputHandle(index: number): string {
       box-shadow: 0 0 0 2px var(--node-color);
     }
 
+    .node.invalid {
+      border-color: #c62828;
+      box-shadow: 0 0 0 2px rgb(198 40 40 / 0.35);
+    }
+
     .node.disabled {
       opacity: 0.55;
       border-style: dashed;
     }
 
     .node__head {
+      display: flex;
+      justify-content: space-between;
       font-size: 11px;
+    }
+
+    .node__errors {
+      padding: 0 6px;
+      border-radius: 8px;
+      background: #c62828;
+      color: #fff;
+      font-weight: 600;
+      cursor: help;
     }
 
     .node__group {
@@ -187,11 +229,34 @@ export class VflowCanvasComponent {
   /** Віртуалізація viewport'у: ngx-vflow рендерить лише видимі вузли (ADR-003: увімкнено за замовчуванням). */
   readonly virtualization = input(true);
 
+  /** Помилки валідації за id вузла — вузол підсвічується, текст у підказці. */
+  readonly nodeErrors = input<NodeErrors>(NO_ERRORS);
+
+  /** Виділення (вузли за id, ребра за індексом у `connections`); змінюється і ззовні (вставка, видалення). */
+  readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
+
   /** Вузли, які користувач перетягнув у нову позицію (після відпускання миші). */
   readonly nodesMoved = output<NodePosition[]>();
 
-  protected readonly nodes = computed<Node<NodeData>[]>(() =>
-    createNodes<NodeData>(
+  /** Користувач з'єднав вихід одного вузла із входом іншого. */
+  readonly connectionCreated = output<NewConnection>();
+
+  /** Користувач змінив виділення (клік, рамка, Ctrl+клік). */
+  readonly selectionChange = output<CanvasSelection>();
+
+  /** Лише вихід → вхід різних вузлів (цикл на себе формат забороняє). */
+  protected readonly connectionSettings: ConnectionSettings = {
+    curve: 'bezier',
+    marker: { type: 'arrow-closed' },
+    validator: (c) =>
+      c.source !== c.target && handleIndex(c.sourceHandle, 'out') >= 0 && handleIndex(c.targetHandle, 'in') >= 0,
+  };
+
+  protected readonly nodes = computed<Node<NodeData>[]>(() => {
+    const errors = this.nodeErrors();
+    // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
+    const selected = new Set(untracked(this.selection).nodes);
+    return createNodes<NodeData>(
       this.model().nodes.map((n) => {
         const height = nodeHeight(n);
         return {
@@ -200,23 +265,26 @@ export class VflowCanvasComponent {
           point: { x: n.x, y: n.y },
           width: NODE_WIDTH,
           height,
-          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height },
+          selected: selected.has(n.id),
+          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [] },
         };
       }),
-    ),
-  );
+    );
+  });
 
   protected readonly edges = computed<Edge[]>(() => {
     const ports = new Map(this.model().nodes.map((n) => [n.id, n]));
+    const selected = new Set(untracked(this.selection).edges);
     return createEdges(
       this.model()
-        .edges.filter((e) => {
+        .edges.map((e, index) => ({ e, index }))
+        .filter(({ e }) => {
           // Ребро на неіснуючий вузол чи порт не малюється, але лишається в моделі (round-trip без втрат).
           const from = ports.get(e.source);
           const to = ports.get(e.target);
           return !!from && !!to && e.sourceOutput >= 0 && e.sourceOutput < from.outputs.length && e.targetInput >= 0 && e.targetInput < to.inputs.length;
         })
-        .map((e) => ({
+        .map(({ e, index }) => ({
           id: e.id,
           source: e.source,
           sourceHandle: outputHandle(e.sourceOutput),
@@ -224,9 +292,44 @@ export class VflowCanvasComponent {
           targetHandle: inputHandle(e.targetInput),
           curve: 'bezier' as const,
           markers: { end: { type: 'arrow-closed' as const } },
+          selected: selected.has(index),
+          data: { index },
         })),
     );
   });
+
+  constructor() {
+    // Виділення ззовні (вставка, видалення, undo) → сигнали `selected` наявних вузлів і ребер.
+    effect(() => {
+      const selection = this.selection();
+      const nodeIds = new Set(selection.nodes);
+      const edgeIndexes = new Set(selection.edges);
+      untracked(() => {
+        for (const node of this.nodes()) node.selected?.set(nodeIds.has(node.id));
+        for (const edge of this.edges()) edge.selected?.set(edgeIndexes.has(edgeIndex(edge)));
+      });
+    });
+  }
+
+  protected connected(c: Connection): void {
+    const sourceOutput = handleIndex(c.sourceHandle, 'out');
+    const targetInput = handleIndex(c.targetHandle, 'in');
+    if (sourceOutput < 0 || targetInput < 0 || c.source === c.target) return;
+    this.connectionCreated.emit({ source: c.source, sourceOutput, target: c.target, targetInput });
+  }
+
+  /** Виділення змінила бібліотека — читаємо його з сигналів `selected` і віддаємо назовні. */
+  protected selectionChanged(): void {
+    const nodes = this.nodes()
+      .filter((n) => n.selected?.())
+      .map((n) => n.id);
+    const edges = this.edges()
+      .filter((e) => e.selected?.())
+      .map(edgeIndex);
+    const current = this.selection();
+    if (sameItems(current.nodes, nodes) && sameItems(current.edges, edges)) return;
+    this.selectionChange.emit({ nodes, edges });
+  }
 
   protected dragEnded(): void {
     const model = new Map(this.model().nodes.map((n) => [n.id, n]));
@@ -257,6 +360,14 @@ export class VflowCanvasComponent {
     const step = height / (total + 1);
     return step * (index + 1);
   }
+}
+
+function edgeIndex(edge: Edge): number {
+  return (edge.data?.() as { index: number } | undefined)?.index ?? -1;
+}
+
+function sameItems<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
 /** Висота картки: мінімум 72 px, більше — якщо портів багато (`core.switch`). */

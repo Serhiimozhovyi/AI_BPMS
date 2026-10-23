@@ -8,6 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch=false",
     "lint": "ng lint",
+    "e2e": "playwright test",
     "test:watch": "ng test"
   },
   "private": true,
@@ -34,6 +35,7 @@
     "@angular/compiler-cli": "^22.2.0",
     "@angular/localize": "^22.2.3",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/d3-drag": "^3.0.7",
     "@types/d3-selection": "^3.0.12",

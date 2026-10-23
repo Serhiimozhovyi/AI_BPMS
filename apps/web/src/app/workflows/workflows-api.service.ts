@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE, PageResult } from '../connectors/connectors-api.service';
@@ -66,6 +66,25 @@ export interface WorkflowDetail {
   updatedAt: string;
 }
 
+/** `WorkflowValidationError` — `{ code, message, nodeId?, path? }` (docs/workflow-format.md, «Валідація при збереженні»). */
+export interface WorkflowValidationError {
+  code: string;
+  message: string;
+  nodeId?: string | null;
+  path?: string | null;
+}
+
+/** Помилки валідації з відповіді 422 (`errors` у ProblemDetails); інша помилка — порожній список. */
+export function validationErrorsOf(error: unknown): WorkflowValidationError[] {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 422) return [];
+  const errors = (error.error as { errors?: unknown } | null)?.errors;
+  if (!Array.isArray(errors)) return [];
+  return errors.filter(
+    (e): e is WorkflowValidationError =>
+      !!e && typeof e === 'object' && typeof (e as WorkflowValidationError).code === 'string' && typeof (e as WorkflowValidationError).message === 'string',
+  );
+}
+
 /** Фільтр списку (`search`, `active`). */
 export interface WorkflowListFilter {
   search?: string | null;
@@ -104,6 +123,11 @@ export class WorkflowsApiService {
 
   create(name: string): Observable<WorkflowDetail> {
     return this.http.post<WorkflowDetail>(this.base, emptyWorkflowDefinition(name));
+  }
+
+  /** `PUT /workflows/{id}` — зберегти визначення як нову версію; 422 — помилки валідації (див. {@link validationErrorsOf}). */
+  save(id: string, definition: WorkflowDefinition): Observable<WorkflowDetail> {
+    return this.http.put<WorkflowDetail>(this.url(id), definition);
   }
 
   rename(id: string, name: string): Observable<WorkflowDetail> {

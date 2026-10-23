@@ -4,20 +4,32 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, catchError, forkJoin, map, of, switchMap, tap } from 'rxjs';
+import { Autosave } from '../../canvas/autosave';
+import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../../canvas/canvas-edit';
 import { CanvasComponent } from '../../canvas/canvas.component';
-import { PaletteItem, PaletteServer, addNode, buildPalette } from '../../canvas/palette';
+import { CanvasClipboardService } from '../../canvas/clipboard.service';
+import { EditHistory } from '../../canvas/edit-history';
+import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../../canvas/palette';
 import { PaletteComponent } from '../../canvas/palette.component';
 import { ConnectorsApiService, apiErrorMessage } from '../../connectors/connectors-api.service';
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowDetail, WorkflowsApiService } from '../../workflows/workflows-api.service';
 
+/** Що зберігає автозбереження: визначення разом з id сценарію, якому воно належить. */
+interface SaveRequest {
+  id: string;
+  definition: WorkflowDefinition;
+}
+
 /**
- * `/workflows/:id` — редактор сценарію (F2-16): сценарій з Api на канвасі, палітра `core.*` і tools
- * MCP-серверів, додавання вузла. Збереження змін — автозбереження F2-17.
+ * `/workflows/:id` — редактор сценарію: сценарій з Api на канвасі, палітра `core.*` і tools MCP-серверів (F2-16);
+ * з'єднання портів, видалення, копіювання/вставка, переміщення, undo/redo і автозбереження кожної зміни в нову
+ * версію з помилками валідації на вузлах (F2-17).
  */
 @Component({
   selector: 'app-workflow-editor-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:keydown)': 'keydown($event)' },
   imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent],
   template: `
     <section class="editor">
@@ -31,10 +43,42 @@ import { WorkflowDefinition, WorkflowDetail, WorkflowsApiService } from '../../w
             вузлів: {{ def.nodes.length }} · ребер: {{ def.connections.length }}
           </span>
         }
-        @if (dirty()) {
-          <span class="editor__dirty" data-testid="dirty" i18n="@@workfloweditor.dirty">Є незбережені зміни</span>
+        @if (definition()) {
+          <span class="editor__tools">
+            <button mat-button type="button" data-testid="undo" [disabled]="!canUndo()" (click)="undo()" i18n-title="@@workfloweditor.undo.hint" title="Скасувати (Ctrl+Z)" i18n="@@workfloweditor.undo">Скасувати</button>
+            <button mat-button type="button" data-testid="redo" [disabled]="!canRedo()" (click)="redo()" i18n-title="@@workfloweditor.redo.hint" title="Повторити (Ctrl+Shift+Z)" i18n="@@workfloweditor.redo">Повторити</button>
+            <button mat-button type="button" data-testid="copy" [disabled]="!hasNodeSelection()" (click)="copy()" i18n-title="@@workfloweditor.copy.hint" title="Копіювати (Ctrl+C)" i18n="@@workfloweditor.copy">Копіювати</button>
+            <button mat-button type="button" data-testid="paste" [disabled]="!canPaste()" (click)="paste()" i18n-title="@@workfloweditor.paste.hint" title="Вставити (Ctrl+V)" i18n="@@workfloweditor.paste">Вставити</button>
+            <button mat-button type="button" data-testid="delete" [disabled]="!hasSelection()" (click)="deleteSelected()" i18n-title="@@workfloweditor.delete.hint" title="Видалити (Delete)" i18n="@@workfloweditor.delete">Видалити</button>
+          </span>
+        }
+        @switch (saveStatus()) {
+          @case ('pending') {
+            <span class="editor__dirty" data-testid="dirty" data-status="pending" i18n="@@workfloweditor.dirty">Є незбережені зміни</span>
+          }
+          @case ('saving') {
+            <span class="editor__dirty" data-testid="dirty" data-status="saving" i18n="@@workfloweditor.saving">Збереження…</span>
+          }
+          @case ('error') {
+            <span class="editor__save-error" data-testid="dirty" data-status="error" i18n="@@workfloweditor.saveError">Не збережено</span>
+          }
+          @case ('saved') {
+            <span class="editor__saved" data-testid="saved" i18n="@@workfloweditor.saved">Збережено · версія {{ workflow()?.version }}</span>
+          }
         }
       </header>
+      @if (saveError(); as message) {
+        <div role="alert" class="editor__errors" data-testid="save-error">
+          <p class="m-0">{{ message }}</p>
+          @if (generalErrors().length > 0) {
+            <ul class="m-0">
+              @for (e of generalErrors(); track $index) {
+                <li>{{ e.message }}</li>
+              }
+            </ul>
+          }
+        </div>
+      }
       @if (loading()) {
         <mat-progress-bar mode="indeterminate" />
       }
@@ -50,7 +94,14 @@ import { WorkflowDefinition, WorkflowDetail, WorkflowsApiService } from '../../w
             <app-palette [sections]="palette()" (pick)="add($event)" />
           </aside>
           <div class="editor__canvas">
-            <app-canvas [definition]="def" [descriptors]="descriptors()" (definitionChange)="changed($event)" />
+            <app-canvas
+              [definition]="def"
+              [descriptors]="descriptors()"
+              [errors]="validationErrors()"
+              [selection]="selection()"
+              (definitionChange)="changed($event)"
+              (selectionChange)="selection.set($event)"
+            />
           </div>
         </div>
       }
@@ -68,6 +119,29 @@ import { WorkflowDefinition, WorkflowDetail, WorkflowsApiService } from '../../w
       align-items: center;
       gap: 16px;
       padding: 8px 16px;
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    .editor__tools {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+
+    .editor__saved {
+      font-size: 13px;
+      opacity: 0.6;
+    }
+
+    .editor__save-error {
+      font-size: 13px;
+      color: var(--mat-sys-error);
+    }
+
+    .editor__errors {
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--mat-sys-error);
       border-bottom: 1px solid var(--mat-sys-outline-variant);
     }
 
@@ -113,6 +187,7 @@ export class WorkflowEditorPage implements OnInit {
   private readonly nodes = inject(NodesApiService);
   private readonly connectors = inject(ConnectorsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly clipboard = inject(CanvasClipboardService);
 
   protected readonly defaultTitle = $localize`:@@workfloweditor.title:Редактор сценарію`;
 
@@ -123,9 +198,34 @@ export class WorkflowEditorPage implements OnInit {
   protected readonly definition = signal<WorkflowDefinition | null>(null);
   protected readonly descriptors = signal<NodeTypeInfo[]>([]);
   private readonly servers = signal<PaletteServer[]>([]);
-  protected readonly dirty = signal(false);
+  protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
+
+  private readonly history = new EditHistory<WorkflowDefinition | null>(null);
+  private readonly autosave = new Autosave<SaveRequest, WorkflowDetail>(
+    (r) => this.workflows.save(r.id, r.definition),
+    (saved, r) => {
+      // Відповідь могла прийти вже після переходу на інший сценарій. Визначення не підміняємо відповіддю —
+      // користувач міг змінити його під час запиту; оновлюємо лише метадані (версію).
+      if (this.workflow()?.id === r.id) this.workflow.set({ ...saved, definition: r.definition });
+    },
+  );
 
   protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers()));
+  protected readonly canUndo = this.history.canUndo;
+  protected readonly canRedo = this.history.canRedo;
+  protected readonly canPaste = computed(() => this.clipboard.clipboard() !== null);
+  protected readonly hasNodeSelection = computed(() => this.selection().nodes.length > 0);
+  protected readonly hasSelection = computed(() => this.selection().nodes.length > 0 || this.selection().edges.length > 0);
+  protected readonly saveStatus = this.autosave.status;
+  protected readonly validationErrors = this.autosave.validationErrors;
+  protected readonly saveError = this.autosave.errorMessage;
+  /** Помилки валідації без вузла (ребра, налаштування) — у панелі над канвасом. */
+  protected readonly generalErrors = computed(() => this.validationErrors().filter((e) => !e.nodeId));
+
+  constructor() {
+    // Незбережені зміни не губляться при виході з редактора: відправляємо їх одразу.
+    this.destroyRef.onDestroy(() => this.autosave.flush());
+  }
 
   ngOnInit(): void {
     // Компонент перевикористовується при переході між сценаріями — перезавантажуємо за кожним :id.
@@ -133,11 +233,15 @@ export class WorkflowEditorPage implements OnInit {
       .pipe(
         map((p) => p.get('id') ?? ''),
         tap(() => {
+          // Зміни попереднього сценарію зберігаються до переходу; стан автозбереження — з нуля.
+          this.autosave.flush();
+          this.autosave.reset();
           this.loading.set(true);
           this.error.set(null);
           this.workflow.set(null);
           this.definition.set(null);
-          this.dirty.set(false);
+          this.history.reset(null);
+          this.selection.set(EMPTY_SELECTION);
         }),
         switchMap((id) =>
           forkJoin({ workflow: this.workflows.get(id), descriptors: this.nodes.list() }).pipe(
@@ -153,6 +257,7 @@ export class WorkflowEditorPage implements OnInit {
         if (loaded) {
           this.workflow.set(loaded.workflow);
           this.definition.set(loaded.workflow.definition);
+          this.history.reset(loaded.workflow.definition);
           this.descriptors.set(loaded.descriptors);
         }
         this.loading.set(false);
@@ -169,9 +274,75 @@ export class WorkflowEditorPage implements OnInit {
     this.changed(addNode(def, item));
   }
 
+  /** Зміна від користувача: новий крок історії й автозбереження. */
   protected changed(definition: WorkflowDefinition): void {
+    if (definition === this.definition()) return;
+    this.history.push(definition);
+    this.apply(definition);
+  }
+
+  protected undo(): void {
+    const definition = this.history.undo();
+    if (definition) this.apply(definition);
+  }
+
+  protected redo(): void {
+    const definition = this.history.redo();
+    if (definition) this.apply(definition);
+  }
+
+  protected deleteSelected(): void {
+    const def = this.definition();
+    if (!def) return;
+    const next = deleteSelection(def, this.selection());
+    this.selection.set(EMPTY_SELECTION);
+    this.changed(next);
+  }
+
+  protected copy(): void {
+    const def = this.definition();
+    const copied = def ? copySelection(def, this.selection()) : null;
+    if (copied) this.clipboard.set(copied);
+  }
+
+  protected paste(): void {
+    const def = this.definition();
+    const clipboard = this.clipboard.clipboard();
+    if (!def || !clipboard) return;
+    const { definition, nodeIds } = pasteClipboard(def, clipboard, randomNodeId, this.clipboard.nextPaste());
+    this.changed(definition);
+    this.selection.set({ nodes: nodeIds, edges: [] });
+  }
+
+  /** Гарячі клавіші редактора; у полях введення не перехоплюються. */
+  protected keydown(event: KeyboardEvent): void {
+    if (!this.definition() || isEditable(event.target)) return;
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    // Перехоплюємо лише доступну дію — інакше працює стандартна поведінка браузера (копіювання тексту тощо).
+    let action: (() => void) | null = null;
+    if (mod && key === 'z' && !event.shiftKey) action = this.canUndo() ? () => this.undo() : null;
+    else if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) action = this.canRedo() ? () => this.redo() : null;
+    else if (mod && key === 'c') action = this.hasNodeSelection() ? () => this.copy() : null;
+    else if (mod && key === 'v') action = this.canPaste() ? () => this.paste() : null;
+    else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) action = this.hasSelection() ? () => this.deleteSelected() : null;
+    if (!action) return;
+    event.preventDefault();
+    action();
+  }
+
+  /** Показує стан історії й ставить його на збереження; виділення лишається лише на наявних елементах. */
+  private apply(definition: WorkflowDefinition): void {
     this.definition.set(definition);
-    this.dirty.set(true);
+    const ids = new Set(definition.nodes.map((n) => n.id));
+    const selection = this.selection();
+    const nodes = selection.nodes.filter((id) => ids.has(id));
+    const edges = selection.edges.filter((i) => i < definition.connections.length);
+    if (nodes.length !== selection.nodes.length || edges.length !== selection.edges.length) {
+      this.selection.set({ nodes, edges });
+    }
+    const id = this.workflow()?.id;
+    if (id) this.autosave.schedule({ id, definition });
   }
 
   /** Конектори з закешованими tools; помилка не ламає редактор — палітра лишається з `core.*`. */
@@ -189,4 +360,9 @@ export class WorkflowEditorPage implements OnInit {
       }),
     );
   }
+}
+
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }

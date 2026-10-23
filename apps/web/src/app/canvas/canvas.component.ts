@@ -1,19 +1,28 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
-import { WorkflowDefinition } from '../workflows/workflows-api.service';
+import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workflows-api.service';
+import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
-import { VflowCanvasComponent } from './vflow/vflow-canvas.component';
+import { NodeErrors, VflowCanvasComponent } from './vflow/vflow-canvas.component';
 
 /**
- * Канвас сценарію з власним API (docs/architecture.md §7, ADR-003): вхід — `WorkflowDefinition` і дескриптори
- * вузлів, вихід — змінене визначення. Бібліотека канвасу (ngx-vflow) схована за `VflowCanvasComponent`,
- * тож її можна замінити, не чіпаючи редактор.
+ * Канвас сценарію з власним API (docs/architecture.md §7, ADR-003): вхід — `WorkflowDefinition`, дескриптори
+ * вузлів, виділення і помилки валідації; вихід — змінене визначення і виділення. Бібліотека канвасу (ngx-vflow)
+ * схована за `VflowCanvasComponent`, тож її можна замінити, не чіпаючи редактор.
  */
 @Component({
   selector: 'app-canvas',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [VflowCanvasComponent],
-  template: `<app-vflow-canvas [model]="model()" [virtualization]="virtualization()" (nodesMoved)="moved($event)" />`,
+  template: `<app-vflow-canvas
+    [model]="model()"
+    [virtualization]="virtualization()"
+    [nodeErrors]="nodeErrors()"
+    [selection]="selection()"
+    (nodesMoved)="moved($event)"
+    (connectionCreated)="connected($event)"
+    (selectionChange)="selectionChange.emit($event)"
+  />`,
   styles: `
     :host {
       display: block;
@@ -32,14 +41,39 @@ export class CanvasComponent {
   /** Віртуалізація viewport'у (ADR-003: увімкнено за замовчуванням). */
   readonly virtualization = input(true);
 
-  /** Нове визначення після змін на канвасі (переміщення вузлів). */
+  /** Помилки валідації з Api; ті, що мають `nodeId`, показуються на вузлах. */
+  readonly errors = input<readonly WorkflowValidationError[]>([]);
+
+  /** Виділені вузли й ребра. */
+  readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
+
+  /** Нове визначення після змін на канвасі (переміщення вузлів, нове ребро). */
   readonly definitionChange = output<WorkflowDefinition>();
+
+  /** Нове виділення після дій користувача на канвасі. */
+  readonly selectionChange = output<CanvasSelection>();
 
   private readonly index = computed(() => new DescriptorIndex(this.descriptors()));
 
   protected readonly model = computed(() => toCanvasModel(this.definition(), this.index()));
 
+  protected readonly nodeErrors = computed<NodeErrors>(() => {
+    const byNode = new Map<string, string[]>();
+    for (const e of this.errors()) {
+      if (!e.nodeId) continue;
+      const list = byNode.get(e.nodeId) ?? [];
+      list.push(e.message);
+      byNode.set(e.nodeId, list);
+    }
+    return byNode;
+  });
+
   protected moved(positions: NodePosition[]): void {
     this.definitionChange.emit(moveNodes(this.definition(), positions, this.index()));
+  }
+
+  protected connected(connection: NewConnection): void {
+    const next = connectNodes(this.definition(), connection);
+    if (next !== this.definition()) this.definitionChange.emit(next);
   }
 }

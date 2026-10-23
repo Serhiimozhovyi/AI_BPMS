@@ -11,6 +11,7 @@ npm run lint
 npm test          # одноразовий прогін Vitest; npm run test:watch — у режимі спостереження
 npm run build
 npm start         # dev-сервер на http://localhost:4200
+npm run e2e       # Playwright (e2e/*.e2e.ts); Api підміняється в тестах, браузер — npx playwright install chromium
 ```
 
 Маршрути (`docs/architecture.md` §7): `/workflows`, `/workflows/:id`, `/executions`, `/connectors`, `/credentials`, `/settings` — поки заглушки.
