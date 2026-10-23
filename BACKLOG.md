@@ -243,7 +243,7 @@
 - DoD: інтеграційний тест проти FakeServer `orders` з `itemsPath`: два спрацювання → друге віддає лише нові записи; стан переживає перезапуск.
 
 ### F2-13 · Api: конектори (MCP-сервери)
-- model: `sonnet` · status: `ready` · depends: F2-05
+- model: `sonnet` · status: `review #42` · depends: F2-05
 - Що: `ConnectorService` + REST з F2-00:
   - CRUD `mcp_servers` (stdio/http, `credential_id`);
   - discovery (`RefreshToolsAsync` → `tools_cache`, `tools_cached_at`), статус з'єднання;

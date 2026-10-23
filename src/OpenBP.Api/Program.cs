@@ -7,6 +7,7 @@ using OpenBP.Api.Auth;
 using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Nodes;
+using OpenBP.Application.Connectors;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Schedules;
 using OpenBP.Application.Webhooks;
@@ -35,7 +36,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<OpenBpExceptionHandler>();
 builder.Services.AddOpenBpAuthentication();
 
-// Реєстр MCP-серверів синхронізує з mcp_servers F2-13 (architecture.md §10.7); тут — для валідації mcp.* при збереженні.
+// Реєстр MCP-серверів процесу Api: синхронізується з mcp_servers через IConnectorService і при старті (architecture.md §10.7);
+// за його кешем tools валідуються mcp.* при збереженні.
 builder.Services.AddSingleton<IMcpServerRegistry>(_ => new McpServerRegistry());
 builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
     CoreNodes.All().Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>())).Concat(AiNodes.All())));
@@ -47,6 +49,10 @@ builder.Services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
 builder.Services.AddScoped<ICredentialProvider>(sp => new PostgresCredentialProvider(new CredentialStore(
     sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
 builder.Services.AddOpenBpWebhookServices();
+
+// Конектори (F2-13): CRUD mcp_servers, discovery, тестові виклики; реєстр заповнюється при старті.
+builder.Services.AddOpenBpConnectorServices();
+builder.Services.AddHostedService<ConnectorRegistryLoader>();
 
 // Розклади core.schedule (F2-11): Quartz у Postgres; планувальник живе в Api і стартує разом із ним.
 builder.Services.AddOpenBpScheduleServices();
@@ -60,7 +66,7 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints();
 app.MapWebhookEndpoints();
 
 app.Run();
