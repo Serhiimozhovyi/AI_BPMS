@@ -277,7 +277,7 @@
 - DoD: Vitest — форми для `core.set`, `core.if`, `mcp.tool` з FakeServer-схемою; зміни потрапляють у сценарій.
 
 ### F2-19 · Поле виразу і Monaco для Code
-- model: `sonnet` · status: `in-progress agent/F2-19-expression-field` · depends: F2-18
+- model: `sonnet` · status: `review #48` · depends: F2-18
 - Що: поле виразу з підказками `$json`, `$input`, `$node["…"]` (назви вузлів сценарію, поля з останнього тестового output), `$now`, `$env`, `$execution`; Monaco для `core.code`.
 - DoD: Vitest на підказки; `npm run lint|test|build` зелені.
 
