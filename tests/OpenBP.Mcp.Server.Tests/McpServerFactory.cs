@@ -55,6 +55,9 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
         }
     }
 
+    /// <summary>Папка файлового сховища воркера (<c>Storage:LocalPath</c>).</summary>
+    public string FilesRoot { get; } = Directory.CreateTempSubdirectory("openbp-mcp-files-").FullName;
+
     /// <summary>Адреса MCP-ендпойнта тестового хоста.</summary>
     public Uri McpEndpoint => new(Server.BaseAddress, "/mcp");
 
@@ -76,6 +79,7 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
 
         await base.DisposeAsync();
         await _container.DisposeAsync();
+        Directory.Delete(FilesRoot, recursive: true);
     }
 
     /// <summary>
@@ -98,6 +102,7 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
                 ["ConnectionStrings:Default"] = _container.GetConnectionString(),
                 ["Worker:PollInterval"] = "00:00:00.050",
                 ["Worker:HeartbeatInterval"] = "00:00:00.500",
+                ["Storage:LocalPath"] = FilesRoot,
                 ["Logging:LogLevel:Default"] = "Warning",
             });
             builder.Services.AddOpenBpWorker(builder.Configuration);
@@ -116,7 +121,7 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
     /// через REST адміністратором, як у продукті, — тож discovery виконується і tools потрапляють у реєстр Api, за яким
     /// валідуються вузли <c>mcp.*</c>.
     /// </summary>
-    /// <param name="mock"><c>1c</c> або <c>telegram</c>; <c>null</c> — загальні tools FakeServer (<c>echo</c>, <c>add</c>, <c>fail</c>…).</param>
+    /// <param name="mock"><c>1c</c>, <c>telegram</c> або <c>msgraph</c>; <c>null</c> — загальні tools FakeServer (<c>echo</c>, <c>add</c>, <c>fail</c>…).</param>
     /// <param name="credentialId">Credential зі змінними середовища.</param>
     public async Task<Guid> CreateMockConnectorAsync(string? mock, Guid? credentialId = null)
     {

@@ -219,10 +219,83 @@ public static class MockTelegramTools
 /// <summary>Результат <c>send_message</c>.</summary>
 public sealed record SentMessage(bool Ok, long ChatId, string Text);
 
-/// <summary>Мок Microsoft Graph для прикладу <c>examples/daily-report.json</c> (<c>--mock msgraph</c>).</summary>
+/// <summary>
+/// Мок Microsoft Graph (<c>--mock msgraph</c>) для прикладу <c>examples/daily-report.json</c> і наскрізного тесту PRD №3:
+/// дві вхідні листи (одна — «Рахунок» з PDF-вкладенням) і надсилання листа. Контракти — як у <c>connectors/msgraph</c>.
+/// </summary>
 [McpServerToolType]
 public static class MockGraphTools
 {
+    /// <summary>Id листа з рахунком.</summary>
+    public const string InvoiceMessageId = "AAMk-invoice-17";
+
+    /// <summary>Id вкладення листа з рахунком.</summary>
+    public const string InvoiceAttachmentId = "att-1";
+
+    /// <summary>Назва файлу вкладення.</summary>
+    public const string InvoiceFileName = "rakhunok-17.pdf";
+
+    /// <summary>Вміст «PDF» вкладення.</summary>
+    public static readonly byte[] InvoiceBytes = "%PDF-1.4 рахунок №17"u8.ToArray();
+
+    private static readonly MailMessage[] Inbox =
+    [
+        new(InvoiceMessageId, "Рахунок №17 від ТОВ Агро", new MailFrom(new MailAddress("ТОВ Агро", "agro@example.com")), "2026-10-23T08:15:00Z", true),
+        new("AAMk-hello-1", "Привітання", new MailFrom(new MailAddress("Олена", "olena@example.com")), "2026-10-23T09:00:00Z", false),
+    ];
+
+    /// <summary>Листи скриньки; <c>contains(subject,'…')</c> у <c>filter</c> відбирає за темою.</summary>
+    [McpServerTool(Name = "list_messages", Title = "Листи", UseStructuredContent = true)]
+    [Description("Повертає листи скриньки як { result: [...] }.")]
+    public static MailMessages ListMessages(
+        [Description("Скринька")] string mailbox,
+        [Description("Тека")] string? folder = null,
+        [Description("OData $filter")] string? filter = null)
+    {
+        var subject = filter is null ? null : System.Text.RegularExpressions.Regex.Match(filter, "contains\\(subject,\\s*'([^']*)'\\)") is { Success: true } m ? m.Groups[1].Value : null;
+        return new([.. Inbox.Where(message => subject is null || message.Subject.Contains(subject, StringComparison.OrdinalIgnoreCase))]);
+    }
+
+    /// <summary>Вкладення листа без вмісту.</summary>
+    [McpServerTool(Name = "list_attachments", Title = "Вкладення", UseStructuredContent = true)]
+    [Description("Повертає вкладення листа як { result: [...] }.")]
+    public static MailAttachments ListAttachments(
+        [Description("Скринька")] string mailbox,
+        [Description("Id листа")] string message_id) =>
+        new(message_id == InvoiceMessageId
+            ? [new MailAttachmentInfo(InvoiceAttachmentId, InvoiceFileName, "application/pdf", InvoiceBytes.Length, false)]
+            : []);
+
+    /// <summary>Вміст вкладення як <c>resource</c>-блок (у OpenBP — binary item).</summary>
+    [McpServerTool(Name = "get_attachment", Title = "Завантажити вкладення")]
+    [Description("Повертає вміст вкладення як embedded resource.")]
+    public static CallToolResult GetAttachment(
+        [Description("Скринька")] string mailbox,
+        [Description("Id листа")] string message_id,
+        [Description("Id вкладення")] string attachment_id)
+    {
+        if (message_id != InvoiceMessageId || attachment_id != InvoiceAttachmentId)
+        {
+            throw new McpException($"Вкладення {attachment_id} листа {message_id} не знайдено.");
+        }
+
+        return new CallToolResult
+        {
+            Content =
+            [
+                new EmbeddedResourceBlock
+                {
+                    Resource = new BlobResourceContents
+                    {
+                        Uri = $"msgraph://messages/{message_id}/attachments/{InvoiceFileName}",
+                        MimeType = "application/pdf",
+                        Blob = System.Text.Encoding.UTF8.GetBytes(Convert.ToBase64String(InvoiceBytes)),
+                    },
+                },
+            ],
+        };
+    }
+
     /// <summary>
     /// «Надсилає» лист. На відміну від справжнього конектора (<c>{ sent, from, to }</c>) повертає ще тему й тіло, щоб
     /// приклад і тести бачили, що саме пішло б адресату.
@@ -238,3 +311,31 @@ public static class MockGraphTools
 
 /// <summary>Результат <c>send_mail</c>.</summary>
 public sealed record SentMail(bool Sent, string From, string[] To, string Subject, string Html);
+
+/// <summary>Результат <c>list_messages</c>.</summary>
+public sealed record MailMessages([property: JsonPropertyName("result")] IReadOnlyList<MailMessage> Result);
+
+/// <summary>Лист (поля — як у Graph).</summary>
+public sealed record MailMessage(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("subject")] string Subject,
+    [property: JsonPropertyName("from")] MailFrom From,
+    [property: JsonPropertyName("receivedDateTime")] string ReceivedDateTime,
+    [property: JsonPropertyName("hasAttachments")] bool HasAttachments);
+
+/// <summary>Відправник листа.</summary>
+public sealed record MailFrom([property: JsonPropertyName("emailAddress")] MailAddress EmailAddress);
+
+/// <summary>Адреса.</summary>
+public sealed record MailAddress([property: JsonPropertyName("name")] string Name, [property: JsonPropertyName("address")] string Address);
+
+/// <summary>Результат <c>list_attachments</c>.</summary>
+public sealed record MailAttachments([property: JsonPropertyName("result")] IReadOnlyList<MailAttachmentInfo> Result);
+
+/// <summary>Вкладення без вмісту.</summary>
+public sealed record MailAttachmentInfo(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("contentType")] string ContentType,
+    [property: JsonPropertyName("size")] int Size,
+    [property: JsonPropertyName("isInline")] bool IsInline);
