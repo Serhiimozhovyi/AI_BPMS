@@ -21,6 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Api/OpenBP.Api.csproj" />
     <ProjectReference Include="../../src/OpenBP.Mcp.Server/OpenBP.Mcp.Server.csproj" />
+    <!-- run_workflow чекає на виконання: воркер у процесі тестів над тією самою БД; моки 1С/Telegram — stdio FakeServer. -->
+    <ProjectReference Include="../../src/OpenBP.Worker/OpenBP.Worker.csproj" Aliases="worker" />
+    <ProjectReference Include="../OpenBP.Mcp.Tests/FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>
 
 </Project>

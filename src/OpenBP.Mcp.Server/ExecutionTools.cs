@@ -1,0 +1,118 @@
+using System.ComponentModel;
+using ModelContextProtocol.Server;
+using OpenBP.Application.Executions;
+using OpenBP.Application.Paging;
+using OpenBP.Shared.Workflow;
+
+namespace OpenBP.Mcp.Server;
+
+/// <summary>Tools виконань (ADR-002) поверх <see cref="IExecutionService"/>; права — ті самі, що в REST.</summary>
+[McpServerToolType]
+public sealed class ExecutionTools
+{
+    /// <summary>Скільки чекати фінального стану в <c>run_workflow</c> за замовчуванням.</summary>
+    public const int DefaultWaitSec = 60;
+
+    /// <summary>Найбільше дозволене очікування в <c>run_workflow</c>.</summary>
+    public const int MaxWaitSec = 600;
+
+    /// <summary><c>run_workflow</c>.</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="events">Потік подій виконання.</param>
+    /// <param name="id">Сценарій.</param>
+    /// <param name="startNodeId">Тригер.</param>
+    /// <param name="startItems">Items тригера.</param>
+    /// <param name="wait">Чекати фінального стану.</param>
+    /// <param name="timeoutSec">Скільки чекати.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "run_workflow", Title = "Run workflow", Destructive = false, Idempotent = false, UseStructuredContent = true)]
+    [Description(
+        "Runs the current version of a workflow manually (nodes with pinData return their pinned items instead of executing). " +
+        "With wait=true (default) waits up to timeoutSec (default 60, max 600) for a final state and returns the execution with all steps; " +
+        "if the time runs out, returns the execution as it is then (state queued/running) — poll it with get_execution. " +
+        "With wait=false returns immediately in state queued. Step data is already scrubbed of secrets.")]
+    public static async Task<ExecutionDetail> RunWorkflow(
+        IExecutionService executions,
+        IExecutionEventSource events,
+        [Description("Workflow id.")] Guid id,
+        [Description("Trigger node id to start from; omit to start from every node without incoming connections.")] string? startNodeId = null,
+        [Description("Items the trigger fires with (e.g. a webhook body as [{\"json\": {...}}]); requires startNodeId.")] Item[]? startItems = null,
+        [Description("Wait for the execution to finish.")] bool wait = true,
+        [Description("How long to wait, in seconds (1–600).")] int timeoutSec = DefaultWaitSec,
+        CancellationToken ct = default)
+    {
+        var started = await executions.StartAsync(id, new StartExecutionRequest(startNodeId, startItems), ct).ConfigureAwait(false);
+        if (wait)
+        {
+            await WaitForFinalStateAsync(events, started.Id, TimeSpan.FromSeconds(Math.Clamp(timeoutSec, 1, MaxWaitSec)), ct).ConfigureAwait(false);
+        }
+
+        return await executions.GetAsync(started.Id, ct).ConfigureAwait(false);
+    }
+
+    /// <summary><c>get_execution</c>.</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "get_execution", Title = "Get execution", ReadOnly = true, UseStructuredContent = true)]
+    [Description("Returns an execution with its state, error and steps (input/output items per port of every executed node; same as the resource openbp://executions/{id}).")]
+    public static Task<ExecutionDetail> GetExecution(
+        IExecutionService executions,
+        [Description("Execution id.")] Guid id,
+        CancellationToken ct = default) =>
+        executions.GetAsync(id, ct);
+
+    /// <summary><c>list_executions</c>.</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="workflowId">Сценарій.</param>
+    /// <param name="status">Стан.</param>
+    /// <param name="page">Сторінка.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "list_executions", Title = "List executions", ReadOnly = true, UseStructuredContent = true)]
+    [Description("Lists executions without steps, most recently started first, 50 per page.")]
+    public static Task<PageResult<ExecutionSummary>> ListExecutions(
+        IExecutionService executions,
+        [Description("Only executions of this workflow.")] Guid? workflowId = null,
+        [Description("Only in this state: queued, running, cancelling, success, error, cancelled, timed_out.")] string? status = null,
+        [Description("Page number, starting at 1.")] int page = 1,
+        CancellationToken ct = default) =>
+        executions.ListAsync(
+            new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status)),
+            new PageRequest { Page = page },
+            ct);
+
+    /// <summary><c>cancel_execution</c>.</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "cancel_execution", Title = "Cancel execution", Destructive = true, Idempotent = true, UseStructuredContent = true)]
+    [Description(
+        "Cancels an execution: queued becomes cancelled at once, running becomes cancelling and stops at the worker's next heartbeat. " +
+        "Does nothing for a finished execution.")]
+    public static Task<ExecutionSummary> CancelExecution(
+        IExecutionService executions,
+        [Description("Execution id.")] Guid id,
+        CancellationToken ct = default) =>
+        executions.CancelAsync(id, ct);
+
+    /// <summary>Чекає фінального стану за потоком подій; вихід за <paramref name="timeout"/> — не помилка.</summary>
+    private static async Task WaitForFinalStateAsync(IExecutionEventSource events, Guid executionId, TimeSpan timeout, CancellationToken ct)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(timeout);
+        try
+        {
+            await foreach (var e in events.SubscribeAsync(executionId, afterStepId: null, deadline.Token).ConfigureAwait(false))
+            {
+                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsFinal(state))
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Час очікування вийшов — віддаємо виконання як є.
+        }
+    }
+}

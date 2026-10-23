@@ -1,15 +1,21 @@
+extern alias worker;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using OpenBP.Application.Auth;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using Testcontainers.PostgreSql;
+using worker::OpenBP.Worker;
 
 namespace OpenBP.Mcp.Server.Tests;
 
@@ -20,6 +26,8 @@ namespace OpenBP.Mcp.Server.Tests;
 public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16").Build();
+    private readonly SemaphoreSlim _workerLock = new(1, 1);
+    private IHost? _worker;
 
     static McpServerFactory()
     {
@@ -43,8 +51,77 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
 
     public new async Task DisposeAsync()
     {
+        if (_worker is not null)
+        {
+            await _worker.StopAsync();
+            _worker.Dispose();
+        }
+
         await base.DisposeAsync();
         await _container.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Запускає (один раз на фікстуру) воркер у процесі тестів над тією самою БД — ті самі сервіси, що в
+    /// <c>OpenBP.Worker</c>, з коротким інтервалом опитування черги.
+    /// </summary>
+    public async Task EnsureWorkerAsync()
+    {
+        await _workerLock.WaitAsync();
+        try
+        {
+            if (_worker is not null)
+            {
+                return;
+            }
+
+            var builder = Host.CreateApplicationBuilder();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Default"] = _container.GetConnectionString(),
+                ["Worker:PollInterval"] = "00:00:00.050",
+                ["Worker:HeartbeatInterval"] = "00:00:00.500",
+                ["Logging:LogLevel:Default"] = "Warning",
+            });
+            builder.Services.AddOpenBpWorker(builder.Configuration);
+            var host = builder.Build();
+            await host.StartAsync();
+            _worker = host;
+        }
+        finally
+        {
+            _workerLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Конектор stdio-моку FakeServer (<c>--mock 1c|telegram</c>) з необов'язковим credential (<c>{ "env": { … } }</c>):
+    /// через REST адміністратором, як у продукті, — тож discovery виконується і tools потрапляють у реєстр Api, за яким
+    /// валідуються вузли <c>mcp.*</c>.
+    /// </summary>
+    /// <param name="mock"><c>1c</c> або <c>telegram</c>.</param>
+    /// <param name="credentialId">Credential зі змінними середовища.</param>
+    public async Task<Guid> CreateMockConnectorAsync(string mock, Guid? credentialId = null)
+    {
+        var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host : "dotnet";
+        var (_, key) = await CreateApiKeyAsync(UserRole.Admin);
+        using var http = CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key.Key);
+        var response = await http.PostAsJsonAsync("/api/v1/connectors", new
+        {
+            name = $"{mock} (мок) {Guid.NewGuid():N}",
+            transport = "stdio",
+            config = new { command = dotnet, arguments = new[] { Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll"), "--mock", mock } },
+            credentialId,
+        });
+        response.EnsureSuccessStatusCode();
+        var created = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
+        if ((string?)created["summary"]!["status"] != "ok")
+        {
+            throw new InvalidOperationException($"Мок {mock} не пройшов discovery: {created.ToJsonString()}");
+        }
+
+        return Guid.Parse((string)created["summary"]!["id"]!);
     }
 
     public OpenBpDbContext CreateDbContext() =>
