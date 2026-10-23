@@ -9,6 +9,7 @@ using OpenBP.Api.Errors;
 using OpenBP.Api.Nodes;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Nodes;
 using OpenBP.Application.Schedules;
 using OpenBP.Application.Webhooks;
 using OpenBP.Application.Workflows;
@@ -42,6 +43,7 @@ builder.Services.AddSingleton<IMcpServerRegistry>(_ => new McpServerRegistry());
 builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
     CoreNodes.All().Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>())).Concat(AiNodes.All())));
 builder.Services.AddOpenBpWorkflowServices();
+builder.Services.AddOpenBpNodeServices();
 builder.Services.AddOpenBpExecutionServices();
 
 // Credentials для auth webhook-ів (F2-10): ключ OPENBP_ENCRYPTION_KEY читається при першому запиті до webhook-а з auth.
@@ -66,7 +68,7 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 
 app.Run();

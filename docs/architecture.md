@@ -152,6 +152,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `IExecutionLauncher` | webhook (F2-10), Quartz (F2-11), `mcp.poll` (F2-12), `IExecutionService` | створює рядок `executions` і job без перевірки ролей — внутрішній вхід для тригерів |
 | `IExecutionEventSource` | SSE `/executions/{id}/events`, MCP-ресурс `openbp://executions/{id}` | потік подій кроків виконання |
 | `IConnectorService` | REST, MCP `describe_connectors`, UI | CRUD `mcp_servers`, discovery, тестовий виклик tool'а |
+| `INodeService` | REST `GET /nodes`, UI (палітра канвасу) | дескриптори зареєстрованих вузлів (`NodeDescriptor`), viewer |
 
 Сигнатури — у коді (`OpenBP.Application`), вони є джерелом правди; тут — лише правила.
 

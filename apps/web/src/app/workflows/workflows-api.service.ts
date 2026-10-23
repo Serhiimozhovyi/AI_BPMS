@@ -12,9 +12,32 @@ export interface WorkflowSummary {
   updatedAt: string;
 }
 
+/** Вузол сценарію (docs/workflow-format.md, «Обов'язкові поля»). Невідомі поля зберігаються як є. */
+export interface WorkflowNode {
+  id: string;
+  name: string;
+  type: string;
+  typeVersion: number;
+  position: [number, number];
+  parameters: Record<string, unknown>;
+  timeoutSec?: number;
+  retry?: { maxTries: number; waitMs: number; [extra: string]: unknown };
+  continueOnFail?: boolean;
+  disabled?: boolean;
+  notes?: string;
+  [extra: string]: unknown;
+}
+
+/** Ребро: вихід `from.output` вузла `from.node` → вхід `to.input` вузла `to.node` (індекси від 0). */
+export interface WorkflowConnection {
+  from: { node: string; output: number; [extra: string]: unknown };
+  to: { node: string; input: number; [extra: string]: unknown };
+  [extra: string]: unknown;
+}
+
 /**
- * Визначення сценарію (docs/workflow-format.md). Список сценаріїв працює лише з обов'язковими полями верхнього рівня;
- * повний тип вузлів з'явиться разом із канвасом.
+ * Визначення сценарію (docs/workflow-format.md). Невідомі поля на будь-якому рівні дозволені —
+ * клієнт не відкидає їх при збереженні.
  */
 export interface WorkflowDefinition {
   formatVersion: 1;
@@ -24,9 +47,10 @@ export interface WorkflowDefinition {
     executionTimeoutSec: number;
     errorWorkflowId: string | null;
     saveSuccessfulData: boolean;
+    [extra: string]: unknown;
   };
-  nodes: unknown[];
-  connections: unknown[];
+  nodes: WorkflowNode[];
+  connections: WorkflowConnection[];
   pinData: Record<string, unknown[]>;
   [extra: string]: unknown;
 }
@@ -72,6 +96,10 @@ export class WorkflowsApiService {
     if (search) params['search'] = search;
     if (filter.active !== undefined && filter.active !== null) params['active'] = filter.active;
     return this.http.get<PageResult<WorkflowSummary>>(this.base, { params });
+  }
+
+  get(id: string): Observable<WorkflowDetail> {
+    return this.http.get<WorkflowDetail>(this.url(id));
   }
 
   create(name: string): Observable<WorkflowDetail> {
