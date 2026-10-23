@@ -386,7 +386,7 @@
 - DoD: тест CLI — `openbp run examples/daily-report.json` на моках проходить до `send_mail` з таблицею в тілі листа; README прикладів оновлено.
 
 ### F3-17 · PRD №3 наскрізь: агент збирає сценарій через `/mcp`
-- model: `opus` · status: `ready` · depends: F3-04, F3-05, F3-06, F3-07, F3-13
+- model: `opus` · status: `review #68` · depends: F3-04, F3-05, F3-06, F3-07, F3-13
 - Що: інтеграційний тест-сценарій (`tests/OpenBP.Mcp.Server.Tests`) MCP-клієнтом проти Api + Worker + FakeServer-моків: `describe_connectors` → `create_workflow` («лист з темою "Рахунок" → зберегти вкладення → повідомити в Telegram»; тригер — `mcp.poll` над моком пошти) → `validate_workflow` (навмисна помилка → виправлення за кодом) → `run_workflow` з тестовими items → `get_execution` = `success`; сценарій видно через `GET /workflows`. Плюс `docs/mcp-server.md`: усі tools/resources з прикладами, конфіг Claude Desktop / Claude Code (`mcpServers` з URL і заголовком) і типовий діалог.
 - DoD: тест зелений у CI; документація перевірена вручну з Claude Desktop (запис у PR, як саме); `README.md` посилається на `docs/mcp-server.md`. **Критерій фази 3.**
 

@@ -9,6 +9,7 @@ MCP-native BPMS-конструктор: процеси на канвасі, ін
 - Як влаштовано: [docs/architecture.md](docs/architecture.md)
 - Формат сценарію: [docs/workflow-format.md](docs/workflow-format.md)
 - Вузли і конектори: [docs/connectors.md](docs/connectors.md)
+- OpenBP як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
 - Фази: [docs/roadmap.md](docs/roadmap.md) · Задачі: [BACKLOG.md](BACKLOG.md)
 - Нічний агент: [docs/night-agent.md](docs/night-agent.md)
 - Правила для Claude Code: [CLAUDE.md](CLAUDE.md)
