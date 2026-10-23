@@ -1,0 +1,145 @@
+{
+  "formatVersion": 1,
+  "name": "Щоденний звіт про продажі",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 300,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_schedule",
+      "name": "Розклад",
+      "type": "core.schedule",
+      "typeVersion": 1,
+      "position": [
+        100,
+        200
+      ],
+      "parameters": {
+        "cron": "0 7 * * *",
+        "timezone": "Europe/Kyiv"
+      }
+    },
+    {
+      "id": "n_period",
+      "name": "Період",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [
+        300,
+        200
+      ],
+      "parameters": {
+        "fields": [
+          {
+            "name": "date",
+            "value": "{{ new Date(Date.parse($json.timestamp.slice(0, 10) + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10) }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_sales",
+      "name": "1С: продажі за вчора",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        520,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_1c",
+        "toolName": "sales_report",
+        "arguments": {
+          "from": "{{ $json.date }}",
+          "to": "{{ $json.date }}"
+        }
+      },
+      "timeoutSec": 60,
+      "retry": {
+        "maxTries": 3,
+        "waitMs": 5000
+      }
+    },
+    {
+      "id": "n_table",
+      "name": "Таблиця по контрагентах",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        760,
+        200
+      ],
+      "parameters": {
+        "code": "const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst byCustomer = {};\nfor (const sale of $json.result) {\n  const name = sale.customer || 'Без контрагента';\n  const row = byCustomer[name] ?? (byCustomer[name] = { customer: name, count: 0, amount: 0 });\n  row.count += 1;\n  row.amount += sale.amount;\n}\nconst rows = Object.values(byCustomer).sort((a, b) => b.amount - a.amount);\nconst total = rows.reduce((sum, r) => sum + r.amount, 0);\nconst html = '<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\">'\n  + '<tr><th>Контрагент</th><th>Документів</th><th>Сума, грн</th></tr>'\n  + rows.map(r => '<tr><td>' + esc(r.customer) + '</td><td>' + r.count + '</td><td>' + r.amount.toFixed(2) + '</td></tr>').join('')\n  + '<tr><th>Разом</th><th>' + $json.result.length + '</th><th>' + total.toFixed(2) + '</th></tr>'\n  + '</table>';\nreturn { total, customers: rows.length, html };"
+      }
+    },
+    {
+      "id": "n_mail",
+      "name": "Надіслати звіт",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_msgraph",
+        "toolName": "send_mail",
+        "arguments": {
+          "from": "reports@example.com",
+          "to": [
+            "director@example.com"
+          ],
+          "subject": "Продажі за {{ $node[\"Період\"].json.date }}: {{ $json.total.toFixed(2) }} грн",
+          "html": "<h3>Продажі за {{ $node[\"Період\"].json.date }}</h3>{{ $json.html }}"
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_schedule",
+        "output": 0
+      },
+      "to": {
+        "node": "n_period",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_period",
+        "output": 0
+      },
+      "to": {
+        "node": "n_sales",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_sales",
+        "output": 0
+      },
+      "to": {
+        "node": "n_table",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_table",
+        "output": 0
+      },
+      "to": {
+        "node": "n_mail",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {}
+}

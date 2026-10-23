@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +14,8 @@ namespace OpenBP.Mcp.FakeServer;
 /// <summary>
 /// Тестовий MCP-сервер. <c>dotnet OpenBP.Mcp.FakeServer.dll</c> — stdio;
 /// <c>--http &lt;url&gt;</c> — Streamable HTTP на <c>&lt;url&gt;/mcp</c>. У тестах HTTP-варіант хоститься в процесі через <see cref="BuildHttp"/>.
-/// <c>--mock 1c</c> / <c>--mock telegram</c> — stdio-мок 1С або Telegram для прикладу <c>examples/telegram-1c.json</c>.
+/// <c>--mock 1c</c> / <c>--mock telegram</c> / <c>--mock msgraph</c> — stdio-моки 1С, Telegram і Microsoft Graph для прикладів
+/// <c>examples/telegram-1c.json</c> і <c>examples/daily-report.json</c>.
 /// </summary>
 public static class FakeServerApp
 {
@@ -38,11 +40,12 @@ public static class FakeServerApp
             {
                 "1c" => [typeof(MockOneCTools)],
                 "telegram" => [typeof(MockTelegramTools)],
+                "msgraph" => [typeof(MockGraphTools)],
                 _ => [],
             };
         if (tools.Length == 0)
         {
-            await Console.Error.WriteLineAsync("--mock: очікується 1c або telegram.");
+            await Console.Error.WriteLineAsync("--mock: очікується 1c, telegram або msgraph.");
             return 2;
         }
 
@@ -144,7 +147,7 @@ public static class CrashTools
     }
 }
 
-/// <summary>Мок 1С для прикладу <c>examples/telegram-1c.json</c> (<c>--mock 1c</c>).</summary>
+/// <summary>Мок 1С для прикладів <c>examples/telegram-1c.json</c> і <c>examples/daily-report.json</c> (<c>--mock 1c</c>).</summary>
 [McpServerToolType]
 public static class MockOneCTools
 {
@@ -163,7 +166,37 @@ public static class MockOneCTools
         ArgumentNullException.ThrowIfNull(lines);
         return new(Interlocked.Increment(ref _lastNumber), customer, lines.Length);
     }
+
+    /// <summary>
+    /// Продажі за період у форматі справжнього конектора (<c>connectors/onec</c>): три документи двох контрагентів,
+    /// датовані першим днем періоду.
+    /// </summary>
+    [McpServerTool(Name = "sales_report", Title = "Звіт про продажі", UseStructuredContent = true)]
+    [Description("Проведені документи продажу за період.")]
+    public static SalesReport SalesReport(
+        [Description("Перший день, YYYY-MM-DD")] string from,
+        [Description("Останній день, YYYY-MM-DD")] string to)
+    {
+        var date = $"{from}T10:00:00";
+        return new(
+        [
+            new("РН-0001", date, "ТОВ Агро", "6f1c2a8e-0d5b-4c33-9a5e-2b7d8f1e4a10", 1000.5m),
+            new("РН-0002", date, "ФГ Лан", "0b9a7c11-52de-4e0f-8d3a-77c1e2f40a22", 250m),
+            new("РН-0003", date, "ТОВ Агро", "6f1c2a8e-0d5b-4c33-9a5e-2b7d8f1e4a10", 99m),
+        ]);
+    }
 }
+
+/// <summary>Результат <c>sales_report</c>: <c>{ "result": [...] }</c>.</summary>
+public sealed record SalesReport([property: JsonPropertyName("result")] IReadOnlyList<Sale> Result);
+
+/// <summary>Документ продажу (snake_case, як у справжнього конектора).</summary>
+public sealed record Sale(
+    [property: JsonPropertyName("number")] string Number,
+    [property: JsonPropertyName("date")] string Date,
+    [property: JsonPropertyName("customer")] string Customer,
+    [property: JsonPropertyName("customer_key")] string CustomerKey,
+    [property: JsonPropertyName("amount")] decimal Amount);
 
 /// <summary>Рядок замовлення 1С.</summary>
 public sealed record OrderLine(string Sku, double Qty);
@@ -185,3 +218,23 @@ public static class MockTelegramTools
 
 /// <summary>Результат <c>send_message</c>.</summary>
 public sealed record SentMessage(bool Ok, long ChatId, string Text);
+
+/// <summary>Мок Microsoft Graph для прикладу <c>examples/daily-report.json</c> (<c>--mock msgraph</c>).</summary>
+[McpServerToolType]
+public static class MockGraphTools
+{
+    /// <summary>
+    /// «Надсилає» лист. На відміну від справжнього конектора (<c>{ sent, from, to }</c>) повертає ще тему й тіло, щоб
+    /// приклад і тести бачили, що саме пішло б адресату.
+    /// </summary>
+    [McpServerTool(Name = "send_mail", Title = "Надіслати лист", UseStructuredContent = true)]
+    [Description("Надсилає HTML-лист зі скриньки.")]
+    public static SentMail SendMail(
+        [Description("Скринька відправника")] string from,
+        [Description("Адреси отримувачів")] string[] to,
+        [Description("Тема")] string subject,
+        [Description("HTML-тіло")] string html) => new(true, from, to, subject, html);
+}
+
+/// <summary>Результат <c>send_mail</c>.</summary>
+public sealed record SentMail(bool Sent, string From, string[] To, string Subject, string Html);

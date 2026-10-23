@@ -1,16 +1,19 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using OpenBP.Engine.Nodes;
 using OpenBP.Engine.Testing;
+using OpenBP.Shared.Validation;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Cli.Tests;
 
 /// <summary>
-/// <c>openbp run</c> на прикладі <c>examples/telegram-1c.json</c> з моками 1С і Telegram на FakeServer.
+/// <c>openbp run</c> на прикладах <c>examples/telegram-1c.json</c> і <c>examples/daily-report.json</c> з моками 1С, Telegram і Graph на FakeServer.
 /// Сервери стартують із dll поруч із тестами (а не через <c>dotnet run</c>, як у <c>examples/servers.json</c>).
 /// </summary>
 public sealed class CliRunTests : IDisposable
@@ -31,6 +34,35 @@ public sealed class CliRunTests : IDisposable
         Assert.Contains("\"number\": 1001", stdout, StringComparison.Ordinal);
         Assert.Contains("\"chatId\": 42", stdout, StringComparison.Ordinal);
         Assert.Contains("\"text\": \"Замовлення №1001 створено\"", stdout, StringComparison.Ordinal);
+        Assert.Contains("Результат: Success", stdout, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DailyReport_RunsFromScheduleThroughSalesReportToMailWithTable()
+    {
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(await File.ReadAllTextAsync(DailyReport)));
+        var kyiv = TimeZoneInfo.FindSystemTimeZoneById("Europe/Kyiv");
+        var before = YesterdayIn(kyiv);
+
+        var (code, stdout, stderr) = await RunAsync("run", DailyReport, "--servers", WriteServers());
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("▶ Розклад [core.schedule] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("▶ Період [core.set] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("▶ 1С: продажі за вчора [mcp.tool] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("▶ Таблиця по контрагентах [core.code] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("▶ Надіслати звіт [mcp.tool] — Success", stdout, StringComparison.Ordinal);
+
+        // sales_report отримав учорашній день (за Києвом) як from і to.
+        var day = Regex.Match(stdout, "\"date\": \"(\\d{4}-\\d{2}-\\d{2})T10:00:00\"").Groups[1].Value;
+        Assert.Contains(day, new[] { before, YesterdayIn(kyiv) });
+
+        // Лист: таблиця по контрагентах, відсортована за сумою, з підсумком.
+        Assert.Contains("\"sent\": true", stdout, StringComparison.Ordinal);
+        Assert.Contains($"\"subject\": \"Продажі за {day}: 1349.50 грн\"", stdout, StringComparison.Ordinal);
+        Assert.Contains($"<h3>Продажі за {day}</h3><table", stdout, StringComparison.Ordinal);
+        Assert.Contains("<tr><td>ТОВ Агро</td><td>2</td><td>1099.50</td></tr><tr><td>ФГ Лан</td><td>1</td><td>250.00</td></tr>", stdout, StringComparison.Ordinal);
+        Assert.Contains("<tr><th>Разом</th><th>3</th><th>1349.50</th></tr>", stdout, StringComparison.Ordinal);
         Assert.Contains("Результат: Success", stdout, StringComparison.Ordinal);
     }
 
@@ -226,6 +258,11 @@ public sealed class CliRunTests : IDisposable
 
     private static string Example => Path.Combine(RepoRoot, "examples", "telegram-1c.json");
 
+    private static string DailyReport => Path.Combine(RepoRoot, "examples", "daily-report.json");
+
+    private static string YesterdayIn(TimeZoneInfo zone) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
     private static string OllamaExample => Path.Combine(RepoRoot, "examples", "telegram-1c-ollama.json");
 
     private static string RepoRoot
@@ -247,13 +284,13 @@ public sealed class CliRunTests : IDisposable
     private static string DotNet =>
         Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host : "dotnet";
 
-    /// <summary>Файл серверів із моками 1С і Telegram, що стартують із dll FakeServer поруч із тестами.</summary>
+    /// <summary>Файл серверів із моками 1С, Telegram і Graph, що стартують із dll FakeServer поруч із тестами.</summary>
     private string WriteServers()
     {
         var dll = Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll");
         object Server(string id, string mock) => new { id, transport = "stdio", command = DotNet, args = new[] { dll, "--mock", mock } };
         var path = Path.Combine(_dir, "servers.json");
-        File.WriteAllText(path, JsonSerializer.Serialize(new { servers = new[] { Server("srv_1c", "1c"), Server("srv_telegram", "telegram") } }));
+        File.WriteAllText(path, JsonSerializer.Serialize(new { servers = new[] { Server("srv_1c", "1c"), Server("srv_telegram", "telegram"), Server("srv_msgraph", "msgraph") } }));
         return path;
     }
 

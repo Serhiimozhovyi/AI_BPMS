@@ -31,6 +31,21 @@
       ]
     },
     {
+      "id": "srv_msgraph",
+      "name": "Microsoft Graph (мок)",
+      "transport": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--no-build",
+        "--project",
+        "../tests/OpenBP.Mcp.Tests/FakeServer",
+        "--",
+        "--mock",
+        "msgraph"
+      ]
+    },
+    {
       "id": "srv_telegram_bot",
       "name": "Telegram Bot API (справжній; токен — зі змінної TELEGRAM_BOT_TOKEN оболонки)",
       "transport": "stdio",

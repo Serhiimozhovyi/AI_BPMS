@@ -35,12 +35,25 @@ dotnet run --project src/OpenBP.Cli -- run examples/telegram-1c.json --pin --ser
 ```
 
 - `--pin` — ручний тестовий запуск: вузли з `pinData` не виконуються, їхній вихід — закріплені items.
-- `--servers` — MCP-сервери для `serverId` вузлів `mcp.*`; моки 1С і Telegram — `tests/OpenBP.Mcp.Tests/FakeServer` з `--mock 1c|telegram`
+- `--servers` — MCP-сервери для `serverId` вузлів `mcp.*`; моки 1С, Telegram і Microsoft Graph — `tests/OpenBP.Mcp.Tests/FakeServer` з `--mock 1c|telegram|msgraph`
   (стартують через `dotnet run --no-build`, тому спершу `dotnet build`).
 - `--credentials` — JSON `{ "<credentialId>": { … } }` з даними credentials для вузлів (зараз `ai.llm`). Без шифрування, лише для dev: бойові ключі в такий файл і в репо не кладіть.
 - `core.webhook` (F2-D) поки не реалізований: CLI підставляє заглушку, яка працює лише з `pinData`.
   Коли справжній вузол з'явиться, заглушка перестає реєструватись сама.
 - Коди виходу: `0` — успіх, `1` — виконання завершилось помилкою/скасуванням/таймаутом, `2` — помилка аргументів, файлу чи сценарію.
+
+#### Щоденний звіт (PRD №2)
+
+`examples/daily-report.json`: `core.schedule` о 07:00 → `core.set` (учорашня дата) → `mcp.tool` 1С `sales_report` →
+`core.code` (HTML-таблиця по контрагентах) → `mcp.tool` Graph `send_mail`. На моках (`--mock 1c`, `--mock msgraph`) тригер
+спрацьовує одразу, а мок Graph повертає тему й тіло листа, щоб було видно таблицю:
+
+```bash
+dotnet build
+dotnet run --project src/OpenBP.Cli -- run examples/daily-report.json --servers examples/servers.json
+```
+
+Зі справжніми системами замініть `serverId` на конектори `connectors/onec` і `connectors/msgraph`, а адреси в `send_mail` на свої.
 
 #### Прогін з локальною Ollama (вручну, не в CI)
 
