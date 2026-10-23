@@ -370,7 +370,7 @@
 - DoD: тести проти in-process фейку Bot API (успіх кожного tool'а, 401/429 → `isError`, токен не з'являється у відповідях і помилках); `examples/servers.json` отримує варіант запису для справжнього конектора (без секретів).
 
 ### F3-14 · Конектор 1С (OData)
-- model: `sonnet` · status: `ready` · depends: F3-12
+- model: `sonnet` · status: `done` · depends: F3-12
 - Що: `connectors/onec/` на шаблоні з генератором OData (F3-12) + ручні tools для PRD №1–2: `create_order { customer, lines[] }` (документ «Замовлення покупця»: пошук контрагента за назвою, номенклатури за артикулом, запис документа) і `sales_report { from, to }` (вибірка за період); базова адреса публікації і логін/пароль — зі змінних середовища; README: як увімкнути OData-публікацію в 1С і які об'єкти відкрити.
 - DoD: тести проти мок-OData (CSDL + дані у тестах): `create_order` робить очікувані запити і повертає `{ number }`; `sales_report` → `{ result: [...] }`; помилки автентифікації → `isError`; мок `--mock 1c` із `FakeServer` лишається для прикладів і CI.
 
@@ -380,7 +380,7 @@
 - DoD: тести проти in-process фейку Graph і token endpoint (успіх, 401 → повторне отримання токена один раз, 429 з `Retry-After` → `isError`); секрет і токен не потрапляють у відповіді й помилки.
 
 ### F3-16 · Приклад «Щоденний звіт» (PRD №2)
-- model: `sonnet` · status: `review #66` · depends: F3-14, F3-15
+- model: `sonnet` · status: `done` · depends: F3-14, F3-15
 - Що: `examples/daily-report.json`: `core.schedule` 07:00 → `mcp.tool` 1С `sales_report` → `core.code` (агрегація по контрагентах, HTML-таблиця) → `mcp.tool` Graph `send_mail`; `examples/servers.json` — записи для конекторів 1С і Graph у режимі моків; моки `--mock 1c` розширити `sales_report`, додати `--mock msgraph` у `FakeServer`.
 - DoD: тест CLI — `openbp run examples/daily-report.json` на моках проходить до `send_mail` з таблицею в тілі листа; README прикладів оновлено.
 
@@ -390,7 +390,7 @@
 - DoD: тест зелений у CI; документація перевірена вручну з Claude Desktop (запис у PR, як саме); `README.md` посилається на `docs/mcp-server.md`. **Критерій фази 3.**
 
 ### F3-19 · Файлове сховище у воркері (локальна папка)
-- model: `sonnet` · status: `review #67` · depends: F2-07
+- model: `sonnet` · status: `done` · depends: F2-07
 - Що: `IBinaryStore` у локальній папці для `OpenBP.Worker` за `architecture.md` §6: налаштування `Storage:LocalPath`, файл у `<папка>/<рік>/<місяць>/<id>`, `BinaryRef` з `storage: local`, `directory`, `fileSize`, `sha256`; читання лише своїх посилань (без виходу за папку); без налаштування — зрозуміла помилка з назвою налаштування. Знайдено під час F3-17: `get_attachment` віддає binary item, а у воркері була заглушка.
 - DoD: тести сховища (запис/читання, хеш, відмова на підроблені `BinaryRef`, реєстрація за конфігом) і воркера (`mcp.tool` з файлом → файл у папці); `architecture.md` і `.env.example` оновлено.
 

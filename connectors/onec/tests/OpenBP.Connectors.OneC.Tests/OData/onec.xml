@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фрагмент $metadata публікації 1С (standard.odata, OData v3) для тестів конектора. -->
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
+  <edmx:DataServices m:DataServiceVersion="3.0">
+    <Schema Namespace="StandardODATA" xmlns="http://schemas.microsoft.com/ado/2009/11/edm">
+      <EntityType Name="Catalog_Контрагенты">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="DeletionMark" Type="Edm.Boolean" />
+        <Property Name="Code" Type="Edm.String" />
+        <Property Name="Description" Type="Edm.String" />
+      </EntityType>
+      <EntityType Name="Catalog_Номенклатура">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="DeletionMark" Type="Edm.Boolean" />
+        <Property Name="Description" Type="Edm.String" />
+        <Property Name="Артикул" Type="Edm.String" />
+      </EntityType>
+      <ComplexType Name="Document_ЗаказПокупателя_Товары_RowType">
+        <Property Name="LineNumber" Type="Edm.Int64" />
+        <Property Name="Номенклатура_Key" Type="Edm.Guid" />
+        <Property Name="Количество" Type="Edm.Double" />
+      </ComplexType>
+      <EntityType Name="Document_ЗаказПокупателя">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="DeletionMark" Type="Edm.Boolean" />
+        <Property Name="Number" Type="Edm.String" />
+        <Property Name="Date" Type="Edm.DateTime" />
+        <Property Name="Posted" Type="Edm.Boolean" />
+        <Property Name="Контрагент_Key" Type="Edm.Guid" />
+        <Property Name="Товары" Type="Collection(StandardODATA.Document_ЗаказПокупателя_Товары_RowType)" Nullable="false" />
+      </EntityType>
+      <EntityType Name="Document_РеализацияТоваровУслуг">
+        <Key>
+          <PropertyRef Name="Ref_Key" />
+        </Key>
+        <Property Name="Ref_Key" Type="Edm.Guid" Nullable="false" />
+        <Property Name="DeletionMark" Type="Edm.Boolean" />
+        <Property Name="Number" Type="Edm.String" />
+        <Property Name="Date" Type="Edm.DateTime" />
+        <Property Name="Posted" Type="Edm.Boolean" />
+        <Property Name="Контрагент_Key" Type="Edm.Guid" />
+        <Property Name="СуммаДокумента" Type="Edm.Double" />
+      </EntityType>
+      <EntityContainer Name="StandardODATA" m:IsDefaultEntityContainer="true">
+        <EntitySet Name="Catalog_Контрагенты" EntityType="StandardODATA.Catalog_Контрагенты" />
+        <EntitySet Name="Catalog_Номенклатура" EntityType="StandardODATA.Catalog_Номенклатура" />
+        <EntitySet Name="Document_ЗаказПокупателя" EntityType="StandardODATA.Document_ЗаказПокупателя" />
+        <EntitySet Name="Document_РеализацияТоваровУслуг" EntityType="StandardODATA.Document_РеализацияТоваровУслуг" />
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>
