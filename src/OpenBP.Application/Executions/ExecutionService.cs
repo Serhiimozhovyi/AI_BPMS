@@ -4,6 +4,7 @@ using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
 using OpenBP.Data;
 using OpenBP.Engine.Execution;
+using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Executions;
 
@@ -27,6 +28,19 @@ public sealed class ExecutionService(
         return launcher.LaunchAsync(
             new ExecutionLaunch(workflowId, ExecutionMode.Manual, request?.StartNodeId, request?.StartItems, request?.DestinationNodeId, request?.RunData),
             ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<ExecutionSummary> StartNodeAsync(Guid workflowId, string nodeId, IReadOnlyList<Item>? items, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(nodeId);
+        currentUser.Require(UserRole.Editor);
+        var definition = await CurrentDefinitionAsync(workflowId, ct);
+        var ancestors = Ancestors(definition, nodeId);
+        var runData = items is null
+            ? await LastManualRunDataAsync(workflowId, ancestors, ct)
+            : InputRunData(definition, nodeId, ancestors, items);
+        return await StartAsync(workflowId, new StartExecutionRequest(DestinationNodeId: nodeId, RunData: runData), ct);
     }
 
     /// <inheritdoc />
@@ -118,6 +132,100 @@ public sealed class ExecutionService(
                 return ExecutionMapping.ToSummary(await db.Executions.AsNoTracking().SingleAsync(e => e.Id == id, ct));
             }
         }
+    }
+
+    /// <summary>Визначення поточної версії сценарію.</summary>
+    private async Task<WorkflowDefinition> CurrentDefinitionAsync(Guid workflowId, CancellationToken ct)
+    {
+        var definition = await db.Workflows.AsNoTracking()
+            .Where(w => w.Id == workflowId)
+            .Join(db.WorkflowVersions.AsNoTracking(), w => w.CurrentVersionId, v => v.Id, (_, v) => v.Definition)
+            .SingleOrDefaultAsync(ct)
+            ?? throw new NotFoundException("workflow", workflowId);
+        return WorkflowJson.Deserialize(definition);
+    }
+
+    /// <summary>Усі попередники вузла за ребрами (без самого вузла).</summary>
+    private static HashSet<string> Ancestors(WorkflowDefinition definition, string nodeId)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        var stack = new Stack<string>([nodeId]);
+        while (stack.TryPop(out var id))
+        {
+            foreach (var c in definition.Connections)
+            {
+                if (c.To.Node == id && c.From.Node != nodeId && result.Add(c.From.Node))
+                {
+                    stack.Push(c.From.Node);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Виходи попередників з останнього завершеного ручного запуску: лише кроки <see cref="StepStatus.Success"/> і
+    /// <see cref="StepStatus.Skipped"/>, для Loop — з найбільшим <c>runIndex</c> (як у UI).
+    /// </summary>
+    private async Task<Dictionary<string, Item[][]>> LastManualRunDataAsync(Guid workflowId, HashSet<string> ancestors, CancellationToken ct)
+    {
+        var result = new Dictionary<string, Item[][]>(StringComparer.Ordinal);
+        if (ancestors.Count == 0)
+        {
+            return result;
+        }
+
+        var manual = ExecutionModes.ToDb(ExecutionMode.Manual);
+        string[] final = [ExecutionStatuses.Success, ExecutionStatuses.Error, ExecutionStatuses.Cancelled, ExecutionStatuses.TimedOut];
+        var last = await db.Executions.AsNoTracking()
+            .Where(e => e.WorkflowId == workflowId && e.Mode == manual && final.Contains(e.Status))
+            .OrderByDescending(e => e.Id)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(ct);
+        if (last is null)
+        {
+            return result;
+        }
+
+        var nodeIds = ancestors.ToList();
+        var steps = await db.ExecutionSteps.AsNoTracking()
+            .Where(s => s.ExecutionId == last && nodeIds.Contains(s.NodeId))
+            .OrderBy(s => s.RunIndex).ThenBy(s => s.Id)
+            .ToListAsync(ct);
+        foreach (var step in steps.Select(ExecutionMapping.ToStep))
+        {
+            if (step.Status is StepStatus.Success or StepStatus.Skipped)
+            {
+                result[step.NodeId] = step.Output;
+            }
+            else
+            {
+                result.Remove(step.NodeId);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// <paramref name="items"/> на вхід 0 вузла: попередник першого ребра на вхід 0 віддає їх на порту цього ребра,
+    /// решта попередників — порожній вихід (не виконується ніхто з них).
+    /// </summary>
+    private static Dictionary<string, Item[][]> InputRunData(WorkflowDefinition definition, string nodeId, HashSet<string> ancestors, IReadOnlyList<Item> items)
+    {
+        var feeding = definition.Connections.FirstOrDefault(c => c.To.Node == nodeId && (c.To.Input ?? 0) == 0)
+            ?? throw new ArgumentException($"Вузол «{nodeId}» не має вхідного ребра на вхід 0 — items нікуди подати.", nameof(items));
+        var result = ancestors.ToDictionary(id => id, _ => Array.Empty<Item[]>(), StringComparer.Ordinal);
+        var port = feeding.From.Output ?? 0;
+        var ports = new Item[port + 1][];
+        for (var i = 0; i < ports.Length; i++)
+        {
+            ports[i] = i == port ? [.. items] : [];
+        }
+
+        result[feeding.From.Node] = ports;
+        return result;
     }
 
     /// <inheritdoc />

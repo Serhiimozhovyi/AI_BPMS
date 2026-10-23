@@ -1,6 +1,7 @@
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
+using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Executions;
 
@@ -20,6 +21,28 @@ public interface IExecutionService
     /// <exception cref="NotFoundException">Сценарію немає.</exception>
     /// <exception cref="WorkflowValidationException">Поточна версія некоректна (напр. невідомий <c>startNodeId</c>).</exception>
     Task<ExecutionSummary> StartAsync(Guid workflowId, StartExecutionRequest? request, CancellationToken ct);
+
+    /// <summary>
+    /// «Виконати вузол» (F2-21; MCP <c>test_node</c>): ручний запуск лише вузла <paramref name="nodeId"/> і його попередників
+    /// через <see cref="StartAsync"/> з <see cref="StartExecutionRequest.DestinationNodeId"/> і
+    /// <see cref="StartExecutionRequest.RunData"/>. Звідки вхід вузла:
+    /// <list type="bullet">
+    /// <item><paramref name="items"/> задано — це items на вході 0: вони стають виходом попередника першого ребра на вхід 0,
+    /// решта попередників не виконується (порожній вихід);</item>
+    /// <item>інакше — як у UI: попередники, що завершились успішно (або згаслою гілкою) в останньому ручному запуску
+    /// сценарію, не виконуються і віддають свій тодішній вихід; решта — з <c>pinData</c> або виконуються.</item>
+    /// </list>
+    /// Сам вузол виконується завжди, навіть якщо для нього є <c>pinData</c>.
+    /// </summary>
+    /// <param name="workflowId">Сценарій; виконується поточна версія.</param>
+    /// <param name="nodeId">Вузол.</param>
+    /// <param name="items">Items на вході 0; <c>null</c> — дані останнього ручного запуску.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Виконання в стані <see cref="ExecutionState.Queued"/>.</returns>
+    /// <exception cref="NotFoundException">Сценарію немає.</exception>
+    /// <exception cref="WorkflowValidationException">Вузла немає в поточній версії (<c>DESTINATION_NODE_UNKNOWN</c>).</exception>
+    /// <exception cref="ArgumentException"><paramref name="items"/> задано для вузла без вхідних ребер.</exception>
+    Task<ExecutionSummary> StartNodeAsync(Guid workflowId, string nodeId, IReadOnlyList<Item>? items, CancellationToken ct);
 
     /// <summary>Сторінка списку, сортування за <c>started_at desc</c> (для <see cref="ExecutionState.Queued"/> — за <c>id</c>).</summary>
     /// <param name="filter">Фільтр.</param>

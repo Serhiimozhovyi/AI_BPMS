@@ -324,7 +324,7 @@
 - DoD: тести — запуск сценарію з `pinData` на FakeServer-моках: `run_workflow` з `wait` повертає `success` і кроки без секретів; без `wait` — `queued` і далі `get_execution`; viewer не запускає; невідомий id → `isError` `NOT_FOUND`.
 
 ### F3-06 · `/mcp`: `test_node`
-- model: `opus` · status: `ready` · depends: F3-05, F2-21
+- model: `opus` · status: `done` · depends: F3-05, F2-21
 - Що: tool `test_node { workflowId, nodeId, items? }` — виконати один вузол на переданих items (або на `pinData`/output попереднього вузла з останнього ручного запуску, як у F2-21) через той самий механізм запуску одного вузла, що й UI; чекає завершення й віддає `{ output: Item[][], error? }`. Логіку не дублювати: якщо F2-21 поклала запуск одного вузла у `IExecutionService`, tool — лише обгортка; якщо ні — винести спочатку туди (без змін контракту REST).
 - DoD: тести — `test_node` для `core.set` і для `mcp.tool` на FakeServer; помилка вузла → `isError` з текстом помилки без секретів; `pinData` поважається.
 

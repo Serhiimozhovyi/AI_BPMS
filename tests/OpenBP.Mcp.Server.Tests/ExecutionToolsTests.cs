@@ -31,22 +31,6 @@ public class ExecutionToolsTests(McpServerFactory mcp)
         return Structured(result);
     }
 
-    private static string RepoRoot
-    {
-        get
-        {
-            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            {
-                if (File.Exists(Path.Combine(dir.FullName, "OpenBP.sln")))
-                {
-                    return dir.FullName;
-                }
-            }
-
-            throw new InvalidOperationException("OpenBP.sln не знайдено.");
-        }
-    }
-
     /// <summary>
     /// Приклад telegram-1c на моках; конектор 1С має credential із секретом, і той самий секрет є в даних
     /// (<c>pinData</c> ai.llm → вхід і вихід 1С), тож у кроках він має бути замаскований.
@@ -56,7 +40,7 @@ public class ExecutionToolsTests(McpServerFactory mcp)
         var credential = await mcp.CreateCredentialAsync(new JsonObject { ["env"] = new JsonObject { ["ONEC_TOKEN"] = Secret } });
         var oneC = await mcp.CreateMockConnectorAsync("1c", credential);
         var telegram = await mcp.CreateMockConnectorAsync("telegram");
-        var json = (await File.ReadAllTextAsync(Path.Combine(RepoRoot, "examples", "telegram-1c.json")))
+        var json = (await File.ReadAllTextAsync(Path.Combine(McpServerFactory.RepoRoot, "examples", "telegram-1c.json")))
             .Replace("\"srv_1c\"", $"\"{oneC}\"", StringComparison.Ordinal)
             .Replace("\"srv_telegram\"", $"\"{telegram}\"", StringComparison.Ordinal);
         var definition = JsonNode.Parse(json)!.AsObject();

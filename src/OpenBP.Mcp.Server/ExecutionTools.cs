@@ -96,7 +96,7 @@ public sealed class ExecutionTools
         executions.CancelAsync(id, ct);
 
     /// <summary>Чекає фінального стану за потоком подій; вихід за <paramref name="timeout"/> — не помилка.</summary>
-    private static async Task WaitForFinalStateAsync(IExecutionEventSource events, Guid executionId, TimeSpan timeout, CancellationToken ct)
+    internal static async Task WaitForFinalStateAsync(IExecutionEventSource events, Guid executionId, TimeSpan timeout, CancellationToken ct)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(timeout);
