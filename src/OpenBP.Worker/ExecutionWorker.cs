@@ -7,17 +7,18 @@ using OpenBP.Data;
 namespace OpenBP.Worker;
 
 /// <summary>
-/// Хост виконань (docs/architecture.md §10.4): бере job'и <see cref="JobKinds.Execution"/> з <see cref="JobQueue"/>
-/// лише за вільного слота (до <see cref="WorkerOptions.MaxConcurrentExecutions"/> одночасно) і передає їх
-/// <see cref="ExecutionJobProcessor"/>. Порожня черга або збій БД — пауза <see cref="WorkerOptions.PollInterval"/>.
+/// Хост виконань (docs/architecture.md §10.4): бере job'и <see cref="JobKinds.Execution"/> (і <see cref="JobKinds.Poll"/>,
+/// якщо задано <see cref="PollJobProcessor"/>) з <see cref="JobQueue"/> лише за вільного слота
+/// (до <see cref="WorkerOptions.MaxConcurrentExecutions"/> одночасно) і передає їх <see cref="ExecutionJobProcessor"/> /
+/// <see cref="PollJobProcessor"/>. Порожня черга або збій БД — пауза <see cref="WorkerOptions.PollInterval"/>.
 /// При зупинці переривує виконання (їхні job'и повертаються в чергу для відновлення) і чекає їх завершення.
 /// </summary>
 public sealed partial class ExecutionWorker : BackgroundService
 {
-    private static readonly string[] Kinds = [JobKinds.Execution];
-
+    private readonly string[] _kinds;
     private readonly JobQueue _queue;
     private readonly ExecutionJobProcessor _processor;
+    private readonly PollJobProcessor? _poll;
     private readonly WorkerOptions _options;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
@@ -28,7 +29,14 @@ public sealed partial class ExecutionWorker : BackgroundService
     /// <param name="options">Налаштування воркера.</param>
     /// <param name="logger">Системний лог.</param>
     /// <param name="time">Годинник; за замовчуванням системний.</param>
-    public ExecutionWorker(JobQueue queue, ExecutionJobProcessor processor, WorkerOptions options, ILogger<ExecutionWorker> logger, TimeProvider? time = null)
+    /// <param name="poll">Обробник job'ів опитування <c>mcp.poll</c>; <c>null</c> — воркер їх не бере.</param>
+    public ExecutionWorker(
+        JobQueue queue,
+        ExecutionJobProcessor processor,
+        WorkerOptions options,
+        ILogger<ExecutionWorker> logger,
+        TimeProvider? time = null,
+        PollJobProcessor? poll = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -37,6 +45,8 @@ public sealed partial class ExecutionWorker : BackgroundService
         _options = options;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _time = time ?? TimeProvider.System;
+        _poll = poll;
+        _kinds = poll is null ? [JobKinds.Execution] : [JobKinds.Execution, JobKinds.Poll];
     }
 
     /// <inheritdoc />
@@ -53,7 +63,7 @@ public sealed partial class ExecutionWorker : BackgroundService
                 ClaimedJob? job;
                 try
                 {
-                    job = await _queue.ClaimAsync(_options.WorkerId, Kinds, stoppingToken).ConfigureAwait(false);
+                    job = await _queue.ClaimAsync(_options.WorkerId, _kinds, stoppingToken).ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -91,7 +101,14 @@ public sealed partial class ExecutionWorker : BackgroundService
     {
         try
         {
-            await _processor.ProcessAsync(job, stoppingToken).ConfigureAwait(false);
+            if (job.Kind == JobKinds.Poll && _poll is not null)
+            {
+                await _poll.ProcessAsync(job, stoppingToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _processor.ProcessAsync(job, stoppingToken).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {

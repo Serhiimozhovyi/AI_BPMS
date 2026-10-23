@@ -18,7 +18,7 @@ namespace OpenBP.Application.Workflows;
 /// Валідація — <see cref="WorkflowValidator"/> з провайдером із контейнера (ланцюжок
 /// <c>NodeRegistrySchemaProvider</c> → <c>McpNodeSchemaProvider</c>). Активація, збереження активного сценарію і
 /// деактивація в одній транзакції з прапорцем <c>active</c> перереєстровують тригери: <c>webhooks</c> (F2-10) і
-/// розклади <c>core.schedule</c> у Quartz (F2-11, <see cref="IScheduleRegistrar"/>). Quartz живе у власних таблицях,
+/// розклади <c>core.schedule</c> і <c>mcp.poll</c> у Quartz (F2-11, F2-12, <see cref="IScheduleRegistrar"/>). Quartz живе у власних таблицях,
 /// тож розклади замінюються перед комітом (збій Quartz відкочує транзакцію), а знімаються після нього; розклад,
 /// що пережив невдалий коміт, при спрацюванні нічого не запускає (<see cref="ScheduleFireService"/>).
 /// Некоректний cron чи часовий пояс розкладу — помилка валідації збереження (<see cref="ScheduleParameters"/>).

@@ -5,16 +5,22 @@ using Quartz;
 namespace OpenBP.Application.Schedules;
 
 /// <summary>
-/// Розклад одного вузла <c>core.schedule</c>, уже розібраний і перевірений: що реєструвати в Quartz.
+/// Розклад одного вузла <c>core.schedule</c> або <c>mcp.poll</c>, уже розібраний і перевірений: що реєструвати в Quartz.
 /// </summary>
 /// <param name="NodeId">Вузол-тригер.</param>
 /// <param name="Cron">Вираз у формі Quartz (6–7 полів; 5-польовий crontab уже переписано).</param>
 /// <param name="Timezone">IANA-ідентифікатор часового поясу, у якому рахується розклад.</param>
 /// <param name="Zone">Той самий часовий пояс.</param>
-public sealed record ScheduleTrigger(string NodeId, string Cron, string Timezone, TimeZoneInfo Zone);
+/// <param name="NodeType">Тип вузла: <see cref="ScheduleParameters.NodeType"/> або <see cref="ScheduleParameters.PollNodeType"/>.</param>
+public sealed record ScheduleTrigger(string NodeId, string Cron, string Timezone, TimeZoneInfo Zone, string NodeType = ScheduleParameters.NodeType)
+{
+    /// <summary>Розклад вузла <c>mcp.poll</c>: спрацювання ставить job опитування, а не виконання.</summary>
+    public bool IsPoll => NodeType == ScheduleParameters.PollNodeType;
+}
 
 /// <summary>
-/// Параметри вузлів <c>core.schedule</c> (схема — <c>OpenBP.Nodes.Core/Schemas/schedule.schema.json</c>):
+/// Параметри розкладу вузлів <c>core.schedule</c> (схема — <c>OpenBP.Nodes.Core/Schemas/schedule.schema.json</c>)
+/// і <c>mcp.poll</c> (F2-12; у нього лише <c>cron</c>, часовий пояс — <c>settings.timezone</c>):
 /// розбір <c>cron</c> (5 полів — crontab, 6–7 — Quartz) і часового поясу (<c>timezone</c> вузла або
 /// <c>settings.timezone</c> сценарію). Схема не може перевірити cron, тож ця перевірка — частина валідації
 /// збереження (<see cref="Workflows.WorkflowService"/>): некоректний розклад — <see cref="WorkflowValidationCodes.ParameterInvalid"/>.
@@ -24,11 +30,14 @@ public static class ScheduleParameters
     /// <summary>Тип вузла-тригера.</summary>
     public const string NodeType = "core.schedule";
 
+    /// <summary>Polling-тригер MCP: опитується за власним <c>cron</c> (F2-12).</summary>
+    public const string PollNodeType = "mcp.poll";
+
     /// <summary>Часовий пояс, якщо його не задано ні у вузлі, ні в сценарії.</summary>
     public const string DefaultTimezone = "UTC";
 
     /// <summary>
-    /// Розбирає розклади увімкнених вузлів <c>core.schedule</c> визначення сценарію (JSON-дерево у форматі
+    /// Розбирає розклади увімкнених вузлів <c>core.schedule</c> і <c>mcp.poll</c> визначення сценарію (JSON-дерево у форматі
     /// <c>WorkflowJson</c>, уже провалідоване схемою формату).
     /// </summary>
     /// <param name="document">Визначення сценарію.</param>
@@ -49,7 +58,7 @@ public static class ScheduleParameters
         for (var i = 0; i < nodes.Count; i++)
         {
             if (nodes[i] is not JsonObject node
-                || Text(node, "type") != NodeType
+                || Text(node, "type") is not ({ } type and (NodeType or PollNodeType))
                 || (node["disabled"] is JsonValue d && d.TryGetValue<bool>(out var disabled) && disabled))
             {
                 continue;
@@ -66,7 +75,7 @@ public static class ScheduleParameters
 
             if (cron is not null && zone is not null)
             {
-                triggers.Add(new ScheduleTrigger(nodeId, cron, timezone, zone));
+                triggers.Add(new ScheduleTrigger(nodeId, cron, timezone, zone, type));
             }
         }
 

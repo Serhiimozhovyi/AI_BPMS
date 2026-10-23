@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Jobs;
 using OpenBP.Data;
 using OpenBP.Engine.Execution;
 using OpenBP.Shared.Workflow;
@@ -15,7 +16,13 @@ public enum ScheduleFireStatus
     /// <summary>Виконання поставлено в чергу.</summary>
     Launched,
 
-    /// <summary>Сценарій неактивний або в поточній версії немає цього (увімкненого) вузла <c>core.schedule</c>.</summary>
+    /// <summary>Розклад <c>mcp.poll</c>: поставлено job опитування <see cref="JobKinds.Poll"/> (F2-12).</summary>
+    PollQueued,
+
+    /// <summary>
+    /// Сценарій неактивний, у поточній версії немає цього (увімкненого) вузла-тригера або попередній job опитування
+    /// цього вузла ще чекає в черзі.
+    /// </summary>
     Skipped,
 
     /// <summary>Сценарію немає — розклад застарів і його треба зняти.</summary>
@@ -25,17 +32,21 @@ public enum ScheduleFireStatus
 /// <summary>Результат спрацювання розкладу.</summary>
 /// <param name="Status">Що сталося.</param>
 /// <param name="ExecutionId">Виконання для <see cref="ScheduleFireStatus.Launched"/>.</param>
-public sealed record ScheduleFireOutcome(ScheduleFireStatus Status, Guid? ExecutionId = null);
+/// <param name="JobId">Job опитування для <see cref="ScheduleFireStatus.PollQueued"/>.</param>
+public sealed record ScheduleFireOutcome(ScheduleFireStatus Status, Guid? ExecutionId = null, Guid? JobId = null);
 
 /// <summary>
 /// Спрацювання розкладу <c>core.schedule</c>: перевіряє, що сценарій активний і його поточна версія містить
 /// увімкнений вузол-тригер, і ставить виконання в чергу (<see cref="IExecutionLauncher"/>, режим <c>trigger</c>)
 /// з item'ом <c>{ timestamp, timezone }</c> — запланований час спрацювання в часовому поясі розкладу.
+/// Для вузла <c>mcp.poll</c> (F2-12) замість виконання ставить job <see cref="JobKinds.Poll"/>: опитування
+/// з <c>node_state</c> робить воркер і запускає виконання лише за нових записів (docs/architecture.md §10.4).
 /// Ролей не перевіряє: викликач — <see cref="ScheduleFireJob"/>.
 /// </summary>
 /// <param name="db">Контекст БД.</param>
 /// <param name="launcher">Постановка виконання в чергу.</param>
-public sealed class ScheduleFireService(OpenBpDbContext db, IExecutionLauncher launcher)
+/// <param name="time">Годинник: <c>run_at</c> job'а опитування.</param>
+public sealed class ScheduleFireService(OpenBpDbContext db, IExecutionLauncher launcher, TimeProvider time)
 {
     /// <summary>Ставить виконання за спрацюванням розкладу.</summary>
     /// <param name="workflowId">Сценарій.</param>
@@ -69,6 +80,11 @@ public sealed class ScheduleFireService(OpenBpDbContext db, IExecutionLauncher l
             return new(ScheduleFireStatus.Skipped);
         }
 
+        if (trigger.IsPoll)
+        {
+            return await EnqueuePollAsync(workflowId, nodeId, ct);
+        }
+
         try
         {
             var execution = await launcher.LaunchAsync(
@@ -80,6 +96,34 @@ public sealed class ScheduleFireService(OpenBpDbContext db, IExecutionLauncher l
             // Сценарій деактивовано між перевіркою і запуском.
             return new(ScheduleFireStatus.Skipped);
         }
+    }
+
+    /// <summary>
+    /// Ставить job опитування вузла <c>mcp.poll</c>. Якщо попередній job цього вузла ще не взято воркером, нового не
+    /// ставить: два опитування поспіль з одним станом дали б ті самі записи двічі.
+    /// </summary>
+    private async Task<ScheduleFireOutcome> EnqueuePollAsync(Guid workflowId, string nodeId, CancellationToken ct)
+    {
+        var waiting = await db.Jobs.AsNoTracking()
+            .Where(j => j.Kind == JobKinds.Poll && j.LockedBy == null)
+            .Select(j => j.Payload)
+            .ToListAsync(ct);
+        if (waiting.Select(JobJson.Deserialize<PollJobPayload>).Any(p => p.WorkflowId == workflowId && p.NodeId == nodeId))
+        {
+            return new(ScheduleFireStatus.Skipped);
+        }
+
+        var now = time.GetUtcNow();
+        var job = new JobEntity
+        {
+            Id = Guid.CreateVersion7(now),
+            Kind = JobKinds.Poll,
+            Payload = JobJson.Serialize(new PollJobPayload { WorkflowId = workflowId, NodeId = nodeId }),
+            RunAt = now,
+        };
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync(ct);
+        return new(ScheduleFireStatus.PollQueued, JobId: job.Id);
     }
 
     /// <summary>Item спрацювання — той самий формат, що віддає <c>core.schedule</c> у тестовому запуску.</summary>

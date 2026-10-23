@@ -21,7 +21,7 @@ public static class WorkerServiceCollectionExtensions
     /// <summary>
     /// Додає воркер виконань: БД (рядок підключення <c>Default</c>), <see cref="JobQueue"/>, credentials (ключ з
     /// <c>OPENBP_ENCRYPTION_KEY</c> — без нього старт неможливий), реєстри MCP-серверів і вузлів, Jint і
-    /// <see cref="ExecutionWorker"/> з налаштуваннями секції <see cref="WorkerOptions.Section"/>, а також
+    /// <see cref="ExecutionWorker"/> (виконання і опитування <c>mcp.poll</c>, <see cref="PollJobProcessor"/>) з налаштуваннями секції <see cref="WorkerOptions.Section"/>, а також
     /// <see cref="ExecutionRecoveryService"/> (відновлення після падіння воркера) з налаштуваннями черги з підсекції
     /// <see cref="QueueSection"/>.
     /// </summary>
@@ -77,12 +77,24 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionJobProcessor>>(),
             sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(sp => new PollJobProcessor(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<JobQueue>(),
+            sp.GetRequiredService<CredentialStore>(),
+            sp.GetRequiredService<INodeRegistry>(),
+            sp.GetRequiredService<McpServerSync>(),
+            sp.GetRequiredService<IExpressionEvaluator>(),
+            sp.GetService<IBinaryStore>(),
+            sp.GetRequiredService<WorkerOptions>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PollJobProcessor>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddHostedService(sp => new ExecutionWorker(
             sp.GetRequiredService<JobQueue>(),
             sp.GetRequiredService<ExecutionJobProcessor>(),
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionWorker>>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<PollJobProcessor>()));
         services.AddHostedService(sp => new ExecutionRecoveryService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

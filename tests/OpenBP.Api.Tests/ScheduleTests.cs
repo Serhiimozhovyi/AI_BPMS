@@ -127,6 +127,60 @@ public class ScheduleTests(ApiFactory api)
         await DeactivateAsync(editor, id);
     }
 
+    // ---------- mcp.poll (F2-12) ----------
+
+    [Fact]
+    public async Task Poll_node_gets_cron_trigger_on_activation_and_fire_enqueues_poll_job_not_execution()
+    {
+        var editor = await LoginAsync(api);
+        var id = await CreateAsync(editor, PollNode("*/5 * * * *"));
+        await ActivateAsync(editor, id);
+
+        var trigger = Assert.IsAssignableFrom<ICronTrigger>(await (await SchedulerAsync(api)).GetTrigger(QuartzScheduleRegistrar.TriggerKeyOf(id, "n_poll")));
+        Assert.Equal("0 */5 * * * ?", trigger.CronExpressionString);
+        Assert.Equal("Europe/Kyiv", trigger.TimeZone.Id);
+
+        await using var scope = api.Services.CreateAsyncScope();
+        var fire = scope.ServiceProvider.GetRequiredService<ScheduleFireService>();
+        var queued = await fire.FireAsync(id, "n_poll", DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.Equal(ScheduleFireStatus.PollQueued, queued.Status);
+        Assert.Null(queued.ExecutionId);
+        await using (var db = api.CreateDbContext())
+        {
+            var job = await db.Jobs.AsNoTracking().SingleAsync(j => j.Id == queued.JobId);
+            Assert.Equal(JobKinds.Poll, job.Kind);
+            var payload = JobJson.Deserialize<PollJobPayload>(job.Payload);
+            Assert.Equal(id, payload.WorkflowId);
+            Assert.Equal("n_poll", payload.NodeId);
+            Assert.False(await db.Executions.AnyAsync(e => e.WorkflowId == id));
+        }
+
+        // Попередній job ще чекає воркера — другий не ставиться.
+        Assert.Equal(ScheduleFireStatus.Skipped, (await fire.FireAsync(id, "n_poll", DateTimeOffset.UtcNow, CancellationToken.None)).Status);
+
+        await DeactivateAsync(editor, id);
+        Assert.Null(await (await SchedulerAsync(api)).GetTrigger(QuartzScheduleRegistrar.TriggerKeyOf(id, "n_poll")));
+        Assert.Equal(ScheduleFireStatus.Skipped, (await fire.FireAsync(id, "n_poll", DateTimeOffset.UtcNow, CancellationToken.None)).Status);
+        await using var cleanup = api.CreateDbContext();
+        await cleanup.Jobs.Where(j => j.Id == queued.JobId).ExecuteDeleteAsync();
+    }
+
+    [Theory]
+    [InlineData("0 7 * *")]
+    [InlineData("{{ $env.CRON }}")]
+    public async Task Invalid_poll_cron_is_validation_error(string cron)
+    {
+        var editor = await LoginAsync(api);
+
+        var problem = await AssertProblemAsync(await editor.PostAsync(Base, Json(PollNode(cron))), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+
+        var error = Assert.Single(problem.GetProperty("errors").EnumerateArray());
+        Assert.Equal("PARAMETER_INVALID", error.GetProperty("code").GetString());
+        Assert.Equal("n_poll", error.GetProperty("nodeId").GetString());
+        Assert.Equal("/nodes/0/parameters/cron", error.GetProperty("path").GetString());
+    }
+
     // ---------- валідація ----------
 
     [Theory]
@@ -170,6 +224,12 @@ public class ScheduleTests(ApiFactory api)
         [{ "id": "n_cron", "name": "Щоранку", "type": "core.schedule", "typeVersion": 1, "position": [0, 0],
            "parameters": { "cron": "{{cron}}"{{(timezone is null ? "" : $", \"timezone\": \"{timezone}\"")}} } }]
         """, settingsTimezone);
+
+    /// <summary><c>mcp.poll</c> із сервером-виразом: статично його не перевірити, тож реєстр серверів тесту не потрібен.</summary>
+    private static string PollNode(string cron) => Definition($$$"""
+        [{ "id": "n_poll", "name": "Нові замовлення", "type": "mcp.poll", "typeVersion": 1, "position": [0, 0],
+           "parameters": { "serverId": "{{ 'srv' }}", "toolName": "orders", "arguments": {}, "keyField": "id", "cron": "{{{cron}}}" } }]
+        """);
 
     private static string Definition(string nodes, string timezone = "Europe/Kyiv") => $$"""
         {
