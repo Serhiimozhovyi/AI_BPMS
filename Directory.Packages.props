@@ -23,6 +23,10 @@
     <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
   </ItemGroup>
 
+  <ItemGroup Label="Розклад">
+    <PackageVersion Include="Quartz" Version="4.6.0" />
+  </ItemGroup>
+
   <ItemGroup Label="MCP">
     <PackageVersion Include="ModelContextProtocol.Core" Version="2.3.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />

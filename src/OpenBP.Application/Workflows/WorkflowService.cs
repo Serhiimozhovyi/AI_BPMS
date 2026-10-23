@@ -5,6 +5,7 @@ using Npgsql;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
+using OpenBP.Application.Schedules;
 using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Shared.Validation;
@@ -16,13 +17,17 @@ namespace OpenBP.Application.Workflows;
 /// Реалізація <see cref="IWorkflowService"/> над <c>workflows</c>/<c>workflow_versions</c> (docs/architecture.md §10.2).
 /// Валідація — <see cref="WorkflowValidator"/> з провайдером із контейнера (ланцюжок
 /// <c>NodeRegistrySchemaProvider</c> → <c>McpNodeSchemaProvider</c>). Активація, збереження активного сценарію і
-/// деактивація в одній транзакції з прапорцем <c>active</c> перереєстровують тригери: <c>webhooks</c> (F2-10);
-/// Quartz додає F2-11.
+/// деактивація в одній транзакції з прапорцем <c>active</c> перереєстровують тригери: <c>webhooks</c> (F2-10) і
+/// розклади <c>core.schedule</c> у Quartz (F2-11, <see cref="IScheduleRegistrar"/>). Quartz живе у власних таблицях,
+/// тож розклади замінюються перед комітом (збій Quartz відкочує транзакцію), а знімаються після нього; розклад,
+/// що пережив невдалий коміт, при спрацюванні нічого не запускає (<see cref="ScheduleFireService"/>).
+/// Некоректний cron чи часовий пояс розкладу — помилка валідації збереження (<see cref="ScheduleParameters"/>).
 /// </summary>
 public sealed class WorkflowService(
     OpenBpDbContext db,
     ICurrentUser currentUser,
     INodeSchemaProvider schemaProvider,
+    IScheduleRegistrar schedules,
     TimeProvider time) : IWorkflowService
 {
     /// <summary>Код конфлікту: видалення активного сценарію.</summary>
@@ -145,6 +150,11 @@ public sealed class WorkflowService(
                 $"Сценарій «{id}» щойно збережено іншим запитом; оновіть його і збережіть ще раз.");
         }
 
+        if (workflow.Active)
+        {
+            await schedules.ReplaceAsync(id, ScheduleParameters.Read(document, out _), ct);
+        }
+
         await tx.CommitAsync(ct);
         return ToDetail(workflow, version);
     }
@@ -170,7 +180,7 @@ public sealed class WorkflowService(
     {
         ArgumentNullException.ThrowIfNull(definition);
         currentUser.Require(UserRole.Viewer);
-        var errors = await _validator.ValidateAsync(ToDocument(definition), new WorkflowValidationOptions { IsActive = asActive }, ct);
+        var errors = await ValidateDocumentAsync(ToDocument(definition), asActive, ct);
         return new WorkflowValidationResult(errors);
     }
 
@@ -199,6 +209,7 @@ public sealed class WorkflowService(
             throw WebhookRegistrar.PathConflictRace();
         }
 
+        await schedules.ReplaceAsync(id, ScheduleParameters.Read(JsonNode.Parse(version.Definition)!.AsObject(), out _), ct);
         await tx.CommitAsync(ct);
         return ToDetail(workflow, version);
     }
@@ -216,6 +227,7 @@ public sealed class WorkflowService(
             workflow.UpdatedAt = time.GetUtcNow();
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+            await schedules.RemoveAsync(id, ct);
         }
 
         return await DetailAsync(workflow, ct);
@@ -296,11 +308,27 @@ public sealed class WorkflowService(
 
     private async Task ThrowIfInvalidAsync(JsonObject document, bool asActive, CancellationToken ct)
     {
-        var errors = await _validator.ValidateAsync(document, new WorkflowValidationOptions { IsActive = asActive }, ct);
+        var errors = await ValidateDocumentAsync(document, asActive, ct);
         if (errors.Count > 0)
         {
             throw new WorkflowValidationException(errors);
         }
+    }
+
+    /// <summary>
+    /// Правила 1–6 (<see cref="WorkflowValidator"/>), а для структурно валідного сценарію — ще й розклади
+    /// <c>core.schedule</c>: cron і часовий пояс схема перевірити не може.
+    /// </summary>
+    private async Task<IReadOnlyList<WorkflowValidationError>> ValidateDocumentAsync(JsonObject document, bool asActive, CancellationToken ct)
+    {
+        var errors = await _validator.ValidateAsync(document, new WorkflowValidationOptions { IsActive = asActive }, ct);
+        if (errors.Count > 0)
+        {
+            return errors;
+        }
+
+        ScheduleParameters.Read(document, out var scheduleErrors);
+        return scheduleErrors;
     }
 
     private async Task<WorkflowEntity> FindAsync(Guid id, CancellationToken ct) =>

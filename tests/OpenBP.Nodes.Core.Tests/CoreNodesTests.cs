@@ -14,6 +14,8 @@ public class CoreNodesTests
         { "core.webhook", """{"path":"telegram-in"}""" },
         { "core.webhook", """{"method":"GET","path":"orders/new","auth":{"type":"header","credentialId":"cred_1","headerName":"X-Token"}}""" },
         { "core.webhook", """{"method":"POST","path":"a.b~c_d-1","auth":{"type":"basic","credentialId":"cred_1"}}""" },
+        { "core.schedule", """{"cron":"0 7 * * 1-5"}""" },
+        { "core.schedule", """{"cron":"0 0 7 ? * MON-FRI","timezone":"Europe/Kyiv"}""" },
         { "core.set", """{"fields":[{"name":"order.customer","value":"{{ $json.name }}"}],"keepOnlySet":false}""" },
         { "core.if", """{"combine":"and","conditions":[{"left":"{{ $json.qty }}","operator":"gt","right":5}]}""" },
         { "core.switch", """{"rules":[{"conditions":[{"left":"{{ $json.s }}","operator":"equals","right":"new"}]}]}""" },
@@ -32,6 +34,10 @@ public class CoreNodesTests
         { "core.webhook", """{"path":"x","method":"OPTIONS"}""" },
         { "core.webhook", """{"path":"x","auth":{"type":"jwt","credentialId":"c"}}""" },
         { "core.webhook", """{"path":"x","auth":{"type":"header"}}""" },
+        { "core.schedule", "{}" },
+        { "core.schedule", """{"cron":""}""" },
+        { "core.schedule", """{"cron":"0 7 * * *","timezone":""}""" },
+        { "core.schedule", """{"cron":"0 7 * * *","every":"day"}""" },
         { "core.set", """{"fields":[{"name":""}]}""" },
         { "core.if", """{"conditions":[{"left":1,"operator":"like"}]}""" },
         { "core.switch", """{"rules":[]}""" },
@@ -50,7 +56,7 @@ public class CoreNodesTests
             registry.Register(node);
         }
 
-        string[] expected = ["core.manualTrigger", "core.webhook", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code"];
+        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code"];
         Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Order());
         foreach (var type in expected)
         {
@@ -63,6 +69,7 @@ public class CoreNodesTests
 
         Assert.True(registry.Resolve("core.manualTrigger", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.webhook", 1).Descriptor.IsTrigger);
+        Assert.True(registry.Resolve("core.schedule", 1).Descriptor.IsTrigger);
         Assert.Equal(2, registry.Resolve("core.merge", 1).Descriptor.Inputs.Count);
         Assert.Equal(5, registry.Resolve("core.switch", 1).Descriptor.Outputs.Count);
     }

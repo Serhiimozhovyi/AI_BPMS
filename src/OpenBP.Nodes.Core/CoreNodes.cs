@@ -9,11 +9,12 @@ namespace OpenBP.Nodes.Core;
 public static class CoreNodes
 {
     /// <summary>Створює по екземпляру кожного <c>core.*</c> вузла (усі версії).</summary>
-    /// <param name="time">Джерело часу для <c>core.wait</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
+    /// <param name="time">Джерело часу для <c>core.wait</c> і <c>core.schedule</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
     public static IReadOnlyList<INode> All(TimeProvider? time = null) =>
     [
         new ManualTriggerNode(),
         new WebhookNode(),
+        new ScheduleNode(time),
         new SetNode(),
         new IfNode(),
         new SwitchNode(),

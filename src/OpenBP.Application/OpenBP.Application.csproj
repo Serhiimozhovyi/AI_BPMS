@@ -6,6 +6,8 @@
   <ItemGroup>
     <!-- Лише PasswordHasher<T> (docs/architecture.md §10.6); без UserManager/IdentityDbContext. -->
     <PackageReference Include="Microsoft.Extensions.Identity.Core" />
+    <!-- Тригер core.schedule (F2-11): Quartz.NET з таблицями в Postgres (ADR-001). -->
+    <PackageReference Include="Quartz" />
   </ItemGroup>
 
   <ItemGroup>
