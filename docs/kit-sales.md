@@ -58,7 +58,8 @@
 
 - Необов'язковий `executions.correlation_key` (текст до 200 символів) з індексом `(workflow_id, correlation_key)`.
 - Задається виразом у тригері (`core.webhook`, `mcp.poll`, ручний запуск — параметр `correlationKey` вузла) або параметром REST/MCP-запуску (`correlationKey`). Для угоди — `{{ $json.Id }}` з `CrmSales`, для контрагента — його Id.
-- Налаштування сценарію `settings.correlation: { skipIfActive: true }`: якщо є активне (`queued`/`running`/`waiting`) виконання цього сценарію з тим самим ключем, нове **не створюється**. Подія пишеться в системний журнал і в аудит; webhook відповідає 200 `{ skipped: true, executionId: <активне> }`; MCP/REST-запуск — 409 `EXECUTION_DUPLICATE` з id активного.
+- Налаштування сценарію `settings.correlation: { skipIfActive: true }`: якщо є активне (`queued`/`running`/`cancelling`, після F5-02 ще й `waiting`) виконання цього сценарію з тим самим ключем, дубль записується як `cancelled` з поясненням і id активного в `error`, job не ставиться (так само, як `concurrency.onLimit: drop`). Webhook відповідає 202 з id цього запису, REST/MCP-запуск повертає його ж. Так пропуск видно в журналі виконань.
+- `mcp.poll` із ключем запускає окреме виконання на кожен новий запис, щоб кожна угода мала свій процес.
 - Фільтр за ключем у `/executions` (UI, REST `?correlationKey=`, MCP `list_executions`). Так видно «які процеси йдуть по цій угоді».
 - Не плутати з дедуплікацією вебхука (F6-05): та відсікає повторний HTTP-запит у вікні часу, незалежно від стану виконання.
 
