@@ -47,6 +47,10 @@ internal sealed class EngineNodeContext : INodeContext
 
     public NodeDefinition Node { get; }
 
+    public IReadOnlyDictionary<string, IReadOnlyList<Item>> NodeOutputs => _nodes;
+
+    public string Timezone => _timezone;
+
     public Guid ExecutionId { get; }
 
     public IExecutionLogger Logger { get; }

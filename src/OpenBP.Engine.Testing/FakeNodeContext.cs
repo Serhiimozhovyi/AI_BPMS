@@ -39,6 +39,14 @@ public sealed class FakeNodeContext : INodeContext
     /// <inheritdoc />
     public JsonObject NodeState { get; set; } = [];
 
+    /// <summary>Виходи «вже виконаних» вузлів за назвою; тест задає їх напряму.</summary>
+    public Dictionary<string, IReadOnlyList<Item>> NodeOutputs { get; init; } = new(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public string Timezone { get; set; } = "UTC";
+
+    IReadOnlyDictionary<string, IReadOnlyList<Item>> INodeContext.NodeOutputs => NodeOutputs;
+
     IExecutionLogger INodeContext.Logger => Logger;
 
     IBinaryStore INodeContext.Binary => Binary;
