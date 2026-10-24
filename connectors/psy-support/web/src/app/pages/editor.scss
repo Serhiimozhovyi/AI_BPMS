@@ -1,0 +1,33 @@
+.editor {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px 16px;
+    max-width: 960px;
+
+    label,
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--ac-cool-grey-4);
+        font-size: 12px;
+    }
+
+    input,
+    select,
+    textarea {
+        color: var(--ac-vivid);
+        font: inherit;
+        font-size: 14px;
+    }
+
+    textarea {
+        padding: 8px 12px;
+        border: 1px solid var(--ac-line);
+        border-radius: var(--ac-radius-sm);
+    }
+
+    .wide {
+        grid-column: 1 / -1;
+    }
+}

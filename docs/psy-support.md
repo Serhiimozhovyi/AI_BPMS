@@ -222,6 +222,10 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
 - Перший координатор створюється під час старту з `PSY_ADMIN_EMAIL`/`PSY_ADMIN_PASSWORD`, якщо облікових записів немає.
 - 5 невдалих входів поспіль блокують вхід на 15 хв. Сесія закінчується через 12 год бездіяльності.
 - Cookie `psy_session`: `HttpOnly`, `SameSite=Strict` (захист від CSRF для REST), `Secure` за HTTPS.
+- Сторінки адмінки (F3-35, `connectors/psy-support/web`): вхід, пароль за посиланням, розклад (слоти й шаблони),
+  записи, події з учасниками й оголошеннями, сеанси БСТ з чергою, матеріали; координатору ще тексти бота, психологи й
+  облікові записи, лічильники, журнал, видалення даних (§8). Меню показує лише сторінки ролі; сторінки координатора
+  закриті і в маршрутах, і в REST (403).
 - REST `/api/v1` (F3-34), дати — ISO 8601 з поясом, JSON — snake_case:
   - вхід: `POST auth/login`, `POST auth/logout`, `GET auth/me`, `POST auth/invite` (пароль за посиланням, ≥ 10 символів);
   - обидві ролі: `GET psychologists`, `GET|POST slots`, `PUT slots/{id}/status`, `DELETE slots/{id}`,
