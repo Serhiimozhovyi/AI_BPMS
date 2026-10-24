@@ -8,7 +8,7 @@ namespace OpenBP.Data;
 /// за попередній — і в порівнянні <see cref="Guid"/>, і в порядку <c>uuid</c> Postgres. Між процесами порядок
 /// задає годинник; <c>execution_steps</c> сортуються за <c>id</c>, щоб знімок повертав кроки в порядку збереження.
 /// </summary>
-internal static class SequentialGuid
+public static class SequentialGuid
 {
     private const long MaxCounter = (1L << 42) - 1;
 

@@ -16,7 +16,8 @@ internal static class ExecutionMapping
         ExecutionStates.FromDb(e.Status),
         e.StartedAt,
         e.FinishedAt,
-        e.Error);
+        e.Error,
+        e.ResumedFromExecutionId);
 
     /// <summary>Крок як збережений: items і помилка вже очищені від секретів (F2-04).</summary>
     public static ExecutionStepDto ToStep(ExecutionStepEntity e) => new(

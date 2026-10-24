@@ -74,6 +74,18 @@ public interface IExecutionService
     /// <exception cref="NotFoundException">Виконання немає.</exception>
     /// <exception cref="ConflictException">Виконання ще не завершене (код <c>EXECUTION_NOT_FINISHED</c>).</exception>
     Task<ExecutionSummary> RetryAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
+    /// Продовжити помилкове (<c>error</c>/<c>timed_out</c>) виконання з вузла, що впав (<see cref="Engine.Execution.ExecutionMode.Resume"/>,
+    /// F6-08): нове виконання тієї самої версії, успішні вузли не виконуються знову. Роль editor.
+    /// </summary>
+    /// <param name="id">Вихідне виконання.</param>
+    /// <param name="items">Нові items на вхід 0 вузла, що впав; <c>null</c> — ті самі, що були.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Виконання немає.</exception>
+    /// <exception cref="ConflictException"><c>EXECUTION_NOT_FAILED</c> — стан не <c>error</c>/<c>timed_out</c>.</exception>
+    /// <exception cref="WorkflowValidationException"><c>RESUME_INPUT_NOT_APPLICABLE</c> — <paramref name="items"/> нікуди подати.</exception>
+    Task<ExecutionSummary> ResumeFromFailedAsync(Guid id, IReadOnlyList<Item>? items, CancellationToken ct);
 }
 
 /// <summary>

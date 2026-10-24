@@ -115,6 +115,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("mode");
 
+                    b.Property<Guid?>("ResumedFromExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resumed_from_execution_id");
+
                     b.Property<DateTimeOffset?>("ScheduledAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("scheduled_at");

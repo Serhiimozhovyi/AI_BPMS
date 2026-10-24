@@ -238,9 +238,15 @@ public sealed class WorkflowExecutor
     private async Task<StepRecord> RunNodeAsync(PlannedNode node, RunState run, CancellationToken token)
     {
         var definition = node.Definition;
-        var inputs = run.GatherInputs(node);
-        var startedAt = _time.GetUtcNow();
         var request = run.Request;
+        var inputs = run.GatherInputs(node);
+        if (inputs.Length > 0 && request.InputOverrides.TryGetValue(definition.Id, out var overridden))
+        {
+            // Новий масив: GatherInputs віддає List<Item>[], і запис іншого типу в нього впав би (коваріантність масивів).
+            inputs = [[.. overridden.Select(RunState.Clone)], .. inputs.Skip(1)];
+        }
+
+        var startedAt = _time.GetUtcNow();
 
         StepRecord Step(StepStatus status, Item[][] output, StepError? error = null) => new()
         {

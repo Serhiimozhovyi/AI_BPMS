@@ -491,6 +491,52 @@ public class ExecutionTests(ApiFactory api)
             HttpStatusCode.NotFound, "NOT_FOUND");
     }
 
+    [Fact]
+    public async Task Resume_FailedExecution_CopiesCompletedStepsAndQueuesResumeWithNewInput()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var viewer = await LoginAsync(UserRole.Viewer);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        await MarkRunningAsync(executionId);
+
+        await AssertProblemAsync(
+            await editor.PostAsync($"/api/v1/executions/{executionId}/resume", null),
+            HttpStatusCode.Conflict, "EXECUTION_NOT_FAILED");
+
+        var store = new PostgresExecutionStore(new Contexts(api));
+        await store.SaveStepAsync(Step(executionId, "n_start", "з тригера"), default);
+        await store.SaveStepAsync(Step(executionId, "n_set", "ні") with { Status = StepStatus.Error, Output = [], Error = new StepError("Вузол упав.") }, default);
+        await store.FinishAsync(Finished(executionId, ExecutionStatus.Error, "Вузол упав."), default);
+
+        await AssertProblemAsync(
+            await viewer.PostAsync($"/api/v1/executions/{executionId}/resume", null),
+            HttpStatusCode.Forbidden, "FORBIDDEN");
+
+        var response = await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/resume", new { items = new[] { new { json = new { value = "виправлено" } } } });
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var resumed = await JsonAsync(response);
+        var resumeId = resumed.GetProperty("id").GetGuid();
+        Assert.Equal($"/api/v1/executions/{resumeId}", response.Headers.Location?.OriginalString);
+        Assert.Equal("resume", resumed.GetProperty("mode").GetString());
+        Assert.Equal(executionId, resumed.GetProperty("resumedFromExecutionId").GetGuid());
+
+        await using var db = api.CreateDbContext();
+        var copied = await db.ExecutionSteps.Where(s => s.ExecutionId == resumeId).ToListAsync();
+        Assert.Equal("n_start", Assert.Single(copied).NodeId);
+        var payload = (await db.Jobs.Where(j => j.Kind == JobKinds.Execution).Select(j => j.Payload).ToListAsync())
+            .Select(JobJson.Deserialize<ExecutionJobPayload>)
+            .Single(p => p.ExecutionId == resumeId);
+        Assert.Equal(ExecutionMode.Resume, payload.Mode);
+        Assert.Equal("n_start", payload.StartNodeId);
+        Assert.Equal("виправлено", payload.InputOverrides!["n_set"].Single().Json["value"]!.GetValue<string>());
+
+        // Невідоме виконання — 404.
+        await AssertProblemAsync(
+            await editor.PostAsync($"/api/v1/executions/{Guid.NewGuid()}/resume", null),
+            HttpStatusCode.NotFound, "NOT_FOUND");
+    }
+
     // ---------- SSE ----------
 
     [Fact]

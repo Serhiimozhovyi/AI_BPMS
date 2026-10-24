@@ -2,6 +2,8 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -18,7 +20,9 @@ import {
   ExecutionsApiService,
   executionModeLabel,
   executionStateLabel,
+  failedStep,
   isFinalState,
+  parseItems,
 } from '../../executions/executions-api.service';
 import { WorkflowSummary, WorkflowsApiService } from '../../workflows/workflows-api.service';
 
@@ -48,13 +52,14 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
 
 /**
  * `/executions` (F3-09): журнал виконань з фільтрами (сценарій, стан, період) і пагінацією; деталі — кроки по вузлах
- * з input/output (та сама панель, що в тестовому запуску), живе оновлення через SSE, «Скасувати» і «Повторити».
+ * з input/output (та сама панель, що в тестовому запуску), живе оновлення через SSE, «Скасувати», «Повторити» і
+ * «Продовжити з вузла» (F6-08) з редактором вхідних items вузла, що впав.
  * `?workflowId=` — журнал одного сценарію (посилання з канвасу).
  */
 @Component({
   selector: 'app-executions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatProgressBarModule, NodeRunDataComponent],
+  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, NodeRunDataComponent],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@executions.title">Виконання</h1>
@@ -152,7 +157,42 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
                 Повторити
               </button>
             }
+            @if (canResume(d.summary.state)) {
+              <button mat-stroked-button type="button" data-testid="resume-button" [disabled]="acting() || resumeOpen()" (click)="openResume()" i18n="@@executions.resume">
+                Продовжити з вузла
+              </button>
+            }
           </div>
+          @if (d.summary.resumedFromExecutionId; as source) {
+            <p class="mb-2 opacity-70" data-testid="resumed-from">
+              <ng-container i18n="@@executions.resumedFrom">Продовжує виконання</ng-container>
+              <button mat-button type="button" (click)="select(source)">{{ source }}</button>
+            </p>
+          }
+          @if (resumeOpen()) {
+            <div class="mb-4 flex flex-col gap-2 rounded border p-3" data-testid="resume-panel">
+              @if (resumeStep(); as failed) {
+                <p i18n="@@executions.resume.from">Вузол «{{ nodeName(failed.nodeId) }}» виконається знову, вузли до нього — ні.</p>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label i18n="@@executions.resume.items">Вхідні items (вхід 0)</mat-label>
+                  <textarea matInput rows="8" class="font-mono" data-testid="resume-items" [value]="resumeText()" (input)="resumeText.set(text($event))"></textarea>
+                  @if (resumeError(); as message) {
+                    <mat-hint class="text-red-700" data-testid="resume-items-error">{{ message }}</mat-hint>
+                  } @else {
+                    <mat-hint i18n="@@executions.resume.items.hint">Змініть дані, щоб виконати вузол з виправленими items</mat-hint>
+                  }
+                </mat-form-field>
+              } @else {
+                <p i18n="@@executions.resume.noFailedNode">Виконання зупинилось між вузлами: продовжаться вузли, що не встигли виконатись.</p>
+              }
+              <div class="flex gap-2">
+                <button mat-flat-button type="button" data-testid="resume-submit" [disabled]="acting() || !!resumeError()" (click)="resume(d.summary.id)" i18n="@@executions.resume.submit">
+                  Продовжити
+                </button>
+                <button mat-button type="button" data-testid="resume-cancel" (click)="resumeOpen.set(false)" i18n="@@executions.resume.cancel">Скасувати</button>
+              </div>
+            </div>
+          }
           @if (d.summary.error) {
             <p role="alert" class="mb-2 text-red-700" data-testid="detail-error">{{ d.summary.error }}</p>
           }
@@ -207,6 +247,19 @@ export class ExecutionsPage implements OnInit {
   private readonly nodeNames = signal<ReadonlyMap<string, string>>(new Map());
   readonly acting = signal(false);
   readonly actionError = signal<string | null>(null);
+  readonly resumeOpen = signal(false);
+  readonly resumeText = signal('');
+  /** Текст редактора на момент відкриття: незмінений — продовжуємо з тими самими входами. */
+  private readonly resumeInitial = signal('');
+  readonly resumeStep = computed(() => {
+    const detail = this.selected();
+    return detail ? failedStep(detail) : null;
+  });
+  readonly resumeError = computed(() => {
+    if (!this.resumeStep() || this.resumeText() === this.resumeInitial()) return null;
+    const parsed = parseItems(this.resumeText());
+    return 'error' in parsed ? parsed.error : null;
+  });
 
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
   readonly selectedStep = computed<ExecutionStep | null>(() => {
@@ -277,6 +330,7 @@ export class ExecutionsPage implements OnInit {
   select(id: string): void {
     this.stopLive();
     this.actionError.set(null);
+    this.resumeOpen.set(false);
     this.api
       .get(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -323,6 +377,45 @@ export class ExecutionsPage implements OnInit {
           this.actionError.set(apiErrorMessage(e));
         },
       });
+  }
+
+  openResume(): void {
+    const text = JSON.stringify(this.resumeStep()?.input[0] ?? [], null, 2);
+    this.resumeInitial.set(text);
+    this.resumeText.set(text);
+    this.resumeOpen.set(true);
+  }
+
+  resume(id: string): void {
+    if (this.resumeError()) return;
+    const changed = !!this.resumeStep() && this.resumeText() !== this.resumeInitial();
+    const parsed = changed ? parseItems(this.resumeText()) : null;
+    const items = parsed && 'items' in parsed ? parsed.items : null;
+    this.acting.set(true);
+    this.actionError.set(null);
+    this.api
+      .resume(id, items)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => {
+          this.acting.set(false);
+          this.resumeOpen.set(false);
+          this.load();
+          this.select(summary.id);
+        },
+        error: (e: unknown) => {
+          this.acting.set(false);
+          this.actionError.set(apiErrorMessage(e));
+        },
+      });
+  }
+
+  text(event: Event): string {
+    return (event.target as HTMLTextAreaElement).value;
+  }
+
+  canResume(state: ExecutionState): boolean {
+    return state === 'error' || state === 'timed_out';
   }
 
   canCancel(state: ExecutionState): boolean {

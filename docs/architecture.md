@@ -88,10 +88,10 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 - Помилки: `OpenBpException` → результат tool'а з `isError: true` і `structuredContent = { code, message, errors? }` (`errors` — `WorkflowValidationError[]` для `WORKFLOW_INVALID`), ті самі коди, що в REST; той самий JSON дублюється текстовим блоком. Робить це фільтр `tools/call` (`McpErrors`), тож tools не ловлять винятки самі; `ArgumentException` (напр. `definition` не об'єкт або не тієї форми) → `BAD_REQUEST`, як 400 у REST; інші винятки SDK віддає загальним `isError` без деталей. У `resources/read` помилка — JSON-RPC: `NOT_FOUND` → `ResourceNotFound` (-32002), решта → `InvalidRequest`, код OpenBP — на початку повідомлення.
 - Реалізація (F3-03): `AddOpenBpMcpServer()` — `serverInfo.name = openbp`, `WithHttpTransport(Stateless = true)`, tools/resources з `OpenBP.Mcp.Server`; `MapOpenBpMcp("/mcp", <схема API-ключа>)` — ендпойнт з політикою лише цієї схеми, тож cookie UI ігнорується, а без ключа, з невідомим чи відкликаним ключем — 401. `ICurrentUser` у tool'і — власник ключа (ті самі права, що в REST). JSON відповідей — camelCase, переліки рядками; `null`-поля пишуться, бо `outputSchema` tools робить їх обов'язковими (F3-17). `describe_connectors` і `openbp://connectors` віддають `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }` — без `config` і `credentialId`; `outputSchema` (F3-22) — форма результату tool'а, щоб агент писав вирази наступних вузлів.
 - Сценарії (F3-04): `definition` в аргументах і відповідях — JSON-об'єкт за `WorkflowJson.Options` (той самий вигляд, що в REST і файлах, невідомі поля зберігаються). `list_workflows` → `{ items, page, pageSize, total }`; `get_workflow`/`create_workflow`/`update_workflow` → `{ id, name, active, version, versionId, updatedAt, definition }`; `validate_workflow` → `{ valid, errors }` (помилки визначення — не помилка tool'а); `openbp://workflows/{id}` — `definition` поточної версії.
-- Виконання (F3-05): `run_workflow { id, startNodeId?, startItems?, wait = true, timeoutSec = 60 }` — ручний запуск через `IExecutionService.StartAsync`; з `wait` чекає фінального стану через `IExecutionEventSource` (не довше `timeoutSec`, максимум 600 с) і віддає `ExecutionDetail` з кроками; якщо час вийшов — `ExecutionDetail` як є (`queued`/`running`), без помилки; без `wait` — одразу `queued`. `get_execution`, `list_executions { workflowId?, status?, page? }` (`status` — snake_case, як у REST; невідомий → `BAD_REQUEST`), `cancel_execution`; `openbp://executions/{id}` — знімок `ExecutionDetail`. Стани в JSON — snake_case (`timed_out`), кроки — вже очищені від секретів (§8).
+- Виконання (F3-05): `run_workflow { id, startNodeId?, startItems?, wait = true, timeoutSec = 60 }` — ручний запуск через `IExecutionService.StartAsync`; з `wait` чекає фінального стану через `IExecutionEventSource` (не довше `timeoutSec`, максимум 600 с) і віддає `ExecutionDetail` з кроками; якщо час вийшов — `ExecutionDetail` як є (`queued`/`running`), без помилки; без `wait` — одразу `queued`. `get_execution`, `list_executions { workflowId?, status?, page? }` (`status` — snake_case, як у REST; невідомий → `BAD_REQUEST`), `cancel_execution`, `resume_execution { id, items? }` (F6-08); `openbp://executions/{id}` — знімок `ExecutionDetail`. Стани в JSON — snake_case (`timed_out`), кроки — вже очищені від секретів (§8).
 - Один вузол (F3-06): `test_node { workflowId, nodeId, items?, timeoutSec = 60 }` — обгортка над `IExecutionService.StartNodeAsync` (той самий запуск одного вузла, що й UI F2-21: `destinationNodeId` + `runData`, §10.3). Вхід: з `items` — вони на вході 0 вузла (як output першого попередника на цьому вході; інші предки — порожні, решта графа не виконується; вузол без входу → `BAD_REQUEST`); без `items` — output предків з останнього ручного виконання у фінальному стані, а де його немає — `pinData`. Сам вузол виконується, навіть якщо закріплений. Чекає завершення і віддає `{ executionId, status, input, output }` (`Item[][]`); помилка вузла → `isError` з кодом `NODE_FAILED` і текстом помилки (вже очищеним від секретів, §8); вузол не виконався (зокрема не встиг за `timeoutSec`) → теж `NODE_FAILED` зі станом виконання; невідомий вузол → `WORKFLOW_INVALID` (`DESTINATION_NODE_UNKNOWN`).
 - Тести `/mcp` — `tests/OpenBP.Mcp.Server.Tests`: `McpServerFactory` (Api над Testcontainers + MCP-клієнт SDK з API-ключем потрібної ролі; `EnsureWorkerAsync()` — воркер у процесі тестів над тією ж БД, `CreateMockConnectorAsync()` — stdio-моки 1С/Telegram через REST) — спільний хелпер F3-03…F3-06, F3-17.
-- Tools (ADR-002): `describe_connectors`, `describe_nodes` (F3-21: типи вузлів, порти, схеми параметрів — те саме, що REST `/nodes`), `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `list_workflow_groups`, `create_workflow_group`, `move_workflow` (F3-63), `run_workflow` (з `wait`), `get_execution`, `list_executions`, `cancel_execution`, `test_node`. Resources: `openbp://schema/workflow-format`, `openbp://connectors`, `openbp://nodes`, `openbp://workflows/{id}`, `openbp://executions/{id}` (знімок; підписки — поза MVP). Детальний опис — `docs/mcp-server.md` (F3-17).
+- Tools (ADR-002): `describe_connectors`, `describe_nodes` (F3-21: типи вузлів, порти, схеми параметрів — те саме, що REST `/nodes`), `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `list_workflow_groups`, `create_workflow_group`, `move_workflow` (F3-63), `run_workflow` (з `wait`), `get_execution`, `list_executions`, `cancel_execution`, `resume_execution`, `test_node`. Resources: `openbp://schema/workflow-format`, `openbp://connectors`, `openbp://nodes`, `openbp://workflows/{id}`, `openbp://executions/{id}` (знімок; підписки — поза MVP). Детальний опис — `docs/mcp-server.md` (F3-17).
 
 ## 5. Вирази і Code-вузол
 
@@ -115,7 +115,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at |
-| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error |
+| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
@@ -230,7 +230,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `POST /workflows/{id}/executions { startNodeId?, startItems?, destinationNodeId?, runData? }` | editor | 202 `ExecutionSummary` (ручний запуск; `destinationNodeId` — «Виконати вузол»: лише вузол і його попередники, сам вузол виконується навіть із `pinData`; `runData` — виходи вузлів попереднього запуску `{ nodeId: Item[][] }` по портах, такі вузли не виконуються, мають пріоритет над `pinData`; невідомий вузол → 422 `START_NODE_UNKNOWN`/`DESTINATION_NODE_UNKNOWN`) |
 | `GET /executions?workflowId&status&from&to&page&pageSize` | viewer | `PageResult<ExecutionSummary>` |
 | `GET /executions/{id}` | viewer | `ExecutionDetail` з кроками |
-| `POST /executions/{id}/cancel` · `POST /executions/{id}/retry` | editor | 202 `ExecutionSummary` |
+| `POST /executions/{id}/cancel` · `POST /executions/{id}/retry` · `POST /executions/{id}/resume` (`{ items? }`) | editor | 202 `ExecutionSummary` |
 | `GET /executions/{id}/events` | viewer | SSE, див. 10.5 |
 | `GET /nodes` | viewer | дескриптори `core.*`/`ai.*`/`mcp.*` для палітри |
 | `GET /connectors` · `GET /connectors/{id}` · `GET /connectors/{id}/tools` | viewer | `PageResult<ConnectorSummary>` · `ConnectorDetail` · `McpToolInfo[]` |
@@ -258,7 +258,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 | `kind` | payload | Хто ставить | Що робить воркер |
 |---|---|---|---|
-| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію») | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
+| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax?, inputOverrides? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію»; `inputOverrides` — лише `resume`) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
 | `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
 
 Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;
@@ -312,6 +312,19 @@ job береться лише за вільного слота.
 застосовується, `destinationNodeId`/`runData` ручного запуску не переносяться (повторюється весь граф).
 Незавершене (`queued`/`running`/`cancelling`) → 409 `EXECUTION_NOT_FINISHED`; потрібна роль editor.
 Успішне виконання без збережених даних (`saveSuccessfulData: false`) → 409 `EXECUTION_DATA_NOT_SAVED`.
+
+Продовження з вузла, що впав (`IExecutionService.ResumeFromFailedAsync`, `POST /executions/{id}/resume`, MCP
+`resume_execution`, F6-08): лише для `error`/`timed_out` (інакше 409 `EXECUTION_NOT_FAILED`), роль editor. Нове
+виконання `mode = resume` **тієї самої** `version_id` з `executions.resumed_from_execution_id` = вихідне. В одній
+транзакції з рядком виконання і job'ом у нього копіюються кроки вихідного, що дали результат (`success`, `skipped`,
+`error` вузла з `continueOnFail`; з тими самими `runIndex`, входами, виходами й часом). Воркер, побачивши
+`mode = resume`, не запускає граф з початку, а відновлює виконання зі знімка (`ResumeAsync`, як після падіння):
+скопійовані вузли не виконуються знову, вузол, що впав (останній крок `error` без `continueOnFail` або `cancelled`),
+і все після нього — виконуються. Старт — як у повторі (тригер, що має крок, якщо він один). Тіло `{ items }` — нові
+items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverrides`, у payload — `inputOverrides`); якщо вузла, що
+впав, немає (таймаут між вузлами) або в нього немає входу → 422 `RESUME_INPUT_NOT_APPLICABLE`. Ліміти сценарію
+(F6-06) діють на `resume`, як на повтор. В UI — кнопка «Продовжити з вузла» в деталях виконання з редактором
+вхідних items; деталі продовження посилаються на вихідне виконання.
 
 Зберігання даних і очищення історії (F4-07):
 - `settings.saveSuccessfulData = false` — коли виконання (крім ручного тестового запуску з канвасу) завершилось `success`,

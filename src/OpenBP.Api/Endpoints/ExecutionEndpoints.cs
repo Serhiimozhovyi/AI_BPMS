@@ -63,6 +63,15 @@ public static class ExecutionEndpoints
             .WithDescription("Успішне виконання без збережених даних (`saveSuccessfulData: false`) повторити не можна — 409 EXECUTION_DATA_NOT_SAVED.")
             .Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
 
+        executions.MapPost("/{id:guid}/resume", async (Guid id, ResumeExecutionRequest? body, IExecutionService service, CancellationToken ct) =>
+        {
+            var resumed = await service.ResumeFromFailedAsync(id, body?.Items, ct);
+            return Results.Accepted($"/api/v1/executions/{resumed.Id}", resumed);
+        })
+            .WithSummary("Продовжити помилкове виконання з вузла, що впав")
+            .WithDescription("Нове виконання `mode = resume` тієї самої версії: успішні вузли не виконуються знову, вузол, що впав, — з тими самими входами або з `items` на вході 0. Лише для `error`/`timed_out` (інакше 409 EXECUTION_NOT_FAILED); `items` без вузла, що впав, або для вузла без входу — 422 RESUME_INPUT_NOT_APPLICABLE.")
+            .Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
+
         executions.MapGet("/{id:guid}/events", StreamEventsAsync)
             .WithSummary("Потік подій виконання (SSE)")
             .WithDescription("`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану.")

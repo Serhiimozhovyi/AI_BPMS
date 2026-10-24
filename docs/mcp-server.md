@@ -12,7 +12,7 @@ OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
   - `viewer` — читання (`describe_connectors`, `describe_nodes`, `list_*`, `get_*`, `validate_workflow`, resources);
-  - `editor` — ще `create_workflow`, `update_workflow`, `run_workflow`, `test_node`, `cancel_execution`;
+  - `editor` — ще `create_workflow`, `update_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`;
   - `admin` — те саме (керування конекторами й користувачами в MCP не винесено).
 - Без ключа або з відкликаним ключем — HTTP 401 ще до MCP-обміну. Cookie-сесія UI для `/mcp` не діє.
 
@@ -86,6 +86,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `get_execution` | viewer | `id` | те саме, що `run_workflow` |
 | `list_executions` | viewer | `workflowId?`, `status?`, `page?` | сторінка виконань без кроків |
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
+| `resume_execution` | editor | `id`, `items?` | нове виконання `resume` (у черзі): продовження помилкового (`error`/`timed_out`) з вузла, що впав; успішні вузли не виконуються знову, `items` — нові дані на вхід 0 вузла, що впав (F6-08). Інакше — `EXECUTION_NOT_FAILED` / `RESUME_INPUT_NOT_APPLICABLE` |
 
 `definition` — сценарій у форматі [workflow-format.md](workflow-format.md); схема — resource
 `openbp://schema/workflow-format`, типи вузлів і їхні `parameters` — з `describe_nodes`, `serverId`/`toolName` вузлів
