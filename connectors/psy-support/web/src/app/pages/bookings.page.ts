@@ -99,17 +99,13 @@ export class BookingsPage implements OnInit {
         ) {
             return;
         }
-        this.api
-            .cancelBooking(b.id)
-            .subscribe({
-                next: () => this.reload(),
-                error: (e: unknown) => this.error.set(errorText(e)),
-            });
+        this.api.cancelBooking(b.id).subscribe({
+            next: () => this.reload(),
+            error: (e: unknown) => this.error.set(errorText(e)),
+        });
     }
 
     private reload(): void {
-        this.api
-            .bookings(ALL_FROM, ALL_TO)
-            .subscribe((list) => this.bookings.set(list));
+        this.api.bookings(ALL_FROM, ALL_TO).subscribe((list) => this.bookings.set(list));
     }
 }
