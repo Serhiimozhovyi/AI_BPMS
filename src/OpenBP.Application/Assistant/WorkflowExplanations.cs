@@ -51,7 +51,11 @@ public sealed record WorkflowExplanation(
     public bool Stale => Text is not null && Version != CurrentVersion;
 }
 
-/// <summary>Пояснення сценарію (F3-72): читає viewer, замовляє заново editor.</summary>
+/// <summary>Тіло <c>PUT /workflows/{id}/explanation</c> (F3-73).</summary>
+/// <param name="Text">Пояснення.</param>
+public sealed record WorkflowExplanationInput(string? Text);
+
+/// <summary>Пояснення сценарію (F3-72): читає viewer, замовляє заново й зберігає ззовні (F3-73) editor.</summary>
 public interface IWorkflowExplanationService
 {
     /// <summary>Поточне пояснення сценарію.</summary>
@@ -65,11 +69,25 @@ public interface IWorkflowExplanationService
     /// <param name="ct">Скасування.</param>
     /// <exception cref="NotFoundException">Сценарію немає.</exception>
     Task<WorkflowExplanation> RequestAsync(Guid workflowId, CancellationToken ct);
+
+    /// <summary>
+    /// Зберігає пояснення поточної версії, написане ззовні — ШІ-агентом через <c>/mcp</c> (Claude, ChatGPT) або людиною
+    /// (F3-73). Модель помічника для цього не потрібна.
+    /// </summary>
+    /// <param name="workflowId">Сценарій.</param>
+    /// <param name="text">Пояснення.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="ArgumentException">Порожній або задовгий текст.</exception>
+    /// <exception cref="NotFoundException">Сценарію немає.</exception>
+    Task<WorkflowExplanation> SaveAsync(Guid workflowId, string? text, CancellationToken ct);
 }
 
 /// <summary>Реалізація <see cref="IWorkflowExplanationService"/>.</summary>
 public sealed class WorkflowExplanationService(OpenBpDbContext db, ICurrentUser currentUser, TimeProvider time) : IWorkflowExplanationService
 {
+    /// <summary>Найдовше пояснення, яке можна зберегти ззовні.</summary>
+    public const int MaxTextChars = 50_000;
+
     private const string Entity = "workflow";
 
     private readonly ProjectAccess _access = new(db, currentUser);
@@ -91,16 +109,58 @@ public sealed class WorkflowExplanationService(OpenBpDbContext db, ICurrentUser 
         return ToDto(await db.WorkflowExplanations.AsNoTracking().SingleAsync(e => e.WorkflowId == workflowId, ct), current);
     }
 
+    /// <inheritdoc />
+    public async Task<WorkflowExplanation> SaveAsync(Guid workflowId, string? text, CancellationToken ct)
+    {
+        text = text?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            throw new ArgumentException("Пояснення не може бути порожнім.", nameof(text));
+        }
+
+        if (text.Length > MaxTextChars)
+        {
+            throw new ArgumentException($"Пояснення задовге: до {MaxTextChars} символів.", nameof(text));
+        }
+
+        var workflow = await FindAsync(workflowId, UserRole.Editor, ct);
+        var current = await db.WorkflowVersions.AsNoTracking()
+            .Where(v => v.Id == workflow.CurrentVersionId)
+            .Select(v => new { v.Version, v.Definition })
+            .SingleAsync(ct);
+        var row = await db.WorkflowExplanations.SingleOrDefaultAsync(e => e.WorkflowId == workflowId, ct);
+        if (row is null)
+        {
+            row = new WorkflowExplanationEntity { WorkflowId = workflowId };
+            db.WorkflowExplanations.Add(row);
+        }
+
+        row.Text = text;
+        row.Version = current.Version;
+        row.Status = WorkflowExplanationStatus.Ready;
+        row.Error = null;
+        row.DefinitionHash = WorkflowExplainer.Fingerprint(current.Definition, workflow.Name).Hash;
+        row.UpdatedAt = time.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+        return ToDto(row, current.Version);
+    }
+
     private async Task<int> CurrentVersionAsync(Guid workflowId, UserRole minimum, CancellationToken ct)
+    {
+        var workflow = await FindAsync(workflowId, minimum, ct);
+        return await db.WorkflowVersions.AsNoTracking()
+            .Where(v => v.Id == workflow.CurrentVersionId)
+            .Select(v => v.Version)
+            .SingleAsync(ct);
+    }
+
+    private async Task<WorkflowEntity> FindAsync(Guid workflowId, UserRole minimum, CancellationToken ct)
     {
         currentUser.Require(UserRole.Viewer);
         var workflow = await db.Workflows.AsNoTracking().SingleOrDefaultAsync(w => w.Id == workflowId, ct)
                        ?? throw new NotFoundException(Entity, workflowId);
         await _access.RequireAsync(workflow.GroupId, minimum, Entity, workflowId, ct);
-        return await db.WorkflowVersions.AsNoTracking()
-            .Where(v => v.Id == workflow.CurrentVersionId)
-            .Select(v => v.Version)
-            .SingleAsync(ct);
+        return workflow;
     }
 
     private static WorkflowExplanation ToDto(WorkflowExplanationEntity? row, int current) => row is null
@@ -125,14 +185,32 @@ internal static class WorkflowExplanationQueue
     /// <param name="delay">Пауза перед поясненням.</param>
     /// <param name="force">Пояснити заново, навіть якщо визначення не змінилось.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="definition">
+    /// Визначення нової версії і назва сценарію: якщо значуща частина не змінилась (пересунули вузли), наявне пояснення
+    /// переходить на нову версію без job'а — і тоді, коли його написав ШІ-агент через <c>/mcp</c> (F3-73).
+    /// </param>
     public static async Task ScheduleAsync(
-        OpenBpDbContext db, Guid workflowId, int version, DateTimeOffset now, TimeSpan delay, bool force, CancellationToken ct)
+        OpenBpDbContext db,
+        Guid workflowId,
+        int version,
+        DateTimeOffset now,
+        TimeSpan delay,
+        bool force,
+        CancellationToken ct,
+        (string Definition, string Name)? definition = null)
     {
         var row = await db.WorkflowExplanations.SingleOrDefaultAsync(e => e.WorkflowId == workflowId, ct);
         if (row is null)
         {
             row = new WorkflowExplanationEntity { WorkflowId = workflowId, Version = version };
             db.WorkflowExplanations.Add(row);
+        }
+        else if (!force && definition is { } d && row.Text is not null && row.Status == WorkflowExplanationStatus.Ready
+                 && row.DefinitionHash == WorkflowExplainer.Fingerprint(d.Definition, d.Name).Hash)
+        {
+            row.Version = version;
+            row.UpdatedAt = now;
+            return;
         }
 
         row.Error = null;
@@ -225,9 +303,7 @@ public sealed class WorkflowExplainer(IDbContextFactory<OpenBpDbContext> context
             db.WorkflowExplanations.Add(row);
         }
 
-        var essence = Essence(JsonNode.Parse(current.Definition)!.AsObject(), workflow.Name);
-        var text = essence.ToJsonString(Readable);
-        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        var (essence, text, hash) = Fingerprint(current.Definition, workflow.Name);
         row.UpdatedAt = time.GetUtcNow();
         if (row.Text is not null && row.DefinitionHash == hash)
         {
@@ -291,6 +367,17 @@ public sealed class WorkflowExplainer(IDbContextFactory<OpenBpDbContext> context
         return row.Status == WorkflowExplanationStatus.Ready ? ExplainOutcome.Ready : ExplainOutcome.Failed;
     }
 
+    /// <summary>Значуща частина визначення (<see cref="Essence"/>), її текст для моделі й відбиток.</summary>
+    /// <param name="definition">Визначення версії (jsonb).</param>
+    /// <param name="name">Назва сценарію.</param>
+    internal static (JsonObject Essence, string Text, string Hash) Fingerprint(string definition, string name)
+    {
+        var essence = Essence(JsonNode.Parse(definition)!.AsObject(), name);
+        // jsonb повертає ключі в іншому порядку, ніж їх записали, — відбиток рахується від упорядкованих ключів.
+        var text = Sorted(essence)!.ToJsonString(Readable);
+        return (essence, text, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
+    }
+
     /// <summary>
     /// Значуща частина визначення: без <c>pinData</c>, нотаток і координат вузлів; довгі рядки обрізано. Від неї ж
     /// рахується відбиток, тож пересування вузлів пояснення не оновлює.
@@ -314,6 +401,14 @@ public sealed class WorkflowExplainer(IDbContextFactory<OpenBpDbContext> context
         Trim(copy);
         return copy;
     }
+
+    private static JsonNode? Sorted(JsonNode? node) => node switch
+    {
+        JsonObject obj => new JsonObject(obj.OrderBy(p => p.Key, StringComparer.Ordinal)
+            .Select(p => KeyValuePair.Create(p.Key, Sorted(p.Value)))),
+        JsonArray array => new JsonArray([.. array.Select(Sorted)]),
+        _ => node?.DeepClone(),
+    };
 
     private static void Trim(JsonNode? node)
     {

@@ -205,4 +205,31 @@ public class ExplanationTests(ApiFactory api)
         Assert.Equal("pending", JsonDocument.Parse(await requested.Content.ReadAsStringAsync()).RootElement.GetProperty("status").GetString());
         Assert.Equal([1], (await JobsAsync(id)).Select(p => p.Version));
     }
+
+    [Fact]
+    public async Task Explanation_written_outside_is_stored_without_a_model()
+    {
+        var admin = await LoginAsync(api, ApiFactory.AdminEmail, ApiFactory.AdminPassword);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync(Settings, new { credentialId = (Guid?)null, model = (string?)null })).StatusCode);
+        var editor = await LoginAsync(api, UserRole.Editor);
+        var viewer = await LoginAsync(api, UserRole.Viewer);
+        var name = $"Ззовні {Guid.NewGuid():N}";
+        var id = await CreateWorkflowAsync(editor, Definition(name));
+
+        var saved = await editor.PutAsJsonAsync($"/api/v1/workflows/{id}/explanation", new { text = Reply });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var ready = await ExplanationAsync(viewer, id);
+        Assert.Equal("ready", ready.GetProperty("status").GetString());
+        Assert.Equal(Reply, ready.GetProperty("text").GetString());
+
+        // Пересування вузла не старить пояснення навіть без моделі.
+        await SaveAsync(editor, id, Definition(name, 480));
+        var moved = await ExplanationAsync(viewer, id);
+        Assert.Equal("ready", moved.GetProperty("status").GetString());
+        Assert.False(moved.GetProperty("stale").GetBoolean());
+        Assert.Empty(await JobsAsync(id));
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync($"/api/v1/workflows/{id}/explanation", new { text = "x" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await editor.PutAsJsonAsync($"/api/v1/workflows/{id}/explanation", new { text = " " })).StatusCode);
+    }
 }

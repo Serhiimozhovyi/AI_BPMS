@@ -54,6 +54,14 @@ public static class AssistantEndpoints
             .WithSummary("Пояснити сценарій заново")
             .WithDescription("Ставить пояснення поточної версії в чергу одразу, навіть якщо сценарій не змінювався. Лише editor.");
 
+        api.MapPut("/workflows/{id:guid}/explanation", (Guid id, WorkflowExplanationInput body, IWorkflowExplanationService service, CancellationToken ct) =>
+            service.SaveAsync(id, body.Text, ct))
+            .WithTags(OpenApiSetup.Tags.Assistant)
+            .WithSummary("Зберегти пояснення сценарію")
+            .WithDescription(
+                "Пояснення поточної версії, написане ззовні — ШІ-агентом через `/mcp` (`save_workflow_explanation`) або людиною; " +
+                "модель помічника не потрібна. `text` — до 50 000 символів. Лише editor.");
+
         return api;
     }
 

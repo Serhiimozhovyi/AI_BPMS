@@ -54,7 +54,8 @@ const MAX_POLLS = 60;
               data-testid="explanation-status"
               i18n="@@explanation.notConfigured"
             >
-              Пояснення з'явиться, коли адміністратор вибере модель у «Налаштуваннях → Помічник».
+              Пояснення пише Claude чи ChatGPT, підключений до OpenBP через MCP (інструмент
+              save_workflow_explanation), або модель із «Налаштувань → Помічник».
             </p>
           }
           @case ('failed') {
