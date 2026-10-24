@@ -31,6 +31,8 @@ interface PanelState {
  * Панель вузла (F2-18): форма параметрів з `ParametersSchema` дескриптора (`core.*`) або з `inputSchema` tool'а
  * (`mcp.tool`) і загальні поля вузла. Кожна зміна — новий `WorkflowNode` у `nodeChange`; невідомі поля вузла й
  * параметрів зберігаються. Зовнішня зміна вузла (undo/redo, інший вузол) перебудовує форму, власна — ні.
+ * Дії редактора над вузлом (тест кроку, pin) проєктуються в заголовок поруч із назвою: `[panelActions]`,
+ * редактор закріпленого output — одразу під заголовком: `[panelPinned]` (F3-51).
  */
 @Component({
   selector: 'app-node-panel',
@@ -41,12 +43,16 @@ interface PanelState {
     @let s = state();
     <section class="panel" data-testid="node-panel" [attr.data-node]="s.node.id">
       <header class="panel__header">
-        <h2 class="mat-font-title-sm m-0" data-testid="node-panel-name">{{ s.node.name }}</h2>
+        <div class="panel__title-row">
+          <h2 class="mat-font-title-sm m-0 panel__name" data-testid="node-panel-name">{{ s.node.name }}</h2>
+          <ng-content select="[panelActions]" />
+        </div>
         <span class="panel__type">{{ s.node.type }}</span>
         @if (isMcp(s.node)) {
           <span class="panel__type" data-testid="node-panel-tool">{{ s.node.parameters['serverId'] }} · {{ s.node.parameters['toolName'] }}</span>
         }
       </header>
+      <ng-content select="[panelPinned]" />
 
       @if (!s.descriptor) {
         <p class="panel__note" role="status" data-testid="node-panel-unknown" i18n="@@nodeform.unknownType">
@@ -90,6 +96,19 @@ interface PanelState {
       flex-direction: column;
       gap: 2px;
       margin-bottom: 12px;
+    }
+
+    .panel__title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel__name {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .panel__type {
