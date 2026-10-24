@@ -61,9 +61,23 @@ const TEMPLATES = [
   },
 ];
 
+/** Відповідь фейкового помічника (F3-60): кроки інструментів, нове визначення, текст. */
+function assistantStream(definition: unknown): string {
+  const events = [
+    { type: 'step', tool: 'get_workflow', ok: true, text: 'визначення сценарію' },
+    { type: 'step', tool: 'describe_nodes', ok: true, text: 'типів вузлів: 3' },
+    { type: 'step', tool: 'update_workflow', ok: true, text: "сценарій оновлено: вузлів 2, з'єднань 1" },
+    { type: 'definition', definition },
+    { type: 'message', text: 'Додав ручний запуск і «Привітання».' },
+    { type: 'done' },
+  ];
+  return events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+}
+
 /** Фейковий Api: сценарій з версіями; кожен `PUT` — нова версія. */
 class FakeApi {
   version = 1;
+  assistantRequests: unknown[] = [];
   definition: Definition = {
     formatVersion: 1,
     name: 'E2E',
@@ -93,6 +107,10 @@ class FakeApi {
       if (path === '/api/v1/nodes') return route.fulfill({ json: DESCRIPTORS });
       if (path === '/api/v1/connectors') return route.fulfill({ json: { items: [], page: 1, pageSize: 200, total: 0 } });
       if (path === '/api/v1/workflows/templates') return route.fulfill({ json: TEMPLATES });
+      if (path === `/api/v1/workflows/${WORKFLOW_ID}/assistant` && request.method() === 'POST') {
+        this.assistantRequests.push(request.postDataJSON());
+        return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(TEMPLATES[0].definition) });
+      }
       if (path === '/api/v1/workflows') {
         const items = [this.detail(), { id: ERROR_WORKFLOW_ID, name: 'Сповіщення про помилки', active: true, version: 2, updatedAt: '' }];
         return route.fulfill({ json: { items, page: 1, pageSize: 200, total: items.length } });
@@ -466,4 +484,29 @@ test('F3-59: порожній сценарій — «Почати з прикл�
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
   await expect(page.getByTestId('first-step-hint')).toHaveCount(0);
+});
+
+test('F3-60: «Описати процес» → помічник будує сценарій з тригером і Set; Ctrl+Z скасовує відповідь', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+
+  await page.getByTestId('start-describe').click();
+  await expect(page.getByTestId('assistant-panel')).toBeVisible();
+  await expect(page.getByTestId('empty-start')).toHaveCount(0);
+  await page.getByTestId('assistant-input').fill('зроби сценарій з тригером і Set');
+  await page.getByTestId('assistant-send').click();
+
+  await expect(page.getByTestId('assistant-log')).toContainText('Додав ручний запуск і «Привітання».');
+  await expect(page.getByTestId('assistant-log')).toContainText('Змінив сценарій');
+  await expect(card(page, 'Старт')).toBeVisible();
+  await expect(card(page, 'Привітання')).toBeVisible();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await waitSaved(page);
+  expect(graph(api.definition).nodes).toEqual(['Привітання:core.set', 'Старт:core.manualTrigger']);
+  expect(api.assistantRequests).toEqual([expect.objectContaining({ message: 'зроби сценарій з тригером і Set', history: [] })]);
+
+  await page.getByTestId('assistant-close').click();
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
 });

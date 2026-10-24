@@ -1,0 +1,96 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpEventType } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
+import { parseAssistantStream } from './assistant-api.service';
+import { AssistantPanelComponent } from './assistant-panel.component';
+
+const URL = '/api/v1/workflows/w1/assistant';
+
+function sse(...events: object[]): string {
+  return events.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+}
+
+describe('parseAssistantStream', () => {
+  it('розбирає повні блоки й лишає неповний хвіст', () => {
+    const text = sse({ type: 'message', text: 'а' }, { type: 'done' }) + 'event: step\ndata: {"ty';
+    const { events, consumed } = parseAssistantStream(text);
+    expect(events.map((e) => e.type)).toEqual(['message', 'done']);
+    expect(text.slice(consumed)).toBe('event: step\ndata: {"ty');
+  });
+});
+
+describe('AssistantPanelComponent', () => {
+  const start: WorkflowDefinition = emptyWorkflowDefinition('Заявки');
+
+  function create() {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const fixture = TestBed.createComponent(AssistantPanelComponent);
+    fixture.componentRef.setInput('workflowId', 'w1');
+    fixture.componentRef.setInput('definition', start);
+    fixture.detectChanges();
+    const changes: WorkflowDefinition[] = [];
+    fixture.componentInstance.definitionChange.subscribe((d) => changes.push(d));
+    return { fixture, host: fixture.nativeElement as HTMLElement, http: TestBed.inject(HttpTestingController), changes };
+  }
+
+  function type(host: HTMLElement, text: string) {
+    const input = host.querySelector('[data-testid="assistant-input"]') as HTMLTextAreaElement;
+    input.value = text;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('надсилає запит з визначенням і історією; кроки й текст — у розмові; визначення — один раз наприкінці', () => {
+    const { fixture, host, http, changes } = create();
+    type(host, 'додай Set');
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="assistant-send"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const request = http.expectOne(URL);
+    expect(request.request.body).toEqual({ message: 'додай Set', definition: start, history: [] });
+    const first = { ...start, nodes: [{ id: 'a', name: 'A', type: 'core.manualTrigger', typeVersion: 1, position: [0, 0] as [number, number], parameters: {} }] };
+    const second = { ...first, name: 'інше' };
+    const partial = sse({ type: 'step', tool: 'update_workflow', ok: true, text: 'вузлів 1' }, { type: 'definition', definition: first });
+    request.event({ type: HttpEventType.DownloadProgress, loaded: 1, partialText: partial });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="assistant-busy"]')).not.toBeNull();
+    expect(changes).toEqual([]);
+
+    request.flush(partial + sse({ type: 'definition', definition: second }, { type: 'message', text: 'Готово' }, { type: 'done' }));
+    fixture.detectChanges();
+
+    const lines = Array.from(host.querySelectorAll('[data-kind]')).map((l) => [l.getAttribute('data-kind'), l.textContent?.trim()]);
+    expect(lines).toEqual([
+      ['user', 'додай Set'],
+      ['step', 'Змінив сценарій: вузлів 1'],
+      ['assistant', 'Готово'],
+    ]);
+    expect(changes).toEqual([second]);
+    expect(host.querySelector('[data-testid="assistant-busy"]')).toBeNull();
+
+    // Наступний запит несе історію.
+    type(host, 'а тепер Code');
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="assistant-send"]') as HTMLButtonElement).click();
+    expect(http.expectOne(URL).request.body.history).toEqual([
+      { role: 'user', text: 'додай Set' },
+      { role: 'assistant', text: 'Готово' },
+    ]);
+  });
+
+  it('помилка Api (409 не налаштовано) — текст із detail; запит ззовні з send надсилається одразу', () => {
+    const { fixture, host, http } = create();
+    fixture.componentRef.setInput('prompt', { text: 'Поясни вузол', send: true, seq: 1 });
+    fixture.detectChanges();
+
+    http.expectOne(URL).flush(JSON.stringify({ code: 'ASSISTANT_NOT_CONFIGURED', detail: 'Помічник не налаштований.' }), { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-kind="error"]')?.textContent).toContain('Помічник не налаштований.');
+    expect((host.querySelector('[data-testid="assistant-send"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+});

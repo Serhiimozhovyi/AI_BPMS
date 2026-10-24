@@ -10,6 +10,7 @@ using OpenBP.Api.Errors;
 using OpenBP.Api.Health;
 using OpenBP.Api.Nodes;
 using OpenBP.Api.OpenApi;
+using OpenBP.Application.Assistant;
 using OpenBP.Application.Audit;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
@@ -79,6 +80,9 @@ builder.Services.AddOpenBpWebhookServices();
 // Credentials (F4-01): CRUD без значень секретів, лише для admin.
 builder.Services.AddOpenBpCredentialServices();
 
+// Помічник у редакторі (F3-60): модель з «Налаштувань → Помічник»; credential моделі розшифровується в Api.
+builder.Services.AddOpenBpAssistantServices();
+
 // Конектори (F2-13): CRUD mcp_servers, discovery, тестові виклики; реєстр заповнюється при старті.
 builder.Services.AddOpenBpConnectorServices();
 builder.Services.AddHostedService<ConnectorRegistryLoader>();
@@ -116,7 +120,7 @@ app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
 app.MapOpenBpMetrics();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints().MapAssistantEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

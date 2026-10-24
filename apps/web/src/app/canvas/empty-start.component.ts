@@ -6,7 +6,8 @@ import { ScreenPoint } from './quick-add';
 
 /**
  * Порожній сценарій (F3-59): картка по центру канвасу — «Додати тригер» (спливаюча палітра лише з тригерами) або
- * «Почати з прикладу» (шаблони з `GET /workflows/templates`). Що робити з вибором — вирішує редактор.
+ * «Почати з прикладу» (шаблони з `GET /workflows/templates`) або
+ * «Описати процес» (помічник, F3-60). Що робити з вибором — вирішує редактор.
  */
 @Component({
   selector: 'app-empty-start',
@@ -39,6 +40,7 @@ import { ScreenPoint } from './quick-add';
           <button mat-stroked-button type="button" data-testid="start-template" [disabled]="loading()" (click)="loadTemplates()" i18n="@@emptystart.template">
             Почати з прикладу
           </button>
+          <button mat-stroked-button type="button" data-testid="start-describe" (click)="describe.emit()" i18n="@@emptystart.describe">Описати процес</button>
         </div>
         @if (error()) {
           <p role="alert" class="start__error" data-testid="templates-error">{{ error() }}</p>
@@ -131,6 +133,8 @@ export class EmptyStartComponent {
 
   /** «Додати тригер»: точка, біля якої відкрити спливаючу палітру. */
   readonly addTrigger = output<ScreenPoint>();
+  /** «Описати процес»: відкрити помічника (F3-60). */
+  readonly describe = output<void>();
   /** Вибраний шаблон. */
   readonly pick = output<WorkflowTemplate>();
 

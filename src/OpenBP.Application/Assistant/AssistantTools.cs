@@ -14,7 +14,7 @@ internal static class AssistantTools
 
     private static JsonObject Empty() => new() { ["type"] = "object", ["properties"] = new JsonObject() };
 
-    public static IReadOnlyList<ChatTool> All { get; } =
+    public static IReadOnlyList<LlmTool> All { get; } =
     [
         new(
             DescribeNodes,

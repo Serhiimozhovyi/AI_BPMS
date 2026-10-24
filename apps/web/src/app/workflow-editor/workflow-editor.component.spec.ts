@@ -976,4 +976,34 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvasNodes(fixture)).toEqual([]);
   });
+  it('помічник (F3-60): «Пояснити вузол» відкриває панель замість панелі вузла; відповідь — одна правка, Ctrl+Z її скасовує', async () => {
+    const { fixture, http, host } = await loaded();
+    canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+    click(host, '[data-testid="assistant-explain"]');
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
+    expect(host.querySelector('[data-testid="assistant-panel"]')).not.toBeNull();
+    const request = http.expectOne('/api/v1/workflows/w1/assistant');
+    expect(request.request.body.message).toContain('«Поля» (n_set)');
+    expect(request.request.body.definition.nodes.map((n: { id: string }) => n.id)).toEqual(['n_hook', 'n_set']);
+    const next = { ...workflow.definition, nodes: [workflow.definition.nodes[0]], connections: [] };
+    request.flush(
+      `event: definition\ndata: ${JSON.stringify({ type: 'definition', definition: next })}\n\n` +
+        `event: message\ndata: ${JSON.stringify({ type: 'message', text: 'Прибрав крок' })}\n\nevent: done\ndata: {"type":"done"}\n\n`,
+    );
+    await render(fixture);
+    expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook']);
+
+    key({ key: 'z', ctrlKey: true });
+    await render(fixture);
+    expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
+
+    click(host, '[data-testid="assistant-toggle"]');
+    canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="assistant-panel"]')).toBeNull();
+    expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+  });
 });

@@ -60,7 +60,7 @@ public interface IAssistantSession
 }
 
 /// <summary>
-/// ШІ-помічник у редакторі (F3-60, docs/architecture.md §10.10): модель з налаштувань і інструменти, що дублюють tools
+/// ШІ-помічник у редакторі (F3-60, docs/architecture.md §10.8): модель з налаштувань і інструменти, що дублюють tools
 /// <c>/mcp</c> (<c>describe_nodes</c>, <c>describe_connectors</c>, <c>get_workflow</c>, <c>update_workflow</c>,
 /// <c>test_node</c>) — усередині Api. Помічник не зберігає сценарій: нове визначення віддається редактору подією
 /// <c>definition</c> і стає звичайною правкою з історією. Значень credentials і журналу виконань модель не бачить.
@@ -140,20 +140,20 @@ public sealed class AssistantService(
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(limits.Timeout);
 
-            var turns = new List<ChatTurn>();
+            var turns = new List<LlmTurn>();
             foreach (var turn in request.History ?? [])
             {
                 if (turn.Role is "user" or "assistant" && !string.IsNullOrWhiteSpace(turn.Text))
                 {
-                    turns.Add(new ChatTurn(turn.Role, turn.Text));
+                    turns.Add(new LlmTurn(turn.Role, turn.Text));
                 }
             }
 
-            turns.Add(ChatTurn.User(request.Message!));
+            turns.Add(LlmTurn.User(request.Message!));
             var steps = 0;
             while (true)
             {
-                ChatReply reply;
+                LlmReply reply;
                 AssistantEvent? failure = null;
                 try
                 {
@@ -161,12 +161,12 @@ public sealed class AssistantService(
                 }
                 catch (LlmException ex)
                 {
-                    reply = new ChatReply("", []);
+                    reply = new LlmReply("", []);
                     failure = new AssistantEvent("error", ex.Message, Code: "ASSISTANT_PROVIDER_ERROR");
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
-                    reply = new ChatReply("", []);
+                    reply = new LlmReply("", []);
                     failure = TimedOut(limits);
                 }
 
@@ -195,7 +195,7 @@ public sealed class AssistantService(
                     break;
                 }
 
-                turns.Add(new ChatTurn("assistant", reply.Text, reply.ToolCalls));
+                turns.Add(new LlmTurn("assistant", reply.Text, reply.ToolCalls));
                 foreach (var call in reply.ToolCalls)
                 {
                     steps++;
@@ -222,7 +222,7 @@ public sealed class AssistantService(
                         break;
                     }
 
-                    turns.Add(ChatTurn.Tool(call.Id, Truncate(outcome.Result)));
+                    turns.Add(LlmTurn.Tool(call.Id, Truncate(outcome.Result)));
                 }
 
                 if (failure is not null)
@@ -240,7 +240,7 @@ public sealed class AssistantService(
             $"Помічник не вклався в {(int)limits.Timeout.TotalSeconds} с. Уточніть запит або повторіть.",
             Code: "ASSISTANT_TIMEOUT");
 
-        private async Task<ToolOutcome> ExecuteAsync(ChatToolCall call, CancellationToken ct)
+        private async Task<ToolOutcome> ExecuteAsync(LlmToolCall call, CancellationToken ct)
         {
             try
             {
