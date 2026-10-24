@@ -3,10 +3,14 @@ import { MatButtonModule } from '@angular/material/button';
 import { Api, Booking } from '../core/api';
 import { errorText } from '../core/errors';
 import { Session } from '../core/session';
-import { dayStartIso, formatDateTime } from '../core/time';
+import { formatDateTime } from '../core/time';
+
+/** Межі вибірки «усі записи»: бекенд вимагає from і to. */
+const ALL_FROM = '2000-01-01T00:00:00Z';
+const ALL_TO = '2100-01-01T00:00:00Z';
 
 /**
- * Записи на консультації на 14 днів. Психолог бачить ім'я й телефон лише у своїх записах, записи колег — без даних
+ * Усі активні записи на консультації, від найраніших до найпізніших. Психолог бачить ім'я й телефон лише у своїх записах, записи колег — без даних
  * людини (це вирішує бекенд, §7.1).
  */
 @Component({
@@ -17,7 +21,7 @@ import { dayStartIso, formatDateTime } from '../core/time';
         <section class="page p-6">
             <h1 class="page-title" i18n="@@bookings.title">Записи на консультації</h1>
             <p class="muted" i18n="@@bookings.hint">
-                Найближчі 14 днів. Скасування сповіщає людину в боті.
+                Усі записи. Скасування сповіщає людину в боті.
             </p>
             @if (error()) {
                 <p class="error" role="alert">{{ error() }}</p>
@@ -81,7 +85,9 @@ export class BookingsPage implements OnInit {
 
     protected canCancel(b: Booking): boolean {
         return (
-            this.session.isCoordinator() || this.session.me()?.psychologist_id === b.psychologist_id
+            new Date(b.starts_at) > new Date() &&
+            (this.session.isCoordinator() ||
+                this.session.me()?.psychologist_id === b.psychologist_id)
         );
     }
 
@@ -102,9 +108,8 @@ export class BookingsPage implements OnInit {
     }
 
     private reload(): void {
-        const tz = this.session.timezone();
         this.api
-            .bookings(new Date().toISOString(), dayStartIso(tz, 15))
+            .bookings(ALL_FROM, ALL_TO)
             .subscribe((list) => this.bookings.set(list));
     }
 }
