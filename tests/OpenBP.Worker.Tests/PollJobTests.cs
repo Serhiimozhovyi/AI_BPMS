@@ -172,6 +172,7 @@ public sealed class PollJobTests(PostgresFixture postgres)
         {
           "formatVersion": 1,
           "name": "Нові замовлення",
+          "settings": { "timezone": "UTC", "executionTimeoutSec": 0, "errorWorkflowId": null, "saveSuccessfulData": true },
           "nodes": [
             { "id": "n_poll", "name": "Замовлення", "type": "mcp.poll", "typeVersion": 1, "position": [0, 0],
               "parameters": { "serverId": "{{serverId}}", "toolName": "orders", "arguments": { "ids": [{{string.Join(",", ids)}}] },

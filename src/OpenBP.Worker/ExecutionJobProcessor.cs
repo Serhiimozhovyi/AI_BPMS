@@ -196,7 +196,11 @@ public sealed partial class ExecutionJobProcessor
         }
 
         var loadedStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false);
-        var store = new PostgresExecutionStore(_contexts, _time, scrubber);
+        // Ручний тестовий запуск з канвасу показує дані вузлів завжди; решта — за settings.saveSuccessfulData (F4-07).
+        var store = new PostgresExecutionStore(_contexts, _time, scrubber)
+        {
+            KeepSuccessfulData = workflow.Settings.SaveSuccessfulData || payload.Mode == ExecutionMode.Manual,
+        };
         var executor = new WorkflowExecutor(
             _nodes,
             store,

@@ -82,5 +82,8 @@ scripts/dev.sh test               # dotnet test; тести OpenBP.Data самі
 scripts/dev.sh down
 ```
 
+Історія виконань очищується щодня: завершені виконання старші за 30 днів видаляються. Термін і час задають
+`OPENBP_EXECUTION_RETENTION_DAYS` (`0` — зберігати все) і `OPENBP_EXECUTION_RETENTION_CRON`, див. `.env.example`.
+
 Структура: `src/*` — проєкти з [docs/architecture.md](docs/architecture.md) §1, `tests/*` — xUnit-проєкт на кожен `src/*`.
 Версії NuGet-пакетів — централізовано в `Directory.Packages.props`; спільні налаштування збірки — у `Directory.Build.props`.

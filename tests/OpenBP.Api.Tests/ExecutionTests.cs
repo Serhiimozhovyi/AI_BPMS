@@ -423,6 +423,24 @@ public class ExecutionTests(ApiFactory api)
     // ---------- повтор (F3-08) ----------
 
     [Fact]
+    public async Task Retry_SuccessWithoutSavedData_Returns409()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        await MarkRunningAsync(executionId);
+
+        // saveSuccessfulData: false (F4-07) — після успіху в кроках немає даних, стартових items для повтору теж.
+        var store = new PostgresExecutionStore(new Contexts(api)) { KeepSuccessfulData = false };
+        await store.SaveStepAsync(Step(executionId, "n_start", "з тригера"), default);
+        await store.FinishAsync(Finished(executionId, ExecutionStatus.Success), default);
+
+        await AssertProblemAsync(
+            await editor.PostAsync($"/api/v1/executions/{executionId}/retry", null),
+            HttpStatusCode.Conflict, "EXECUTION_DATA_NOT_SAVED");
+    }
+
+    [Fact]
     public async Task Retry_FinishedExecution_QueuesRetryOfSameVersionWithStartItemsOfTriggerStep()
     {
         var editor = await LoginAsync(UserRole.Editor);
