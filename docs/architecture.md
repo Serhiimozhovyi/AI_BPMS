@@ -101,6 +101,11 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
   виразах: item з тим самим індексом або перший) і `$node["Назва"].all` (усі items) — копії виходів, лише читання;
   вузол, що не виконувався, — помилка з його назвою. `Date` працює в `settings.timezone` сценарію, а не в UTC. Движок
   передає вузлам ці дані через `INodeContext.NodeOutputs` і `INodeContext.Timezone`.
+- Попередній перегляд у редакторі (F3-56): `IExpressionPreviewService` (application-шар) обчислює вираз тим самим
+  `IExpressionEvaluator` і з тими самими лімітами; контекст — `item`/`nodes` з редактора або `pinData` збереженої версії,
+  `$execution.id` — нульовий GUID, `$env` не підставляється (вираз із ним повертає помилку без обчислення). UI: кнопка
+  «розгорнути» біля поля відкриває Monaco з мовою `openbp-expression` (JavaScript лише всередині `{{ }}`), результат
+  з debounce 300 мс і каталог функцій; у звичайному полі `{{ … }}` підсвічуються, помилка розбору — під полем.
 
 ## 6. Схема БД (EF Core, PostgreSQL)
 
@@ -227,6 +232,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[] }` (200 навіть з помилками) |
 | `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
 | `GET /workflows/{id}/versions` · `GET /workflows/{id}/versions/{version}` | viewer | `WorkflowVersionSummary[]` · визначення |
+| `POST /workflows/{id}/expressions/evaluate { expression, nodeId?, item?, nodes? }` | editor | `{ value, error }` (200 і при помилці виразу): попередній перегляд у редакторі виразів (F3-56) тим самим Jint з лімітами виконання (§5); `item` — `$json` (без нього — перший item `pinData` попереднього вузла або `{}`), `nodes` — `{ "Назва": Item[] }` для `$node` (без них — `pinData`); `$env` недоступний — `error` «недоступні в попередньому перегляді», credentials виразам не видно |
 | `POST /workflows/{id}/executions { startNodeId?, startItems?, destinationNodeId?, runData? }` | editor | 202 `ExecutionSummary` (ручний запуск; `destinationNodeId` — «Виконати вузол»: лише вузол і його попередники, сам вузол виконується навіть із `pinData`; `runData` — виходи вузлів попереднього запуску `{ nodeId: Item[][] }` по портах, такі вузли не виконуються, мають пріоритет над `pinData`; невідомий вузол → 422 `START_NODE_UNKNOWN`/`DESTINATION_NODE_UNKNOWN`) |
 | `GET /executions?workflowId&status&from&to&page&pageSize` | viewer | `PageResult<ExecutionSummary>` |
 | `GET /executions/{id}` | viewer | `ExecutionDetail` з кроками |

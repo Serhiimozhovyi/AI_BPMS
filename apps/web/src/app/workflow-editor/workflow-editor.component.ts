@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, effect, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -26,6 +26,7 @@ import { ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../node-form/expression-suggest';
 import { ExpressionTargetService } from '../node-form/expression-target';
+import { ExpressionEditorService } from '../node-form/expression-editor-dialog.component';
 import { MCP_TOOL_TYPES, updateNode } from '../node-form/node-form';
 import { NodePanelComponent } from '../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../nodes/nodes-api.service';
@@ -95,7 +96,7 @@ export interface EditorErrorEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
   imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
-  providers: [ExpressionTargetService],
+  providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
       <header class="editor__bar">
@@ -719,6 +720,8 @@ export class WorkflowEditorComponent implements OnInit {
   // ---------- панель «Вхід | Параметри | Вихід» (F3-52) ----------
 
   private readonly expressionTargets = inject(ExpressionTargetService);
+  /** Редактор виразів з полів (F3-56): попередній перегляд — у цьому сценарії. */
+  private readonly expressionEditor = inject(ExpressionEditorService);
   protected readonly minPanelWidth = MIN_PANEL_WIDTH;
   protected readonly inputTitle = $localize`:@@workfloweditor.input.title:Вхід`;
   protected readonly outputTitle = $localize`:@@workfloweditor.output.title:Вихід`;
@@ -811,6 +814,7 @@ export class WorkflowEditorComponent implements OnInit {
   );
 
   constructor() {
+    effect(() => (this.expressionEditor.workflowId = this.workflowId()));
     // Незбережені зміни не губляться при виході з редактора: відправляємо їх одразу.
     this.destroyRef.onDestroy(() => {
       this.autosave.flush();

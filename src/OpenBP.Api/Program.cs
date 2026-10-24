@@ -19,6 +19,7 @@ using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
+using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Mcp.Server;
@@ -53,6 +54,8 @@ builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
 // Межа таймауту виконання (F4-05): валідатор відхиляє settings.executionTimeoutSec більше за неї.
 builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<IConfiguration>()[WorkflowLimits.MaxExecutionTimeoutKey]));
 builder.Services.AddOpenBpWorkflowServices();
+// Попередній перегляд виразів у редакторі (F3-56): той самий Jint з лімітами, що й у Worker.
+builder.Services.AddSingleton<IExpressionEvaluator>(_ => new JintExpressionEvaluator());
 builder.Services.AddOpenBpNodeServices();
 builder.Services.AddOpenBpExecutionServices();
 

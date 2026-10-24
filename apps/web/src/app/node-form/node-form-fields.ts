@@ -28,6 +28,8 @@ import { Assignment, assignmentsFromInput, inputFieldNames, isUnary } from './co
 import { OptionItem, OptionsMode, OptionsSource, dependencies, filterOptions, findOption, modeFor, resolveArguments } from './dynamic-options';
 import { OptionsConnector, ToolOptionsService } from './tool-options.service';
 import { ExpressionTarget, ExpressionTargetService } from './expression-target';
+import { ExpressionEditorService } from './expression-editor-dialog.component';
+import { ExpressionSegment, expressionSegments, expressionSyntaxError, hasExpression } from './expression-tools';
 import { CodeEditorHandle, MONACO_LOADER } from './monaco-loader';
 import { ValueRules, formatValue, isExpression, isPlainObject, parseValue, valueError, valueErrorMessage } from './node-value';
 import { ARRAY_FIELD, ASSIGNMENTS_FIELD, CODE_FIELD, COMBINE_FIELD, CONDITION_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
@@ -35,6 +37,8 @@ import { ARRAY_FIELD, ASSIGNMENTS_FIELD, CODE_FIELD, COMBINE_FIELD, CONDITION_FI
 /** Спільний стан форми вузла (`FormlyFormOptions.formState`): контекст підказок виразів і конектор вузла. */
 export interface NodeFormState {
   expressionContext?: ExpressionContext;
+  /** Вузол форми — для попереднього перегляду в редакторі виразів (F3-56). */
+  nodeId?: string;
   /** Конектор `mcp.tool`/`mcp.poll` — звідки поля з `x-openbp-options` беруть варіанти (F3-54). */
   connector?: OptionsConnector | null;
 }
@@ -132,9 +136,15 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
               }
             </mat-select>
           } @else if (multiline) {
+            <div class="value__hl">
+            @if (highlight(); as segments) {
+              <div #backdrop class="value__backdrop value__backdrop--multiline" aria-hidden="true" [attr.data-testid]="'highlight-' + key">@for (s of segments; track $index) {@if (s.expression) {<mark class="value__mark">{{ s.text }}</mark>} @else {<span>{{ s.text }}</span>}}</div>
+            }
             <textarea
               #textEl
               matInput
+              class="value__text"
+              (scroll)="syncBackdrop(textEl)"
               rows="3"
               [formControl]="text"
               [required]="!!props.required"
@@ -143,15 +153,22 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
               [matAutocomplete]="suggest"
               [matAutocompleteDisabled]="!canSuggest"
               [attr.data-testid]="'field-' + key"
-              (input)="updateSuggestions(textEl)"
+              (input)="updateSuggestions(textEl); syncBackdrop(textEl)"
               (click)="updateSuggestions(textEl)"
-              (keyup)="caretMoved($event, textEl)"
+              (keyup)="caretMoved($event, textEl); syncBackdrop(textEl)"
               (focus)="activateTarget()"
             ></textarea>
+            </div>
           } @else {
+            <div class="value__hl">
+            @if (highlight(); as segments) {
+              <div #backdrop class="value__backdrop" aria-hidden="true" [attr.data-testid]="'highlight-' + key">@for (s of segments; track $index) {@if (s.expression) {<mark class="value__mark">{{ s.text }}</mark>} @else {<span>{{ s.text }}</span>}}</div>
+            }
             <input
               #textEl
               matInput
+              class="value__text"
+              (scroll)="syncBackdrop(textEl)"
               [formControl]="text"
               [required]="!!props.required"
               [placeholder]="props.placeholder ?? ''"
@@ -159,11 +176,12 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
               [matAutocomplete]="suggest"
               [matAutocompleteDisabled]="!canSuggest"
               [attr.data-testid]="'field-' + key"
-              (input)="updateSuggestions(textEl)"
+              (input)="updateSuggestions(textEl); syncBackdrop(textEl)"
               (click)="updateSuggestions(textEl)"
-              (keyup)="caretMoved($event, textEl)"
+              (keyup)="caretMoved($event, textEl); syncBackdrop(textEl)"
               (focus)="activateTarget()"
             />
+            </div>
           }
           <mat-autocomplete #suggest="matAutocomplete" class="expr-suggest" (optionSelected)="suggestionPicked($event)">
             @for (o of suggestions(); track o.label) {
@@ -182,6 +200,18 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
             <mat-error [attr.data-testid]="'error-' + key">{{ message }}</mat-error>
           }
         </mat-form-field>
+        @if (canExpand()) {
+          <button
+            type="button"
+            class="value__expand"
+            [attr.data-testid]="'expand-' + key"
+            i18n-title="@@nodeform.expression.expand"
+            title="Розгорнути редактор виразу"
+            i18n-aria-label="@@nodeform.expression.expand"
+            aria-label="Розгорнути редактор виразу"
+            (click)="openExpressionEditor()"
+          ><span class="material-symbols-outlined" aria-hidden="true">open_in_full</span></button>
+        }
       }
       @if (canToggle) {
         <button
@@ -197,6 +227,9 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
         >{{ expressionLabel }}</button>
       }
     </div>
+    @if (!errorText() && syntaxError(); as message) {
+      <p class="value__status value__status--error" role="status" [attr.data-testid]="'expr-error-' + key">{{ message }}</p>
+    }
     @if (source && optionsMessage(); as message) {
       <p class="value__status" role="status" [class.value__status--error]="optionsStatus() === 'error'" [attr.data-testid]="'options-status-' + key">{{ message }}</p>
     }
@@ -212,6 +245,64 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
     .value__field {
       flex: 1;
       min-width: 0;
+    }
+
+    .value__hl {
+      position: relative;
+    }
+
+    .value__text {
+      position: relative;
+      z-index: 1;
+      background: transparent;
+    }
+
+    /* Підсвітка {{ … }} (F3-56): копія тексту під прозорим полем, вирази — фоном AC-Kit «Buttun». */
+    .value__backdrop {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      white-space: pre;
+      color: transparent;
+      pointer-events: none;
+      font: inherit;
+      letter-spacing: inherit;
+    }
+
+    .value__backdrop--multiline {
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .value__mark {
+      border-radius: 3px;
+      background: var(--ac-button);
+      color: transparent;
+    }
+
+    .value__expand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      margin-top: 12px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--ac-radius-sm);
+      background: none;
+      color: var(--ac-cool-grey-4);
+      cursor: pointer;
+    }
+
+    .value__expand:hover,
+    .value__expand:focus-visible {
+      background: var(--ac-cool-grey-2);
+      color: var(--ac-kit);
+    }
+
+    .value__expand .material-symbols-outlined {
+      font-size: 18px;
     }
 
     .value__toggle {
@@ -290,8 +381,14 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
     insert: (expression) => this.insertExpression(expression),
   };
 
+  /** Повноекранний редактор виразів (F3-56); поза редактором сценарію — немає. */
+  private readonly expressionEditor = inject(ExpressionEditorService, { optional: true });
+
   /** Текст поля (для всіх видів, крім прапорця і списку поза режимом виразу). */
   protected readonly text = new FormControl('', { nonNullable: true });
+  /** Значення {@link text} сигналом — для підсвітки й перевірки синтаксису. */
+  private readonly textValue = signal('');
+  private readonly backdrop = viewChild<ElementRef<HTMLElement>>('backdrop');
   protected readonly expression = signal(false);
   protected readonly expressionLabel = '{{ }}';
   private readonly errorVersion = signal(0);
@@ -343,18 +440,51 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
     return code ? valueErrorMessage(code, this.rules) : null;
   });
 
+  /** Частини `{{ … }}` текстового поля для підсвітки; `null` — виразів немає. */
+  protected readonly highlight = computed<ExpressionSegment[] | null>(() => {
+    const text = this.textValue();
+    return this.canSuggest && this.mode() === 'text' && hasExpression(text) ? expressionSegments(text) : null;
+  });
+
+  /** Синтаксична помилка виразу — під полем, доки немає іншої помилки значення. */
+  protected readonly syntaxError = computed(() => (this.canSuggest && this.mode() === 'text' ? expressionSyntaxError(this.textValue()) : null));
+
+  /** Кнопка «розгорнути» — у текстовому полі, що приймає вирази, в редакторі сценарію. */
+  protected readonly canExpand = computed(() => !!this.expressionEditor && this.canSuggest && this.mode() === 'text');
+
   ngOnInit(): void {
     const value: unknown = this.formControl.value;
     this.expression.set(this.canToggle && isExpression(value));
     this.text.setValue(formatValue(value, this.rules.kind), { emitEvent: false });
+    this.textValue.set(this.text.value);
     this.initOptions(value);
     this.text.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((t) => {
+      this.textValue.set(t);
       this.formControl.setValue(parseValue(t, this.rules));
       this.formControl.markAsDirty();
       this.formControl.markAsTouched();
     });
     this.formControl.statusChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.errorVersion.update((v) => v + 1));
     this.destroyRef.onDestroy(() => this.targets?.release(this.target));
+  }
+
+  /** Копія тексту під полем прокручується разом із ним. */
+  protected syncBackdrop(el: HTMLInputElement | HTMLTextAreaElement): void {
+    const backdrop = this.backdrop()?.nativeElement;
+    if (!backdrop) return;
+    backdrop.scrollLeft = el.scrollLeft;
+    backdrop.scrollTop = el.scrollTop;
+  }
+
+  /** «Розгорнути»: редактор виразів з поточним текстом; «Застосувати» записує новий текст у поле. */
+  protected openExpressionEditor(): void {
+    const state = this.options?.formState as NodeFormState | undefined;
+    this.expressionEditor
+      ?.open({ value: this.text.value, label: this.label, nodeId: state?.nodeId ?? null, context: this.expressionContext, readonly: this.formControl.disabled })
+      .subscribe((value) => {
+        if (value === undefined || value === this.text.value) return;
+        this.text.setValue(value);
+      });
   }
 
   /** Поле з фокусом стає ціллю вставки виразів з панелі входу. */
@@ -571,7 +701,10 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
   private setMode(mode: OptionsMode): void {
     this.optionsMode.set(mode);
     if (mode === 'list') this.showSelected();
-    else this.text.setValue(formatValue(this.formControl.value, this.rules.kind), { emitEvent: false });
+    else {
+      this.text.setValue(formatValue(this.formControl.value, this.rules.kind), { emitEvent: false });
+      this.textValue.set(this.text.value);
+    }
   }
 
   /** Поле списку показує підпис поточного значення (або саме значення, якщо його немає в списку). */
@@ -614,6 +747,7 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
     this.expression.set(on);
     if (on) {
       this.text.setValue(formatValue(this.formControl.value, this.rules.kind), { emitEvent: false });
+      this.textValue.set(this.text.value);
     } else if (valueError(this.formControl.value, { ...this.rules, allowExpression: false })) {
       // Вираз або некоректний текст не показати прапорцем/списком — поле стає незаданим.
       this.formControl.setValue(undefined);

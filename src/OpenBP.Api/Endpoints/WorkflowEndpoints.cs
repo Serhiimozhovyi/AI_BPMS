@@ -91,6 +91,11 @@ public static class WorkflowEndpoints
             service.GetVersionAsync(id, version, ct))
             .WithSummary("Визначення конкретної версії");
 
+        workflows.MapPost("/{id:guid}/expressions/evaluate", (Guid id, EvaluateExpressionRequest body, IExpressionPreviewService service, CancellationToken ct) =>
+            service.EvaluateAsync(id, body, ct))
+            .WithSummary("Обчислити вираз для попереднього перегляду")
+            .WithDescription("Ті самі ліміти, що й під час виконання; контекст — item і виходи вузлів із запиту або pinData. $env недоступний.");
+
         return api;
     }
 

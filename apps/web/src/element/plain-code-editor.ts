@@ -2,7 +2,7 @@ import type { CodeEditorFactory } from '../app/node-form/monaco-loader';
 
 /**
  * Заміна `src/app/node-form/monaco-load.ts` у збірці `<openbp-canvas>` (angular.json, `fileReplacements`):
- * код `core.code` редагується звичайним `<textarea>` — без Monaco, його воркерів і глобальних стилів,
+ * код `core.code` і вирази (F3-56) редагуються звичайним `<textarea>` — без Monaco, його воркерів і глобальних стилів,
  * яким не місце в одному JS-файлі й у Shadow DOM.
  */
 export function loadMonaco(): Promise<CodeEditorFactory> {
@@ -23,6 +23,9 @@ export function loadMonaco(): Promise<CodeEditorFactory> {
         return { dispose: () => area.removeEventListener('input', listener) };
       },
       dispose: () => area.remove(),
+      getCursor: () => area.selectionStart,
+      setCursor: (offset: number) => area.setSelectionRange(offset, offset),
+      focus: () => area.focus(),
     };
   });
 }

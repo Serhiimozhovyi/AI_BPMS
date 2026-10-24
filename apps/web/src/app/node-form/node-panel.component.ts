@@ -330,6 +330,7 @@ export class NodePanelComponent {
         return { ...prev, node: src.node };
       }
       this.formState.connector = connectorOf(src.node, this.serverTools());
+      this.formState.nodeId = src.node.id;
       return createState(src, this.formState);
     },
   });
