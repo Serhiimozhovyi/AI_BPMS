@@ -68,6 +68,10 @@ builder.Services.AddHostedService<ConnectorRegistryLoader>();
 
 // Розклади core.schedule (F2-11): Quartz у Postgres; планувальник живе в Api і стартує разом із ним.
 builder.Services.AddOpenBpScheduleServices();
+
+// Очищення історії виконань (F4-07): Quartz-job раз на добу, пачками.
+builder.Services.AddOpenBpExecutionRetention(ExecutionRetentionOptions.Parse(
+    builder.Configuration[ExecutionRetentionOptions.DaysKey], builder.Configuration[ExecutionRetentionOptions.CronKey]));
 builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
 // MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.

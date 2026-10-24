@@ -20,6 +20,7 @@ public sealed class ExecutionRetryTests(PostgresFixture postgres)
         {
           "formatVersion": 1,
           "name": "{{{name}}}",
+          "settings": { "timezone": "UTC", "executionTimeoutSec": 0, "errorWorkflowId": null, "saveSuccessfulData": true },
           "nodes": [
             { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
             { "id": "n_echo", "name": "Відлуння", "type": "mcp.tool", "typeVersion": 1, "position": [200, 0],

@@ -15,6 +15,7 @@ public sealed class ErrorWorkflowTests(PostgresFixture postgres)
         {
           "formatVersion": 1,
           "name": "Сповіщення про помилки",
+          "settings": { "timezone": "UTC", "executionTimeoutSec": 0, "errorWorkflowId": null, "saveSuccessfulData": true },
           "nodes": [
             { "id": "n_err", "name": "Помилка", "type": "core.errorTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
             {{(fails

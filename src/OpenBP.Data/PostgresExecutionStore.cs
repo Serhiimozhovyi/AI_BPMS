@@ -33,6 +33,13 @@ public sealed class PostgresExecutionStore(
 {
     private const string UniqueViolation = "23505";
 
+    /// <summary>
+    /// Зберігати <c>input</c>/<c>output</c> кроків успішного виконання (<c>settings.saveSuccessfulData</c>, F4-07).
+    /// <c>false</c> — <see cref="FinishAsync"/> для <see cref="ExecutionStatus.Success"/> лишає в кроках лише статус і час;
+    /// помилкові, скасовані й прострочені виконання зберігаються повністю. За замовчуванням <c>true</c>.
+    /// </summary>
+    public bool KeepSuccessfulData { get; init; } = true;
+
     private readonly IDbContextFactory<OpenBpDbContext> _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
 
     /// <summary>
@@ -116,6 +123,17 @@ public sealed class PostgresExecutionStore(
         ArgumentNullException.ThrowIfNull(result);
         var error = result.Error is null ? null : Scrub(result.Error.Message);
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        if (result.Status == ExecutionStatus.Success && !KeepSuccessfulData)
+        {
+            // Кроки потрібні з даними до кінця виконання (відновлення після падіння воркера), тож прибираються
+            // разом із записом підсумку — однією транзакцією.
+            await db.ExecutionSteps
+                .Where(st => st.ExecutionId == result.ExecutionId)
+                .ExecuteUpdateAsync(u => u.SetProperty(st => st.Input, (string?)null).SetProperty(st => st.Output, (string?)null), ct)
+                .ConfigureAwait(false);
+        }
+
         var updated = await db.Executions
             .Where(e => e.Id == result.ExecutionId)
             .ExecuteUpdateAsync(
@@ -129,6 +147,8 @@ public sealed class PostgresExecutionStore(
         {
             throw NotCreated(result.ExecutionId);
         }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
