@@ -55,6 +55,21 @@ public static class WorkflowValidationCodes
     /// <summary><c>settings.errorWorkflowId</c>: не id, сам сценарій, сценарію немає або в ньому немає <c>core.errorTrigger</c>.</summary>
     public const string ErrorWorkflowInvalid = "ERROR_WORKFLOW_INVALID";
 
+    /// <summary>Бізнес-розмітка: дві доріжки <c>business.lanes</c> з однаковим <c>id</c>.</summary>
+    public const string BusinessLaneIdDuplicate = "BUSINESS_LANE_ID_DUPLICATE";
+
+    /// <summary>Бізнес-розмітка: два зовнішні кроки <c>business.steps</c> з однаковим <c>id</c>.</summary>
+    public const string BusinessStepIdDuplicate = "BUSINESS_STEP_ID_DUPLICATE";
+
+    /// <summary>Бізнес-розмітка: <c>lane</c> вузла або кроку посилається на доріжку, якої немає в <c>business.lanes</c>.</summary>
+    public const string BusinessLaneUnknown = "BUSINESS_LANE_UNKNOWN";
+
+    /// <summary>Бізнес-розмітка: зв'язок зовнішнього кроку <c>links[].node</c> посилається на вузол, якого немає.</summary>
+    public const string BusinessLinkNodeUnknown = "BUSINESS_LINK_NODE_UNKNOWN";
+
+    /// <summary>Бізнес-розмітка: зовнішній крок без жодного зв'язку з вузлом — на схемі він нічого не означає.</summary>
+    public const string BusinessStepLinksMissing = "BUSINESS_STEP_LINKS_MISSING";
+
     /// <summary>Попередження (не помилка): <c>$vars.key</c> посилається на змінну інстансу, якої немає (F6-09).</summary>
     public const string VariableUnknown = "VARIABLE_UNKNOWN";
 }

@@ -60,6 +60,12 @@ public class CliTransferTests(ApiFactory api) : IDisposable
         Assert.Contains("Активовано", output, StringComparison.Ordinal);
         var detail = JsonNode.Parse(await editor.GetStringAsync($"/api/v1/workflows/{importedId}"))!;
         Assert.True(detail["active"]!.GetValue<bool>());
+
+        // F3-67: бізнес-розмітка пройшла export → файл → import без втрат.
+        var original = JsonNode.Parse(Definition(name, path))!;
+        Assert.True(JsonNode.DeepEquals(original["business"], export["definition"]!["business"]));
+        Assert.True(JsonNode.DeepEquals(original["business"], detail["definition"]!["business"]));
+        Assert.Equal("Прийняти запит", (string?)detail["definition"]!["nodes"]![0]!["business"]!["title"]);
     }
 
     [Fact]
@@ -169,8 +175,11 @@ public class CliTransferTests(ApiFactory api) : IDisposable
           "formatVersion": 1,
           "name": "{{name}}",
           "settings": { "timezone": "Europe/Kyiv", "executionTimeoutSec": 0, "errorWorkflowId": null, "saveSuccessfulData": false },
+          "business": { "lanes": [ { "id": "ext", "name": "Зовнішня система" } ],
+                        "steps": [ { "id": "s_call", "title": "Система шле запит", "lane": "ext",
+                                     "links": [ { "node": "n_hook", "direction": "in", "label": "запит" } ] } ] },
           "nodes": [{ "id": "n_hook", "name": "Хук", "type": "core.webhook", "typeVersion": 1, "position": [0, 0],
-                      "parameters": { "method": "POST", "path": "{{path}}" } }],
+                      "parameters": { "method": "POST", "path": "{{path}}" }, "business": { "title": "Прийняти запит" } }],
           "connections": [],
           "pinData": {}
         }

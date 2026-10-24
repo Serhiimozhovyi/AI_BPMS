@@ -111,8 +111,9 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   У редакторі їх змінює діалог «Налаштування» (кнопка на панелі інструментів).
   `saveSuccessfulData: false` — у кроках успішних виконань (крім ручного тесту) лишаються лише статус і час (docs/architecture.md §10.4).
 - Необов'язкові `settings` (F6-06): `concurrency`, `throttle`, `disableAfterErrors` — див. «Ліміти навантаження».
-- Вузол: `id`, `name`, `type`, `typeVersion` (≥ 1), `position` (`[x, y]`), `parameters` (об'єкт). Необов'язкові: `timeoutSec`, `retry` (`maxTries`, `waitMs`), `continueOnFail`, `disabled`, `notes`.
-- Ребро: `from.node` + `from.output`, `to.node` + `to.input` (індекси від 0).
+- Вузол: `id`, `name`, `type`, `typeVersion` (≥ 1), `position` (`[x, y]`), `parameters` (об'єкт). Необов'язкові: `timeoutSec`, `retry` (`maxTries`, `waitMs`), `continueOnFail`, `disabled`, `notes`, `business` (див. «Бізнес-атрибути»).
+- Ребро: `from.node` + `from.output`, `to.node` + `to.input` (індекси від 0). Необов'язкове `business.label`.
+- Сценарій: необов'язкове `business` (`lanes`, `steps`) — див. «Бізнес-атрибути».
 - Невідомі поля на будь-якому рівні дозволені й зберігаються при (де)серіалізації.
 
 ### Таймаут виконання і серверна межа
@@ -208,6 +209,52 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 - Ліміти інстансу: рядків у таблиці — `OPENBP_DATA_TABLE_MAX_ROWS` (типово 100 000), розмір рядка —
   `OPENBP_DATA_TABLE_MAX_ROW_BYTES` (типово 65 536 байт); перевищення — помилка вузла `DATA_TABLE_ROW_LIMIT` / `DATA_TABLE_ROW_TOO_LARGE`.
 
+## Бізнес-атрибути (F3-67)
+
+Необов'язкова розмітка для бізнес-вигляду сценарію ([business-view.md](business-view.md)): доріжки учасників, назви кроків
+людською мовою, дії людей у зовнішніх системах і підписи стрілок. Рушій ці поля **ігнорує**; без них бізнес-вигляд
+будується за правилами за замовчуванням. Поля додано до `formatVersion` 1 як необов'язкові: документи без них лишаються
+валідними і не змінюються при збереженні. REST, `/mcp` (`get_workflow`/`update_workflow`) і експорт/імпорт переносять
+їх без втрат, тож ШІ-агент може розмітити сценарій сам. Повний приклад — `examples/kit-approval-business.json`
+(сценарій погодження в Кіт 2; він не входить у CLI-прогони, бо вузли Кіта ще без конектора).
+
+```json
+{
+  "business": {
+    "lanes": [
+      { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" },
+      { "id": "openbp", "name": "OpenBP", "description": "сценарій" }
+    ],
+    "steps": [
+      { "id": "s_approve", "title": "Погоджувач тисне «Погодити» у формі", "subtitle": "статус задачі", "lane": "kit",
+        "links": [ { "node": "n_assign", "direction": "out", "label": "ставить задачу в Кіті" },
+                   { "node": "n_read", "direction": "in", "label": "читає статус" } ] }
+    ]
+  },
+  "nodes": [
+    { "id": "n_assign", "name": "Assign approver", "type": "mcp.tool", "...": "...",
+      "business": { "title": "Призначити погоджувача", "subtitle": "kit-crm", "lane": "openbp" } }
+  ],
+  "connections": [
+    { "from": { "node": "n_decision", "output": 2 }, "to": { "node": "n_mail", "input": 0 },
+      "business": { "label": "2 дні без рішення" } }
+  ]
+}
+```
+
+| Рівень | Поле | Значення |
+|---|---|---|
+| сценарій | `business.lanes[]` | доріжки в порядку показу: `id` (унікальний), `name`, `description?` (підпис під назвою). Немає — доріжка за типом вузла |
+| сценарій | `business.steps[]` | дії людей у зовнішніх системах, яких немає в графі: `id` (унікальний), `title`, `subtitle?`, `lane` (id з `lanes`), `links[]` — хоча б один зв'язок `{ node, direction, label? }`; `direction: "in"` — вузол читає результат кроку (пунктирна стрілка крок → вузол), `"out"` — вузол ставить людині задачу (суцільна стрілка вузол → крок) |
+| вузол | `business` | `title?` (замість `name`), `subtitle?`, `lane?` (id з `lanes`; немає — за типом вузла), `hidden?` (`true` — не показувати; `false` — показувати `core.set`/`core.code`/`core.merge`, який інакше згортається) |
+| ребро | `business.label?` | підпис стрілки; немає — назва виходу (`так`/`ні`, `timeout`, назва правила `switch`) |
+
+Валідатор перевіряє (коди помилок — у «Валідації при збереженні»): унікальність `id` доріжок і кроків; `lane` вузла
+чи кроку є в `business.lanes` (без `lanes` будь-яке посилання на доріжку — помилка, бо доріжки за замовчуванням id не
+мають); `links[].node` — існуючий вузол; у кроку є хоча б один зв'язок. Невідомі поля всередині `business` зберігаються,
+як і будь-де у форматі. Редактор при видаленні вузла прибирає зв'язки кроків на нього; крок, що лишився без зв'язків,
+видаляється.
+
 ## Item і BinaryRef
 
 Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байти файлу в item не потрапляють, лише посилання на файлове сховище:
@@ -233,6 +280,10 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 6. `serverId`/`credentialId` існують і доступні користувачу.
 7. `settings.executionTimeoutSec` не більший за серверну межу `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (`EXECUTION_TIMEOUT_TOO_LARGE`).
 8. `settings.errorWorkflowId` — інший існуючий сценарій з `core.errorTrigger` (`ERROR_WORKFLOW_INVALID`).
+9. Бізнес-атрибути: `BUSINESS_LANE_ID_DUPLICATE` (`/business/lanes/{i}/id`), `BUSINESS_STEP_ID_DUPLICATE`
+   (`/business/steps/{i}/id`), `BUSINESS_LANE_UNKNOWN` (`/business/steps/{i}/lane` або `/nodes/{i}/business/lane`),
+   `BUSINESS_LINK_NODE_UNKNOWN` (`/business/steps/{i}/links/{j}/node`), `BUSINESS_STEP_LINKS_MISSING`
+   (`/business/steps/{i}/links`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.
 

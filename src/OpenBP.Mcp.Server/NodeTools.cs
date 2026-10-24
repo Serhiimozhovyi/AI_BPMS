@@ -80,7 +80,13 @@ public sealed class NodeTools
         "`mcp.tool` returns a tool's structured result as one item; set `itemsPath` to split an array into items. " +
         "Tools of connected systems are listed by describe_connectors. " +
         "In `core.code` JavaScript the same `$node[\"Node name\"].json` is available (plus `.all` with every item), " +
-        "and `Date` uses the workflow's `settings.timezone`.")]
+        "and `Date` uses the workflow's `settings.timezone`. " +
+        "Any node may carry optional `business` fields for the business (swimlane) view, not executed by the engine: " +
+        "`title` and `subtitle` shown instead of `name`, `lane` (id from the workflow-level `business.lanes`) and `hidden` " +
+        "(true hides the node; false shows a core.set/core.code/core.merge node that is otherwise collapsed). " +
+        "At the workflow level `business.lanes` lists participants ({ id, name, description? }) and `business.steps` the human " +
+        "actions in external systems ({ id, title, subtitle?, lane, links: [{ node, direction: in|out, label? }] }); " +
+        "a connection may carry `business.label` for its arrow. See the format schema for details.")]
     public static Task<NodesDescription> DescribeNodes(INodeService nodes, CancellationToken ct) =>
         NodesDescription.BuildAsync(nodes, ct);
 }

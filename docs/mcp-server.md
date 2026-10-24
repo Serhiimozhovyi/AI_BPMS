@@ -94,6 +94,13 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 `openbp://schema/workflow-format`, типи вузлів і їхні `parameters` — з `describe_nodes`, `serverId`/`toolName` вузлів
 `mcp.*` — з `describe_connectors`.
 
+Необов'язкові бізнес-атрибути (F3-67, [business-view.md](business-view.md)) — `business.lanes`/`business.steps` на
+рівні сценарію, `business { title, subtitle, lane, hidden }` на вузлі, `business.label` на ребрі — `create_workflow`,
+`update_workflow`, `get_workflow` і resource `openbp://workflows/{id}` переносять без втрат, тож агент може сам розмітити
+сценарій для бізнес-вигляду; опис полів є в описі `describe_nodes` і в схемі формату. `validate_workflow` перевіряє
+посилання: `BUSINESS_LANE_UNKNOWN`, `BUSINESS_LINK_NODE_UNKNOWN`, `BUSINESS_STEP_LINKS_MISSING`,
+`BUSINESS_LANE_ID_DUPLICATE`, `BUSINESS_STEP_ID_DUPLICATE` — з `path` на поле.
+
 ### Приклади викликів
 
 `validate_workflow` з помилкою (tool, якого немає в конекторі):
