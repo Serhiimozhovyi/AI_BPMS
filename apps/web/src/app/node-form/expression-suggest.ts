@@ -3,7 +3,7 @@ import { isPlainObject } from './node-value';
 
 /**
  * Підказки в полі виразу `{{ }}` (F2-19): змінні з docs/workflow-format.md і `OpenBP.Expressions`
- * (`$json`, `$input`, `$node["…"]`, `$now`, `$env`, `$execution`), назви вузлів сценарію і поля з останнього
+ * (`$json`, `$binary`, `$input`, `$node["…"]`, `$now`, `$env`, `$execution`), назви вузлів сценарію і поля з останнього
  * тестового output. Без Angular — чисті функції.
  */
 
@@ -41,6 +41,7 @@ export interface SuggestResult {
 /** Кореневі змінні виразу. */
 export const ROOT_VARIABLES: readonly { name: string; detail: string }[] = [
   { name: '$json', detail: $localize`:@@expr.var.json:поточний item` },
+  { name: '$binary', detail: $localize`:@@expr.var.binary:файли поточного item` },
   { name: '$input', detail: $localize`:@@expr.var.input:вхідні items` },
   { name: '$node', detail: $localize`:@@expr.var.node:output вузла за назвою` },
   { name: '$now', detail: $localize`:@@expr.var.now:поточний час (Date)` },
