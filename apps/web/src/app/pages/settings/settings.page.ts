@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
 import { AuthService } from '../../auth/auth.service';
+import { AssistantSection } from '../../settings/assistant-section.component';
 import { AuditSection } from '../../settings/audit-section.component';
 import { NotificationChannelsSection } from '../../settings/notification-channels-section.component';
 import { VariablesSection } from '../../settings/variables-section.component';
@@ -21,7 +22,7 @@ import { VariablesSection } from '../../settings/variables-section.component';
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection, NotificationChannelsSection, AuditSection],
+  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
@@ -121,6 +122,9 @@ import { VariablesSection } from '../../settings/variables-section.component';
       </div>
 
       @if (isAdmin()) {
+        <div class="mt-8" data-testid="assistant-section">
+          <app-assistant-section />
+        </div>
         <div class="mt-8" data-testid="notifications-section">
           <app-notification-channels-section />
         </div>

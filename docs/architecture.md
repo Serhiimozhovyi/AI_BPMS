@@ -189,7 +189,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ## 8. Безпека
 
-- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`.
+- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів, credential'а моделі помічника (F3-60, §10.8) і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`.
 - Secret scrubbing: значення credentials, що потрапили у вихід вузла, замінюються на `***` перед записом у `execution_steps` і перед віддачею через SSE/MCP.
 - Jint: без CLR-interop, без мережі, з лімітами. stdio MCP-сервери — з таймаутами і лімітами пам'яті.
 - Webhook: опційна автентифікація (header-токен / Basic).
@@ -247,6 +247,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `IExecutionLauncher` | webhook (F2-10), Quartz (F2-11), `mcp.poll` (F2-12), `IExecutionService` | створює рядок `executions` і job без перевірки ролей — внутрішній вхід для тригерів |
 | `IExecutionEventSource` | SSE `/executions/{id}/events`, MCP-ресурс `openbp://executions/{id}` | потік подій кроків виконання |
 | `IConnectorService` | REST, MCP `describe_connectors`, UI | CRUD `mcp_servers`, discovery, тестовий виклик tool'а |
+| `IAssistantService`, `IAssistantSettingsService` | REST `POST /workflows/{id}/assistant`, `/settings/assistant`, UI | помічник у редакторі (§10.8) |
 | `INodeService` | REST `GET /nodes`, UI (палітра канвасу) | дескриптори зареєстрованих вузлів (`NodeDescriptor`), viewer |
 
 Сигнатури — у коді (`OpenBP.Application`), вони є джерелом правди; тут — лише правила.
@@ -292,6 +293,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `PATCH /workflows/{id} { name?, groupId? }` | editor | `WorkflowDetail`; змінюються лише передані поля, `groupId: null` — прибрати з групи (без нової версії) |
 | `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання), editor | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії лишаються без групи) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
+| `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
+| `GET /settings/assistant`, `PUT /settings/assistant { credentialId, model }` | editor / admin | налаштування помічника: credential `anthropic`/`openai`/`openai-compatible` (назва й тип, без значень) і модель; `credentialId: null` вимикає |
 | `GET /workflows/templates` | viewer | `[{ id, name, description, definition }]` — шаблони «Почати з прикладу» (F3-59): файли `examples/` з каталогу `examples/templates.json`, вбудовані в збірку Api; у `definition` немає `pinData` і `settings.errorWorkflowId`, `serverId`/`credentialId` порожні |
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
 | `GET /workflows/{id}/export` | editor | `{ definition, manifest: { connectors: [{ ref, name, transport }], credentials: [{ ref, name, type }], variables: [key], workflows: [{ ref, name }] } }` — без секретів і значень змінних (F6-09) |
@@ -478,3 +481,18 @@ Api — при кожній зміні через `IConnectorService`; Worker �
 (реєструє відсутні, перереєстровує змінені за `config`/`credential_id`). Credential конектора — JSON
 `{ "headers": { … } }` (http) або `{ "env": { … } }` (stdio); хост зливає його в `McpServerConfig` перед реєстрацією,
 у `config` і відповідях API цих значень немає.
+
+### 10.8. Помічник у редакторі (F3-60)
+
+`IAssistantService` веде розмову з моделлю з «Налаштувань → Помічник» (`app_settings`, ключ `assistant`:
+`{ credentialId, model }`; провайдер — тип credential'а) усередині Api, без `/mcp` по мережі. `LlmChat` (`OpenBP.Ai`) —
+публічна обгортка над тими самими провайдерами, що й `ai.llm`/`ai.agent`. Інструменти дублюють tools `/mcp`:
+`describe_nodes`, `describe_connectors`, `get_workflow`, `update_workflow` (над робочою копією визначення з запиту —
+може бути незбереженим), `test_node` (поточна збережена версія, той самий `StartNodeAsync`, що й UI; у відповідь — до
+5 items на порт). Помічник нічого не зберігає: остаточне визначення приходить подією `definition`, редактор застосовує
+його однією правкою з історією (undo скасовує відповідь). Назву сценарію помічник не змінює.
+
+Ліміти — 20 викликів інструментів і 120 с на запит (`AssistantLimits`); перевищення — подія `error` з кодом
+`ASSISTANT_STEP_LIMIT`/`ASSISTANT_TIMEOUT`, помилка провайдера — `ASSISTANT_PROVIDER_ERROR`. Модель не отримує значень
+credentials (у визначенні — лише `credentialId`) і журналу виконань; ключ провайдера йде лише в заголовок запиту.
+Credential моделі розшифровується в Api на час запиту (§8).

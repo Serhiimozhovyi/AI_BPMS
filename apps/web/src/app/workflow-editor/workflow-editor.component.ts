@@ -25,6 +25,7 @@ import { PathSegment, expressionFor } from '../canvas/data-schema';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EmptyStartComponent } from '../canvas/empty-start.component';
+import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
@@ -107,7 +108,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -145,6 +146,7 @@ export interface EditorErrorEvent {
             <button mat-button type="button" data-testid="copy" [disabled]="!hasNodeSelection()" (click)="copy()" i18n-title="@@workfloweditor.copy.hint" title="Копіювати (Ctrl+C)" i18n="@@workfloweditor.copy">Копіювати</button>
             <button mat-button type="button" data-testid="paste" [disabled]="!canPaste()" (click)="paste()" i18n-title="@@workfloweditor.paste.hint" title="Вставити (Ctrl+V)" i18n="@@workfloweditor.paste">Вставити</button>
             <button mat-button type="button" data-testid="delete" [disabled]="!hasSelection()" (click)="deleteSelected()" i18n-title="@@workfloweditor.delete.hint" title="Видалити (Delete)" i18n="@@workfloweditor.delete">Видалити</button>
+            <button mat-button type="button" data-testid="assistant-toggle" [attr.aria-pressed]="assistantOpen()" (click)="toggleAssistant()" i18n-title="@@workfloweditor.assistant.hint" title="ШІ-помічник: описати процес, пояснити чи виправити вузол" i18n="@@workfloweditor.assistant">Помічник</button>
             <button mat-button type="button" data-testid="settings" (click)="openSettings()" i18n-title="@@workfloweditor.settings.hint" title="Часовий пояс, таймаут, сценарій помилок" i18n="@@workfloweditor.settings">Налаштування</button>
             @if (!embedded()) {
               <a mat-button data-testid="executions-link" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" i18n="@@workfloweditor.executions">Журнал виконань</a>
@@ -230,8 +232,8 @@ export interface EditorErrorEvent {
               (renamed)="renamed($event)"
               (contextMenu)="openContextMenu($event)"
             />
-            @if (!def.nodes.length && !readonly() && !quickAdd()) {
-              <app-empty-start class="absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2" (addTrigger)="startWithTrigger($event)" (pick)="startFromTemplate($event)" />
+            @if (!def.nodes.length && !readonly() && !quickAdd() && !assistantOpen()) {
+              <app-empty-start class="absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2" (addTrigger)="startWithTrigger($event)" (pick)="startFromTemplate($event)" (describe)="assistantAction('describe')" />
             }
             @if (notice(); as text) {
               <p class="absolute bottom-4 left-1/2 z-[2] m-0 -translate-x-1/2 rounded-md bg-ac-kit px-3 py-1.5 text-[13px] text-white" role="status" data-testid="editor-notice">{{ text }}</p>
@@ -265,7 +267,11 @@ export interface EditorErrorEvent {
               />
             }
           </div>
-          @if (selectedNode(); as node) {
+          @if (assistantOpen() && !readonly()) {
+            <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
+              <app-assistant-panel [workflowId]="workflowId()" [definition]="def" [prompt]="assistantPrompt()" (definitionChange)="assistantChanged($event)" (closed)="assistantOpen.set(false)" />
+            </aside>
+          } @else if (selectedNode(); as node) {
             <aside class="editor__panel" data-testid="editor-panel" [class.editor__panel--wide]="wide()" [style.width.px]="panelWidth()">
               <div
                 class="editor__resize"
@@ -347,6 +353,11 @@ export interface EditorErrorEvent {
                         } @else {
                           <button mat-button type="button" data-testid="pin-manual" (click)="pinManual(node.id)" i18n-title="@@workfloweditor.pinManual.hint" title="Закріпити output, введений вручну: тестові запуски не виконуватимуть вузол (P)" i18n="@@workfloweditor.pinManual">Ввести дані вручну</button>
                         }
+                        <button mat-button type="button" data-testid="assistant-explain" (click)="assistantAction('explain', node)" i18n="@@workfloweditor.assistant.explain">Пояснити вузол</button>
+                        @if (selectedStep()?.error) {
+                          <button mat-button type="button" data-testid="assistant-fix" (click)="assistantAction('fix', node)" i18n="@@workfloweditor.assistant.fix">Виправити помилку</button>
+                        }
+                        <button mat-button type="button" data-testid="assistant-expression" (click)="assistantAction('expression', node)" i18n="@@workfloweditor.assistant.expression">Написати вираз</button>
                       </div>
                     }
                     @if (selectedPinItems(); as items) {
@@ -1074,6 +1085,42 @@ export class WorkflowEditorComponent implements OnInit {
       return;
     }
     this.showQuickAdd({ kind: 'free' }, 'step', center);
+  }
+
+  /** Панель «Помічник» замість панелі вузла (F3-60). */
+  protected readonly assistantOpen = signal(false);
+  protected readonly assistantPrompt = signal<AssistantPrompt | null>(null);
+  private assistantSeq = 0;
+
+  protected toggleAssistant(): void {
+    this.assistantOpen.update((open) => !open);
+  }
+
+  /** Відповідь помічника — одна правка з історією: Ctrl+Z скасовує її цілком. */
+  protected assistantChanged(definition: WorkflowDefinition): void {
+    this.changed(definition);
+  }
+
+  /** Швидкі дії: пояснити вузол, виправити помилку (з текстом помилки й входом), написати вираз; «Описати процес». */
+  protected assistantAction(kind: 'explain' | 'fix' | 'expression' | 'describe', node?: WorkflowNode): void {
+    const label = node ? `«${node.name}» (${node.id})` : '';
+    let text: string;
+    let send = true;
+    if (kind === 'explain') text = $localize`:@@workfloweditor.assistant.explainPrompt:Поясни простими словами, що робить вузол ${label}:node: і які дані він отримує та віддає.`;
+    else if (kind === 'fix') {
+      const step = this.selectedStep();
+      const input = JSON.stringify(step?.input?.[0]?.slice(0, 3) ?? []).slice(0, 2000);
+      const error = [step?.error?.message, step?.error?.details].filter(Boolean).join('\n');
+      text = $localize`:@@workfloweditor.assistant.fixPrompt:Вузол ${label}:node: завершився помилкою:\n${error}:error:\nВхідні дані: ${input}:input:\nВиправ вузол.`;
+    } else if (kind === 'expression') {
+      text = $localize`:@@workfloweditor.assistant.expressionPrompt:Напиши вираз {{ }} для вузла ${label}:node:: `;
+      send = false;
+    } else {
+      text = '';
+      send = false;
+    }
+    this.assistantOpen.set(true);
+    this.assistantPrompt.set({ text, send, seq: ++this.assistantSeq });
   }
 
   /** Порожній сценарій → «Додати тригер» (F3-59). */

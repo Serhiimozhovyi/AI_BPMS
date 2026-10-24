@@ -175,6 +175,15 @@ public sealed class ExecutionStatEntity
 }
 
 /// <summary>Змінна інстансу (<c>$vars.key</c>, F6-09): не секрет — секрети лишаються в credentials.</summary>
+/// <summary>Налаштування застосунку за ключем (F3-60: <c>assistant</c> — credential і модель помічника).</summary>
+public sealed class AppSettingEntity
+{
+    public string Key { get; set; } = "";
+    /// <summary>jsonb.</summary>
+    public string Value { get; set; } = "{}";
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class VariableEntity
 {
     public string Key { get; set; } = "";

@@ -15,6 +15,8 @@
     <ProjectReference Include="../OpenBP.Engine/OpenBP.Engine.csproj" />
     <ProjectReference Include="../OpenBP.Data/OpenBP.Data.csproj" />
     <ProjectReference Include="../OpenBP.Mcp/OpenBP.Mcp.csproj" />
+    <!-- Помічник у редакторі (F3-60): розмова з інструментами поверх провайдерів ai.llm. -->
+    <ProjectReference Include="../OpenBP.Ai/OpenBP.Ai.csproj" />
   </ItemGroup>
 
 </Project>

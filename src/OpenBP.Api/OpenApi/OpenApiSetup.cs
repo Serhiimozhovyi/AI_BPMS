@@ -69,6 +69,9 @@ public static class OpenApiSetup
 
         /// <summary>Webhook-и.</summary>
         public const string Webhooks = "Webhook";
+
+        /// <summary>Помічник у редакторі.</summary>
+        public const string Assistant = "Помічник";
     }
 
     private static readonly (string Name, string Description)[] TagDescriptions =
@@ -86,6 +89,7 @@ public static class OpenApiSetup
         (Tags.Notifications, "Канали сповіщень адміністратору (email, Telegram, webhook) про помилки виконань, вимкнені сценарії, недоступні конектори, воркери й бекапи. Лише admin."),
         (Tags.Overview, "Підсумки виконань за 24 год / 7 / 30 днів і поточний стан черги."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
+        (Tags.Assistant, "ШІ-помічник у редакторі: налаштування моделі (admin) і розмова над сценарієм (SSE). Модель не бачить значень credentials."),
     ];
 
     /// <summary>Реєструє генерацію документа.</summary>
