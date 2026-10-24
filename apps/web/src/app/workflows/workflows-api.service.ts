@@ -10,6 +10,16 @@ export interface WorkflowSummary {
   active: boolean;
   version: number;
   updatedAt: string;
+  /** Група сценарію (F3-63); `null` — без групи. */
+  groupId?: string | null;
+}
+
+/** `WorkflowGroupSummary` — група сценаріїв з кількістю сценаріїв у ній (`GET /workflow-groups`, F3-63). */
+export interface WorkflowGroup {
+  id: string;
+  name: string;
+  sortOrder: number;
+  workflowCount: number;
 }
 
 /** Вузол сценарію (docs/workflow-format.md, «Обов'язкові поля»). Невідомі поля зберігаються як є. */
@@ -64,6 +74,7 @@ export interface WorkflowDetail {
   versionId: string;
   definition: WorkflowDefinition;
   updatedAt: string;
+  groupId?: string | null;
 }
 
 /** `WorkflowValidationError` — `{ code, message, nodeId?, path? }` (docs/workflow-format.md, «Валідація при збереженні»). */
@@ -121,8 +132,10 @@ export class WorkflowsApiService {
     return this.http.get<WorkflowDetail>(this.url(id));
   }
 
-  create(name: string): Observable<WorkflowDetail> {
-    return this.http.post<WorkflowDetail>(this.base, emptyWorkflowDefinition(name));
+  /** `POST /workflows`; `groupId` — група нового сценарію (F3-63). */
+  create(name: string, groupId?: string | null): Observable<WorkflowDetail> {
+    const options = groupId ? { params: { groupId } } : {};
+    return this.http.post<WorkflowDetail>(this.base, emptyWorkflowDefinition(name), options);
   }
 
   /** `PUT /workflows/{id}` — зберегти визначення як нову версію; 422 — помилки валідації (див. {@link validationErrorsOf}). */
@@ -132,6 +145,33 @@ export class WorkflowsApiService {
 
   rename(id: string, name: string): Observable<WorkflowDetail> {
     return this.http.patch<WorkflowDetail>(this.url(id), { name });
+  }
+
+  /** `PATCH /workflows/{id} { groupId }` — перенести в групу; `null` — без групи. Нової версії не створює. */
+  move(id: string, groupId: string | null): Observable<WorkflowDetail> {
+    return this.http.patch<WorkflowDetail>(this.url(id), { groupId });
+  }
+
+  listGroups(): Observable<WorkflowGroup[]> {
+    return this.http.get<WorkflowGroup[]>(`${API_BASE}/workflow-groups`);
+  }
+
+  createGroup(name: string): Observable<WorkflowGroup> {
+    return this.http.post<WorkflowGroup>(`${API_BASE}/workflow-groups`, { name });
+  }
+
+  renameGroup(id: string, name: string): Observable<WorkflowGroup> {
+    return this.http.patch<WorkflowGroup>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`, { name });
+  }
+
+  /** Сценарії групи лишаються, без групи. */
+  deleteGroup(id: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`);
+  }
+
+  /** `PUT /workflow-groups/order` — усі групи в новому порядку. */
+  reorderGroups(ids: readonly string[]): Observable<WorkflowGroup[]> {
+    return this.http.put<WorkflowGroup[]>(`${API_BASE}/workflow-groups/order`, { ids });
   }
 
   activate(id: string): Observable<WorkflowDetail> {
@@ -153,5 +193,5 @@ export class WorkflowsApiService {
 
 /** Рядок списку з деталей (після створення, перейменування, зміни активності). */
 export function toSummary(detail: WorkflowDetail): WorkflowSummary {
-  return { id: detail.id, name: detail.name, active: detail.active, version: detail.version, updatedAt: detail.updatedAt };
+  return { id: detail.id, name: detail.name, active: detail.active, version: detail.version, updatedAt: detail.updatedAt, groupId: detail.groupId ?? null };
 }

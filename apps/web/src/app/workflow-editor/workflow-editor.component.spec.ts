@@ -108,6 +108,18 @@ describe('WorkflowEditorComponent', () => {
     return { ...workflow, version, versionId: `v${version}`, definition };
   }
 
+  it('сценарій у групі: назва групи поруч із назвою, посилання на список з фільтром (F3-64)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush({ ...workflow, groupId: 'g1' });
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    flushConnectors(http);
+    http.expectOne('/api/v1/workflow-groups').flush([{ id: 'g1', name: 'Продажі', sortOrder: 0, workflowCount: 1 }]);
+    await render(fixture);
+    const link = host.querySelector<HTMLAnchorElement>('[data-testid="workflow-group"]')!;
+    expect(link.textContent?.trim()).toBe('Продажі');
+    expect(link.getAttribute('href')).toBe('/workflows?group=g1');
+  });
+
   it('завантажує сценарій, дескриптори й tools; показує вузли на канвасі і палітру з групою сервера', async () => {
     const { fixture, http, host } = setup();
     http.expectOne('/api/v1/workflows/w1').flush(workflow);

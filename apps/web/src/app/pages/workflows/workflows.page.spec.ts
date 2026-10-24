@@ -1,8 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
-import { WorkflowDetail, WorkflowSummary, emptyWorkflowDefinition } from '../../workflows/workflows-api.service';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { GROUPS_COLLAPSE_KEY } from '../../workflows/workflow-groups';
+import { WorkflowDetail, WorkflowGroup, WorkflowSummary, emptyWorkflowDefinition } from '../../workflows/workflows-api.service';
 import { WorkflowsPage } from './workflows.page';
 
 const draft: WorkflowSummary = { id: 'w1', name: 'Заявки', active: false, version: 2, updatedAt: '2026-10-23T10:00:00Z' };
@@ -19,14 +20,20 @@ describe('WorkflowsPage', () => {
     fixture.detectChanges();
   }
 
-  async function setup(items: WorkflowSummary[] = [draft, live]) {
+  async function setup(items: WorkflowSummary[] = [draft, live], groups: WorkflowGroup[] = [], queryParams: Record<string, string> = {}) {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } } },
+      ],
     });
     const fixture = TestBed.createComponent(WorkflowsPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http.expectOne((r) => r.url === '/api/v1/workflows').flush({ items, page: 1, pageSize: 200, total: items.length });
+    http.expectOne('/api/v1/workflow-groups').flush(groups);
     await render(fixture);
     return { fixture, http, host: fixture.nativeElement as HTMLElement };
   }
@@ -58,9 +65,9 @@ describe('WorkflowsPage', () => {
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
     const fixture = TestBed.createComponent(WorkflowsPage);
     fixture.detectChanges();
-    TestBed.inject(HttpTestingController)
-      .expectOne((r) => r.url === '/api/v1/workflows')
-      .flush(null, { status: 0, statusText: 'Unknown Error' });
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne((r) => r.url === '/api/v1/workflows').flush(null, { status: 0, statusText: 'Unknown Error' });
+    http.match('/api/v1/workflow-groups').forEach((r) => (r.cancelled ? null : r.flush([])));
     await render(fixture);
     expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="page-error"]')?.textContent).toContain('недоступний');
   });
@@ -177,5 +184,125 @@ describe('WorkflowsPage', () => {
     await render(fixture);
     expect(host.querySelector('[data-testid="page-error"]')?.textContent).toContain('не можна видалити');
     expect(row(host, 'w2')).not.toBeNull();
+  });
+
+  describe('групи (F3-64)', () => {
+    const sales: WorkflowGroup = { id: 'g1', name: 'Продажі', sortOrder: 0, workflowCount: 1 };
+    const finance: WorkflowGroup = { id: 'g2', name: 'Фінанси', sortOrder: 1, workflowCount: 0 };
+    const inSales: WorkflowSummary = { ...draft, groupId: 'g1' };
+    const sectionIds = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('[data-section]')].map((e) => e.dataset['section']);
+    const section = (host: HTMLElement, id: string) => host.querySelector<HTMLElement>(`[data-section="${id}"]`)!;
+
+    beforeEach(() => localStorage.removeItem(GROUPS_COLLAPSE_KEY));
+
+    it('секції груп у їхньому порядку, «Без групи» в кінці, лічильники', async () => {
+      const { host } = await setup([inSales, live], [finance, sales]);
+      expect(sectionIds(host)).toEqual(['g1', 'g2', 'none']);
+      expect(section(host, 'g1').querySelector('[data-workflow="w1"]')).not.toBeNull();
+      expect(section(host, 'none').querySelector('[data-workflow="w2"]')).not.toBeNull();
+      expect(section(host, 'g2').querySelector('[data-testid="section-empty"]')).not.toBeNull();
+      expect(section(host, 'g1').querySelector('[data-testid="section-count"]')?.textContent?.trim()).toBe('1');
+    });
+
+    it('без груп — один список без заголовків', async () => {
+      const { host } = await setup();
+      expect(host.querySelector('[data-testid="section-toggle"]')).toBeNull();
+      expect(host.querySelectorAll('[data-workflow]')).toHaveLength(2);
+    });
+
+    it('чіпи і пошук: лише вибрані групи, пошук у їхніх межах; ?group= вибирає чіп', async () => {
+      const { fixture, host } = await setup([inSales, live], [sales, finance], { group: 'g1' });
+      expect(sectionIds(host)).toEqual(['g1']);
+      fixture.componentInstance.chip('none', true);
+      await render(fixture);
+      expect(sectionIds(host)).toEqual(['g1', 'none']);
+      fixture.componentInstance.search.set('розс');
+      await render(fixture);
+      expect(sectionIds(host)).toEqual(['none']);
+      fixture.componentInstance.chip('none', false);
+      await render(fixture);
+      expect(host.querySelector('[data-testid="nothing-found"]')).not.toBeNull();
+    });
+
+    it('згортання секції пам’ятається в localStorage', async () => {
+      const { fixture, host } = await setup([inSales], [sales]);
+      section(host, 'g1').querySelector<HTMLButtonElement>('[data-testid="section-toggle"]')!.click();
+      await render(fixture);
+      expect(section(host, 'g1').querySelector('table')!.hidden).toBe(true);
+      expect(JSON.parse(localStorage.getItem(GROUPS_COLLAPSE_KEY)!)).toEqual({ g1: true });
+    });
+
+    it('перенесення: PATCH { groupId }, рядок у новій секції, лічильники перераховано; помилка повертає', async () => {
+      const { fixture, http, host } = await setup([inSales, live], [sales, finance]);
+      fixture.componentInstance.move(live, 'g2');
+      await render(fixture);
+      expect(section(host, 'g2').querySelector('[data-workflow="w2"]')).not.toBeNull();
+      const req = http.expectOne({ method: 'PATCH', url: '/api/v1/workflows/w2' });
+      expect(req.request.body).toEqual({ groupId: 'g2' });
+      req.flush({ ...detailOf(live), groupId: 'g2' });
+      await render(fixture);
+      expect(fixture.componentInstance.groups().find((g) => g.id === 'g2')?.workflowCount).toBe(1);
+
+      fixture.componentInstance.move({ ...inSales }, null);
+      http.expectOne({ method: 'PATCH', url: '/api/v1/workflows/w1' }).flush({ title: 'Forbidden' }, { status: 403, statusText: 'Forbidden' });
+      await render(fixture);
+      expect(section(host, 'g1').querySelector('[data-workflow="w1"]')).not.toBeNull();
+    });
+
+    it('перетягування рядка в іншу секцію переносить сценарій', async () => {
+      const { fixture, http } = await setup([inSales, live], [sales]);
+      fixture.componentInstance.workflowDropped({
+        previousContainer: { data: 'none' },
+        container: { data: 'g1' },
+        item: { data: live },
+      } as never);
+      expect(http.expectOne({ method: 'PATCH', url: '/api/v1/workflows/w2' }).request.body).toEqual({ groupId: 'g1' });
+    });
+
+    it('нова група; «+ Сценарій» у секції створює сценарій у цій групі', async () => {
+      const { fixture, http, host } = await setup([inSales], [sales]);
+      vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      host.querySelector<HTMLButtonElement>('[data-testid="new-group-button"]')!.click();
+      await render(fixture);
+      const input = host.querySelector<HTMLInputElement>('[data-testid="group-name"]')!;
+      input.value = ' Склад ';
+      input.dispatchEvent(new Event('input'));
+      host.querySelector<HTMLFormElement>('[data-testid="group-form"]')!.dispatchEvent(new Event('submit'));
+      const created = http.expectOne({ method: 'POST', url: '/api/v1/workflow-groups' });
+      expect(created.request.body).toEqual({ name: 'Склад' });
+      created.flush({ id: 'g3', name: 'Склад', sortOrder: 1, workflowCount: 0 });
+      await render(fixture);
+      expect(sectionIds(host)).toEqual(['g1', 'g3', 'none']);
+
+      section(host, 'g3').querySelector<HTMLButtonElement>('[data-testid="section-create"]')!.click();
+      await render(fixture);
+      expect(host.querySelector('[data-testid="create-group-hint"]')?.textContent).toContain('Склад');
+      const name = host.querySelector<HTMLInputElement>('[data-testid="create-name"]')!;
+      name.value = 'Залишки';
+      name.dispatchEvent(new Event('input'));
+      host.querySelector<HTMLFormElement>('[data-testid="create-form"]')!.dispatchEvent(new Event('submit'));
+      const post = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/workflows');
+      expect(post.request.params.get('groupId')).toBe('g3');
+    });
+
+    it('видалення групи: підтвердження з кількістю, сценарії — без групи', async () => {
+      const { fixture, http, host } = await setup([inSales], [sales]);
+      fixture.componentInstance.deletingGroupId.set('g1');
+      await render(fixture);
+      expect(section(host, 'g1').querySelector('[data-testid="group-delete-text"]')?.textContent).toContain('1');
+      section(host, 'g1').querySelector<HTMLButtonElement>('[data-testid="group-delete-confirm"]')!.click();
+      http.expectOne({ method: 'DELETE', url: '/api/v1/workflow-groups/g1' }).flush(null, { status: 204, statusText: 'No Content' });
+      await render(fixture);
+      expect(fixture.componentInstance.groups()).toEqual([]);
+      expect(fixture.componentInstance.workflows()[0].groupId).toBeNull();
+    });
+
+    it('порядок груп: PUT /workflow-groups/order з новим порядком', async () => {
+      const { fixture, http } = await setup([], [sales, finance]);
+      fixture.componentInstance.sectionDropped({ previousIndex: 1, currentIndex: 0 } as never);
+      const req = http.expectOne({ method: 'PUT', url: '/api/v1/workflow-groups/order' });
+      expect(req.request.body).toEqual({ ids: ['g2', 'g1'] });
+      expect(fixture.componentInstance.orderedGroups().map((g) => g.id)).toEqual(['g2', 'g1']);
+    });
   });
 });
