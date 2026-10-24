@@ -86,14 +86,21 @@ public sealed class CodeNode : INode
                 {
                     ct.ThrowIfCancellationRequested();
                     var p = i == 0 ? first : ctx.Params<CodeParameters>(i);
-                    var result = Run(p.Code, timeZone, deadline.Token, ct, (engine, parser) =>
+                    try
+                    {
+                        var result = Run(p.Code, timeZone, deadline.Token, ct, (engine, parser) =>
                     {
                         engine.SetValue("$json", parser.Parse(items[i].Json.ToJsonString()));
                         engine.SetValue("$index", i);
                         SetNodes(engine, parser, p.Code, nodes, i);
                         SetVars(engine, parser, p.Code, ctx.Vars);
                     });
-                    output.AddRange(ToJsonObjects(result, allowSingle: true).Select(json => ItemCopy.WithJson(items[i], json)));
+                        output.AddRange(ToJsonObjects(result, allowSingle: true).Select(json => ItemCopy.WithJson(items[i], json)));
+                    }
+                    catch (CoreNodeException ex)
+                    {
+                        throw ex.AtItem(i, items.Count);
+                    }
                 }
 
                 break;
@@ -108,7 +115,7 @@ public sealed class CodeNode : INode
                 output.AddRange(ToJsonObjects(all, allowSingle: false).Select(json => new Item { Json = json }));
                 break;
             default:
-                throw new CoreNodeException($"Невідомий режим «{first.Mode}»; очікується eachItem або allItems.");
+                throw new CoreNodeException($"Невідомий режим «{first.Mode}». Оберіть eachItem (для кожного item) або allItems (усі разом).");
         }
 
         return Task.FromResult<Item[][]>([[.. output]]);
@@ -173,7 +180,7 @@ public sealed class CodeNode : INode
         }
         catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
         {
-            throw new CoreNodeException($"Невідомий часовий пояс сценарію «{timezone}».", ex);
+            throw new CoreNodeException($"Невідомий часовий пояс сценарію «{timezone}». Виберіть часовий пояс у налаштуваннях сценарію.", ex);
         }
     }
 
@@ -181,7 +188,7 @@ public sealed class CodeNode : INode
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            throw new CoreNodeException("Код порожній.");
+            throw new CoreNodeException("Код порожній. Напишіть код, що повертає об'єкт або масив об'єктів.");
         }
 
         var engine = new Jint.Engine(options =>
@@ -209,28 +216,28 @@ public sealed class CodeNode : INode
         }
         catch (Exception ex) when (ex is ExecutionCanceledException or TimeoutException)
         {
-            throw new CoreNodeException($"Код перевищив ліміт часу {_timeout.TotalSeconds:0.###} с.", ex);
+            throw new CoreNodeException($"Код перевищив ліміт часу {_timeout.TotalSeconds:0.###} с. Спростіть обчислення або розбийте їх на кілька вузлів.", ex);
         }
         catch (MemoryLimitExceededException ex)
         {
-            throw new CoreNodeException("Код перевищив ліміт пам'яті.", ex);
+            throw new CoreNodeException("Код перевищив ліміт пам'яті. Обробляйте менше даних за раз, напр. через вузол «Для кожного».", ex);
         }
         catch (RecursionDepthOverflowException ex)
         {
-            throw new CoreNodeException("Код перевищив ліміт глибини рекурсії.", ex);
+            throw new CoreNodeException("Код перевищив ліміт глибини рекурсії. Замініть рекурсію циклом.", ex);
         }
         catch (JavaScriptException ex)
         {
-            throw new CoreNodeException($"Помилка в коді: {ex.Message}", ex);
+            throw new CoreNodeException($"Код не виконався: {ex.Message.TrimEnd('.')}. Виправте код вузла.", ex) { Details = ex.Message };
         }
         catch (Exception ex) when (ex is JintException or Acornima.SyntaxErrorException or Acornima.ParseErrorException)
         {
-            throw new CoreNodeException($"Помилка в коді: {ex.Message}", ex);
+            throw new CoreNodeException($"Код не виконався: {ex.Message.TrimEnd('.')}. Виправте код вузла.", ex) { Details = ex.Message };
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
         {
             // Хост Jint відмовляє в недоступних можливостях (import() без завантажувача модулів тощо).
-            throw new CoreNodeException($"Операція недоступна в коді: {ex.Message}", ex);
+            throw new CoreNodeException($"Операція недоступна в коді: {ex.Message.TrimEnd('.')}. Використовуйте стандартний JavaScript без require і модулів.", ex);
         }
     }
 
@@ -243,7 +250,7 @@ public sealed class CodeNode : INode
 
         if (value.IsPromise() || value is Jint.Native.Function.Function)
         {
-            throw new CoreNodeException("Код має повертати об'єкт або масив об'єктів, а не функцію чи Promise.");
+            throw new CoreNodeException("Код повернув функцію чи Promise. Поверніть об'єкт або масив об'єктів.");
         }
 
         var json = new JsJsonSerializer(engine).Serialize(value);
@@ -260,12 +267,12 @@ public sealed class CodeNode : INode
                 return [obj];
             case JsonArray array:
                 return array.Select((element, index) => element as JsonObject
-                    ?? throw new CoreNodeException($"Елемент {index} результату коду має бути об'єктом, а отримано {Kind(element)}."))
+                    ?? throw new CoreNodeException($"Елемент {index} результату коду — {Kind(element)}, а має бути об'єкт. Поверніть масив об'єктів, напр. [{{ value: x }}]."))
                     .ToList();
             default:
                 throw new CoreNodeException(allowSingle
-                    ? $"Код має повертати об'єкт, масив об'єктів або null, а повернув {Kind(result)}."
-                    : $"У режимі allItems код має повертати масив об'єктів, а повернув {Kind(result)}.");
+                    ? $"Код повернув {Kind(result)}. Поверніть об'єкт, масив об'єктів або null."
+                    : $"У режимі allItems код повернув {Kind(result)}. Поверніть масив об'єктів.");
         }
     }
 

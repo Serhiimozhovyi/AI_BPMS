@@ -51,7 +51,7 @@ public sealed class WaitNode : INode
     {
         if (p.Amount < 0 || double.IsNaN(p.Amount) || double.IsInfinity(p.Amount))
         {
-            throw new CoreNodeException($"Тривалість очікування має бути невід'ємним числом, а задано {p.Amount}.");
+            throw new CoreNodeException($"Тривалість очікування має бути невід'ємним числом, а задано {p.Amount}. Вкажіть 0 або більше.");
         }
 
         var ms = p.Unit switch
@@ -60,11 +60,11 @@ public sealed class WaitNode : INode
             "seconds" => p.Amount * 1000,
             "minutes" => p.Amount * 60_000,
             "hours" => p.Amount * 3_600_000,
-            _ => throw new CoreNodeException($"Невідома одиниця часу «{p.Unit}»; очікується milliseconds, seconds, minutes або hours."),
+            _ => throw new CoreNodeException($"Невідома одиниця часу «{p.Unit}». Оберіть мілісекунди, секунди, хвилини або години."),
         };
 
         return ms > MaxDelay.TotalMilliseconds
-            ? throw new CoreNodeException($"Очікування не може перевищувати {MaxDelay.TotalHours:0} год.")
+            ? throw new CoreNodeException($"Очікування не може перевищувати {MaxDelay.TotalHours:0} год. Зменште тривалість або запускайте продовження за розкладом.")
             : TimeSpan.FromMilliseconds(ms);
     }
 

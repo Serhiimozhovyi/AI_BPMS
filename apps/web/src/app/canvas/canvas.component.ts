@@ -4,7 +4,7 @@ import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workfl
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
 import { QuickAddRequest } from './quick-add';
-import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
+import { MissingFieldRequest, NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
 
 /**
  * Канвас сценарію з власним API (docs/architecture.md §7, ADR-003): вхід — `WorkflowDefinition`, дескриптори
@@ -22,12 +22,15 @@ import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow
     [runStatuses]="runStatuses()"
     [pinnedNodes]="pinnedNodes()"
     [itemCounts]="itemCounts()"
+    [runErrors]="runErrors()"
+    [missingFields]="missingFields()"
     [selection]="selection()"
     [readonly]="readonly()"
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
     (selectionChange)="selectionChange.emit($event)"
     (quickAdd)="quickAdd.emit($event)"
+    (missingClick)="missingClick.emit($event)"
   />`,
   styles: `
     :host {
@@ -56,6 +59,12 @@ export class CanvasComponent {
   /** Кількість items на виході вузла після запуску за `вузол:порт` — підпис на ребрах (F3-52). */
   readonly itemCounts = input<ReadonlyMap<string, number>>(new Map());
 
+  /** Повідомлення помилок вузлів у тестовому запуску (F3-57). */
+  readonly runErrors = input<ReadonlyMap<string, string>>(new Map());
+
+  /** Незаповнені обов'язкові параметри за id вузла (F3-57). */
+  readonly missingFields = input<ReadonlyMap<string, readonly string[]>>(new Map());
+
   /** Виділені вузли й ребра. */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
@@ -67,6 +76,9 @@ export class CanvasComponent {
 
   /** Нове виділення після дій користувача на канвасі. */
   readonly selectionChange = output<CanvasSelection>();
+
+  /** Клік по «не заповнено: N» на картці (F3-57). */
+  readonly missingClick = output<MissingFieldRequest>();
 
   /** Відкрити спливаючу палітру (F3-50); у режимі перегляду не надходить. */
   readonly quickAdd = output<QuickAddRequest>();

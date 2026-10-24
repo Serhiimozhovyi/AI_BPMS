@@ -43,7 +43,9 @@ public sealed record StepRecord
 }
 
 /// <summary>Помилка вузла у вигляді, придатному для журналу й виходу <c>error</c>. Секретів не містить.</summary>
-/// <param name="Message">Повідомлення для людини.</param>
+/// <param name="Message">Повідомлення для людини: що сталося і що зробити (F3-57).</param>
 /// <param name="Type">Тип помилки: назва винятку або код (<c>MCP_TOOL_UNKNOWN</c>, <c>TIMEOUT</c> тощо).</param>
 /// <param name="Attempts">Скільки спроб зроблено з урахуванням повторів.</param>
-public sealed record StepError(string Message, string? Type = null, int Attempts = 1);
+/// <param name="Details">Технічні подробиці (відповідь сервера, текст винятку); <c>null</c> — немає.</param>
+/// <param name="ItemIndex">Індекс item'а на вході, на якому впав вузол; <c>null</c> — невідомо.</param>
+public sealed record StepError(string Message, string? Type = null, int Attempts = 1, string? Details = null, int? ItemIndex = null);

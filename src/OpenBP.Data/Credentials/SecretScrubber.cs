@@ -139,7 +139,7 @@ public sealed class SecretScrubber
         {
             Input = Scrub(step.Input),
             Output = Scrub(step.Output),
-            Error = step.Error is null ? null : step.Error with { Message = Scrub(step.Error.Message), Type = Scrub(step.Error.Type) },
+            Error = step.Error is null ? null : step.Error with { Message = Scrub(step.Error.Message), Type = Scrub(step.Error.Type), Details = Scrub(step.Error.Details) },
         };
     }
 

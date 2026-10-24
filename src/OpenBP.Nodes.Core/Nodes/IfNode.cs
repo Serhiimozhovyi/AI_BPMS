@@ -32,7 +32,14 @@ public sealed class IfNode : INode
         {
             ct.ThrowIfCancellationRequested();
             var p = ctx.Params<ConditionGroup>(i);
-            (ConditionEvaluator.Evaluate(p) ? yes : no).Add(ItemCopy.Clone(items[i]));
+            try
+            {
+                (ConditionEvaluator.Evaluate(p) ? yes : no).Add(ItemCopy.Clone(items[i]));
+            }
+            catch (CoreNodeException ex)
+            {
+                throw ex.AtItem(i, items.Count);
+            }
         }
 
         return Task.FromResult<Item[][]>([[.. yes], [.. no]]);

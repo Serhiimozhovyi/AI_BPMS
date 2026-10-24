@@ -33,7 +33,7 @@ public sealed class DataTableNode(IDataTableStore? store) : INode
     public async Task<Item[][]> ExecuteAsync(INodeContext ctx, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(ctx);
-        var tables = store ?? throw new CoreNodeException("Таблиці даних недоступні: хост не налаштував сховище.");
+        var tables = store ?? throw new CoreNodeException("Таблиці даних недоступні: сервер не налаштував сховище. Зверніться до адміністратора.");
         var items = ctx.Items();
         var output = new List<Item>();
         for (var i = 0; i < items.Count; i++)
@@ -41,14 +41,14 @@ public sealed class DataTableNode(IDataTableStore? store) : INode
             ct.ThrowIfCancellationRequested();
             var p = ctx.Params<DataTableParameters>(i);
             var table = await tables.FindTableAsync(p.Table, ct).ConfigureAwait(false)
-                ?? throw new CoreNodeException($"Таблиці «{p.Table}» немає.");
+                ?? throw new CoreNodeException($"Таблиці «{p.Table}» немає. Оберіть наявну таблицю або створіть її в розділі «Таблиці».");
             try
             {
                 output.AddRange(await RunAsync(tables, table, p, ct).ConfigureAwait(false));
             }
             catch (DataTableException ex)
             {
-                throw new CoreNodeException(items.Count > 1 ? $"Item {i}: {ex.Message}" : ex.Message, ex);
+                throw new CoreNodeException($"{ex.Message.TrimEnd('.')}. Перевірте параметри вузла і дані item'а.", ex).AtItem(i, items.Count);
             }
         }
 
@@ -72,14 +72,14 @@ public sealed class DataTableNode(IDataTableStore? store) : INode
             case "update":
                 var key = Key(p);
                 var updated = await tables.UpdateRowAsync(table, key, Values(p), ct).ConfigureAwait(false)
-                    ?? throw new CoreNodeException($"У таблиці «{table.Name}» немає рядка з ключем «{key}».");
+                    ?? throw new CoreNodeException($"У таблиці «{table.Name}» немає рядка з ключем «{key}». Перевірте ключ або оберіть операцію upsert.");
                 return [ToItem(updated)];
             case "delete":
                 var deleteKey = Key(p);
                 var deleted = await tables.DeleteRowAsync(table, deleteKey, ct).ConfigureAwait(false);
                 return [new Item { Json = new JsonObject { [KeyField] = deleteKey, ["deleted"] = deleted } }];
             default:
-                throw new CoreNodeException($"Невідома операція «{p.Operation}»; очікується get, list, insert, upsert, update або delete.");
+                throw new CoreNodeException($"Невідома операція «{p.Operation}». Оберіть get, list, insert, upsert, update або delete.");
         }
     }
 
@@ -94,12 +94,12 @@ public sealed class DataTableNode(IDataTableStore? store) : INode
     {
         JsonValue v when v.TryGetValue<string>(out var s) && !string.IsNullOrWhiteSpace(s) => s,
         JsonValue v when v.GetValueKind() == JsonValueKind.Number => DataTableRules.KeyText(v)!,
-        _ => throw new CoreNodeException($"Для операції {p.Operation} потрібен параметр key."),
+        _ => throw new CoreNodeException($"Для операції {p.Operation} не задано ключ (key). Вкажіть значення або вираз."),
     };
 
     private static JsonObject Values(DataTableParameters p)
     {
-        var values = p.Values as JsonObject ?? throw new CoreNodeException($"Для операції {p.Operation} потрібен об'єкт values.");
+        var values = p.Values as JsonObject ?? throw new CoreNodeException($"Для операції {p.Operation} не задано значення (values). Додайте поля рядка.");
         // Поле _key з виходу попереднього вузла не є колонкою.
         var copy = (JsonObject)values.DeepClone();
         copy.Remove(KeyField);

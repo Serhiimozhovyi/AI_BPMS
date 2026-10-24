@@ -48,7 +48,7 @@ public sealed class McpPollNode : INode
         var p = ctx.Params<PollParameters>(0);
         if (string.IsNullOrWhiteSpace(p.KeyField))
         {
-            throw new McpToolException($"Вузол «{ctx.Node.Name}»: параметр keyField обов'язковий.");
+            throw new McpToolException("Не задано ключове поле (keyField), за яким розпізнаються нові записи. Вкажіть його у вузлі.");
         }
 
         var items = await _invoker.CallAsync(ctx, p, ct).ConfigureAwait(false);
@@ -69,7 +69,7 @@ public sealed class McpPollNode : INode
         {
             var key = McpToolInvoker.ResolvePath(item.Json, p.KeyField)
                 ?? throw new McpToolException(
-                    $"Вузол «{ctx.Node.Name}»: у записі немає ключового поля «{p.KeyField}» (або воно null).");
+                    $"У записі немає ключового поля «{p.KeyField}» (або воно null). Вкажіть у keyField поле, що є в кожному записі.");
             if (known.Add(KeyText(key)))
             {
                 seen.Add(key.DeepClone());

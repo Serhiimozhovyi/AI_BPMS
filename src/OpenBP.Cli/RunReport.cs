@@ -27,6 +27,10 @@ internal static class RunReport
             if (step.Error is { } error)
             {
                 await writer.WriteLineAsync($"  помилка: {error.Message}").ConfigureAwait(false);
+                if (error.Details is { } details)
+                {
+                    await writer.WriteLineAsync($"  подробиці: {details}").ConfigureAwait(false);
+                }
             }
         }
 

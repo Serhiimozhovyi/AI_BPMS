@@ -14,7 +14,7 @@ internal sealed class OpenAiProvider(OpenAiCompatibleProvider chat) : ILlmProvid
         var apiKey = request.Credential["apiKey"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            throw new LlmException("Credential openai: потрібен apiKey.");
+            throw new LlmException("У credential openai не задано apiKey. Відкрийте credential і вкажіть ключ.");
         }
 
         // Поточні моделі OpenAI приймають max_completion_tokens; max_tokens застарів.

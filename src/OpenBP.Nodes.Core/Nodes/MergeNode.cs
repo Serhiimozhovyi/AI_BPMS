@@ -33,7 +33,7 @@ public sealed class MergeNode : INode
         {
             "append" => [.. first.Select(ItemCopy.Clone), .. second.Select(ItemCopy.Clone)],
             "combineByPosition" => CombineByPosition(first, second, ct),
-            _ => throw new CoreNodeException($"Невідомий режим об'єднання «{p.Mode}»; очікується append або combineByPosition."),
+            _ => throw new CoreNodeException($"Невідомий режим об'єднання «{p.Mode}». Оберіть append або combineByPosition."),
         };
 
         return Task.FromResult<Item[][]>([output]);
@@ -44,7 +44,7 @@ public sealed class MergeNode : INode
         if (first.Count != second.Count)
         {
             throw new CoreNodeException(
-                $"Режим combineByPosition потребує однакової кількості items на входах, а отримано {first.Count} і {second.Count}.");
+                $"Режим combineByPosition потребує однакової кількості items на входах, а отримано {first.Count} і {second.Count}. Вирівняйте кількість items або оберіть режим append.");
         }
 
         var output = new Item[first.Count];

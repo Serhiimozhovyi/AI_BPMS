@@ -22,7 +22,7 @@ internal sealed class AnthropicProvider(HttpClient http) : ILlmProvider
         var apiKey = request.Credential["apiKey"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            throw new LlmException("Credential anthropic: потрібен apiKey.");
+            throw new LlmException("У credential anthropic не задано apiKey. Відкрийте credential і вкажіть ключ.");
         }
 
         using var message = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = JsonContent.Create(BuildBody(request)) };
@@ -100,7 +100,7 @@ internal sealed class AnthropicProvider(HttpClient http) : ILlmProvider
         }
 
         throw new LlmException(structured
-            ? "Провайдер не повернув виклик інструмента output з structured output."
-            : "Провайдер повернув відповідь без текстового content.");
+            ? "Модель не повернула структуровану відповідь (виклик інструмента output). Повторіть запуск або уточніть промпт."
+            : "Модель повернула відповідь без тексту. Повторіть запуск або уточніть промпт.");
     }
 }

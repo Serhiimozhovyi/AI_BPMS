@@ -14,9 +14,19 @@ internal static class LlmHttp
         if (!response.IsSuccessStatusCode)
         {
             var details = text.Length > MaxErrorBodyChars ? text[..MaxErrorBodyChars] + "…" : text;
-            throw new LlmException($"Провайдер відповів HTTP {(int)response.StatusCode}: {details}");
+            throw new LlmException(StatusMessage((int)response.StatusCode)) { Details = details };
         }
 
         return text;
     }
+
+    /// <summary>Що сталося і що зробити за HTTP-статусом провайдера (F3-57); тіло відповіді — у Details.</summary>
+    internal static string StatusMessage(int status) => status switch
+    {
+        401 or 403 => $"Провайдер моделі відхилив ключ доступу (HTTP {status}). Перевірте API-ключ у credential вузла.",
+        404 => $"Провайдер не знайшов модель або адресу (HTTP {status}). Перевірте назву моделі і baseUrl.",
+        429 => $"Провайдер обмежив кількість запитів (HTTP {status}). Повторіть пізніше або налаштуйте повтори вузла.",
+        >= 500 => $"Провайдер моделі тимчасово недоступний (HTTP {status}). Повторіть запуск пізніше.",
+        _ => $"Провайдер моделі відхилив запит (HTTP {status}). Перевірте модель і параметри вузла.",
+    };
 }

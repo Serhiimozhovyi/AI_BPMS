@@ -63,7 +63,7 @@ public class ScrubbedExecutionStoreTests(PostgresFixture postgres)
 
         // Движок у пам'яті бачив секрети (вони йшли між вузлами), а в БД — лише ***.
         Assert.Equal(ExecutionStatus.Error, result.Status);
-        Assert.Contains(Secret, result.Error!.Message, StringComparison.Ordinal);
+        Assert.Contains(Secret, result.Error!.Details, StringComparison.Ordinal);
         Assert.Contains(result.Steps, s => s.Output.SelectMany(p => p).Any(i => i.Json.ToJsonString().Contains(Secret, StringComparison.Ordinal)));
 
         await using var db = PostgresFixture.CreateContext(cs);
@@ -85,7 +85,9 @@ public class ScrubbedExecutionStoreTests(PostgresFixture postgres)
 
         var execution = await db.Executions.AsNoTracking().SingleAsync(e => e.Id == executionId);
         Assert.Equal(ExecutionStatuses.Error, execution.Status);
-        Assert.Equal("Відмова для ***", execution.Error);
+        Assert.StartsWith("Вузол зупинився через непередбачений збій.", execution.Error, StringComparison.Ordinal);
+        // Текст винятку з секретом — у details кроку, вже очищений.
+        Assert.Contains(rows, r => r.Error?.Contains("Відмова для ***", StringComparison.Ordinal) == true);
 
         // Знімок для resume читає вже очищені кроки.
         var snapshot = (await store.LoadAsync(executionId, CancellationToken.None))!;
@@ -105,7 +107,7 @@ public class ScrubbedExecutionStoreTests(PostgresFixture postgres)
         var echo = snapshot.Steps.Single(s => s.NodeId == "e");
         Assert.Equal("***", echo.Input[0][0].Json["list"]![0]!.GetValue<string>());
         var failed = snapshot.Steps.Single(s => s.NodeId == "f");
-        Assert.Equal("Відмова для ***", failed.Error!.Message);
+        Assert.Equal("Відмова для ***", failed.Error!.Details);
     }
 
     /// <summary>t → l (читає credential і віддає його в items) → e (echo) → f (падає з секретом у повідомленні).</summary>

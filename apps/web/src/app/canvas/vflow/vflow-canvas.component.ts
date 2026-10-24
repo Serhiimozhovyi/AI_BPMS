@@ -17,6 +17,16 @@ interface NodeData {
   runStatus: NodeRunStatus | null;
   /** Output вузла закріплено (`pinData`): у тестовому запуску вузол не виконується. */
   pinned: boolean;
+  /** Повідомлення помилки вузла в останньому запуску (F3-57); `null` — не падав. */
+  runError: string | null;
+  /** Незаповнені обов'язкові параметри (F3-57) — ключі полів у порядку форми. */
+  missing: readonly string[];
+}
+
+/** Клік по «не заповнено: N» — відкрити вузол і поставити фокус на перше незаповнене поле. */
+export interface MissingFieldRequest {
+  nodeId: string;
+  field: string;
 }
 
 /** Помилки валідації за id вузла. */
@@ -28,6 +38,10 @@ const NO_ERRORS: NodeErrors = new Map();
 export type NodeRunStatuses = ReadonlyMap<string, NodeRunStatus>;
 
 const NO_RUN: NodeRunStatuses = new Map();
+
+const NO_RUN_ERRORS: ReadonlyMap<string, string> = new Map();
+
+const NO_MISSING: ReadonlyMap<string, readonly string[]> = new Map();
 
 const NO_PINNED: ReadonlySet<string> = new Set();
 const NO_COUNTS: ReadonlyMap<string, number> = new Map();
@@ -135,7 +149,25 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
             }
           </div>
           <div class="node__name" [title]="ctx.data().node.name">{{ ctx.data().node.name }}</div>
-          <div class="node__type" [title]="ctx.data().node.subtitle">{{ ctx.data().node.subtitle }}</div>
+          @if (ctx.data().runError; as runError) {
+            <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
+          } @else {
+            <div class="node__type" [title]="ctx.data().node.subtitle">{{ ctx.data().node.subtitle }}</div>
+          }
+          @if (ctx.data().missing.length > 0) {
+            <button
+              type="button"
+              class="node__missing"
+              data-testid="node-missing"
+              [title]="missingTitle(ctx.data().missing)"
+              (mousedown)="$event.stopPropagation()"
+              (pointerdown)="$event.stopPropagation()"
+              (click)="openMissing($event, ctx.node.id, ctx.data().missing[0])"
+              i18n="@@canvas.missing"
+            >
+              не заповнено: {{ ctx.data().missing.length }}
+            </button>
+          }
           @for (port of ctx.data().node.outputs; track $index; let i = $index) {
             <handle
               position="right"
@@ -311,6 +343,30 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       color: var(--ac-cool-grey-4);
     }
 
+    /* Перший рядок помилки запуску (F3-57) замість підзаголовка; повний текст — у підказці й панелі вузла. */
+    .node__run-error {
+      overflow: hidden;
+      font-size: 11px;
+      color: var(--ac-red);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    /* «не заповнено: N» (F3-57) — під карткою, щоб не міняти її висоту й положення портів. */
+    .node__missing {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      padding: 0 6px;
+      border: 1px solid var(--ac-orange);
+      border-radius: 8px;
+      background: var(--ac-white);
+      color: var(--ac-orange);
+      font: 600 11px/16px Ubuntu, sans-serif;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
     .node__port {
       position: absolute;
       transform: translateY(-50%);
@@ -402,6 +458,12 @@ export class VflowCanvasComponent {
   /** Кількість items на виході після запуску за `вузол:порт` — підпис на ребрах (F3-52). */
   readonly itemCounts = input<ReadonlyMap<string, number>>(NO_COUNTS);
 
+  /** Повідомлення помилок останнього запуску за id вузла — перший рядок на картці (F3-57). */
+  readonly runErrors = input<ReadonlyMap<string, string>>(NO_RUN_ERRORS);
+
+  /** Незаповнені обов'язкові параметри за id вузла — «не заповнено: N» на картці (F3-57). */
+  readonly missingFields = input<ReadonlyMap<string, readonly string[]>>(NO_MISSING);
+
   /** Виділення (вузли за id, ребра за індексом у `connections`); змінюється і ззовні (вставка, видалення). */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
@@ -416,6 +478,9 @@ export class VflowCanvasComponent {
 
   /** Користувач змінив виділення (клік, рамка, Ctrl+клік). */
   readonly selectionChange = output<CanvasSelection>();
+
+  /** Клік по «не заповнено: N»: відкрити вузол із фокусом на першому незаповненому полі (F3-57). */
+  readonly missingClick = output<MissingFieldRequest>();
 
   /** Відкрити спливаючу палітру (F3-50): «+» біля порту чи на ребрі, з'єднання відпущено в порожньому місці. */
   readonly quickAdd = output<QuickAddRequest>();
@@ -438,6 +503,8 @@ export class VflowCanvasComponent {
     const errors = this.nodeErrors();
     const run = this.runStatuses();
     const pinned = this.pinnedNodes();
+    const runErrors = this.runErrors();
+    const missing = this.missingFields();
     const draggable = !this.readonly();
     // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
     const selected = new Set(untracked(this.selection).nodes);
@@ -452,7 +519,7 @@ export class VflowCanvasComponent {
           height,
           draggable,
           selected: selected.has(n.id),
-          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id) },
+          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id), runError: runErrors.get(n.id) ?? null, missing: missing.get(n.id) ?? [] },
         };
       }),
     );
@@ -531,6 +598,20 @@ export class VflowCanvasComponent {
   protected addFromPort(event: MouseEvent, node: string, output: number): void {
     event.stopPropagation();
     this.quickAdd.emit({ target: { kind: 'port', from: { node, output } }, anchor: anchorOf(event) });
+  }
+
+  protected openMissing(event: MouseEvent, nodeId: string, field: string): void {
+    event.stopPropagation();
+    this.missingClick.emit({ nodeId, field });
+  }
+
+  /** Перший рядок повідомлення — для картки (повний текст — у підказці). */
+  protected firstLine(message: string): string {
+    return message.split('\n', 1)[0];
+  }
+
+  protected missingTitle(fields: readonly string[]): string {
+    return $localize`:@@canvas.missing.title:Не заповнено обов'язкові поля: ${fields.join(', ')}:fields:. Клацніть, щоб заповнити.`;
   }
 
   protected addOnEdge(event: MouseEvent, edgeIndex: number): void {

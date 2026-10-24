@@ -1,6 +1,10 @@
 namespace OpenBP.Engine;
 
-/// <summary>Базовий виняток движка; усі помилки, які движок кидає сам, походять від нього.</summary>
+/// <summary>
+/// Базовий виняток движка; усі помилки, які движок кидає сам, походять від нього.
+/// <see cref="Exception.Message"/> — для людини за правилом «що сталося → що зробити» (F3-57): без стеку,
+/// без слів «помилка»/«exception»; технічні подробиці (відповідь сервера, текст Jint) — у <see cref="Details"/>.
+/// </summary>
 public class EngineException : Exception
 {
     /// <summary>Створює виняток із повідомленням.</summary>
@@ -13,6 +17,37 @@ public class EngineException : Exception
     public EngineException(string message, Exception? innerException)
         : base(message, innerException)
     {
+    }
+
+    /// <summary>Технічні подробиці для розбору (не для картки вузла); <c>null</c> — немає.</summary>
+    public string? Details { get; init; }
+
+    /// <summary>Індекс item'а на вході вузла, на якому сталося (від 0); <c>null</c> — невідомо або не стосується item'а.</summary>
+    public int? ItemIndex { get; init; }
+
+    /// <summary>
+    /// Повідомлення з позначкою item'а в кінці першого речення: «Поле «x» порожнє [item 2]. Вкажіть значення.».
+    /// Позначка — лише коли на вході більше одного item'а (<paramref name="itemCount"/>).
+    /// </summary>
+    /// <param name="message">Повідомлення «що сталося. Що зробити.».</param>
+    /// <param name="itemIndex">Індекс item'а від 0.</param>
+    /// <param name="itemCount">Скільки items на вході вузла.</param>
+    public static string AtItem(string message, int itemIndex, int itemCount)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (itemCount <= 1 || message.Contains("[item ", StringComparison.Ordinal))
+        {
+            return message;
+        }
+
+        var label = $" [item {itemIndex}]";
+        var end = message.IndexOf(". ", StringComparison.Ordinal);
+        if (end < 0)
+        {
+            end = message.EndsWith('.') ? message.Length - 1 : message.Length;
+        }
+
+        return message.Insert(end, label);
     }
 }
 

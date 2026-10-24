@@ -237,6 +237,21 @@ public sealed class WorkflowExecutor
             ? (ExecutionStatus.Cancelled, new StepError("Виконання скасовано.", "CANCELLED"))
             : (ExecutionStatus.TimedOut, new StepError($"Перевищено таймаут сценарію ({timeoutSec} с).", "TIMEOUT"));
 
+    /// <summary>
+    /// Виняток вузла → <see cref="StepError"/>: повідомлення <see cref="EngineException"/> уже для людини (F3-57), його
+    /// <see cref="EngineException.Details"/> і <see cref="EngineException.ItemIndex"/> переносяться; будь-який інший виняток —
+    /// непередбачений збій: людині — що робити, його текст — у <c>Details</c>.
+    /// </summary>
+    internal static StepError ToStepError(Exception ex, int attempts) => ex switch
+    {
+        EngineException engine => new StepError(engine.Message, ex.GetType().Name, attempts, engine.Details, engine.ItemIndex),
+        _ => new StepError(
+            "Вузол зупинився через непередбачений збій. Повторіть запуск; якщо повториться — передайте подробиці адміністратору.",
+            ex.GetType().Name,
+            attempts,
+            ex.Message),
+    };
+
     private async Task<StepRecord> RunNodeAsync(PlannedNode node, RunState run, CancellationToken token)
     {
         var definition = node.Definition;
@@ -333,7 +348,7 @@ public sealed class WorkflowExecutor
             {
                 span?.SetTag(OpenBpTelemetry.Status, "error");
                 _ = OpenBpTelemetry.Fail(span, ex);
-                var error = new StepError(ex.Message, ex.GetType().Name, attempt);
+                var error = ToStepError(ex, attempt);
                 if (attempt >= maxTries)
                 {
                     return Failed(error);
@@ -401,18 +416,26 @@ public sealed class WorkflowExecutor
     }
 
     /// <summary>Item виходу <c>error</c>: <c>{ "error": { "message", "type", "attempts" } }</c>.</summary>
-    private static Item ErrorItem(StepError error) => new()
+    private static Item ErrorItem(StepError error)
     {
-        Json = new JsonObject
+        var json = new JsonObject
         {
-            ["error"] = new JsonObject
-            {
-                ["message"] = error.Message,
-                ["type"] = error.Type,
-                ["attempts"] = error.Attempts,
-            },
-        },
-    };
+            ["message"] = error.Message,
+            ["type"] = error.Type,
+            ["attempts"] = error.Attempts,
+        };
+        if (error.Details is not null)
+        {
+            json["details"] = error.Details;
+        }
+
+        if (error.ItemIndex is { } index)
+        {
+            json["itemIndex"] = index;
+        }
+
+        return new Item { Json = new JsonObject { ["error"] = json } };
+    }
 
     /// <summary>Тригер (без входів) — завжди; один вхід — є items; кілька входів (Merge) — items на всіх.</summary>
     private static bool HasData(PlannedNode node, IReadOnlyList<Item>[] inputs) =>

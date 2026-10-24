@@ -1,6 +1,6 @@
 import { ExecutionStep } from '../executions/executions-api.service';
 import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { ancestorIds, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from './test-run';
+import { ancestorIds, applyEvent, isRunning, nodeRunErrors, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from './test-run';
 
 function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success', runIndex = 0, output: ExecutionStep['output'] = [[{ json: { node: nodeId } }]]): ExecutionStep {
   return { id, nodeId, runIndex, status, input: [], output, error: status === 'error' ? { message: 'збій' } : null, startedAt: '', finishedAt: '' };
@@ -17,6 +17,13 @@ describe('test-run', () => {
       ['a', 'success'],
       ['b', 'error'],
     ]);
+  });
+
+  it('повідомлення помилок — лише вузлів, що впали (F3-57)', () => {
+    let run = applyEvent(startedRun('e1'), { kind: 'step', step: step('a', 's1') });
+    run = applyEvent(run, { kind: 'step', step: step('b', 's2', 'error') });
+    expect([...nodeRunErrors(run)]).toEqual([['b', 'збій']]);
+    expect(nodeRunErrors(null).size).toBe(0);
   });
 
   it('фінальний status завершує запуск і несе помилку виконання', () => {

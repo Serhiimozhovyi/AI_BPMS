@@ -75,6 +75,27 @@ describe('WorkflowEditorComponent', () => {
 
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
+  it('«не заповнено: N» (F3-57): обов’язкові аргументи tool’а; клік відкриває вузол і ставить фокус на перше поле', async () => {
+    const { fixture, http, host } = setup();
+    const mcpNode = { id: 'n_mcp', name: '1С', type: 'mcp.tool', typeVersion: 1, position: [360, 200] as [number, number], parameters: { serverId: 'c1', toolName: 'create_order', arguments: {} } };
+    http.expectOne('/api/v1/workflows/w1').flush({ ...workflow, definition: { ...workflow.definition, nodes: [workflow.definition.nodes[0], mcpNode], connections: [] } });
+    const mcpSchema = { type: 'object', properties: { serverId: { type: 'string' }, toolName: { type: 'string' }, arguments: { type: 'object' } } };
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS.map((d) => (d.type === 'mcp.tool' ? { ...d, parametersSchema: mcpSchema } : d)));
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [withTools], page: 1, pageSize: 200, total: 1 });
+    http.expectOne('/api/v1/connectors/c1').flush({
+      ...detail1c,
+      tools: [{ name: 'create_order', inputSchema: { type: 'object', required: ['customer'], properties: { customer: { type: 'string', title: 'Клієнт' } } } }],
+    });
+    await render(fixture);
+
+    expect(Object.fromEntries(canvasComponent(fixture).missingFields())).toEqual({ n_mcp: ['arguments.customer'] });
+    canvasComponent(fixture).missingClick.emit({ nodeId: 'n_mcp', field: 'arguments.customer' });
+    await render(fixture);
+    expect(canvasComponent(fixture).selection().nodes).toEqual(['n_mcp']);
+    expect(host.querySelector('[data-testid="panel-tab-params"]')?.getAttribute('aria-selected')).toBe('true');
+    await vi.waitFor(() => expect(document.activeElement?.closest('[data-field="customer"]')).not.toBeNull());
+  });
+
   async function loaded() {
     const ctx = setup();
     ctx.http.expectOne('/api/v1/workflows/w1').flush(workflow);
@@ -424,6 +445,11 @@ describe('WorkflowEditorComponent', () => {
       // Вхід і вихід — схемою: поле і приклад значення.
       expect(host.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('"input"');
       expect(run?.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"n_set"');
+      // F3-57: перший рядок помилки — на картці; «Показати вхідні дані» на вузькій панелі відкриває вкладку входу.
+      expect(Object.fromEntries(canvasComponent(fixture).runErrors())).toEqual({ n_set: 'Вузол упав' });
+      click(host, '[data-testid="node-run-error-input"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="panel-tab-input"]')?.getAttribute('aria-selected')).toBe('true');
 
       source.emit('status', { executionId: 'e1', state: 'error', error: 'Вузол упав' });
       await render(fixture);
