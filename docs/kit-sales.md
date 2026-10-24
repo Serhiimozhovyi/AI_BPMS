@@ -68,16 +68,14 @@ MCP-сервер на Connector Kit (`connectors/kit-crm`), stdio або http, �
 
 ### 5.1. Автентифікація
 
-- Токен Keycloak (realm `astarta`) для **сервісного користувача**. Два варіанти, обирає власник:
-  - `client_credentials`: окремий client у Keycloak з service account. Env: `KIT_TOKEN_URL`, `KIT_CLIENT_ID`, `KIT_CLIENT_SECRET`;
-  - пароль сервісного користувача (`grant_type=password`, client `KitWeb`). Env: `KIT_TOKEN_URL`, `KIT_CLIENT_ID`, `KIT_USERNAME`, `KIT_PASSWORD`.
-- Обидва варіанти вимагають, щоб у таблиці `Users` Кіта був користувач, зв'язаний із цим акаунтом, з роллю `CRM_user`. Інакше OData відповідає 403 на запис. Створення користувача — дія власника в Кіті.
+- Токен Keycloak (realm `astarta`) через `client_credentials`: **окремий client** у Keycloak із service account (рішення власника, 2026-10-24). Env: `KIT_TOKEN_URL`, `KIT_CLIENT_ID`, `KIT_CLIENT_SECRET`.
+- У таблиці `Users` Кіта має бути користувач, зв'язаний із service account цього client'а, з роллю `CRM_user`. Інакше OData відповідає 403 на запис. Client і користувача створює власник на dev-стенді.
 - Токен кешується до `expires_in − 30 с`; 401 → одне оновлення токена й повтор; другий 401 → помилка tool'а «сервісний користувач не автентифікований».
 - Секрети лише в env конектора (credential OpenBP типу `mcp.stdio`/`mcp.http`), ніколи у відповідях tools і журналах.
 
 ### 5.2. Обов'язкові правила запису
 
-- Кожен POST/PATCH/DELETE іде із заголовком `FrontPagePath` (значення — env `KIT_FRONT_PAGE_PATH`, напр. `/crm/sales`), інакше `RolePermissionHandler` Кіта дає 403. На 403 конектор пише зрозумілу помилку з підказкою про заголовок і роль.
+- Заголовок `FrontPagePath` на POST/PATCH/DELETE береться з env `KIT_FRONT_PAGE_PATH`. Поки значення немає (рішення власника: «поки ніякі, потім поставимо»), тож env порожній і заголовок не шлеться. Якщо `RolePermissionHandler` Кіта відповість 403, конектор пише зрозумілу помилку з підказкою задати `KIT_FRONT_PAGE_PATH` і перевірити роль.
 - Видалення в Кіті м'яке (`IsDelete = true`). Конектор додає `IsDelete eq false` до кожного `$filter` і ніколи не повертає видалені записи.
 - Відповідальний на угодах і задачах — `CrmPerson`, а не `Users`. Tools приймають і повертають `CrmPersonId`; пошук за email користувача — через `Users.CrmPersonId`.
 
@@ -93,11 +91,12 @@ MCP-сервер на Connector Kit (`connectors/kit-crm`), stdio або http, �
 | `get_task { id }` · `list_tasks { saleId?, responsibleId?, status?, deadlineBefore? }` · `set_task_status { id, status }` | задачі |
 | `find_contractors { query }` · `get_contractor { id }` · `find_persons { query }` · `get_person { id }` | контрагенти й особи |
 | `add_sale_note { saleId, text }` | нотатка до угоди |
+| `get_user_manager { crmPersonId }` | керівник менеджера з профілю користувача: `CrmPerson` → `Users` (email) → `GET /users/{email}/manager` у Microsoft Graph; повертає ім'я та email або `null` |
 | `changes_since { entity: sales \| tasks \| contractors, since }` | записи з `Updated gt since` для `mcp.poll`, новий курсор = найбільший `Updated` |
 
 ### 5.4. Опитування змін
 
-- `mcp.poll` викликає `changes_since` за розкладом (типово кожні 5 хв) і зберігає курсор `since` у стані тригера.
+- `mcp.poll` викликає `changes_since` кожні 5 хв (підтверджено власником) і зберігає курсор `since` у стані тригера.
 - Нова угода відрізняється від зміненої за `Created >= since`; сценарій фільтрує це сам (`core.if`).
 - Дублікати між опитуваннями (запис змінився двічі) відсікає ключ кореляції (§4) зі `skipIfActive`.
 
@@ -108,15 +107,15 @@ MCP-сервер на Connector Kit (`connectors/kit-crm`), stdio або http, �
 `examples/kit-sales-followup.json`:
 
 1. `mcp.poll` `kit-crm.changes_since { entity: sales }` → лише нові угоди; `correlationKey = {{ $json.Id }}`, `skipIfActive`.
-2. `kit-crm.create_task`: «Зв'язатися з клієнтом», відповідальний = відповідальний угоди, дедлайн +1 робочий день (вихідні пропускаємо; святковий календар — питання до власника).
+2. `kit-crm.create_task`: «Зв'язатися з клієнтом», відповідальний = відповідальний угоди, дедлайн +1 робочий день: понеділок–п'ятниця, суботу й неділю пропускаємо, державні свята не враховуємо (рішення власника).
 3. `core.waitFor` `kit-crm.get_task` до статусу Виконане/Невиконане, `interval` 30 хв, `timeoutAfter` 2 дні.
-4. `done` → `kit-crm.add_sale_note` з результатом. `timeout` → лист або повідомлення в Teams керівнику (Graph) і повторна задача.
+4. `done` → `kit-crm.add_sale_note` з результатом. `timeout` → `kit-crm.get_user_manager` → лист керівнику (Graph `sendMail`) і повторна задача. Немає керівника в профілі → лист на адресу з параметра сценарію.
 
 DoD: CLI-прогін з фейком OData Кіта й моком Graph для обох гілок; дубль угоди не запускає другий процес.
 
 ### 6.2. Щоденний звіт по протермінованих задачах (F5-07)
 
-`examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm.list_tasks { status: Протерміноване }` → `core.code` групує за відповідальним → лист кожному менеджеру й зведення керівнику через Graph. Порожній день — без листів.
+`examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm.list_tasks { status: Протерміноване }` → `core.code` групує за відповідальним → лист кожному менеджеру й зведення його керівнику (`get_user_manager`) через Graph. Порожній день — без листів.
 
 ## 7. Порядок робіт
 
@@ -125,10 +124,10 @@ DoD: CLI-прогін з фейком OData Кіта й моком Graph для 
 3. F5-06, F5-07 після конектора.
 4. Поверх F5-02 — F6-01 (вебхук і форма для `core.wait`), F6-04 (підсценарії).
 
-## 8. Питання до власника
+## 8. Рішення власника (2026-10-24)
 
-1. Сервісний доступ у Кіті: `client_credentials` (окремий client) чи пароль сервісного користувача? Хто створює користувача з роллю `CRM_user` на dev-стенді?
-2. Значення `FrontPagePath` для запису (яку сторінку Кіт вважає джерелом зміни).
-3. «+1 робочий день»: лише вихідні чи ще державні свята (тоді потрібен довідник свят)?
-4. Ескалація керівнику: лист чи Teams, і де брати керівника менеджера (у CRM оргструктури немає, лише довідник підрозділів).
-5. Інтервал опитування угод: 5 хв достатньо?
+1. Сервісний доступ — окремий client у Keycloak (`client_credentials`); користувача з роллю `CRM_user` створює власник.
+2. `FrontPagePath` — поки не задаємо, значення поставимо пізніше.
+3. Робочі дні — понеділок–п'ятниця, без довідника свят.
+4. Ескалація — листом; керівник береться з профілю користувача (Microsoft Graph `manager`).
+5. Інтервал опитування угод — 5 хв.
