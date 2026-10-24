@@ -923,10 +923,79 @@ describe('WorkflowEditorComponent', () => {
       click(host, '[data-testid="view-business"]');
       await render(fixture);
       (host.querySelector('[data-step="n_hook"]') as SVGGElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      // Редагована схема чекає, чи не буде подвійного кліку (F3-68).
+      await vi.waitFor(() => expect(host.querySelector('app-canvas')).not.toBeNull());
       await render(fixture);
-      expect(host.querySelector('app-canvas')).not.toBeNull();
       expect(canvasComponent(fixture).selection().nodes).toEqual(['n_hook']);
       expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+    });
+
+    it('правка назви на схемі (F3-68) — звичайна зміна: undo, Ctrl+Z, автозбереження; вузли ті самі', async () => {
+      const { fixture, http, host } = await loaded();
+      const editor = () => fixture.componentInstance['definition']()!;
+      click(host, '[data-testid="view-business"]');
+      await render(fixture);
+      host.querySelector('[data-step="n_hook"]')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await render(fixture);
+      const input = host.querySelector('[data-testid="business-inline"]') as HTMLInputElement;
+      input.value = 'Надійшла заявка';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await render(fixture);
+      expect(editor().nodes[0].business).toEqual({ title: 'Надійшла заявка' });
+      expect(editor().nodes[1]).toBe(workflow.definition.nodes[1]);
+      expect(editor().connections).toBe(workflow.definition.connections);
+      expect(host.querySelector('[data-step="n_hook"]')?.textContent).toContain('Надійшла заявка');
+
+      click(host, '[data-testid="undo"]');
+      await render(fixture);
+      expect(editor().nodes[0].business).toBeUndefined();
+      click(host, '[data-testid="redo"]');
+      await render(fixture);
+      expect(editor().nodes[0].business).toEqual({ title: 'Надійшла заявка' });
+      key({ key: 'z', ctrlKey: true });
+      await render(fixture);
+      expect(editor().nodes[0].business).toBeUndefined();
+      key({ key: 'z', ctrlKey: true, shiftKey: true });
+      await render(fixture);
+
+      fixture.componentInstance['autosave'].flush();
+      const put = http.expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' });
+      expect((put.request.body as WorkflowDefinition).nodes[0].business).toEqual({ title: 'Надійшла заявка' });
+      put.flush(saved(4, put.request.body as WorkflowDefinition));
+    });
+
+    it('розділ «Бізнес-вигляд» у панелі вузла (F3-68)', async () => {
+      const { fixture, http, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_hook'], edges: [] });
+      await render(fixture);
+      const section = host.querySelector('[data-testid="business-node-fields"]') as HTMLElement;
+      expect(section).not.toBeNull();
+      const title = section.querySelector('[data-testid="business-node-title"]') as HTMLInputElement;
+      expect(title.placeholder).toBe(workflow.definition.nodes[0].name);
+      title.value = 'Надійшла заявка';
+      title.dispatchEvent(new Event('change'));
+      await render(fixture);
+      const hidden = section.querySelector('[data-testid="business-node-hidden"]') as HTMLInputElement;
+      hidden.checked = true;
+      hidden.dispatchEvent(new Event('change'));
+      await render(fixture);
+      expect(fixture.componentInstance['definition']()!.nodes[0].business).toEqual({ title: 'Надійшла заявка', hidden: true });
+      expect((host.querySelector('[data-testid="business-node-hidden"]') as HTMLInputElement).checked).toBe(true);
+
+      fixture.componentInstance['autosave'].flush();
+      const put = http.expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' });
+      put.flush(saved(4, put.request.body as WorkflowDefinition));
+    });
+
+    it('перегляд (readonly): схема без правок', async () => {
+      const { fixture, host } = await loaded();
+      fixture.componentRef.setInput('readonly', true);
+      click(host, '[data-testid="view-business"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="business-add-lane"]')).toBeNull();
+      host.querySelector('[data-step="n_hook"]')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await render(fixture);
+      expect(host.querySelector('[data-testid="business-inline"]')).toBeNull();
     });
 
     it('у бізнес-вигляді Delete не видаляє виділені вузли', async () => {

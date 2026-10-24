@@ -36,6 +36,8 @@ export interface BusinessEdge {
   to: string;
   kind: BusinessEdgeKind;
   label?: string;
+  /** Звідки стрілка у визначенні — щоб змінити її підпис: перше ребро ланцюжка або зв'язок зовнішнього кроку. */
+  origin: { connection: number } | { step: string; link: number };
 }
 
 export interface BusinessView {
@@ -119,6 +121,7 @@ export function buildBusinessView(
         to: read ? l.node : step.id,
         kind: read ? 'read' : 'write',
         ...(l.label ? { label: l.label } : {}),
+        origin: { step: step.id, link: l.index },
       });
     });
   }
@@ -171,12 +174,13 @@ function orderLanes(lanes: ReadonlyMap<string, BusinessLane>, own: ReadonlySet<s
  * Підпис і вид — з першого ребра ланцюжка (виходу видимого кроку).
  */
 function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, visible: ReadonlySet<string>): BusinessEdge[] {
-  const outgoing = new Map<string, WorkflowConnection[]>();
-  for (const edge of model.edges) {
+  // Ребра моделі канвасу йдуть у тому ж порядку, що й `connections` визначення: індекс — позиція ребра.
+  const outgoing = new Map<string, { c: WorkflowConnection; index: number }[]>();
+  model.edges.forEach((edge, index) => {
     const list = outgoing.get(edge.source) ?? [];
-    list.push(edge.origin);
+    list.push({ c: edge.origin, index });
     outgoing.set(edge.source, list);
-  }
+  });
 
   const reachVisible = (start: string): string[] => {
     const found: string[] = [];
@@ -190,7 +194,7 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
         found.push(id);
         continue;
       }
-      for (const c of outgoing.get(id) ?? []) stack.push(c?.to?.node);
+      for (const { c } of outgoing.get(id) ?? []) stack.push(c?.to?.node);
     }
     return found;
   };
@@ -199,7 +203,7 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
   const keys = new Set<string>();
   for (const node of model.nodes) {
     if (!visible.has(node.id)) continue;
-    for (const c of outgoing.get(node.id) ?? []) {
+    for (const { c, index } of outgoing.get(node.id) ?? []) {
       const output = node.outputs[c?.from?.output] ?? '';
       const kind: BusinessEdgeKind = ALT_OUTPUTS.has(output) ? 'alt' : 'flow';
       const label = connectionLabel(c) ?? outputLabel(node, output);
@@ -207,7 +211,7 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
         const key = `${node.id}->${target}:${label ?? ''}`;
         if (keys.has(key)) continue;
         keys.add(key);
-        result.push({ id: `f:${key}`, from: node.id, to: target, kind, ...(label ? { label } : {}) });
+        result.push({ id: `f:${key}`, from: node.id, to: target, kind, ...(label ? { label } : {}), origin: { connection: index } });
       }
     }
   }
@@ -257,6 +261,8 @@ interface NodeBusiness {
 }
 
 interface ExternalStepLink {
+  /** Індекс у `links` визначення. */
+  index: number;
   node: string;
   direction: 'in' | 'out';
   label?: string;
@@ -309,12 +315,13 @@ export function readWorkflowBusiness(definition: WorkflowDefinition): WorkflowBu
     const title = str(step['title']);
     if (!id || !title) continue;
     const links: ExternalStepLink[] = [];
-    for (const l of Array.isArray(step['links']) ? step['links'] : []) {
+    const rawLinks: unknown[] = Array.isArray(step['links']) ? step['links'] : [];
+    for (const [index, l] of rawLinks.entries()) {
       const link = asRecord(l);
       const node = str(link['node']);
       if (!node) continue;
       const label = str(link['label']);
-      links.push({ node, direction: link['direction'] === 'out' ? 'out' : 'in', ...(label ? { label } : {}) });
+      links.push({ index, node, direction: link['direction'] === 'out' ? 'out' : 'in', ...(label ? { label } : {}) });
     }
     const subtitle = str(step['subtitle']);
     steps.push({ id, title, lane: str(step['lane']) ?? '', links, ...(subtitle ? { subtitle } : {}) });

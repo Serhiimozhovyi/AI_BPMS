@@ -79,7 +79,13 @@ const EXECUTION = {
   steps: [step('n_hook', 'success', [1]), step('n_if', 'success', [1, 0]), step('n_set', 'error', [])],
 };
 
+/** Збережене визначення: PUT замінює його, наступний GET повертає (як справжній Api між перезавантаженнями). */
+let stored: typeof DEFINITION = structuredClone(DEFINITION);
+let version = 1;
+
 async function install(page: Page): Promise<void> {
+  stored = structuredClone(DEFINITION);
+  version = 1;
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u1', email: 'e2e@openbp.test', role: 'admin' } });
@@ -100,8 +106,12 @@ async function install(page: Page): Promise<void> {
     if (path === '/api/v1/executions') return route.fulfill({ json: { items: [EXECUTION.summary], page: 1, pageSize: 50, total: 1 } });
     if (path === `/api/v1/executions/${EXECUTION.summary.id}`) return route.fulfill({ json: EXECUTION });
     if (path === `/api/v1/workflows/${WORKFLOW_ID}`) {
+      if (route.request().method() === 'PUT') {
+        stored = route.request().postDataJSON();
+        version++;
+      }
       return route.fulfill({
-        json: { id: WORKFLOW_ID, name: 'Погодження задачі', active: false, version: 1, versionId: 'v1', definition: DEFINITION, updatedAt: '' },
+        json: { id: WORKFLOW_ID, name: 'Погодження задачі', active: false, version, versionId: `v${version}`, definition: stored, updatedAt: '' },
       });
     }
     return route.fulfill({ status: 404, json: { title: 'Not Found', status: 404 } });
@@ -160,4 +170,62 @@ test('виконання на бізнес-вигляді: пройдені кр
   await expect(view.locator('[data-step="n_back"]')).toHaveAttribute('data-status', 'pending');
   await expect(view.locator('[data-step="n_hook"] rect')).toHaveCSS('stroke', 'rgb(71, 204, 138)');
   await expect(page.getByTestId('business-legend')).toContainText('збій');
+});
+
+test('правки на бізнес-схемі (F3-68): назва, доріжка, дія людини зі зв\'язком, підпис стрілки — зберігаються, технічний вигляд той самий', async ({ page }) => {
+  await page.goto(`/workflows/${WORKFLOW_ID}?view=business`);
+  const view = page.getByTestId('business-view');
+  await expect(view.getByTestId('business-step')).toHaveCount(5);
+  const inline = page.getByTestId('business-inline');
+
+  // Перейменувати крок подвійним кліком.
+  await view.locator('[data-step="n_back"]').dblclick();
+  await inline.fill('Повернути автору на доопрацювання');
+  await inline.press('Enter');
+  await expect(view.locator('[data-step="n_back"]')).toContainText('доопрацювання');
+
+  // Перенести крок у доріжку «Кіт 2» через меню.
+  await view.locator('[data-step="n_task"]').click({ button: 'right' });
+  await page.getByTestId('business-menu-move').click();
+  await page.getByTestId('business-menu-lane-kit2').click();
+
+  // Додати дію людини, пов'язану з кроком «Задача виконавцю».
+  await view.locator('[data-step="n_task"]').click({ button: 'right' });
+  await page.getByTestId('business-menu-human').click();
+  await page.getByTestId('business-menu-lane-kit2').click();
+  await expect(inline).toHaveValue('Нова дія людини');
+  await inline.fill('Виконавець закриває задачу');
+  await inline.press('Enter');
+  await expect(view.getByTestId('business-step')).toHaveCount(6);
+  await expect(view.locator('[data-testid="business-edge"][data-from="s_2"][data-to="n_task"]')).toHaveCount(1);
+
+  // Підпис стрілки «ні».
+  await view.locator('[data-testid="business-edge"][data-from="n_if"][data-to="n_back"] text').dblclick();
+  await expect(inline).toHaveValue('ні');
+  await inline.fill('не погоджено');
+  await inline.press('Enter');
+  await expect(view.locator('[data-testid="business-edge"][data-from="n_if"][data-to="n_back"]')).toContainText('не погоджено');
+
+  await expect(page.getByTestId('saved')).toBeVisible();
+  await page.reload();
+  await expect(view.getByTestId('business-step')).toHaveCount(6);
+  await expect(view.locator('[data-step="n_back"]')).toContainText('доопрацювання');
+  await expect(view.locator('[data-step="s_2"]')).toContainText('Виконавець закриває задачу');
+  await expect(view.locator('[data-testid="business-edge"][data-from="n_if"][data-to="n_back"]')).toContainText('не погоджено');
+  const kitLane = view.locator('[data-lane="kit2"] rect');
+  const laneBox = (await kitLane.boundingBox())!;
+  const taskBox = (await view.locator('[data-step="n_task"]').boundingBox())!;
+  expect(taskBox.y).toBeGreaterThan(laneBox.y);
+  expect(taskBox.y + taskBox.height).toBeLessThan(laneBox.y + laneBox.height);
+
+  // Структура та сама: вузли, ребра й параметри — як до правок.
+  const strip = (o: object) => {
+    const copy: Record<string, unknown> = { ...o };
+    delete copy['business'];
+    return copy;
+  };
+  expect(stored.nodes.map(strip)).toEqual(DEFINITION.nodes.map(strip));
+  expect(stored.connections.map(strip)).toEqual(DEFINITION.connections.map(strip));
+  await page.getByTestId('view-technical').click();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 5 · ребер: 4');
 });
