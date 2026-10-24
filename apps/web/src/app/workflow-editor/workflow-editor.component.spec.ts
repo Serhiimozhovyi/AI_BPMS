@@ -797,4 +797,59 @@ describe('WorkflowEditorComponent', () => {
       expect(host.querySelector('a[href="/workflows"]')).toBeNull();
     });
   });
+  describe('«Бізнес | Технічний» (F3-66)', () => {
+    afterEach(() => {
+      localStorage.removeItem('openbp.editor.view');
+      history.replaceState(null, '', '/');
+    });
+
+    it('перемикач показує бізнес-схему замість канвасу і палітри та пише ?view=business', async () => {
+      const { fixture, host } = await loaded();
+      expect(button(host, 'view-technical').getAttribute('aria-checked')).toBe('true');
+      click(host, '[data-testid="view-business"]');
+      await render(fixture);
+      expect(host.querySelector('app-business-view')).not.toBeNull();
+      expect(host.querySelector('app-canvas')).toBeNull();
+      expect(host.querySelector('app-palette')).toBeNull();
+      expect(location.search).toBe('?view=business');
+      expect(localStorage.getItem('openbp.editor.view')).toBe('business');
+      // core.set згорнуто — на схемі лише тригер.
+      const steps = [...host.querySelectorAll('[data-testid="business-step"]')].map((s) => s.getAttribute('data-step'));
+      expect(steps).toEqual(['n_hook']);
+
+      click(host, '[data-testid="view-technical"]');
+      await render(fixture);
+      expect(host.querySelector('app-canvas')).not.toBeNull();
+      expect(location.search).toBe('');
+    });
+
+    it('?view=business відкриває бізнес-вигляд одразу', async () => {
+      history.replaceState(null, '', '/?view=business');
+      const { host } = await loaded();
+      expect(host.querySelector('app-business-view')).not.toBeNull();
+    });
+
+    it('клік на крок — технічний вигляд з виділеним вузлом і панеллю', async () => {
+      const { fixture, host } = await loaded();
+      click(host, '[data-testid="view-business"]');
+      await render(fixture);
+      (host.querySelector('[data-step="n_hook"]') as SVGGElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await render(fixture);
+      expect(host.querySelector('app-canvas')).not.toBeNull();
+      expect(canvasComponent(fixture).selection().nodes).toEqual(['n_hook']);
+      expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+    });
+
+    it('у бізнес-вигляді Delete не видаляє виділені вузли', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      click(host, '[data-testid="view-business"]');
+      await render(fixture);
+      key({ key: 'Delete' });
+      await render(fixture);
+      click(host, '[data-testid="view-technical"]');
+      await render(fixture);
+      expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
+    });
+  });
 });

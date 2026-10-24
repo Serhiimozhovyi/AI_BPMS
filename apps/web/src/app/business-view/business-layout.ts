@@ -5,13 +5,15 @@ import { BusinessEdge, BusinessEdgeKind, BusinessLane, BusinessStep, BusinessVie
  * під-рядків, якщо в колонці кілька її кроків). Детермінована: залежить лише від порядку кроків і ребер.
  */
 
-export const LANE_LABEL_WIDTH = 140;
+export const LANE_LABEL_WIDTH = 190;
 export const STEP_WIDTH = 150;
 export const STEP_HEIGHT = 64;
 export const COLUMN_GAP = 40;
 export const ROW_HEIGHT = 96;
 export const LANE_GAP = 12;
 const LANE_PADDING = (ROW_HEIGHT - STEP_HEIGHT) / 2;
+/** На скільки вершини ромба рішення виступають за прямокутник кроку. */
+export const DIAMOND_OVERHANG = 6;
 
 export interface PlacedLane extends BusinessLane {
   y: number;
@@ -76,10 +78,21 @@ export function layoutBusinessView(view: BusinessView): BusinessLayout {
   });
   const byId = new Map(steps.map((s) => [s.id, s]));
 
+  // Гілки рішення: найближча за висотою виходить праворуч, решта — з нижньої/верхньої вершини ромба.
+  const sideBranch = new Map<string, string>();
+  for (const step of steps) {
+    if (step.kind !== 'decision') continue;
+    const forward = view.edges.filter((e) => e.from === step.id && (byId.get(e.to)?.column ?? -1) > step.column);
+    const closest = [...forward].sort((a, b) => Math.abs(byId.get(a.to)!.y - step.y) - Math.abs(byId.get(b.to)!.y - step.y))[0];
+    if (closest) sideBranch.set(step.id, closest.id);
+  }
+
   const edges = view.edges.flatMap((edge): PlacedEdge[] => {
     const from = byId.get(edge.from);
     const to = byId.get(edge.to);
-    return from && to ? [{ ...edge, ...route(from, to) }] : [];
+    if (!from || !to) return [];
+    const vertical = from.kind === 'decision' && to.column > from.column && sideBranch.get(from.id) !== edge.id && to.y !== from.y;
+    return [{ ...edge, ...(vertical ? decisionBranch(from, to) : route(from, to)) }];
   });
 
   const maxColumn = Math.max(0, ...steps.map((s) => s.column));
@@ -151,4 +164,13 @@ function route(from: PlacedStep, to: PlacedStep): { path: string; labelX: number
   if (cx === tx) return { path: `M${cx} ${sy}V${ty}`, labelX: cx + 6, labelY: (sy + ty) / 2 };
   const midY = down ? sy + LANE_PADDING : sy - LANE_PADDING;
   return { path: `M${cx} ${sy}V${midY}H${tx}V${ty}`, labelX: Math.min(cx, tx) + 6, labelY: midY - 4 };
+}
+
+/** Гілка рішення з нижньої чи верхньої вершини ромба; підпис — біля повороту до цілі, щоб гілки не зливались. */
+function decisionBranch(from: PlacedStep, to: PlacedStep): { path: string; labelX: number; labelY: number } {
+  const cx = from.x + from.width / 2;
+  const down = to.y > from.y;
+  const sy = down ? from.y + from.height + DIAMOND_OVERHANG : from.y - DIAMOND_OVERHANG;
+  const ty = to.y + to.height / 2;
+  return { path: `M${cx} ${sy}V${ty}H${to.x}`, labelX: cx + 6, labelY: ty - 6 };
 }
