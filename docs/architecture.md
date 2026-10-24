@@ -134,6 +134,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
+| `workflow_explanations` | workflow_id (PK, FK cascade), version, status (`pending`/`ready`/`failed`/`not_configured`), text, error, definition_hash, updated_at — пояснення сценарію простими словами (F3-72, §10.8) |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
@@ -249,6 +250,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `IExecutionEventSource` | SSE `/executions/{id}/events`, MCP-ресурс `openbp://executions/{id}` | потік подій кроків виконання |
 | `IConnectorService` | REST, MCP `describe_connectors`, UI | CRUD `mcp_servers`, discovery, тестовий виклик tool'а |
 | `IAssistantService`, `IAssistantSettingsService` | REST `POST /workflows/{id}/assistant`, `/settings/assistant`, UI | помічник у редакторі (§10.8) |
+| `IWorkflowExplanationService` (+ `WorkflowExplainer` у воркері) | REST `/workflows/{id}/explanation`, UI | пояснення сценарію простими словами (§10.8, F3-72) |
 | `INodeService` | REST `GET /nodes`, UI (палітра канвасу) | дескриптори зареєстрованих вузлів (`NodeDescriptor`), viewer |
 
 Сигнатури — у коді (`OpenBP.Application`), вони є джерелом правди; тут — лише правила.
@@ -308,6 +310,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
 | `POST /workflows/{id}/publish` · `/discard-draft` | editor | `WorkflowDetail`; публікація чернетки й «Скасувати зміни» (F6-10, §10.2) |
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
+| `GET /workflows/{id}/explanation` | viewer | пояснення сценарію (§10.8): `status` (`none`, `pending`, `ready`, `failed`, `not_configured`), `version`, `currentVersion`, `text`, `error`, `stale` |
+| `POST /workflows/{id}/explanation` | editor | пояснити поточну версію заново, одразу |
 | `GET /settings/assistant`, `PUT /settings/assistant { credentialId, model }` | editor / admin | налаштування помічника: credential `anthropic`/`openai`/`openai-compatible` (назва й тип, без значень) і модель; `credentialId: null` вимикає |
 | `GET /workflows/templates` | viewer | `[{ id, name, description, definition, connectors }]` — шаблони «Почати з прикладу» (F3-59): файли `examples/` з каталогу `examples/templates.json`, вбудовані в збірку Api; у `definition` немає `pinData` і `settings.errorWorkflowId`, `serverId`/`credentialId` порожні; `connectors` — id записів каталогу конекторів, потрібних шаблону (F6-16) |
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
@@ -357,6 +361,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 |---|---|---|---|
 | `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax?, inputOverrides? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію»; `inputOverrides` — лише `resume`) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
 | `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
+| `explain` | `ExplainJobPayload { workflowId, version }` | `IWorkflowService` при збереженні (з паузою 15 с), `POST /workflows/{id}/explanation` (одразу) | `WorkflowExplainer`: версія вже не поточна → нічого; інакше пояснення моделлю помічника в `workflow_explanations` (F3-72, §10.8) |
 
 Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;
 `cancelling` — тимчасовий стан після запиту на скасування. Рядок `executions` створює `IExecutionLauncher`
@@ -538,3 +543,14 @@ Api — при кожній зміні через `IConnectorService`; Worker �
 `ASSISTANT_STEP_LIMIT`/`ASSISTANT_TIMEOUT`, помилка провайдера — `ASSISTANT_PROVIDER_ERROR`. Модель не отримує значень
 credentials (у визначенні — лише `credentialId`) і журналу виконань; ключ провайдера йде лише в заголовок запиту.
 Credential моделі розшифровується в Api на час запиту (§8).
+
+**Пояснення сценарію (F3-72).** Кожне збереження (`SaveAsync`, `CreateAsync`, повернення чернетки) у тій самій транзакції
+позначає `workflow_explanations.status = pending` і ставить job `explain` з `run_at` = зараз + 15 с; помічник не
+налаштований — `not_configured` без job'а. Автозбереження пише версію на кожну правку, тож воркер пояснює лише
+версію, яка досі поточна, а решта job'ів завершуються без запиту до моделі. Відбиток (`definition_hash`) рахується від
+визначення без координат вузлів, нотаток і `pinData`: пересування вузлів пояснення не оновлює. Модель (налаштування й
+credential ті самі, що в помічника; без інструментів, до 8000 токенів, 180 с) отримує це ж визначення з обрізаними до
+3000 символів рядками і назви конекторів за `serverId`; значень credentials і тестових даних — ні. Помилка моделі —
+`failed` з текстом у `error`, job не повторюється. REST: `GET /workflows/{id}/explanation` (viewer) і
+`POST …/explanation` (editor, пояснити заново одразу). У редакторі — картка «Пояснення процесу» над розмовою в панелі
+«Помічник»; поки `pending`, вона перепитує Api кожні 5 с.

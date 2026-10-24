@@ -282,7 +282,7 @@ export interface EditorErrorEvent {
           </div>
           @if (assistantOpen() && !readonly()) {
             <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
-              <app-assistant-panel [workflowId]="workflowId()" [definition]="def" [prompt]="assistantPrompt()" (definitionChange)="assistantChanged($event)" (closed)="assistantOpen.set(false)" />
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" (definitionChange)="assistantChanged($event)" (closed)="assistantOpen.set(false)" />
             </aside>
           } @else if (selectedNode(); as node) {
             <aside class="editor__panel" data-testid="editor-panel" [class.editor__panel--wide]="wide()" [style.width.px]="panelWidth()">

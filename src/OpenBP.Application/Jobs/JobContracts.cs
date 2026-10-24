@@ -13,6 +13,9 @@ public static class JobKinds
 
     /// <summary>Спрацювання розкладу вузла <c>mcp.poll</c>; payload — <see cref="PollJobPayload"/>.</summary>
     public const string Poll = "poll";
+
+    /// <summary>Пояснити сценарій простими словами (F3-72); payload — <see cref="ExplainJobPayload"/>.</summary>
+    public const string Explain = "explain";
 }
 
 /// <summary>
@@ -66,6 +69,16 @@ public sealed record PollJobPayload
 
     /// <summary>Id вузла <c>mcp.poll</c>.</summary>
     public required string NodeId { get; init; }
+}
+
+/// <summary>Payload job <see cref="JobKinds.Explain"/>: яку версію сценарію пояснити.</summary>
+public sealed record ExplainJobPayload
+{
+    /// <summary><c>workflows.id</c>.</summary>
+    public required Guid WorkflowId { get; init; }
+
+    /// <summary>Номер версії; якщо сценарій уже збережено новішою — job нічого не робить (пояснить наступний).</summary>
+    public required int Version { get; init; }
 }
 
 /// <summary>(Де)серіалізація payload job'ів: camelCase, enum як рядки, items — за <see cref="WorkflowJson.Options"/>.</summary>

@@ -8,7 +8,7 @@ namespace OpenBP.Worker;
 
 /// <summary>
 /// Хост виконань (docs/architecture.md §10.4): бере job'и <see cref="JobKinds.Execution"/> (і <see cref="JobKinds.Poll"/>,
-/// якщо задано <see cref="PollJobProcessor"/>) з <see cref="JobQueue"/> лише за вільного слота
+/// якщо задано <see cref="PollJobProcessor"/>, і <see cref="JobKinds.Explain"/>, якщо задано <see cref="ExplainJobProcessor"/>) з <see cref="JobQueue"/> лише за вільного слота
 /// (до <see cref="WorkerOptions.MaxConcurrentExecutions"/> одночасно) і передає їх <see cref="ExecutionJobProcessor"/> /
 /// <see cref="PollJobProcessor"/>. Порожня черга або збій БД — пауза <see cref="WorkerOptions.PollInterval"/>.
 /// При зупинці переривує виконання (їхні job'и повертаються в чергу для відновлення) і чекає їх завершення.
@@ -19,6 +19,7 @@ public sealed partial class ExecutionWorker : BackgroundService
     private readonly JobQueue _queue;
     private readonly ExecutionJobProcessor _processor;
     private readonly PollJobProcessor? _poll;
+    private readonly ExplainJobProcessor? _explain;
     private readonly WorkerOptions _options;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
@@ -32,6 +33,7 @@ public sealed partial class ExecutionWorker : BackgroundService
     /// <param name="time">Годинник; за замовчуванням системний.</param>
     /// <param name="poll">Обробник job'ів опитування <c>mcp.poll</c>; <c>null</c> — воркер їх не бере.</param>
     /// <param name="liveness">Відмітки циклу для <c>/health/ready</c>; <c>null</c> — не ведуться.</param>
+    /// <param name="explain">Обробник job'ів пояснення сценарію (F3-72); <c>null</c> — воркер їх не бере.</param>
     public ExecutionWorker(
         JobQueue queue,
         ExecutionJobProcessor processor,
@@ -39,7 +41,8 @@ public sealed partial class ExecutionWorker : BackgroundService
         ILogger<ExecutionWorker> logger,
         TimeProvider? time = null,
         PollJobProcessor? poll = null,
-        WorkerLiveness? liveness = null)
+        WorkerLiveness? liveness = null,
+        ExplainJobProcessor? explain = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -50,7 +53,8 @@ public sealed partial class ExecutionWorker : BackgroundService
         _time = time ?? TimeProvider.System;
         _poll = poll;
         _liveness = liveness;
-        _kinds = poll is null ? [JobKinds.Execution] : [JobKinds.Execution, JobKinds.Poll];
+        _explain = explain;
+        _kinds = [JobKinds.Execution, .. poll is null ? Array.Empty<string>() : [JobKinds.Poll], .. explain is null ? Array.Empty<string>() : [JobKinds.Explain]];
     }
 
     /// <inheritdoc />
@@ -113,6 +117,10 @@ public sealed partial class ExecutionWorker : BackgroundService
             if (job.Kind == JobKinds.Poll && _poll is not null)
             {
                 await _poll.ProcessAsync(job, stoppingToken).ConfigureAwait(false);
+            }
+            else if (job.Kind == JobKinds.Explain && _explain is not null)
+            {
+                await _explain.ProcessAsync(job, stoppingToken).ConfigureAwait(false);
             }
             else
             {

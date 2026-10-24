@@ -1054,6 +1054,10 @@ describe('WorkflowEditorComponent', () => {
 
     expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
     expect(host.querySelector('[data-testid="assistant-panel"]')).not.toBeNull();
+    // Панель показує пояснення процесу (F3-72).
+    http
+      .expectOne('/api/v1/workflows/w1/explanation')
+      .flush({ status: 'ready', version: 1, currentVersion: 1, text: 'Коротко: приймає заявки.', error: null, updatedAt: null, stale: false });
     const request = http.expectOne('/api/v1/workflows/w1/assistant');
     expect(request.request.body.message).toContain('«Поля» (n_set)');
     expect(request.request.body.definition.nodes.map((n: { id: string }) => n.id)).toEqual(['n_hook', 'n_set']);

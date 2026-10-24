@@ -1050,6 +1050,42 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("workflows", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.WorkflowExplanationEntity", b =>
+                {
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.Property<string>("DefinitionHash")
+                        .HasColumnType("text")
+                        .HasColumnName("definition_hash");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("WorkflowId");
+
+                    b.ToTable("workflow_explanations", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.WorkflowGroupEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1224,6 +1260,15 @@ namespace OpenBP.Data.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.WorkflowExplanationEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowEntity", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
