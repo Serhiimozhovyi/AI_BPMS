@@ -39,7 +39,7 @@ import { WorkflowDetail, WorkflowSummary, WorkflowsApiService, toSummary } from 
 
       @if (creating()) {
         <form class="mb-6 flex max-w-2xl items-start gap-2" data-testid="create-form" [formGroup]="createForm" (ngSubmit)="create()">
-          <mat-form-field class="flex-1">
+          <mat-form-field appearance="outline" class="flex-1">
             <mat-label i18n="@@workflows.form.name">Назва сценарію</mat-label>
             <input matInput [formControl]="newName" name="name" data-testid="create-name" />
             @if (newName.hasError('required')) {

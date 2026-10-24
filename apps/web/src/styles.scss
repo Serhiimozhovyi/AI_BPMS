@@ -150,20 +150,6 @@ body {
   color: var(--ac-vivid);
 }
 
-// Навігація у верхній панелі: активний пункт підкреслено кольором Kit.
-.mat-toolbar a.mat-mdc-button {
-  --mat-button-text-label-text-color: rgb(255 255 255 / 0.75);
-  --mat-button-text-state-layer-color: #ffffff;
-  --mat-button-text-container-height: 64px;
-  border-radius: 0;
-  border-bottom: 3px solid transparent;
-}
-
-.mat-toolbar a.mat-mdc-button.active {
-  --mat-button-text-label-text-color: #ffffff;
-  border-bottom-color: var(--ac-kit);
-}
-
 // Сторінки-розділи — білі картки на тлі Cool Grey, як «Вкладка Введення ДО».
 main > :not(router-outlet) > section.p-6 {
   margin: 20px;
