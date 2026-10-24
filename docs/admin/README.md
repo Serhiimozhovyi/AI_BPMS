@@ -209,7 +209,8 @@ Redirect URI для реєстрації клієнта: `https://openbp.example
 Приклад для Telegram-конектора з `connectors/telegram` (інші так само). Зберіть його на сервері:
 
 ```bash
-docker run --rm -v "$PWD/connectors/telegram:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 \
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD/connectors/telegram:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 \
   dotnet publish src/OpenBP.Connectors.Telegram -c Release -o out
 ```
 
@@ -326,7 +327,8 @@ curl -fsS http://127.0.0.1:8080/health/ready            # Api: БД доступ
 | Провайдер OIDC/OAuth2: «invalid redirect_uri» | Redirect URI у провайдера не збігається: `https://<OPENBP_PUBLIC_URL>/signin-oidc/<key>` (OIDC) чи `/api/v1/oauth2/callback` (OAuth2). |
 | Журнал виконання в UI не оновлюється наживо | Reverse proxy буферизує SSE. nginx: `proxy_buffering off`, `proxy_read_timeout 1h` ([§3](#3-https-через-reverse-proxy)). |
 | Облікові дані після відновлення: помилка розшифрування | `OPENBP_ENCRYPTION_KEY` не той, що був при створенні бекапу. Поверніть старий ключ у `.env`, `dc up -d api worker`. |
-| Конектор у стані «Помилка» | `dc logs api worker` (шукайте назву сервера). Для http — чи відповідає `http://<сервіс>:<порт>/mcp` з мережі Compose: `dc exec api curl -sS -o /dev/null -w '%{http_code}' http://telegram:8080/mcp`. |
+| Конектор у стані «Помилка» | `dc logs api worker` (шукайте назву сервера). Для http — чи відповідає `http://<сервіс>:<порт>/mcp` з мережі Compose: `dc exec api curl -sS -o /dev/null -w '%{http_code}' http://telegram:8080/mcp`. Будь-який HTTP-код (на GET зазвичай 405 чи 406) — сервер досяжний; помилка з'єднання — ні. |
+| Збірка (`up --build`, `dotnet publish`) падає з `NU1301`/`NU1900` чи помилкою SSL до `api.nuget.org` або `registry.npmjs.org` | Сервер за корпоративним проксі з перевіркою TLS: контейнер збірки не довіряє його сертифікату. Додайте корпоративний CA в етап збірки або зберіть образи на машині з прямим доступом і перенесіть (`docker save`/`docker load`, тег `OPENBP_VERSION`). |
 | Виконання висять у черзі | Воркер не здоровий або зупинений: `dc ps worker`, `dc logs worker`. Більше воркерів — `--scale worker=N`. |
 | Виконання обриваються з `timed_out` | Таймаут сценарію (налаштування сценарію) або межа `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (типово 3600 с). |
 | Webhook повертає 404 | Сценарій неактивний або шлях інший: `https://<адреса>/webhook/<path>`, метод — як у тригері. |

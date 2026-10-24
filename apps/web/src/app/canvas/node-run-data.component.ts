@@ -122,8 +122,8 @@ export class NodeRunDataComponent {
   /** Назви вихідних портів з дескриптора. */
   readonly outputNames = input<readonly string[]>([]);
 
-  protected readonly inputs = computed(() => ports(this.step().input, this.inputNames()));
-  protected readonly outputs = computed(() => ports(this.step().output, this.outputNames()));
+  protected readonly inputs = computed(() => ports(this.step().input, this.inputNames(), false));
+  protected readonly outputs = computed(() => ports(this.step().output, this.outputNames(), true));
 
   protected readonly statusLabel = computed(() => {
     switch (this.step().status) {
@@ -139,7 +139,8 @@ export class NodeRunDataComponent {
   });
 }
 
-function ports(items: ExecutionItem[][], names: readonly string[]): PortView[] {
-  // Порт одразу за описаними — `error` вузла з `continueOnFail` (docs/workflow-format.md).
-  return items.map((port, i) => ({ label: names[i] ?? (i === names.length ? 'error' : `#${i}`), items: port, json: JSON.stringify(port, null, 2) }));
+function ports(items: ExecutionItem[][], names: readonly string[], withErrorPort: boolean): PortView[] {
+  // Вихід одразу за описаними — `error` вузла з `continueOnFail` (docs/workflow-format.md). Без назв (журнал виконань) — номери.
+  const label = (i: number) => names[i] ?? (withErrorPort && names.length > 0 && i === names.length ? 'error' : `#${i}`);
+  return items.map((port, i) => ({ label: label(i), items: port, json: JSON.stringify(port, null, 2) }));
 }

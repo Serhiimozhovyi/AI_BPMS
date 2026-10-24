@@ -2,10 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { ExecutionStep } from '../executions/executions-api.service';
 import { NodeRunDataComponent } from './node-run-data.component';
 
-function render(step: ExecutionStep, outputNames: string[] = ['main']) {
+function render(step: ExecutionStep, outputNames: string[] = ['main'], inputNames: string[] = ['main']) {
   const fixture = TestBed.createComponent(NodeRunDataComponent);
   fixture.componentRef.setInput('step', step);
-  fixture.componentRef.setInput('inputNames', ['main']);
+  fixture.componentRef.setInput('inputNames', inputNames);
   fixture.componentRef.setInput('outputNames', outputNames);
   fixture.detectChanges();
   return fixture.nativeElement as HTMLElement;
@@ -52,5 +52,26 @@ describe('NodeRunDataComponent', () => {
     expect(host.querySelector('[data-testid="node-run-error"]')?.textContent).toContain('MCP: timeout');
     expect(host.querySelector('[data-testid="node-run-status"]')?.textContent).toContain('помилка');
     expect(host.querySelectorAll('[data-testid="node-run-output"]')[1].textContent).toContain('error · 1');
+  });
+
+  it('без назв портів (журнал виконань) нумерує порти, а не називає перший error', () => {
+    const host = render(
+      {
+        id: 's1',
+        nodeId: 'n_set',
+        runIndex: 0,
+        status: 'success',
+        input: [[{ json: {} }]],
+        output: [[{ json: { a: 1 } }]],
+        error: null,
+        startedAt: '',
+        finishedAt: '',
+      },
+      [],
+      [],
+    );
+    expect(host.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('#0 · 1');
+    expect(host.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('#0 · 1');
+    expect(host.textContent).not.toContain('error');
   });
 });
