@@ -583,7 +583,7 @@
 - DoD: CI-джоб зелений; локальний `docker build` кожного образу; розміри образів — у PR.
 
 ### F4-10 · Продакшн Compose
-- model: `sonnet` · status: `review #98` · depends: F4-09
+- model: `sonnet` · status: `done` · depends: F4-09
 - Що: `docker-compose.prod.yml`: `postgres` (том, healthcheck), `migrate` (один раз, `depends_on: service_completed_successfully` для api/worker), `api`, `worker` (кількість через `--scale`), `web` (єдиний відкритий порт, `OPENBP_HTTP_PORT`), `restart: unless-stopped`, ліміти журналів Docker. `.env.example` з усіма змінними (ключ шифрування, адмін, пароль БД, публічна адреса для webhook/OAuth, ретеншн, OIDC) і коментарями; скрипт `scripts/gen-env.sh` генерує випадкові секрети. Перевірка в CI: `docker compose -f docker-compose.prod.yml up` → `/health/ready` зелений → вхід адміном → запуск прикладу `examples/` з `core.manual` → `success`.
 - DoD: CI smoke-джоб зелений; `docker-compose.yml` для розробки не зламано.
 
