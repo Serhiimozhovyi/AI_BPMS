@@ -436,7 +436,7 @@
 - DoD: lint/test/build зелені; скріншоти до і після в PR.
 
 ### F3-27 · Конектор Telegram: клавіатури, редагування, кнопки
-- model: `sonnet` · status: `in-progress agent/F3-27-telegram-keyboards` · depends: F3-13
+- model: `sonnet` · status: `review #77` · depends: F3-13
 - Що: у `connectors/telegram` — `reply_markup` (об'єкт Bot API: `inline_keyboard` | `keyboard` з `request_contact` | `remove_keyboard`) і `disable_link_preview` у `send_message`; нові tools `edit_message_text { chat_id, message_id, text, parse_mode?, reply_markup? }`, `answer_callback_query { callback_query_id, text?, show_alert? }`, `set_my_commands { commands[], scope? }`, `set_webhook { url, secret_token?, allowed_updates? }`, `delete_webhook`. README: webhook-бот на `core.webhook` з auth заголовком `X-Telegram-Bot-Api-Secret-Token`. Знайдено розбором n8n-сценарію «Астарта · Бот психологічної підтримки»: без кнопок і `answerCallbackQuery` бот-меню не зібрати.
 - DoD: тести проти фейку Bot API для кожного нового tool'а і `reply_markup` (inline, contact, remove); `400 message is not modified` → `isError` з описом Telegram; токен не з'являється у відповідях; `docs/connectors.md` оновлено.
 
