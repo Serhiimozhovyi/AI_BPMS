@@ -123,6 +123,22 @@ export function emptyWorkflowDefinition(name: string): WorkflowDefinition {
   };
 }
 
+/** Тіло `POST /workflows/{id}/expressions/evaluate` (F3-56). */
+export interface EvaluateExpressionRequest {
+  expression: string;
+  nodeId?: string;
+  /** Вхідний item (`$json`); без нього — `pinData` попереднього вузла. */
+  item?: { json: unknown };
+  /** Виходи вузлів за назвою (`$node["…"]`); без них — `pinData`. */
+  nodes?: Record<string, { json: unknown }[]>;
+}
+
+/** Результат попереднього перегляду: значення або помилка виразу. */
+export interface ExpressionPreview {
+  value: unknown;
+  error: string | null;
+}
+
 /** Клієнт `/api/v1/workflows` (docs/architecture.md §10.3). */
 @Injectable({ providedIn: 'root' })
 export class WorkflowsApiService {
@@ -193,6 +209,11 @@ export class WorkflowsApiService {
 
   delete(id: string): Observable<void> {
     return this.http.delete<void>(this.url(id));
+  }
+
+  /** Обчислює вираз для попереднього перегляду (F3-56): ліміти виконання, без `$env`. */
+  evaluateExpression(id: string, body: EvaluateExpressionRequest): Observable<ExpressionPreview> {
+    return this.http.post<ExpressionPreview>(`${this.url(id)}/expressions/evaluate`, body);
   }
 
   /** Поточна версія з маніфестом залежностей — файл для іншого середовища (F6-09). */

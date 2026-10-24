@@ -21,6 +21,7 @@ using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
+using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Mcp.Server;
@@ -58,6 +59,8 @@ builder.Services.AddOpenBpWorkflowServices();
 builder.Services.AddOpenBpDataTableServices();
 // Журнал аудиту (F6-15): записи пишуть сервіси змін, читає admin.
 builder.Services.AddScoped<IAuditService, AuditService>();
+// Попередній перегляд виразів у редакторі (F3-56): той самий Jint з лімітами, що й у Worker.
+builder.Services.AddSingleton<IExpressionEvaluator>(_ => new JintExpressionEvaluator());
 builder.Services.AddOpenBpNodeServices();
 builder.Services.AddOpenBpExecutionServices();
 

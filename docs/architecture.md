@@ -104,6 +104,11 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 - Змінні інстансу (F6-09): воркер читає всю таблицю `variables` на старті кожного виконання і poll-прогону
   (`ExecutionRequest.Vars`), тож зміна діє з наступного виконання. Значення — не секрети: їх бачать усі ролі й журнал
   кроків, для секретів — credentials.
+- Попередній перегляд у редакторі (F3-56): `IExpressionPreviewService` (application-шар) обчислює вираз тим самим
+  `IExpressionEvaluator` і з тими самими лімітами; контекст — `item`/`nodes` з редактора або `pinData` збереженої версії,
+  `$execution.id` — нульовий GUID, `$env` не підставляється (вираз із ним повертає помилку без обчислення). UI: кнопка
+  «розгорнути» біля поля відкриває Monaco з мовою `openbp-expression` (JavaScript лише всередині `{{ }}`), результат
+  з debounce 300 мс і каталог функцій; у звичайному полі `{{ … }}` підсвічуються, помилка розбору — під полем.
 
 ## 6. Схема БД (EF Core, PostgreSQL)
 
@@ -255,6 +260,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `GET /tables/{id}/rows?search&page&pageSize` · `POST /tables/{id}/rows { values }` · `PATCH /tables/{id}/rows/{key} { values }` · `DELETE /tables/{id}/rows/{key}` · `POST /tables/{id}/import { csv }` | viewer (читання), editor | `PageResult<DataRowDto>` (`{ key, data, createdAt, updatedAt }`) · 201 · `DataRowDto` · 204 · `{ inserted, updated }`; помилки значень — 422 `DATA_TABLE_*`, дубль ключа — 409 `DATA_TABLE_KEY_DUPLICATE`; CSV перевіряється повністю до запису |
 | `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
 | `GET /workflows/{id}/versions` · `GET /workflows/{id}/versions/{version}` | viewer | `WorkflowVersionSummary[]` · визначення |
+| `POST /workflows/{id}/expressions/evaluate { expression, nodeId?, item?, nodes? }` | editor | `{ value, error }` (200 і при помилці виразу): попередній перегляд у редакторі виразів (F3-56) тим самим Jint з лімітами виконання (§5); `item` — `$json` (без нього — перший item `pinData` попереднього вузла або `{}`), `nodes` — `{ "Назва": Item[] }` для `$node` (без них — `pinData`); `$env` недоступний — `error` «недоступні в попередньому перегляді», credentials виразам не видно |
 | `POST /workflows/{id}/executions { startNodeId?, startItems?, destinationNodeId?, runData? }` | editor | 202 `ExecutionSummary` (ручний запуск; `destinationNodeId` — «Виконати вузол»: лише вузол і його попередники, сам вузол виконується навіть із `pinData`; `runData` — виходи вузлів попереднього запуску `{ nodeId: Item[][] }` по портах, такі вузли не виконуються, мають пріоритет над `pinData`; невідомий вузол → 422 `START_NODE_UNKNOWN`/`DESTINATION_NODE_UNKNOWN`) |
 | `GET /executions?workflowId&status&from&to&page&pageSize` | viewer | `PageResult<ExecutionSummary>` |
 | `GET /executions/{id}` | viewer | `ExecutionDetail` з кроками |

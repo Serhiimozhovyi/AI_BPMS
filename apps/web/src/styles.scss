@@ -105,3 +105,9 @@ main input.border {
 a {
   color: var(--ac-kit);
 }
+
+/* Частини {{ … }} у редакторі виразів Monaco (F3-56) — фон AC-Kit «Buttun», як у звичайному полі. */
+.openbp-expr-hl {
+  background: var(--ac-button);
+  border-radius: 3px;
+}

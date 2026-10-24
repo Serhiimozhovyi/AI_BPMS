@@ -314,3 +314,41 @@ test('конектор одним вузлом: додати Telegram, обра�
   expect(saved.definition.connections).toHaveLength(1);
   expect(saved.definition.nodes[1]).toMatchObject({ name: 'Надіслати повідомлення', parameters: { toolName: 'send_message', arguments: { text: 'Вітаємо з OpenBP', chat_id: 1001 } } });
 });
+
+test('telegram-1c: редактор виразу показує результат на вхідному item і вставляє функцію (F3-56)', async ({ page }) => {
+  await openExample(page);
+  await runAndWait(page, 'run');
+  await page.locator('[data-node-id="n_reply"]').click();
+
+  // У звичайному полі {{ … }} підсвічено, помилка синтаксису — під полем.
+  const text = page.getByTestId('field-text');
+  await text.fill('Замовлення {{ $json.number. }}');
+  await expect(page.getByTestId('expr-error-text')).toContainText('Синтаксична помилка');
+
+  // Помилка виконання з Jint — текстом помилки в редакторі; «Скасувати» не змінює поле.
+  await text.fill('Замовлення {{ $json.number.missing.deep }}');
+  await expect(page.getByTestId('expr-error-text')).toHaveCount(0);
+  await page.getByTestId('expand-text').click();
+  await expect(page.getByTestId('expr-result-error')).not.toBeEmpty();
+  await page.getByTestId('expr-cancel').click();
+  await expect(page.getByTestId('expression-editor')).toHaveCount(0);
+  await expect(text).toHaveValue('Замовлення {{ $json.number.missing.deep }}');
+
+  await text.fill('Замовлення №{{ $json.number }}');
+  await expect(page.getByTestId('highlight-text').locator('mark')).toHaveText('{{ $json.number }}');
+
+  // «Розгорнути»: Monaco і результат через Api на першому вхідному item.
+  await page.getByTestId('expand-text').click();
+  await expect(page.getByTestId('expr-editor')).toHaveAttribute('data-status', 'ready');
+  await expect(page.getByTestId('expr-result')).toHaveText(/^Замовлення №\d+$/);
+  await expect(page.getByTestId('expr-result-type')).toHaveText('string');
+
+  // Курсор у кінці тексту — поза {{ }}, тож функція вставляється разом із маркерами.
+  await page.locator('[data-testid="expr-editor"] .view-lines').click();
+  await page.keyboard.press('Control+End');
+  await page.getByTestId('expr-fn-search').fill('рік');
+  await page.locator('[data-testid="expr-fn"][data-insert="$now.getFullYear()"]').click();
+  await expect(page.getByTestId('expr-result')).toHaveText(/^Замовлення №\d+20\d\d$/);
+  await page.getByTestId('expr-apply').click();
+  await expect(text).toHaveValue('Замовлення №{{ $json.number }}{{ $now.getFullYear() }}');
+});

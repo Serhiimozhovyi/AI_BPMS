@@ -1543,6 +1543,66 @@
         ]
       }
     },
+    "/api/v1/workflows/{id}/expressions/evaluate": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Обчислити вираз для попереднього перегляду",
+        "description": "Ті самі ліміти, що й під час виконання; контекст — item і виходи вузлів із запиту або pinData. $env недоступний.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateExpressionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpressionPreviewResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflow-groups": {
       "get": {
         "tags": [
@@ -4470,6 +4530,45 @@
           }
         }
       },
+      "EvaluateExpressionRequest": {
+        "required": [
+          "expression"
+        ],
+        "type": "object",
+        "properties": {
+          "expression": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "item": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Item"
+              }
+            ]
+          },
+          "nodes": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Item"
+              }
+            }
+          }
+        }
+      },
       "ExecutionDetail": {
         "required": [
           "summary",
@@ -4639,6 +4738,31 @@
           }
         }
       },
+      "ExpressionPreviewResult": {
+        "required": [
+          "value",
+          "error"
+        ],
+        "type": "object",
+        "properties": {
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ImportMapping": {
         "type": "object",
         "properties": {
@@ -4688,6 +4812,7 @@
           }
         }
       },
+      "JsonNode": {},
       "JsonObject": {
         "type": "object"
       },
