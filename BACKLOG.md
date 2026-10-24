@@ -456,7 +456,7 @@
 - DoD: `docs/psy-support.md` погоджено власником; задачі F3-34, F3-35 уточнено за ним.
 
 ### F3-34 · Адмінка психологічної підтримки: бекенд і MCP-tools
-- model: `opus` · status: `in-progress agent/F3-34-psy-support-backend` · depends: F3-33
+- model: `opus` · status: `review #83` · depends: F3-33
 - Що: `connectors/psy-support` за `docs/psy-support.md`: шаблон Connector Kit, власний sln. БД `psy_support` і міграції EF Core за моделлю з §3. Правила §4 у транзакціях: частковий унікальний індекс «один слот — один активний запис», `FOR UPDATE` для місткості подій і БСТ та для ліміту консультацій, черга з `offered`. MCP-tools §5: сім tools бота з екранами (`screen`, `notifications`, `commands`; числові id у `callback_data`, §6.1), доменні tools §5.2 і черга `outbox` для сповіщень з адмінки. Транспорти: stdio і Streamable HTTP з `PSY_MCP_TOKEN`/`PSY_MCP_TOKEN_PII` (§7.3). REST `/api/v1` і вхід для адмінки (§7.1): cookie, ролі `coordinator`/`psychologist`, перший координатор з env, блокування після 5 невдалих входів. Команда `import --dir` для CSV-вивантаження листів таблиці (§9).
 - DoD:
   - тести правил:
