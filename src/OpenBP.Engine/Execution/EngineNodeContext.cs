@@ -198,6 +198,7 @@ internal sealed class EngineNodeContext : INodeContext
                     {
                         Details = reason,
                         ItemIndex = scope.ItemIndex,
+                        Path = path,
                     };
                 }
             default:

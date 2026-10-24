@@ -32,7 +32,8 @@ import { ExpressionEditorService } from './expression-editor-dialog.component';
 import { ExpressionSegment, expressionSegments, expressionSyntaxError, hasExpression } from './expression-tools';
 import { CodeEditorHandle, MONACO_LOADER } from './monaco-loader';
 import { ValueRules, formatValue, isExpression, isPlainObject, parseValue, valueError, valueErrorMessage } from './node-value';
-import { ARRAY_FIELD, ASSIGNMENTS_FIELD, CODE_FIELD, COMBINE_FIELD, CONDITION_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
+import { ARRAY_FIELD, ASSIGNMENTS_FIELD, CODE_FIELD, COMBINE_FIELD, CONDITION_FIELD, DECISION_RULES_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
+import { NodeDecisionRulesFieldComponent } from './decision-table-field.component';
 
 /** Спільний стан форми вузла (`FormlyFormOptions.formState`): контекст підказок виразів і конектор вузла. */
 export interface NodeFormState {
@@ -1337,6 +1338,7 @@ export function provideNodeForm() {
       { name: CONDITION_FIELD, component: NodeConditionFieldComponent },
       { name: COMBINE_FIELD, component: NodeCombineFieldComponent },
       { name: ASSIGNMENTS_FIELD, component: NodeAssignmentsFieldComponent },
+      { name: DECISION_RULES_FIELD, component: NodeDecisionRulesFieldComponent },
     ],
     wrappers: [{ name: SECTION_WRAPPER, component: NodeSectionWrapperComponent }],
     validators: [{ name: 'node-value', validation: nodeValueValidator }],

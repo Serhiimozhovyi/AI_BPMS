@@ -31,6 +31,11 @@ public class NodeToolsTests(McpServerFactory mcp)
         Assert.False((bool)condition["trigger"]!);
         Assert.Equal(2, condition["outputs"]!.AsArray().Count);
 
+        // Таблиця рішень (F6-19): виходи main і noMatch, схема з правилами when/then.
+        var table = byType["core.decisionTable@1"];
+        Assert.Equal(["main", "noMatch"], table["outputs"]!.AsArray().Select(o => (string?)o));
+        Assert.Equal(["inputs", "outputs", "rules"], table["parametersSchema"]!["required"]!.AsArray().Select(r => (string?)r));
+
         var tool = byType["mcp.tool@1"];
         Assert.Contains("itemsPath", tool["parametersSchema"]!["properties"]!.AsObject().Select(p => p.Key));
 

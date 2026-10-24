@@ -18,4 +18,7 @@ public sealed class ExpressionException : EngineException
 
     /// <summary>Рядок параметра, що не обчислився. Може містити дані item'а — у логи не пишеться цілком.</summary>
     public string Expression { get; }
+
+    /// <summary>Шлях параметра вузла, де стоїть вираз (<c>rules[2].then[0]</c>); <c>null</c> — поза параметрами.</summary>
+    public string? Path { get; init; }
 }

@@ -22,6 +22,7 @@ public static class CoreNodes
         new IfNode(),
         new SwitchNode(1),
         new SwitchNode(2),
+        new DecisionTableNode(),
         new MergeNode(),
         new LoopNode(),
         new WaitNode(time),
