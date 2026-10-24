@@ -79,7 +79,12 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
         var now = time.GetUtcNow();
         var start = now - span;
         var from = new DateTimeOffset(start.Year, start.Month, start.Day, start.Hour, 0, 0, TimeSpan.Zero);
-        var rows = await db.ExecutionStats.AsNoTracking().Where(s => s.Hour >= from).ToListAsync(ct);
+        // Не-адмін бачить статистику лише сценаріїв своїх проєктів і спільного простору (F6-14).
+        var access = new ProjectAccess(db, currentUser);
+        var restricted = await access.VisibleProjectsAsync(ct) is not null;
+        var visible = (await access.VisibleWorkflowsAsync(db.Workflows.AsNoTracking(), ct)).Select(w => w.Id);
+        var rows = await db.ExecutionStats.AsNoTracking()
+            .Where(s => s.Hour >= from && (!restricted || visible.Contains(s.WorkflowId))).ToListAsync(ct);
 
         var buckets = new long[ExecutionStatsBuckets.Count];
         foreach (var row in rows)
@@ -102,6 +107,7 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
         var names = await db.Workflows.AsNoTracking().Where(w => ids.Contains(w.Id)).ToDictionaryAsync(w => w.Id, w => w.Name, ct);
 
         var current = await db.Executions.AsNoTracking()
+            .Where(e => !restricted || visible.Contains(e.WorkflowId))
             .Where(e => e.Status == ExecutionStatuses.Queued || e.Status == ExecutionStatuses.Running
                 || e.Status == ExecutionStatuses.Cancelling || e.Status == WaitingStatus)
             .GroupBy(e => e.Status)

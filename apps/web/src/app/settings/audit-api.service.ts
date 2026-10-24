@@ -26,7 +26,7 @@ export interface AuditFilter {
 }
 
 /** Типи сутностей журналу — як `AuditEntities` в Api. */
-export const AUDIT_ENTITY_TYPES = ['workflow', 'credential', 'connector', 'apiKey', 'variable', 'dataTable'] as const;
+export const AUDIT_ENTITY_TYPES = ['workflow', 'credential', 'connector', 'apiKey', 'variable', 'dataTable', 'project'] as const;
 
 /** Назва типу сутності для людей. */
 export function auditEntityLabel(type: string): string {
@@ -43,6 +43,8 @@ export function auditEntityLabel(type: string): string {
       return $localize`:@@audit.entity.variable:Змінна`;
     case 'dataTable':
       return $localize`:@@audit.entity.dataTable:Таблиця даних`;
+    case 'project':
+      return $localize`:@@audit.entity.project:Проєкт`;
     default:
       return type;
   }

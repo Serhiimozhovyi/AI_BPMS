@@ -125,17 +125,18 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 |---|---|
 | `users` | id, email, password_hash (null — лише OIDC, F4-14), role, created_at |
 | `user_logins` | id, user_id → users (cascade), provider, subject (unique provider+subject), created_at, last_login_at (F4-14) |
-| `api_keys` | id, user_id, hash, name, last_used_at |
+| `api_keys` | id, user_id, hash, name, last_used_at, project_id (→ `workflow_groups`, cascade; null — весь інстанс; F6-14) |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
-| `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням) |
+| `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням; F6-14: група — це проєкт) |
+| `project_members` | project_id → workflow_groups (cascade), user_id → users (cascade) — PK разом, role (`editor` \| `viewer`), created_at (F6-14) |
 | `data_tables` | id, name, normalized_name (unique), columns (jsonb: `[{ name, type, key? }]`), created_at, updated_at (F6-11) |
 | `data_rows` | table_id → data_tables (cascade), key (PK разом з table_id), data (jsonb), created_at, updated_at; індекс (table_id, created_at) |
 | `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
-| `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
+| `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
-| `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at |
+| `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
@@ -302,7 +303,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `GET /workflows/{id}` | viewer | `WorkflowDetail` (визначення поточної версії) |
 | `PUT /workflows/{id}` (тіло — визначення) | editor | `WorkflowDetail` нової версії |
 | `PATCH /workflows/{id} { name?, groupId? }` | editor | `WorkflowDetail`; змінюються лише передані поля, `groupId: null` — прибрати з групи (без нової версії) |
-| `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання), editor | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії лишаються без групи) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
+| `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання видимих), editor (створення), admin або editor проєкту (зміни) — §10.6 | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount, role }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії переходять у спільний простір; з credentials чи конекторами — 409 `PROJECT_NOT_EMPTY`) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
+| `GET /workflow-groups/{id}/members` · `PUT /workflow-groups/{id}/members { email, role }` · `DELETE /workflow-groups/{id}/members/{userId}` | учасник (читання), admin або editor проєкту | `ProjectMember[]` (`{ userId, email, role, globalRole }`) · `ProjectMember` · 204 (F6-14) |
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
 | `POST /workflows/{id}/publish` · `/discard-draft` | editor | `WorkflowDetail`; публікація чернетки й «Скасувати зміни» (F6-10, §10.2) |
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
@@ -460,6 +462,28 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
 - Обидві схеми дають `ClaimsPrincipal` з `sub` (id користувача), `email`, `role`; `ICurrentUser` в application-шарі
   будується з нього. Воркер і тригери працюють без користувача (`IExecutionLauncher` ролей не перевіряє).
 - Ролі впорядковані: `viewer < editor < admin`; `Require(UserRole.Editor)` пропускає й admin.
+- Проєкти (F6-14, `ProjectAccess`): група сценаріїв F3-63 — це проєкт, `workflows.group_id` — його id, `null` —
+  спільний простір. Таблиця `project_members (project_id, user_id, role: editor | viewer)`.
+  - admin бачить і змінює все. Глобальні editor/viewer у спільному просторі мають свою глобальну роль, а в проєкті — роль
+    учасника; проєкт, де користувач не учасник, для нього не існує (404, а не 403 — щоб не розкривати назви й id).
+    Глобальний viewer може бути editor'ом проєкту.
+  - Перевірка — в application-шарі, тож REST, UI і MCP однакові: сценарії (список, читання, зміни, перенесення —
+    editor в обох проєктах), виконання (список, читання, запуск, скасування, повтор, продовження, SSE), попередній
+    перегляд виразів, експорт/імпорт (перемапінг лише на спільні ресурси й ресурси цільового проєкту), «Огляд».
+  - Credentials і конектори мають `project_id`: `null` — спільні, змінює лише admin, посилатися можуть усі; проєктні —
+    створює, бачить і змінює editor проєкту. Credential конектора — спільний або з того самого проєкту.
+  - Валідатор при створенні, збереженні, активації й перенесенні сценарію відхиляє `serverId`/`credentialId` (будь-де в
+    параметрах) іншого проєкту — `PROJECT_REFERENCE_FORBIDDEN`. Воркер ролей не перевіряє: посилання вже перевірено.
+  - Проєкт створює глобальний editor (стає його editor-учасником); перейменовує, видаляє й керує учасниками admin або
+    editor проєкту. Проєкт з credentials чи конекторами не видаляється (`PROJECT_NOT_EMPTY`), його сценарії при
+    видаленні переходять у спільний простір, учасники й API-ключі проєкту зникають.
+  - API-ключ з `project_id` (claim `api_key_project_id`) обмежений проєктом: спільного простору й інших проєктів для
+    нього немає, роль — та, що має власник у проєкті; сценарій без `groupId` він створює у своєму проєкті; нових проєктів і
+    ширших ключів не видає. Створити ключ проєкту може його учасник (admin — будь-якого).
+  - Міграція `Projects` робить кожного наявного editor/viewer учасником кожної наявної групи з його глобальною роллю —
+    після оновлення ніхто не втрачає доступу; далі учасників змінюють на сторінці проєкту (`/projects/:id`).
+  - Модель готує мультитенантність: тенант — ізольований набір проєктів (окрема колонка `tenant_id` на `workflow_groups`
+    і `users` поверх тих самих перевірок).
 - OIDC (F4-14): провайдери з `OpenBp:Oidc:Providers:<key>` (змінні `OpenBp__Oidc__Providers__<key>__<Поле>`; поля —
   `OidcProviderOptions`: `DisplayName`, `Authority`, `ClientId`, `ClientSecret`, `Scopes`, `RoleClaim`, `RoleMap`,
   `AutoProvision`, `AllowedEmailDomains`, `TrustEmail`, `AcceptBearer`, `BearerAudiences`, `RequireHttpsMetadata`).

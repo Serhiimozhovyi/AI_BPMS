@@ -70,6 +70,12 @@ public static class WorkflowValidationCodes
     /// <summary>Бізнес-розмітка: зовнішній крок без жодного зв'язку з вузлом — на схемі він нічого не означає.</summary>
     public const string BusinessStepLinksMissing = "BUSINESS_STEP_LINKS_MISSING";
 
+    /// <summary>
+    /// <c>serverId</c>/<c>credentialId</c> посилається на конектор чи credential іншого проєкту (F6-14): сценарій може
+    /// використовувати лише спільні ресурси і ресурси свого проєкту.
+    /// </summary>
+    public const string ProjectReferenceForbidden = "PROJECT_REFERENCE_FORBIDDEN";
+
     /// <summary>Попередження (не помилка): <c>$vars.key</c> посилається на змінну інстансу, якої немає (F6-09).</summary>
     public const string VariableUnknown = "VARIABLE_UNKNOWN";
 }

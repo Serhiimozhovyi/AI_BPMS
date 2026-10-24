@@ -7,8 +7,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { catchError, of } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
 import { CredentialFormComponent } from '../credentials/credential-form.component';
 import { CredentialOption, CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '../credentials/credentials-api.service';
+import { ProjectContextService } from '../projects/project-context.service';
 import { ConnectorFormValue, parseKeyValues, toConnectorInput } from './connector-input';
 import { ConnectorDetail, ConnectorTransport, ConnectorsApiService, apiErrorMessage } from './connectors-api.service';
 
@@ -62,6 +64,17 @@ export function credentialTypesFor(transport: ConnectorTransport): string[] {
           <mat-error i18n="@@connectors.form.name.required">Вкажіть назву</mat-error>
         }
       </mat-form-field>
+
+      @if (targets().length > 1) {
+        <mat-form-field appearance="outline">
+          <mat-label i18n="@@connectors.form.project">Проєкт</mat-label>
+          <mat-select data-testid="connector-project" [value]="projectId()" (selectionChange)="selectProject($event.value)">
+            @for (t of targets(); track t.id) {
+              <mat-option [value]="t.id" [attr.data-project]="t.id ?? 'shared'">{{ t.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
 
       <mat-button-toggle-group
         formControlName="transport"
@@ -143,6 +156,7 @@ export function credentialTypesFor(transport: ConnectorTransport): string[] {
           <app-credential-form
             [types]="credentialTypes()"
             [allowedTypes]="allowedCredentialTypes()"
+            [fixedProjectId]="projectId()"
             (saved)="credentialCreated($event)"
             (cancelled)="creatingCredential.set(false)"
           />
@@ -164,6 +178,8 @@ export class ConnectorFormComponent implements OnInit {
   private readonly api = inject(ConnectorsApiService);
   private readonly credentialsApi = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly context = inject(ProjectContextService);
+  private readonly auth = inject(AuthService);
 
   /** Облікові дані для вибору; помилка завантаження — порожній список. */
   readonly credentials = signal<CredentialOption[]>([]);
@@ -191,8 +207,16 @@ export class ConnectorFormComponent implements OnInit {
   });
 
   private readonly transport = signal<ConnectorTransport>('stdio');
+  /** Проєкт нового конектора (F6-14); `null` — спільний (лише admin). */
+  readonly projectId = signal<string | null>(null);
+  readonly targets = computed(() => this.context.targets(this.auth.user()?.role === 'admin'));
   readonly allowedCredentialTypes = computed(() => credentialTypesFor(this.transport()));
-  readonly matchingCredentials = computed(() => this.credentials().filter((c) => this.allowedCredentialTypes().includes(c.type)));
+  /** Credential потрібного типу, спільний або з того самого проєкту. */
+  readonly matchingCredentials = computed(() =>
+    this.credentials().filter(
+      (c) => this.allowedCredentialTypes().includes(c.type) && (!c.projectId || c.projectId === this.projectId()),
+    ),
+  );
 
   constructor() {
     this.form.controls.transport.valueChanges.pipe(takeUntilDestroyed()).subscribe((transport) => {
@@ -208,6 +232,7 @@ export class ConnectorFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.projectId.set(this.context.initialTarget(this.auth.user()?.role === 'admin'));
     this.credentialsApi
       .options()
       .pipe(
@@ -224,8 +249,16 @@ export class ConnectorFormComponent implements OnInit {
       .subscribe((types) => this.credentialTypes.set(types));
   }
 
+  selectProject(projectId: string | null): void {
+    this.projectId.set(projectId);
+    // Credential іншого проєкту для цього конектора недоступний.
+    if (this.form.controls.credentialId.value && !this.matchingCredentials().some((c) => c.id === this.form.controls.credentialId.value)) {
+      this.form.controls.credentialId.setValue('');
+    }
+  }
+
   credentialCreated(created: CredentialSummary): void {
-    this.credentials.update((list) => [...list, { id: created.id, name: created.name, type: created.type }]);
+    this.credentials.update((list) => [...list, { id: created.id, name: created.name, type: created.type, projectId: created.projectId ?? null }]);
     this.form.controls.credentialId.setValue(created.id);
     this.creatingCredential.set(false);
   }
@@ -236,7 +269,7 @@ export class ConnectorFormComponent implements OnInit {
     this.saving.set(true);
     this.error.set(null);
     this.api
-      .create(toConnectorInput(this.form.getRawValue() as ConnectorFormValue))
+      .create({ ...toConnectorInput(this.form.getRawValue() as ConnectorFormValue), projectId: this.projectId() })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (detail) => {

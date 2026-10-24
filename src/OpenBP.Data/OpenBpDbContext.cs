@@ -10,6 +10,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
+    public DbSet<ProjectMemberEntity> ProjectMembers => Set<ProjectMemberEntity>();
     public DbSet<VariableEntity> Variables => Set<VariableEntity>();
     public DbSet<AppSettingEntity> AppSettings => Set<AppSettingEntity>();
     public DbSet<DataTableEntity> DataTables => Set<DataTableEntity>();
@@ -48,6 +49,8 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("api_keys");
             e.HasIndex(x => x.Hash).IsUnique();
+            // Ключ видаленого проєкту зникає разом із ним (F6-14).
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<WorkflowEntity>(e =>
         {
@@ -60,16 +63,32 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("workflow_groups");
             e.HasIndex(x => x.NormalizedName).IsUnique();
         });
+        b.Entity<ProjectMemberEntity>(e =>
+        {
+            e.ToTable("project_members");
+            e.HasKey(x => new { x.ProjectId, x.UserId });
+            e.HasIndex(x => x.UserId);
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<UserEntity>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<WorkflowVersionEntity>(e =>
         {
             e.ToTable("workflow_versions");
             e.Property(x => x.Definition).HasColumnType("jsonb");
             e.HasIndex(x => new { x.WorkflowId, x.Version }).IsUnique();
         });
-        b.Entity<CredentialEntity>().ToTable("credentials");
+        // Проєкт із credentials чи конекторами не видаляється (сервіс повертає 409), FK лише страхує.
+        b.Entity<CredentialEntity>(e =>
+        {
+            e.ToTable("credentials");
+            e.HasIndex(x => x.ProjectId);
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<McpServerEntity>(e =>
         {
             e.ToTable("mcp_servers");
+            e.HasIndex(x => x.ProjectId);
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Config).HasColumnType("jsonb");
             e.Property(x => x.ToolsCache).HasColumnType("jsonb");
         });

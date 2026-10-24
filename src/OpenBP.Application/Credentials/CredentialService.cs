@@ -26,55 +26,89 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
 
     private const string Entity = "credential";
 
+    private readonly ProjectAccess _access = new(db, currentUser);
+
     /// <inheritdoc />
     public IReadOnlyList<CredentialTypeInfo> Types()
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
         return CredentialTypes.All;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<CredentialSummary>> ListAsync(CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
-        var rows = await db.Credentials.AsNoTracking().OrderBy(c => c.Name).ThenBy(c => c.Id)
-            .Select(c => new { c.Id, c.Name, c.Type, c.CreatedBy }).ToListAsync(ct);
+        var scope = await _access.ScopeAsync(ct);
+        // Не-адмін бачить лише credentials проєктів, де він editor (F6-14).
+        var managed = scope.Projects.Where(p => p.Value >= UserRole.Editor).Select(p => p.Key).ToList();
+        if (!scope.All && managed.Count == 0)
+        {
+            throw new ForbiddenException(UserRole.Admin);
+        }
+
+        var rows = await db.Credentials.AsNoTracking()
+            .Where(c => scope.All || (c.ProjectId != null && managed.Contains(c.ProjectId.Value)))
+            .OrderBy(c => c.Name).ThenBy(c => c.Id)
+            .Select(c => new { c.Id, c.Name, c.Type, c.CreatedBy, c.ProjectId }).ToListAsync(ct);
         var usage = await UsageAsync(ct);
         var result = new List<CredentialSummary>(rows.Count);
         foreach (var r in rows)
         {
-            result.Add(await SummaryAsync(r.Id, r.Name, r.Type, r.CreatedBy, usage, ct));
+            result.Add(await SummaryAsync(r.Id, r.Name, r.Type, r.CreatedBy, usage, ct) with { ProjectId = r.ProjectId });
         }
 
         return result;
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<CredentialOption>> OptionsAsync(string? type, CancellationToken ct)
+    public async Task<IReadOnlyList<CredentialOption>> OptionsAsync(string? type, CancellationToken ct, Guid? projectId = null)
     {
-        currentUser.Require(UserRole.Editor);
+        var scope = await _access.ScopeAsync(ct);
+        if (!scope.All && scope.SharedRole < UserRole.Editor && !scope.Projects.Values.Any(r => r >= UserRole.Editor))
+        {
+            throw new ForbiddenException(UserRole.Editor);
+        }
+
+        if (projectId is not null && scope.RoleIn(projectId) is null)
+        {
+            throw new NotFoundException("workflow-group", projectId);
+        }
+
+        var visible = projectId is { } only ? [only] : scope.All ? null : scope.Projects.Keys.ToList();
         var query = db.Credentials.AsNoTracking();
+        if (visible is not null)
+        {
+            query = query.Where(c => c.ProjectId == null || visible.Contains(c.ProjectId.Value));
+        }
+
         if (!string.IsNullOrEmpty(type))
         {
             query = query.Where(c => c.Type == type);
         }
 
-        return await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Select(c => new CredentialOption(c.Id, c.Name, c.Type)).ToListAsync(ct);
+        return await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Select(c => new CredentialOption(c.Id, c.Name, c.Type, c.ProjectId)).ToListAsync(ct);
     }
 
     /// <inheritdoc />
     public async Task<CredentialSummary> GetAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
         var row = await db.Credentials.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new NotFoundException(Entity, id);
-        return await SummaryAsync(row.Id, row.Name, row.Type, row.CreatedBy, await UsageAsync(ct), ct);
+        await _access.RequireManageAsync(row.ProjectId, Entity, id, ct);
+        return await SummaryAsync(row.Id, row.Name, row.Type, row.CreatedBy, await UsageAsync(ct), ct) with { ProjectId = row.ProjectId };
     }
 
     /// <inheritdoc />
     public async Task<CredentialSummary> CreateAsync(CredentialCreateInput input, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
         ArgumentNullException.ThrowIfNull(input);
+        if (input.ProjectId is { } project && !await db.WorkflowGroups.AnyAsync(g => g.Id == project, ct))
+        {
+            throw new NotFoundException("workflow-group", project);
+        }
+
+        await _access.RequireManageAsync(input.ProjectId, "workflow-group", input.ProjectId?.ToString() ?? "none", ct);
         var name = RequireName(input.Name);
         if (string.IsNullOrEmpty(input.Type) || CredentialTypes.Find(input.Type) is null)
         {
@@ -84,7 +118,7 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         var data = input.Data ?? throw new CredentialValidationException([new("data", "Потрібні дані.")]);
         RejectManaged(input.Type, data);
         CredentialTypes.Validate(input.Type, data);
-        var id = await store.CreateAsync(name, input.Type, data, currentUser.UserId, ct);
+        var id = await store.CreateAsync(name, input.Type, data, currentUser.UserId, ct, input.ProjectId);
         // Значення секретів у журнал не потрапляють: лише назва, тип і імена полів.
         db.Audit(currentUser, _time.GetUtcNow(), AuditActions.CredentialCreated, AuditEntities.Credential, id.ToString(),
             new JsonObject { ["name"] = name, ["type"] = input.Type, ["fields"] = FieldNames(data) });
@@ -95,9 +129,10 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
     /// <inheritdoc />
     public async Task<CredentialSummary> UpdateAsync(Guid id, CredentialUpdateInput input, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
         ArgumentNullException.ThrowIfNull(input);
         var row = await db.Credentials.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await _access.RequireManageAsync(row.ProjectId, Entity, id, ct);
         if (input.Name is not null)
         {
             var previous = row.Name;
@@ -138,8 +173,9 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
     /// <inheritdoc />
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
         var row = await db.Credentials.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await _access.RequireManageAsync(row.ProjectId, Entity, id, ct);
         var usage = Of(await UsageAsync(ct), id);
         if (usage.Any)
         {

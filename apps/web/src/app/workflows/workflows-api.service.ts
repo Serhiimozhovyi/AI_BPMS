@@ -14,12 +14,25 @@ export interface WorkflowSummary {
   groupId?: string | null;
 }
 
-/** `WorkflowGroupSummary` — група сценаріїв з кількістю сценаріїв у ній (`GET /workflow-groups`, F3-63). */
+/** Роль у проєкті (F6-14): `admin` — адміністратор інстансу бачить і змінює все. */
+export type ProjectRole = 'admin' | 'editor' | 'viewer';
+
+/** `WorkflowGroupSummary` — група сценаріїв (вона ж проєкт, F6-14) з кількістю сценаріїв у ній (`GET /workflow-groups`, F3-63). */
 export interface WorkflowGroup {
   id: string;
   name: string;
   sortOrder: number;
   workflowCount: number;
+  /** Моя роль у проєкті (F6-14). */
+  role?: ProjectRole | null;
+}
+
+/** `ProjectMember` — учасник проєкту (`GET /workflow-groups/{id}/members`, F6-14). */
+export interface ProjectMember {
+  userId: string;
+  email: string;
+  role: 'editor' | 'viewer';
+  globalRole?: ProjectRole | null;
 }
 
 /** Доріжка бізнес-вигляду (F3-67, docs/business-view.md): хто виконує кроки. */
@@ -285,9 +298,24 @@ export class WorkflowsApiService {
     return this.http.delete<void>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`);
   }
 
-  /** `PUT /workflow-groups/order` — усі групи в новому порядку. */
+  /** `PUT /workflow-groups/order` — усі видимі групи в новому порядку. */
   reorderGroups(ids: readonly string[]): Observable<WorkflowGroup[]> {
     return this.http.put<WorkflowGroup[]>(`${API_BASE}/workflow-groups/order`, { ids });
+  }
+
+  /** `GET /workflow-groups/{id}/members` — учасники проєкту (F6-14). */
+  listMembers(projectId: string): Observable<ProjectMember[]> {
+    return this.http.get<ProjectMember[]>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members`);
+  }
+
+  /** `PUT /workflow-groups/{id}/members` — додати учасника за email або змінити його роль. */
+  setMember(projectId: string, email: string, role: 'editor' | 'viewer'): Observable<ProjectMember> {
+    return this.http.put<ProjectMember>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members`, { email, role });
+  }
+
+  /** `DELETE /workflow-groups/{id}/members/{userId}`. */
+  removeMember(projectId: string, userId: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`);
   }
 
   activate(id: string): Observable<WorkflowDetail> {

@@ -37,6 +37,9 @@ public interface ICurrentUser
 
     /// <summary><c>api_keys.id</c>, якщо запит автентифіковано API-ключем (REST чи MCP); для журналу аудиту (F6-15).</summary>
     Guid? ApiKeyId => null;
+
+    /// <summary>Проєкт, до якого обмежено API-ключ запиту (F6-14); <c>null</c> — ключ на весь інстанс або сесія UI.</summary>
+    Guid? ApiKeyProjectId => null;
 }
 
 /// <summary>Перевірка прав для сервісів.</summary>
@@ -76,17 +79,21 @@ public static class CurrentUserExtensions
 /// <param name="Email">Email.</param>
 /// <param name="Role">Роль.</param>
 /// <param name="ApiKeyId">Ключ, яким автентифіковано запит (не віддається назовні).</param>
-public sealed record UserInfo(Guid Id, string Email, UserRole Role, [property: JsonIgnore] Guid? ApiKeyId = null);
+/// <param name="ApiKeyProjectId">Проєкт, до якого обмежено ключ (F6-14; не віддається назовні).</param>
+public sealed record UserInfo(Guid Id, string Email, UserRole Role, [property: JsonIgnore] Guid? ApiKeyId = null,
+    [property: JsonIgnore] Guid? ApiKeyProjectId = null);
 
 /// <summary>API-ключ у списку (<c>GET /api-keys</c>); сам ключ не зберігається і не повертається.</summary>
 /// <param name="Id"><c>api_keys.id</c>.</param>
 /// <param name="Name">Назва ключа.</param>
 /// <param name="CreatedBy">Власник ключа.</param>
 /// <param name="LastUsedAt">Останнє використання (оновлюється не частіше раз на хвилину).</param>
-public sealed record ApiKeyInfo(Guid Id, string Name, Guid CreatedBy, DateTimeOffset? LastUsedAt);
+/// <param name="ProjectId">Проєкт, до якого обмежено ключ (F6-14); <c>null</c> — весь інстанс.</param>
+public sealed record ApiKeyInfo(Guid Id, string Name, Guid CreatedBy, DateTimeOffset? LastUsedAt, Guid? ProjectId = null);
 
 /// <summary>Відповідь <c>POST /api-keys</c>: ключ показується один раз.</summary>
 /// <param name="Id"><c>api_keys.id</c>.</param>
 /// <param name="Name">Назва ключа.</param>
 /// <param name="Key">Ключ <c>obp_…</c>; у БД лише SHA-256.</param>
-public sealed record ApiKeyCreated(Guid Id, string Name, string Key);
+/// <param name="ProjectId">Проєкт, до якого обмежено ключ (F6-14); <c>null</c> — весь інстанс.</param>
+public sealed record ApiKeyCreated(Guid Id, string Name, string Key, Guid? ProjectId = null);

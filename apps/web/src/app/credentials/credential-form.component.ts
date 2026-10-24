@@ -5,7 +5,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Observable } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
+import { ProjectContextService } from '../projects/project-context.service';
 import {
   CredentialFormValue,
   PairValue,
@@ -33,6 +35,17 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
         <mat-label i18n="@@credentials.form.name">Назва</mat-label>
         <input matInput name="name" data-testid="credential-name" [value]="name()" (input)="name.set(text($event))" />
       </mat-form-field>
+
+      @if (!credential() && fixedProjectId() === undefined && targets().length > 1) {
+        <mat-form-field appearance="outline">
+          <mat-label i18n="@@credentials.form.project">Проєкт</mat-label>
+          <mat-select data-testid="credential-project" [value]="projectId()" (selectionChange)="projectId.set($event.value)">
+            @for (t of targets(); track t.id) {
+              <mat-option [value]="t.id" [attr.data-project]="t.id ?? 'shared'">{{ t.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
 
       @if (!credential() && availableTypes().length > 1) {
         <mat-form-field appearance="outline">
@@ -137,6 +150,8 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
 export class CredentialFormComponent implements OnInit {
   private readonly api = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly context = inject(ProjectContextService);
+  private readonly auth = inject(AuthService);
 
   /** Каталог типів (сторінка завантажує його один раз). */
   readonly types = input.required<CredentialTypeInfo[]>();
@@ -144,6 +159,8 @@ export class CredentialFormComponent implements OnInit {
   readonly credential = input<CredentialSummary | null>(null);
   /** Дозволені типи для створення (напр. лише `mcp.http` у формі конектора); `null` — усі. */
   readonly allowedTypes = input<string[] | null>(null);
+  /** Проєкт, заданий батьківською формою (конектор, F6-14): вибору немає; `undefined` — вибирає користувач. */
+  readonly fixedProjectId = input<string | null | undefined>(undefined);
 
   readonly saved = output<CredentialSummary>();
   readonly cancelled = output<void>();
@@ -155,6 +172,9 @@ export class CredentialFormComponent implements OnInit {
   readonly value = signal<CredentialFormValue>({ fields: {}, maps: {} });
   readonly errors = signal<string[]>([]);
   readonly saving = signal(false);
+  /** Проєкт нового credential'а (F6-14); `null` — спільний. */
+  readonly projectId = signal<string | null>(null);
+  readonly targets = computed(() => this.context.targets(this.auth.user()?.role === 'admin'));
 
   readonly availableTypes = computed(() => {
     const allowed = this.allowedTypes();
@@ -167,6 +187,8 @@ export class CredentialFormComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    const fixed = this.fixedProjectId();
+    this.projectId.set(fixed !== undefined ? fixed : this.context.initialTarget(this.auth.user()?.role === 'admin'));
     const existing = this.credential();
     if (existing) {
       this.name.set(existing.name);
@@ -238,7 +260,7 @@ export class CredentialFormComponent implements OnInit {
       }
       request = this.api.update(existing.id, changes as { name?: string; data?: NonNullable<typeof data> });
     } else {
-      request = this.api.create(name, t.type, data ?? {});
+      request = this.api.create(name, t.type, data ?? {}, this.projectId());
     }
 
     this.saving.set(true);

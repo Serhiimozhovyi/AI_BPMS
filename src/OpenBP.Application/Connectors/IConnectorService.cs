@@ -26,13 +26,15 @@ public enum ConnectorStatus
 /// <param name="Status">Стан з'єднання.</param>
 /// <param name="ToolCount">Кількість tools у кеші.</param>
 /// <param name="ToolsCachedAt">Час останнього discovery.</param>
+/// <param name="ProjectId">Проєкт (F6-14); <c>null</c> — спільний конектор.</param>
 public sealed record ConnectorSummary(
     Guid Id,
     string Name,
     McpTransportKind Transport,
     ConnectorStatus Status,
     int ToolCount,
-    DateTimeOffset? ToolsCachedAt);
+    DateTimeOffset? ToolsCachedAt,
+    Guid? ProjectId = null);
 
 /// <summary>Конектор з налаштуваннями і кешем tools (<c>GET /connectors/{id}</c>). Секретів немає.</summary>
 /// <param name="Summary">Заголовок.</param>
@@ -77,8 +79,9 @@ public sealed record ConnectorConfig
 /// <param name="Name">Назва, непорожня.</param>
 /// <param name="Transport">Транспорт.</param>
 /// <param name="Config">Налаштування транспорту.</param>
-/// <param name="CredentialId">Credential; <c>null</c> — без автентифікації.</param>
-public sealed record ConnectorInput(string Name, McpTransportKind Transport, ConnectorConfig Config, Guid? CredentialId = null);
+/// <param name="CredentialId">Credential; <c>null</c> — без автентифікації. Має бути спільним або з того самого проєкту.</param>
+/// <param name="ProjectId">Проєкт (F6-14): створює й змінює editor проєкту; <c>null</c> — спільний, лише admin.</param>
+public sealed record ConnectorInput(string Name, McpTransportKind Transport, ConnectorConfig Config, Guid? CredentialId = null, Guid? ProjectId = null);
 
 /// <summary>Результат тестового виклику tool'а (<c>POST /connectors/{id}/tools/{tool}/call</c>): відповідь <c>tools/call</c> як є.</summary>
 /// <param name="IsError">Сервер позначив результат як помилку (<c>isError</c>).</param>

@@ -69,6 +69,10 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 приходять як `null`, а не пропускаються (клієнти на TypeScript SDK перевіряють відповідь за схемою). Дані кроків виконань уже очищені від секретів
 (`architecture.md` §8); `config` конекторів і credentials у відповіді не потрапляють ніколи.
 
+Роль у таблиці — мінімальна; з F6-14 вона діє в межах проєкту (`architecture.md` §10.6): сценарії, виконання й
+конектори чужого проєкту tools не бачать (`NOT_FOUND`), ключ, обмежений проєктом, бачить лише його, а `create_workflow`
+без `groupId` створює сценарій у проєкті ключа.
+
 | Tool | Роль | Аргументи | Що повертає |
 |---|---|---|---|
 | `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }`; `outputSchema` — форма `json` item'а на виході `mcp.tool` (`null`, якщо сервер її не оголосив) |
@@ -79,7 +83,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |
 | `update_workflow` | editor | `id`, `definition` | нова версія-чернетка (назва не змінюється); тригери далі виконують опубліковану версію |
 | `publish_workflow` | editor | `id` | чернетка перевірена як активна і стала опублікованою (F6-10): в активного сценарію webhook'и й розклади одразу перемикаються на неї; неактивний сценарій не вмикається; некоректна чернетка — `WORKFLOW_INVALID`, опублікована версія не змінюється |
-| `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount }] }` — групи сценаріїв у порядку показу (F3-63) |
+| `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount, role }] }` — видимі групи (проєкти) у порядку показу з моєю роллю (F3-63, F6-14) |
 | `create_workflow_group` | editor | `name` | створена група в кінці списку; назва унікальна без урахування регістру (`WORKFLOW_GROUP_NAME_TAKEN`) |
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
 | `list_tables` | viewer | — | `{ items: [{ id, name, columns: [{ name, type, key? }], rowCount, updatedAt }] }` — таблиці даних (F6-11) |

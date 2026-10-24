@@ -35,6 +35,10 @@ public sealed class ExecutionEventSource(
         [EnumeratorCancellation] CancellationToken ct)
     {
         currentUser.Require(UserRole.Viewer);
+        var workflowId = await db.Executions.AsNoTracking().Where(e => e.Id == executionId).Select(e => (Guid?)e.WorkflowId).SingleOrDefaultAsync(ct)
+                         ?? throw new NotFoundException("execution", executionId);
+        var groupId = await db.Workflows.AsNoTracking().Where(w => w.Id == workflowId).Select(w => w.GroupId).SingleOrDefaultAsync(ct);
+        await new ProjectAccess(db, currentUser).RequireAsync(groupId, UserRole.Viewer, "execution", executionId, ct);
         var cursor = afterStepId;
         ExecutionState? lastState = null;
         while (true)

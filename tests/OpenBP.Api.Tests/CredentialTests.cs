@@ -167,7 +167,8 @@ public class CredentialTests(ApiFactory api)
         var client = await LoginAsync(role);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(Base)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"{Base}/types")).StatusCode);
+        // Каталог типів не секретний: editor проєкту створює credentials свого проєкту (F6-14).
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"{Base}/types")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync(Base, new { name = "x", type = "generic", data = new { a = "b" } })).StatusCode);
     }
 

@@ -7,6 +7,7 @@ import { App } from './app';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
 import { AuthService, UserInfo } from './auth/auth.service';
+import { ProjectContextService } from './projects/project-context.service';
 
 const admin: UserInfo = { id: 'u1', email: 'admin@firma.ua', role: 'admin' };
 
@@ -72,6 +73,7 @@ describe('routes', () => {
       '',
       'workflows',
       'workflows/:id',
+      'projects/:id',
       'executions',
       'tables',
       'connectors',
@@ -112,5 +114,31 @@ describe('routes', () => {
     await navigation;
     expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Fexecutions');
     expect(harness.routeNativeElement?.querySelector('[data-testid="login-form"]')).not.toBeNull();
+  });
+});
+
+describe('App: вибір проєкту (F6-14)', () => {
+  it('шапка показує доступні проєкти, вибір змінює контекст і відкриває учасників', async () => {
+    configure();
+    localStorage.removeItem('openbp.project');
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    TestBed.inject(HttpTestingController)
+      .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
+      .flush([{ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 1, role: 'editor' }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="project-select"]')!;
+    expect([...select.options].map((o) => o.textContent?.trim())).toEqual(['Усі проєкти', 'Спільний простір', 'Продажі']);
+    expect(host.querySelector('[data-testid="project-members"]')).toBeNull();
+
+    select.value = 'p1';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(TestBed.inject(ProjectContextService).current()).toBe('p1');
+    expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe('/projects/p1');
+    localStorage.removeItem('openbp.project');
   });
 });
