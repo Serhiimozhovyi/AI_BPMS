@@ -131,3 +131,20 @@ test('telegram-1c: закріплений output 1С не викликає 1С; 
   expect(await orderNumber(page)).toBe(second);
 });
 
+
+test('telegram-1c: відредагований закріплений output 1С іде на вхід наступного вузла (F3-51)', async ({ page }) => {
+  await openExample(page);
+  await page.locator('[data-node-id="n_1c"]').click();
+
+  // Вузол ще не виконувався: дані вводяться вручну з шаблону, далі — JSON у панелі.
+  await page.getByTestId('pin-manual').click();
+  await expect(page.locator('[data-node-id="n_1c"]')).toHaveAttribute('data-pinned', 'true');
+  await page.getByTestId('pinned-json').fill('[{ "json": { "number": 777001, "status": "created" } }]');
+  await page.getByTestId('pinned-apply').click();
+  await expect(page.getByTestId('pinned-apply')).toBeDisabled();
+
+  await runAndWait(page, 'run');
+  await page.locator('app-canvas').click({ position: { x: 5, y: 5 } });
+  await page.locator('[data-node-id="n_reply"]').click();
+  await expect(page.getByTestId('node-run-input')).toContainText('777001');
+});

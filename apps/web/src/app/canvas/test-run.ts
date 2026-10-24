@@ -86,6 +86,14 @@ export function singleNodeRequest(definition: WorkflowDefinition, run: TestRun |
   return { destinationNodeId: nodeId, runData };
 }
 
+/**
+ * Запит «Виконати до цього вузла» (F3-51): вузол і всі його попередники виконуються заново (закріплені — з `pinData`),
+ * інші вузли сценарію — ні; виходи останнього запуску не використовуються.
+ */
+export function untilNodeRequest(nodeId: string): StartExecutionRequest {
+  return { destinationNodeId: nodeId };
+}
+
 /** Статуси вузлів для канвасу. */
 export function nodeStatuses(run: TestRun | null): ReadonlyMap<string, NodeRunStatus> {
   const result = new Map<string, NodeRunStatus>();

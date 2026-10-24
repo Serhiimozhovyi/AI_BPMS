@@ -539,6 +539,60 @@ describe('WorkflowEditorComponent', () => {
       expect(canvasComponent(fixture).definition().pinData).toEqual({});
       expect(button(host, 'pin-output')).not.toBeNull();
     });
+
+    it('«До цього вузла» (F3-51): лише вузол-призначення, попередники виконуються заново', async () => {
+      const { fixture, http, host } = await ran();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      click(host, '[data-testid="run-until"]');
+      await render(fixture);
+      expect(http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).request.body).toEqual({ destinationNodeId: 'n_set' });
+    });
+
+    it('«Ввести дані вручну» на невиконаному вузлі, редагування JSON: некоректне не застосовується, коректне — у pinData', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="node-panel"] [data-testid="node-actions"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="pinned-editor"]')).toBeNull();
+      click(host, '[data-testid="pin-manual"]');
+      await render(fixture);
+      expect(canvasComponent(fixture).definition().pinData).toEqual({ n_set: [{ json: {} }] });
+
+      const textarea = host.querySelector<HTMLTextAreaElement>('[data-testid="pinned-json"]')!;
+      textarea.value = '[{ "a": 1 }]';
+      textarea.dispatchEvent(new Event('input'));
+      await render(fixture);
+      click(host, '[data-testid="pinned-apply"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="pinned-error"]')?.textContent).toContain('Item 0');
+      expect(canvasComponent(fixture).definition().pinData).toEqual({ n_set: [{ json: {} }] });
+
+      textarea.value = '[{ "json": { "name": "Олена" } }, { "json": {} }]';
+      textarea.dispatchEvent(new Event('input'));
+      await render(fixture);
+      click(host, '[data-testid="pinned-apply"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="pinned-error"]')).toBeNull();
+      expect(canvasComponent(fixture).definition().pinData).toEqual({ n_set: [{ json: { name: 'Олена' } }, { json: {} }] });
+
+      // Undo повертає попередні items і в редактор.
+      click(host, '[data-testid="undo"]');
+      await render(fixture);
+      expect(host.querySelector<HTMLTextAreaElement>('[data-testid="pinned-json"]')!.value).toBe('[\n  {\n    "json": {}\n  }\n]');
+    });
+
+    it('клавіша P: успішний вузол — закріпити output, закріплений — відкріпити', async () => {
+      const { fixture } = await ran();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      key({ key: 'p' });
+      await render(fixture);
+      expect(canvasComponent(fixture).definition().pinData).toEqual({ n_set: [{ json: { from: 'n_set', id: 's2' } }] });
+      key({ key: 'p' });
+      await render(fixture);
+      expect(canvasComponent(fixture).definition().pinData).toEqual({});
+    });
   });
 
   describe('вбудовування (F4-13)', () => {

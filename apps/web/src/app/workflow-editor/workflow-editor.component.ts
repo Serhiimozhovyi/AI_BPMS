@@ -16,8 +16,10 @@ import { PaletteComponent } from '../canvas/palette.component';
 import { NodeRunDataComponent } from '../canvas/node-run-data.component';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
 import { QuickAddComponent } from '../canvas/quick-add.component';
-import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed } from '../canvas/test-run';
-import { ExecutionsApiService, StartExecutionRequest } from '../executions/executions-api.service';
+import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
+import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
+import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
+import { ExecutionItem, ExecutionsApiService, StartExecutionRequest } from '../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../node-form/expression-suggest';
@@ -70,13 +72,14 @@ export interface EditorErrorEvent {
  * версію з помилками валідації на вузлах (F2-17); панель з формою виділеного вузла (F2-18); тестовий запуск
  * «Виконати» з живим статусом вузлів через SSE та input/output вузла в панелі (F2-20); «Виконати вузол» на даних
  * останнього запуску і закріплення output вузла в `pinData` (F2-21); спливаюча палітра з «+» біля порту, на ребрі,
- * з відпущеного в порожнє з'єднання і з `Tab`/`N` (F3-50).
+ * з відпущеного в порожнє з'єднання і з `Tab`/`N` (F3-50); тест кроку й pin у заголовку панелі, редагування закріпленого output,
+ * «Виконати до цього вузла», клавіша `P` (F3-51).
  */
 @Component({
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeRunDataComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeRunDataComponent, PinnedDataEditorComponent],
   template: `
     <section class="editor">
       <header class="editor__bar">
@@ -190,17 +193,30 @@ export interface EditorErrorEvent {
           </div>
           @if (selectedNode(); as node) {
             <aside class="editor__panel">
-              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)" />
-              @if (!readonly()) {
-                <div class="editor__node-actions" data-testid="node-actions">
-                  <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску" i18n="@@workfloweditor.runNode">Виконати вузол</button>
-                  @if (selectedPinned()) {
-                    <button mat-button type="button" data-testid="unpin-output" (click)="unpin(node.id)" i18n="@@workfloweditor.unpin">Відкріпити output</button>
-                  } @else if (selectedStep()?.status === 'success') {
-                    <button mat-button type="button" data-testid="pin-output" (click)="pin(node.id)" i18n-title="@@workfloweditor.pin.hint" title="Тестові запуски віддаватимуть цей output, не виконуючи вузол" i18n="@@workfloweditor.pin">Закріпити output</button>
-                  }
-                </div>
-              }
+              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)">
+                @if (!readonly()) {
+                  <div panelActions class="editor__node-actions" data-testid="node-actions">
+                    <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
+                      @if (running()) {
+                        <ng-container i18n="@@workfloweditor.runNode.running">Виконується…</ng-container>
+                      } @else {
+                        <ng-container i18n="@@workfloweditor.runNode">Тестувати крок</ng-container>
+                      }
+                    </button>
+                    <button mat-button type="button" data-testid="run-until" [disabled]="running()" (click)="runUntil(node.id)" i18n-title="@@workfloweditor.runUntil.hint" title="Виконати цей вузол і всі попередні; решта сценарію не виконується" i18n="@@workfloweditor.runUntil">До цього вузла</button>
+                    @if (selectedPinned()) {
+                      <button mat-button type="button" data-testid="unpin-output" (click)="unpin(node.id)" i18n-title="@@workfloweditor.unpin.hint" title="Відкріпити output (P)" i18n="@@workfloweditor.unpin">Відкріпити</button>
+                    } @else if (selectedStep()?.status === 'success') {
+                      <button mat-button type="button" data-testid="pin-output" (click)="pin(node.id)" i18n-title="@@workfloweditor.pin.hint" title="Тестові запуски віддаватимуть цей output, не виконуючи вузол (P)" i18n="@@workfloweditor.pin">Закріпити output</button>
+                    } @else {
+                      <button mat-button type="button" data-testid="pin-manual" (click)="pinManual(node.id)" i18n-title="@@workfloweditor.pinManual.hint" title="Закріпити output, введений вручну: тестові запуски не виконуватимуть вузол (P)" i18n="@@workfloweditor.pinManual">Ввести дані вручну</button>
+                    }
+                  </div>
+                }
+                @if (selectedPinItems(); as items) {
+                  <app-pinned-data-editor panelPinned class="editor__pinned" [items]="items" [readonly]="readonly()" (save)="savePinned(node.id, $event)" />
+                }
+              </app-node-panel>
               @if (selectedStep(); as step) {
                 <app-node-run-data [step]="step" [inputNames]="selectedDescriptor()?.inputs ?? []" [outputNames]="selectedDescriptor()?.outputs ?? []" />
               }
@@ -260,11 +276,14 @@ export interface EditorErrorEvent {
       border-bottom: 1px solid var(--mat-sys-outline-variant);
     }
 
+    .editor__pinned {
+      margin: 0 -16px 12px;
+    }
+
     .editor__node-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      padding: 0 16px 12px;
+      gap: 4px;
     }
 
     .editor__run {
@@ -452,6 +471,12 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly selectedPinned = computed(() => {
     const node = this.selectedNode();
     return !!node && Object.hasOwn(this.definition()?.pinData ?? {}, node.id);
+  });
+  /** Закріплені items виділеного вузла — для редактора; не закріплено — `null`. */
+  protected readonly selectedPinItems = computed<readonly unknown[] | null>(() => {
+    const node = this.selectedNode();
+    const pinData = this.definition()?.pinData ?? {};
+    return node && Object.hasOwn(pinData, node.id) ? pinData[node.id] : null;
   });
   protected readonly runStatuses = computed(() => nodeStatuses(this.testRun()));
   protected readonly running = computed(() => isRunning(this.testRun()));
@@ -691,6 +716,30 @@ export class WorkflowEditorComponent implements OnInit {
     this.changed({ ...def, pinData: { ...def.pinData, [nodeId]: step.output[0] ?? [] } });
   }
 
+  /** «Виконати до цього вузла» (F3-51): вузол і всі попередники заново, решта сценарію — ні. */
+  protected runUntil(nodeId: string): void {
+    this.launch(untilNodeRequest(nodeId), this.testRun()?.steps);
+  }
+
+  /** «Ввести дані вручну»: закріпити шаблон з одним порожнім item, далі — редагування в панелі. */
+  protected pinManual(nodeId: string): void {
+    this.savePinned(nodeId, structuredClone([...EMPTY_PINNED_ITEMS]));
+  }
+
+  /** Відредаговані закріплені items — звичайна зміна з історією й автозбереженням. */
+  protected savePinned(nodeId: string, items: ExecutionItem[]): void {
+    const def = this.definition();
+    if (!def || !def.nodes.some((n) => n.id === nodeId)) return;
+    this.changed({ ...def, pinData: { ...def.pinData, [nodeId]: items } });
+  }
+
+  /** `P`: відкріпити закріплений, закріпити успішний output, інакше — шаблон для ручного введення. */
+  private togglePin(nodeId: string): void {
+    if (Object.hasOwn(this.definition()?.pinData ?? {}, nodeId)) this.unpin(nodeId);
+    else if (this.testRun()?.steps.get(nodeId)?.status === 'success') this.pin(nodeId);
+    else this.pinManual(nodeId);
+  }
+
   protected unpin(nodeId: string): void {
     const def = this.definition();
     if (!def || !Object.hasOwn(def.pinData ?? {}, nodeId)) return;
@@ -771,6 +820,10 @@ export class WorkflowEditorComponent implements OnInit {
     else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) action = this.hasSelection() ? () => this.deleteSelected() : null;
     else if (!mod && !event.altKey && !event.shiftKey && (event.key === 'Tab' || key === 'n') && onCanvas(event.composedPath()[0] ?? event.target))
       action = this.quickAdd() ? null : () => this.quickAddFromKeyboard();
+    else if (!mod && !event.altKey && key === 'p') {
+      const node = this.selectedNode();
+      action = node ? () => this.togglePin(node.id) : null;
+    }
     if (!action) return;
     event.preventDefault();
     action();
