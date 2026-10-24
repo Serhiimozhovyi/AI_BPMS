@@ -72,7 +72,7 @@ public sealed class BotApiClient(HttpClient http, ConnectorSecrets secrets)
             var retry = parsed?.Parameters?.RetryAfter is { } seconds ? $" Повторіть через {seconds} с (retry_after)." : "";
             throw new ConnectorException(secrets.Scrub(
                 $"Telegram {method}: HTTP {(int)response.StatusCode} {response.ReasonPhrase}" +
-                (description.Length > 0 ? $" — {description}." : ".") + retry));
+                (description.Length > 0 ? $" — {description}." : ".") + retry), (int)response.StatusCode);
         }
     }
 

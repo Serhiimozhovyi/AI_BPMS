@@ -1,0 +1,123 @@
+{
+  "formatVersion": 1,
+  "name": "Бот психологічної підтримки: розклад",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 600,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": false
+  },
+  "nodes": [
+    {
+      "id": "n_every5",
+      "name": "Кожні 5 хвилин",
+      "type": "core.schedule",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": { "cron": "*/5 * * * *" },
+      "notes": "Нагадування за 24 год, 1 год і 10 хв і черга сповіщень з адмінки (docs/psy-support.md, правило 4.10)."
+    },
+    {
+      "id": "n_due",
+      "name": "Що надіслати",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "due_notifications",
+        "arguments": { "limit": 100 }
+      }
+    },
+    {
+      "id": "n_any",
+      "name": "Є що надіслати?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [520, 200],
+      "parameters": {
+        "conditions": [{ "left": "{{ $json.items.length }}", "operator": "gt", "right": 0 }]
+      }
+    },
+    {
+      "id": "n_send",
+      "name": "Надіслати в Telegram",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [780, 200],
+      "timeoutSec": 300,
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_messages",
+        "arguments": {
+          "messages": "{{ $json.items.map(n => ({ chat_id: n.chat_id, text: n.text, parse_mode: 'HTML', reply_markup: n.reply_markup })) }}"
+        }
+      },
+      "notes": "send_messages не зупиняється на невдалому повідомленні: повтор не надішле вдруге вже надіслані."
+    },
+    {
+      "id": "n_mark",
+      "name": "Позначити надісланими",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [1040, 200],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "mark_notifications_sent",
+        "arguments": {
+          "ids": "{{ $node[\"Що надіслати\"].json.items.filter((n, i) => $json.results[i].ok || $json.results[i].permanent).map(n => n.id) }}"
+        }
+      },
+      "notes": "Тимчасова помилка (429, мережа) лишає сповіщення в черзі до наступного запуску; заблокований бот — ні."
+    },
+    {
+      "id": "n_morning6",
+      "name": "Щодня о 06:00",
+      "type": "core.schedule",
+      "typeVersion": 1,
+      "position": [0, 460],
+      "parameters": { "cron": "0 6 * * *" }
+    },
+    {
+      "id": "n_slots",
+      "name": "Слоти з шаблонів",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [260, 460],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "generate_slots",
+        "arguments": { "days": 21 }
+      }
+    },
+    {
+      "id": "n_night3",
+      "name": "Щодня о 03:00",
+      "type": "core.schedule",
+      "typeVersion": 1,
+      "position": [0, 640],
+      "parameters": { "cron": "0 3 * * *" }
+    },
+    {
+      "id": "n_anonymize",
+      "name": "Знеособити старі записи",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [260, 640],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "anonymize_old_records",
+        "arguments": {}
+      }
+    }
+  ],
+  "connections": [
+    { "from": { "node": "n_every5", "output": 0 }, "to": { "node": "n_due", "input": 0 } },
+    { "from": { "node": "n_due", "output": 0 }, "to": { "node": "n_any", "input": 0 } },
+    { "from": { "node": "n_any", "output": 0 }, "to": { "node": "n_send", "input": 0 } },
+    { "from": { "node": "n_send", "output": 0 }, "to": { "node": "n_mark", "input": 0 } },
+    { "from": { "node": "n_morning6", "output": 0 }, "to": { "node": "n_slots", "input": 0 } },
+    { "from": { "node": "n_night3", "output": 0 }, "to": { "node": "n_anonymize", "input": 0 } }
+  ],
+  "pinData": {}
+}

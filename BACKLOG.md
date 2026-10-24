@@ -527,7 +527,7 @@
 - DoD: Vitest — стан за замовчуванням, перемикання, відновлення з `localStorage`, пошук розгортає; lint/test/build/e2e зелені.
 
 ### F3-38 · Сценарій «Шедулер бота психологічної підтримки»
-- model: `sonnet` · status: `ready` · depends: F3-31
+- model: `sonnet` · status: `review #92` · depends: F3-31
 - Що: `examples/psy-support-scheduler.json` — заміна n8n-сценарію «Астарта · Шедулер» (`astarta-psy-bot/workflows/11-scheduler.json`): `core.schedule` кожні 5 хв → `psy-support due_notifications` → Telegram `send_message` на кожне → `mark_notifications_sent` (нагадування за 1440/60/10 хв і черга `outbox` з дій адмінки); щодня о 06:00 `generate_slots`, о 03:00 `anonymize_old_records`. Знайдено порівнянням старого й нового бота (2026-10-24): бот обіцяє нагадування, але їх ніхто не надсилає.
 - DoD: CLI-прогін з моками Telegram і psy-support: надіслані позначаються, помилка Telegram для одного отримувача не зупиняє решту і не позначає його надісланим; README адмінки — як активувати.
 

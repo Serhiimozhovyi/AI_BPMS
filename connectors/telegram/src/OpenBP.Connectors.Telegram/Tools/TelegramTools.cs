@@ -163,6 +163,80 @@ public sealed class TelegramTools(BotApiClient api)
         CancellationToken ct = default) =>
         Call(() => Ok(api.CallAsync<bool>("deleteWebhook", new Dictionary<string, object?> { ["drop_pending_updates"] = drop_pending_updates }, ct)));
 
+    /// <summary>Найбільше повідомлень в одному виклику <c>send_messages</c>.</summary>
+    public const int BatchLimit = 100;
+
+    /// <summary>
+    /// <c>send_messages</c> — кілька <c>sendMessage</c> по черзі без зупинки на помилці (розсилки, нагадування): невдале
+    /// повідомлення не зупиняє решту і не робить весь виклик <c>isError</c>, щоб повтор вузла не надіслав удруге вже
+    /// надіслані.
+    /// </summary>
+    /// <param name="messages">Масив <c>{ chat_id, text, parse_mode?, reply_markup?, disable_link_preview? }</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "send_messages", Title = "Send messages (best effort)", UseStructuredContent = true, Destructive = false, OpenWorld = true)]
+    [Description("Sends up to 100 text messages one by one, best effort: a failed message does not stop the rest and does not make the call fail. Returns { results: [{ index, ok, message_id?, error?, permanent }] } in input order; permanent = Telegram refused for good (bot blocked by the user, chat not found, user deactivated), so retrying will not help.")]
+    public async Task<BatchSendResult> SendMessages(
+        [Description("Array of { chat_id, text, parse_mode?, reply_markup?, disable_link_preview? }, same fields as send_message; 1-100 items.")] JsonElement messages,
+        CancellationToken ct = default)
+    {
+        var list = messages.ValueKind == JsonValueKind.Array ? messages.EnumerateArray().ToList() : null;
+        if (list is null || list.Count is 0 or > BatchLimit)
+        {
+            throw new McpException($"messages — масив з 1–{BatchLimit} повідомлень.");
+        }
+
+        var results = new List<BatchSendItem>(list.Count);
+        for (var i = 0; i < list.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var m = list[i];
+            try
+            {
+                if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("chat_id", out var chat) ||
+                    !m.TryGetProperty("text", out var text) || text.ValueKind != JsonValueKind.String)
+                {
+                    throw new ConnectorException("Повідомлення — об'єкт з chat_id і text.");
+                }
+
+                var sent = await api.CallAsync<TelegramMessage>(
+                    "sendMessage",
+                    new Dictionary<string, object?>
+                    {
+                        ["chat_id"] = ChatId(chat),
+                        ["text"] = text.GetString(),
+                        ["parse_mode"] = m.TryGetProperty("parse_mode", out var mode) && mode.ValueKind == JsonValueKind.String ? mode.GetString() : null,
+                        ["reply_markup"] = ReplyMarkup(m.TryGetProperty("reply_markup", out var markup) ? markup : null),
+                        ["link_preview_options"] = m.TryGetProperty("disable_link_preview", out var preview) && preview.ValueKind == JsonValueKind.True
+                            ? new Dictionary<string, object> { ["is_disabled"] = true }
+                            : null,
+                    },
+                    ct).ConfigureAwait(false);
+                results.Add(new BatchSendItem(i, true, sent.MessageId));
+            }
+            catch (ConnectorException ex)
+            {
+                results.Add(new BatchSendItem(i, false, Error: ex.Message, Permanent: IsPermanent(ex)));
+            }
+        }
+
+        return new BatchSendResult(results);
+    }
+
+    /// <summary>
+    /// Остаточна відмова: 403 (бота заблоковано, користувача деактивовано) або 400 з відсутнім чатом; некоректне
+    /// повідомлення (без запиту) теж не виправиться повтором.
+    /// </summary>
+    private static bool IsPermanent(ConnectorException ex) =>
+        ex.StatusCode switch
+        {
+            403 => true,
+            400 => ex.Message.Contains("chat not found", StringComparison.OrdinalIgnoreCase) ||
+                   ex.Message.Contains("user is deactivated", StringComparison.OrdinalIgnoreCase) ||
+                   ex.Message.Contains("PEER_ID_INVALID", StringComparison.OrdinalIgnoreCase),
+            null => !ex.Message.StartsWith("Telegram Bot API недоступний", StringComparison.Ordinal),
+            _ => false,
+        };
+
     /// <summary><c>send_document</c> → <c>sendDocument</c>: за URL або вмістом base64.</summary>
     /// <param name="chat_id">Чат.</param>
     /// <param name="document_url">URL файлу (Telegram завантажить його сам).</param>

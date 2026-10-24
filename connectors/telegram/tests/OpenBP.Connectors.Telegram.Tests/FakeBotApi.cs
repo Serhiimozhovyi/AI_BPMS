@@ -35,6 +35,9 @@ public sealed class FakeBotApi : IAsyncDisposable
     /// <summary>Якщо задано — кожна відповідь має цей статус і тіло.</summary>
     public (int Status, string Body)? FailWith { get; set; }
 
+    /// <summary>Відповіді-помилки для окремих чатів (<c>chat_id</c> → статус і тіло).</summary>
+    public ConcurrentDictionary<long, (int Status, string Body)> FailForChat { get; } = new();
+
     /// <summary>Базова адреса з кінцевим «/».</summary>
     public Uri BaseUrl => new(_app.Urls.Single() + "/");
 
@@ -85,6 +88,14 @@ public sealed class FakeBotApi : IAsyncDisposable
         {
             ctx.Response.StatusCode = fail.Status;
             await ctx.Response.WriteAsync(fail.Body);
+            return;
+        }
+
+        if (json is { ValueKind: JsonValueKind.Object } body && body.TryGetProperty("chat_id", out var chatId) &&
+            chatId.ValueKind == JsonValueKind.Number && FailForChat.TryGetValue(chatId.GetInt64(), out var chatFail))
+        {
+            ctx.Response.StatusCode = chatFail.Status;
+            await ctx.Response.WriteAsync(chatFail.Body);
             return;
         }
 

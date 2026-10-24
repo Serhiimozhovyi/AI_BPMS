@@ -58,3 +58,20 @@ public sealed record BotCommand(
 /// <typeparam name="T">Тип елемента.</typeparam>
 /// <param name="Result">Елементи.</param>
 public sealed record ListResult<T>([property: JsonPropertyName("result")] IReadOnlyList<T> Result);
+
+/// <summary>Результат <c>send_messages</c>: по елементу на кожне повідомлення, у порядку запиту.</summary>
+/// <param name="Results">Результати.</param>
+public sealed record BatchSendResult([property: JsonPropertyName("results")] IReadOnlyList<BatchSendItem> Results);
+
+/// <summary>Результат одного повідомлення з <c>send_messages</c>.</summary>
+/// <param name="Index">Індекс у запиті, від 0.</param>
+/// <param name="Ok">Надіслано.</param>
+/// <param name="MessageId">Id надісланого повідомлення.</param>
+/// <param name="Error">Текст помилки (без токена).</param>
+/// <param name="Permanent">Telegram відмовив остаточно (бота заблоковано, чату немає) — повтор не допоможе.</param>
+public sealed record BatchSendItem(
+    [property: JsonPropertyName("index")] int Index,
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("message_id")] long? MessageId = null,
+    [property: JsonPropertyName("error")] string? Error = null,
+    [property: JsonPropertyName("permanent")] bool Permanent = false);

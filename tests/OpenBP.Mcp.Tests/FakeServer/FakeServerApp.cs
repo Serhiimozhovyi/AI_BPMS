@@ -222,6 +222,20 @@ public static class MockTelegramTools
         [Description("Клавіатура (об'єкт Bot API)")] JsonElement? reply_markup = null) =>
         new(true, chat_id, text, parse_mode, Markup(reply_markup));
 
+    /// <summary>
+    /// «Надсилає» кілька повідомлень без зупинки на помилці, як <c>send_messages</c> конектора: чат з від'ємним id —
+    /// «бота заблоковано» (остаточна відмова), чат 0 — тимчасова помилка 429.
+    /// </summary>
+    [McpServerTool(Name = "send_messages", Title = "Надіслати кілька повідомлень", UseStructuredContent = true)]
+    [Description("Надсилає кілька повідомлень по черзі; невдале не зупиняє решту.")]
+    public static BatchSent SendMessages([Description("Масив { chat_id, text, parse_mode?, reply_markup? }")] JsonElement messages) =>
+        new([.. messages.EnumerateArray().Select((m, i) => m.GetProperty("chat_id").GetInt64() switch
+        {
+            < 0 => new BatchSentItem(i, false, null, "HTTP 403 — Forbidden: bot was blocked by the user.", true),
+            0 => new BatchSentItem(i, false, null, "HTTP 429 — Too Many Requests.", false),
+            _ => new BatchSentItem(i, true, 100 + i, null, false),
+        })]);
+
     /// <summary>«Редагує» повідомлення бота.</summary>
     [McpServerTool(Name = "edit_message_text", Title = "Змінити повідомлення", UseStructuredContent = true)]
     [Description("Замінює текст і inline-клавіатуру повідомлення бота.")]
@@ -277,6 +291,17 @@ public sealed record AnsweredCallback(bool Ok, string CallbackQueryId);
 
 /// <summary>Результат <c>set_my_commands</c>.</summary>
 public sealed record CommandsSet(bool Ok, JsonElement Commands, JsonElement? Scope);
+
+/// <summary>Результат мок-<c>send_messages</c>.</summary>
+public sealed record BatchSent([property: JsonPropertyName("results")] IReadOnlyList<BatchSentItem> Results);
+
+/// <summary>Одне повідомлення мок-<c>send_messages</c>.</summary>
+public sealed record BatchSentItem(
+    [property: JsonPropertyName("index")] int Index,
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("message_id")] long? MessageId,
+    [property: JsonPropertyName("error")] string? Error,
+    [property: JsonPropertyName("permanent")] bool Permanent);
 
 /// <summary>
 /// Мок Microsoft Graph (<c>--mock msgraph</c>) для прикладу <c>examples/daily-report.json</c> і наскрізного тесту PRD №3:

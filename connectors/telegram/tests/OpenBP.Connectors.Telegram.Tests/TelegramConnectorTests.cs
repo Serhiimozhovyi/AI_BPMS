@@ -53,7 +53,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
 
         Assert.Equal(
-            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_updates", "send_document", "send_message", "set_my_commands", "set_webhook"],
+            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_updates", "send_document", "send_message", "send_messages", "set_my_commands", "set_webhook"],
             tools.Keys.Order());
         var send = tools["send_message"].InputSchema;
         Assert.Equal(["chat_id", "text"], send.GetProperty("required").EnumerateArray().Select(e => e.GetString()).Order());
@@ -174,6 +174,49 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.Contains("HTTP 400", text, StringComparison.Ordinal);
         Assert.Contains("message is not modified", text, StringComparison.Ordinal);
         Assert.DoesNotContain(Token, JsonSerializer.Serialize(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Send_messages_continues_after_failures_and_marks_permanent_ones()
+    {
+        var client = await ConnectAsync();
+        _api.FailForChat[43] = (403, """{"ok":false,"error_code":403,"description":"Forbidden: bot was blocked by the user"}""");
+        _api.FailForChat[44] = (429, """{"ok":false,"error_code":429,"description":"Too Many Requests: retry after 5","parameters":{"retry_after":5}}""");
+        _api.FailForChat[45] = (400, """{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}""");
+
+        var result = await client.CallToolAsync("send_messages", new Dictionary<string, object?>
+        {
+            ["messages"] = new object[]
+            {
+                new { chat_id = 42, text = "Нагадування", parse_mode = "HTML", reply_markup = new { inline_keyboard = new[] { new[] { new { text = "Мої записи", callback_data = "c:my" } } } } },
+                new { chat_id = 43, text = "Нагадування" },
+                new { chat_id = 44, text = "Нагадування" },
+                new { chat_id = 45, text = "Нагадування" },
+                new { chat_id = 46 },
+                new { chat_id = 47, text = "Нагадування" },
+            },
+        });
+
+        Assert.NotEqual(true, result.IsError);
+        var items = result.StructuredContent!.Value.GetProperty("results").EnumerateArray().ToList();
+        Assert.Equal([0, 1, 2, 3, 4, 5], items.Select(i => i.GetProperty("index").GetInt32()));
+        Assert.Equal([true, false, false, false, false, true], items.Select(i => i.GetProperty("ok").GetBoolean()));
+        Assert.Equal([false, true, false, true, true, false], items.Select(i => i.GetProperty("permanent").GetBoolean()));
+        Assert.Equal(77, items[0].GetProperty("message_id").GetInt64());
+        Assert.Contains("blocked", items[1].GetProperty("error").GetString(), StringComparison.Ordinal);
+        Assert.Equal(5, _api.Requests.Count(r => r.Method == "sendMessage"));
+        Assert.DoesNotContain(Token, JsonSerializer.Serialize(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Send_messages_without_messages_is_isError()
+    {
+        var client = await ConnectAsync();
+
+        var result = await client.CallToolAsync("send_messages", new Dictionary<string, object?> { ["messages"] = Array.Empty<object>() });
+
+        Assert.True(result.IsError);
+        Assert.Empty(_api.Requests);
     }
 
     [Fact]
