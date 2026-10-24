@@ -9,6 +9,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
+    public DbSet<WorkflowExplanationEntity> WorkflowExplanations => Set<WorkflowExplanationEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<ProjectMemberEntity> ProjectMembers => Set<ProjectMemberEntity>();
     public DbSet<EvaluationEntity> Evaluations => Set<EvaluationEntity>();
@@ -79,6 +80,12 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("workflow_versions");
             e.Property(x => x.Definition).HasColumnType("jsonb");
             e.HasIndex(x => new { x.WorkflowId, x.Version }).IsUnique();
+        });
+        b.Entity<WorkflowExplanationEntity>(e =>
+        {
+            e.ToTable("workflow_explanations");
+            e.HasKey(x => x.WorkflowId);
+            e.HasOne<WorkflowEntity>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Cascade);
         });
         // Проєкт із credentials чи конекторами не видаляється (сервіс повертає 409), FK лише страхує.
         b.Entity<CredentialEntity>(e =>

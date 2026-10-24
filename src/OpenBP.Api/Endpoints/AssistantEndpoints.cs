@@ -7,7 +7,10 @@ using HttpJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace OpenBP.Api.Endpoints;
 
-/// <summary>Маршрути помічника (F3-60): <c>/settings/assistant</c> і <c>POST /workflows/{id}/assistant</c>.</summary>
+/// <summary>
+/// Маршрути помічника (F3-60): <c>/settings/assistant</c> і <c>POST /workflows/{id}/assistant</c>; пояснення сценарію
+/// <c>/workflows/{id}/explanation</c> (F3-72).
+/// </summary>
 public static class AssistantEndpoints
 {
     /// <summary>Додає маршрути до групи <c>/api/v1</c>.</summary>
@@ -35,6 +38,21 @@ public static class AssistantEndpoints
                 "і 120 с. Не налаштовано — 409 ASSISTANT_NOT_CONFIGURED. Лише editor.")
             .Accepts<AssistantRequest>("application/json")
             .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
+
+        api.MapGet("/workflows/{id:guid}/explanation", (Guid id, IWorkflowExplanationService service, CancellationToken ct) =>
+            service.GetAsync(id, ct))
+            .WithTags(OpenApiSetup.Tags.Assistant)
+            .WithSummary("Пояснення сценарію простими словами")
+            .WithDescription(
+                "Пояснення всього процесу (кроки, дані на вході й виході), яке воркер генерує моделлю помічника після кожного " +
+                "збереження (з паузою 15 с, лише для останньої версії; пересування вузлів його не оновлює). `status`: `none`, " +
+                "`pending`, `ready`, `failed` (`error`), `not_configured`; `stale` — текст належить старішій версії. Читає viewer.");
+
+        api.MapPost("/workflows/{id:guid}/explanation", (Guid id, IWorkflowExplanationService service, CancellationToken ct) =>
+            service.RequestAsync(id, ct))
+            .WithTags(OpenApiSetup.Tags.Assistant)
+            .WithSummary("Пояснити сценарій заново")
+            .WithDescription("Ставить пояснення поточної версії в чергу одразу, навіть якщо сценарій не змінювався. Лише editor.");
 
         return api;
     }

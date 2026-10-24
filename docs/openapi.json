@@ -1014,6 +1014,104 @@
         ]
       }
     },
+    "/api/v1/workflows/{id}/explanation": {
+      "get": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Пояснення сценарію простими словами",
+        "description": "Пояснення всього процесу (кроки, дані на вході й виході), яке воркер генерує моделлю помічника після кожного збереження (з паузою 15 с, лише для останньої версії; пересування вузлів його не оновлює). `status`: `none`, `pending`, `ready`, `failed` (`error`), `not_configured`; `stale` — текст належить старішій версії. Читає viewer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Пояснити сценарій заново",
+        "description": "Ставить пояснення поточної версії в чергу одразу, навіть якщо сценарій не змінювався. Лише editor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/{id}/evaluations": {
       "get": {
         "tags": [
@@ -8008,6 +8106,61 @@
             "format": "int32"
           },
           "hasUnpublishedChanges": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkflowExplanation": {
+        "required": [
+          "status",
+          "version",
+          "currentVersion",
+          "text",
+          "error",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "currentVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "stale": {
             "type": "boolean"
           }
         }

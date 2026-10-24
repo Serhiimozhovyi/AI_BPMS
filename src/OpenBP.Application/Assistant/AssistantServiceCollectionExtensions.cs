@@ -16,7 +16,8 @@ namespace OpenBP.Application.Assistant;
 public static class AssistantServiceCollectionExtensions
 {
     /// <summary>
-    /// Додає <see cref="IAssistantSettingsService"/> і <see cref="IAssistantService"/> (scoped) і, якщо хост не зареєстрував свій,
+    /// Додає <see cref="IAssistantSettingsService"/>, <see cref="IAssistantService"/>, <see cref="IWorkflowExplanationService"/>
+    /// і <see cref="WorkflowExplainer"/> (scoped), а також, якщо хост не зареєстрував свій,
     /// <see cref="LlmChat"/> з власним <see cref="HttpClient"/>. Хост реєструє сервіси сценаріїв, вузлів, конекторів і виконань,
     /// фабрику контекстів і <see cref="CredentialEncryptionKey"/>.
     /// </summary>
@@ -26,6 +27,12 @@ public static class AssistantServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(_ => new LlmChat(new HttpClient { Timeout = AssistantLimits.Default.Timeout }));
         services.AddScoped<IAssistantSettingsService, AssistantSettingsService>();
+        services.AddScoped<IWorkflowExplanationService, WorkflowExplanationService>();
+        services.TryAddScoped(sp => new WorkflowExplainer(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<CredentialEncryptionKey>(),
+            sp.GetRequiredService<LlmChat>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddScoped<IAssistantService>(sp => new AssistantService(
             sp.GetRequiredService<ICurrentUser>(),
             sp.GetRequiredService<IAssistantSettingsService>(),

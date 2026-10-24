@@ -1,4 +1,9 @@
-import { HttpClient, HttpDownloadProgressEvent, HttpErrorResponse, HttpEventType } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpDownloadProgressEvent,
+  HttpErrorResponse,
+  HttpEventType,
+} from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, filter, map, mergeMap, throwError } from 'rxjs';
 import { API_BASE } from '../connectors/connectors-api.service';
@@ -27,6 +32,19 @@ export interface AssistantEvent {
   ok?: boolean | null;
   definition?: WorkflowDefinition | null;
   code?: string | null;
+}
+
+/** Пояснення сценарію простими словами (`GET /workflows/{id}/explanation`, F3-72). */
+export interface WorkflowExplanation {
+  status: 'none' | 'pending' | 'ready' | 'failed' | 'not_configured';
+  /** Версія, до якої належить `text`. */
+  version: number | null;
+  currentVersion: number;
+  text: string | null;
+  error: string | null;
+  updatedAt: string | null;
+  /** Текст належить старішій версії. */
+  stale: boolean;
 }
 
 /** Типи credential'ів, з якими працює помічник. */
@@ -63,11 +81,31 @@ export class AssistantApiService {
   }
 
   saveSettings(credentialId: string | null, model: string | null): Observable<AssistantSettings> {
-    return this.http.put<AssistantSettings>(`${API_BASE}/settings/assistant`, { credentialId, model });
+    return this.http.put<AssistantSettings>(`${API_BASE}/settings/assistant`, {
+      credentialId,
+      model,
+    });
+  }
+
+  explanation(workflowId: string): Observable<WorkflowExplanation> {
+    return this.http.get<WorkflowExplanation>(
+      `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/explanation`,
+    );
+  }
+
+  /** Пояснити сценарій заново (поточну версію, одразу). */
+  requestExplanation(workflowId: string): Observable<WorkflowExplanation> {
+    return this.http.post<WorkflowExplanation>(
+      `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/explanation`,
+      null,
+    );
   }
 
   /** Запит до помічника: події в міру надходження (поточний текст відповіді — `partialText` прогресу). */
-  ask(workflowId: string, body: { message: string; definition: WorkflowDefinition; history: AssistantTurn[] }): Observable<AssistantEvent> {
+  ask(
+    workflowId: string,
+    body: { message: string; definition: WorkflowDefinition; history: AssistantTurn[] },
+  ): Observable<AssistantEvent> {
     let consumed = 0;
     return this.http
       .post(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/assistant`, body, {
@@ -76,22 +114,38 @@ export class AssistantApiService {
         responseType: 'text',
       })
       .pipe(
-        filter((e) => e.type === HttpEventType.DownloadProgress || e.type === HttpEventType.Response),
-        map((e) => (e.type === HttpEventType.Response ? (e.body ?? '') : ((e as HttpDownloadProgressEvent).partialText ?? ''))),
+        filter(
+          (e) => e.type === HttpEventType.DownloadProgress || e.type === HttpEventType.Response,
+        ),
+        map((e) =>
+          e.type === HttpEventType.Response
+            ? (e.body ?? '')
+            : ((e as HttpDownloadProgressEvent).partialText ?? ''),
+        ),
         mergeMap((text) => {
           const parsed = parseAssistantStream(text.slice(consumed));
           consumed += parsed.consumed;
           return parsed.events;
         }),
         // Тіло помилки (problem+json) прийшло текстом — розбираємо, щоб apiErrorMessage показав detail.
-        catchError((e: unknown) => throwError(() => (e instanceof HttpErrorResponse && typeof e.error === 'string' ? withJsonBody(e) : e))),
+        catchError((e: unknown) =>
+          throwError(() =>
+            e instanceof HttpErrorResponse && typeof e.error === 'string' ? withJsonBody(e) : e,
+          ),
+        ),
       );
   }
 }
 
 function withJsonBody(e: HttpErrorResponse): HttpErrorResponse {
   try {
-    return new HttpErrorResponse({ error: JSON.parse(e.error as string), headers: e.headers, status: e.status, statusText: e.statusText, url: e.url ?? undefined });
+    return new HttpErrorResponse({
+      error: JSON.parse(e.error as string),
+      headers: e.headers,
+      status: e.status,
+      statusText: e.statusText,
+      url: e.url ?? undefined,
+    });
   } catch {
     return e;
   }
