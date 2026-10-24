@@ -442,7 +442,7 @@
 
 ### F3-28 · Конектор Google Sheets
 - model: `opus` · status: `ready` · depends: F3-10
-- Що: `connectors/gsheets` на шаблоні. Автентифікація сервісним акаунтом: JSON-ключ лише у змінній `GOOGLE_SERVICE_ACCOUNT_JSON`, JWT (RS256) → OAuth-токен, кеш токена. Tools: `read_sheets { spreadsheet_id, sheets[] }` → `{ sheets: { <лист>: [ { row_number, <колонка>: значення } ] }, headers }` (UNFORMATTED_VALUE, порожні рядки пропускаються); `update_row { spreadsheet_id, sheet, row_number, values{} }` за назвами колонок живого заголовка (невідома колонка → `isError`); `append_row { spreadsheet_id, sheet, values{} }` у порядку заголовка → `{ row_number }`; `upsert_row { spreadsheet_id, sheet, key_column, values{} }`; `append_rows { spreadsheet_id, range, values[][] }` для журналів.
+- Що: `connectors/gsheets` на шаблоні. Автентифікація сервісним акаунтом: JSON-ключ лише у змінній `GOOGLE_SERVICE_ACCOUNT_JSON`, JWT (RS256) → OAuth-токен, кеш токена. Tools (спільний «табличний» контракт; той самий набір реалізує F3-32 для Excel, щоб сценарій перемикався між сховищами лише зміною `serverId`): `read_sheets { spreadsheet_id, sheets[] }` → `{ sheets: { <лист>: [ { row_number, <колонка>: значення } ] }, headers }` (UNFORMATTED_VALUE, порожні рядки пропускаються); `update_row { spreadsheet_id, sheet, row_number, values{} }` за назвами колонок живого заголовка (невідома колонка → `isError`); `append_row { spreadsheet_id, sheet, values{} }` у порядку заголовка → `{ row_number }`; `upsert_row { spreadsheet_id, sheet, key_column, values{} }`; `append_rows { spreadsheet_id, range, values[][] }` для журналів.
 - DoD: тести проти фейку Sheets API (успіх кожного tool'а, невідома колонка, 401/403/429 → `isError`, ключ і токен не потрапляють у відповіді й журнали); README «сервісний акаунт → доступ до таблиці → реєстрація в OpenBP»; `docs/connectors.md` оновлено.
 
 ### F3-29 · `core.switch`: більше 4 правил
@@ -456,9 +456,14 @@
 - DoD: тести: читання виходу попереднього вузла, неіснуючий вузол → помилка з назвою, `getHours()` у `Europe/Kyiv` узимку й улітку; `architecture.md` §5 і опис `describe_nodes` оновлено.
 
 ### F3-31 · Приклад: бот психологічної підтримки (з n8n)
-- model: `opus` · status: `blocked` · depends: F3-27, F3-28, F3-29, F3-30
+- model: `opus` · status: `blocked` · depends: F3-27, F3-28 або F3-32, F3-29, F3-30
 - Що: `examples/psy-support-bot.json` за логікою n8n-сценарію «Астарта · Бот психологічної підтримки»: `core.webhook` → читання таблиці → маршрут → реєстрація, меню, матеріали, консультації, події, БСТ, кабінет психолога → одна точка відправки + журнал + лічильники. «Шедулер» (нагадування, розсилки) — окрема задача потім. Перевірка — окремим тестовим ботом, не бойовим токеном.
-- DoD: CLI-прогін з моками Telegram і Sheets: /start → номер → меню; запис на консультацію і одночасний запис двох людей (один отримує «час зайняли»); подія з місткістю 1; БСТ з листом очікування; кабінет відкривається лише психологу.
+- DoD: CLI-прогін з моками Telegram і таблиці (Google Sheets і Excel — той самий сценарій, інший `serverId`): /start → номер → меню; запис на консультацію і одночасний запис двох людей (один отримує «час зайняли»); подія з місткістю 1; БСТ з листом очікування; кабінет відкривається лише психологу.
+
+### F3-32 · Excel у SharePoint/OneDrive (Microsoft Graph)
+- model: `opus` · status: `ready` · depends: F3-15, F3-28
+- Що: у `connectors/msgraph` tools того самого контракту, що й F3-28 (`read_sheets`, `update_row`, `append_row`, `upsert_row`, `append_rows`; `spreadsheet_id` → `{ drive_id, item_id }` або посилання на файл), поверх Graph Excel API (`/drives/{id}/items/{id}/workbook`: `worksheets/{name}/usedRange`, `range(address=…)` PATCH; дописування — `tables/{name}/rows/add`, бо в таблиці Excel воно атомарне, на відміну від запису «в кінець usedRange»). Сесія книги (`createSession`, `persistChanges: true`) на один виклик tool'а. Дозволи застосунку: `Sites.Selected` з доступом лише до потрібного сайту (README: як видати), запасний варіант — `Files.ReadWrite.All`. Запит власника: бот психологічної підтримки має працювати і з Excel у SharePoint, не лише з Google Sheets.
+- DoD: тести проти фейку Graph на ті самі сценарії, що й F3-28 (успіх кожного tool'а, невідома колонка, 401 → одне повторне отримання токена, 423/429/503 з `Retry-After` → `isError`); `upsert_row` і `append_row` працюють і з листом без таблиці Excel (помилка з підказкою створити таблицю); `docs/connectors.md` і README оновлено.
 
 ## Фаза 4 — Продуктова готовність
 
