@@ -537,7 +537,7 @@
 - DoD: тести кожної дії (порожній день, повторний виклик нічого не дублює, видалені люди не отримують); `docs/psy-support.md` оновлено.
 
 ### F3-40 · Сповіщення про збої сценаріїв бота
-- model: `sonnet` · status: `ready` · depends: F4-06, F3-38
+- model: `sonnet` · status: `review #92` · depends: F4-06, F3-38
 - Що: `examples/psy-support-alerts.json` на `core.errorTrigger` (заміна `12-alerts.json`): назва сценарію, вузол і текст помилки → Telegram адміністратору (chat_id — налаштування сценарію); `errorWorkflowId` у бота й Шедулера. Без персональних даних у тексті.
 - DoD: CLI-прогін: збій вузла бота → одне повідомлення адміністратору; README.
 

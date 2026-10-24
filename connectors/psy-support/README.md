@@ -71,6 +71,13 @@ HTTP-сервер у реєстрі MCP OpenBP: URL `http://psy-support:8090/mcp
 о 03:00 — `anonymize_old_records`. Імпортуйте його поруч із ботом із тими самими конекторами (`srv_psy_support`,
 `srv_telegram`) і активуйте.
 
+## Сповіщення про збої
+
+`examples/psy-support-alerts.json` (F3-40) замінює n8n-`12-alerts`: тригер `core.errorTrigger` → текст (назва
+сценарію, вузол, помилка — без персональних даних) → `send_message` адміністратору. Перед активацією замініть
+`admin_chat_id` у вузлі «Адміністратор» на свій chat_id, активуйте сценарій і вкажіть його в «Налаштуваннях» бота й
+розкладу як сценарій помилок (`settings.errorWorkflowId`).
+
 ## Імпорт з Google Sheets
 
 Вивантажте кожен лист таблиці в CSV (`settings.csv`, `users.csv`, `psychologists.csv`, `slots.csv`, `bookings.csv`,

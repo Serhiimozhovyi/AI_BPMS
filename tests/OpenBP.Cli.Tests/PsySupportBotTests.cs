@@ -97,6 +97,9 @@ public sealed class PsySupportFixture : IAsyncLifetime
     /// <summary>Шлях до прикладу.</summary>
     public static string ExamplePath => Path.Combine(RepoRoot, "examples", "psy-support-bot.json");
 
+    /// <summary>Шлях до сценарію сповіщень про збої (F3-40).</summary>
+    public static string AlertsPath => Path.Combine(RepoRoot, "examples", "psy-support-alerts.json");
+
     /// <summary>Шлях до сценарію розкладу (F3-38).</summary>
     public static string SchedulerPath => Path.Combine(RepoRoot, "examples", "psy-support-scheduler.json");
 
@@ -329,6 +332,35 @@ public sealed class PsySupportBotTests(PsySupportFixture psy) : IClassFixture<Ps
 
         var idle = await RunScheduler();
         Assert.Contains("▶ Надіслати в Telegram [mcp.tool] — Skipped", idle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Alerts_IsValidWorkflow() =>
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(await File.ReadAllTextAsync(PsySupportFixture.AlertsPath)));
+
+    [Fact]
+    public async Task Alerts_SendOneMessageToAdministrator()
+    {
+        var (code, stdout, stderr) = await psy.RunAsync(PsySupportFixture.AlertsPath, workflow =>
+        {
+            workflow.Nodes.Single(n => n.Id == "n_admin").Parameters["fields"] = new JsonArray(new JsonObject { ["name"] = "admin_chat_id", ["value"] = 777 });
+            workflow.PinData["n_error"] = [new Item
+            {
+                Json = new JsonObject
+                {
+                    ["execution"] = new JsonObject { ["id"] = "ex-1", ["status"] = "error", ["mode"] = "trigger" },
+                    ["workflow"] = new JsonObject { ["id"] = "wf-1", ["name"] = "Бот психологічної підтримки" },
+                    ["error"] = new JsonObject { ["message"] = "Telegram sendMessage: HTTP 400 <b>", ["nodeId"] = "n_send", ["nodeName"] = "Надіслати відповідь" },
+                },
+            }];
+        });
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("▶ Надіслати адміністратору [mcp.tool] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"chatId\": 777", stdout, StringComparison.Ordinal);
+        Assert.Contains("Збій сценарію «Бот психологічної підтримки»", stdout, StringComparison.Ordinal);
+        Assert.Contains("Вузол: Надіслати відповідь", stdout, StringComparison.Ordinal);
+        Assert.Contains("HTTP 400 &lt;b&gt;", stdout, StringComparison.Ordinal);
     }
 
     private async Task<string> RunScheduler()
