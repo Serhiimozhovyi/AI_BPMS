@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Audit;
+using OpenBP.Application.Notifications;
 using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Engine.Execution;
@@ -13,7 +14,8 @@ namespace OpenBP.Application.Workflows;
 /// завершились після останньої активації (<see cref="WorkflowEntity.ActivatedAt"/>); ручні запуски, повтори, скасовані
 /// й відкинуті лімітами виконання не рахуються, а успіх обриває серію.
 /// <para>
-/// Деактивація знімає <c>webhooks</c> і прапорець <c>active</c> в одній транзакції. Розклади Quartz воркер зняти не може
+/// Деактивація знімає <c>webhooks</c> і прапорець <c>active</c> в одній транзакції разом із записом аудиту й подією
+/// сповіщення <see cref="NotificationEvents.WorkflowDisabled"/> (F6-07). Розклади Quartz воркер зняти не може
 /// (Quartz живе в Api), але розклад неактивного сценарію нічого не запускає (<c>ScheduleFireService</c>), а наступна
 /// активація перереєстровує його.
 /// </para>
@@ -67,6 +69,8 @@ public static class WorkflowCircuitBreaker
         workflow.UpdatedAt = time.GetUtcNow();
         db.Audit(null, workflow.UpdatedAt, AuditActions.WorkflowDeactivated, AuditEntities.Workflow, workflowId.ToString(),
             new JsonObject { ["name"] = workflow.Name, ["reason"] = "disableAfterErrors", ["errors"] = threshold });
+        db.Notify(workflow.UpdatedAt, NotificationEvents.WorkflowDisabled, workflowId.ToString(), $"Сценарій «{workflow.Name}» вимкнено запобіжником",
+            new JsonObject { ["workflow"] = workflow.Name, ["workflowId"] = workflowId.ToString(), ["errors"] = threshold });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return true;

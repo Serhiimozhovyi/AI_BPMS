@@ -1,8 +1,15 @@
 #!/bin/sh
 # Разовий бекап БД OpenBP (F4-11): pg_dump -Fc у $OPENBP_BACKUP_DIR, потім ротація старших за
 # $OPENBP_BACKUP_KEEP_DAYS днів. Підключення — стандартні PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE.
-# Результат — один рядок у журналі контейнера; код виходу ≠ 0 при помилці.
+# Результат — один рядок у журналі контейнера і рядок у таблиці backup_runs (F6-07: Api сповіщає адміністратора про
+# збій бекапу); код виходу ≠ 0 при помилці.
 set -eu
+
+# Запис результату в backup_runs; БД може бути недоступна чи без міграцій — тоді лише журнал.
+record() {
+  printf "INSERT INTO backup_runs (ok, message) VALUES (%s, :'msg');\n" "$1" \
+    | psql --no-psqlrc --quiet --set ON_ERROR_STOP=1 -v msg="$2" >/dev/null 2>&1 || true
+}
 
 DIR="${OPENBP_BACKUP_DIR:-/backups}"
 KEEP_DAYS="${OPENBP_BACKUP_KEEP_DAYS:-14}"
@@ -22,6 +29,7 @@ mkdir -p "$DIR"
 if ! pg_dump --format=custom --no-owner --file="$partial"; then
   rm -f "$partial"
   echo "$(date -Iseconds) openbp-backup: ПОМИЛКА pg_dump, бекап не створено" >&2
+  record false "pg_dump завершився помилкою"
   exit 1
 fi
 mv "$partial" "$file"
@@ -34,4 +42,6 @@ if [ "$KEEP_DAYS" -gt 0 ]; then
   done
 fi
 
-echo "$(date -Iseconds) openbp-backup: ok $file ($(wc -c < "$file") байт), видалено старих: $removed"
+size="$(wc -c < "$file")"
+record true "$(basename "$file") ($size байт)"
+echo "$(date -Iseconds) openbp-backup: ok $file ($size байт), видалено старих: $removed"

@@ -69,6 +69,7 @@ describe('routes', () => {
     const app = routes.find((r) => r.children)!;
     expect(app.canActivateChild).toHaveLength(1);
     expect(app.children!.filter((r) => r.loadComponent).map((r) => r.path)).toEqual([
+      '',
       'workflows',
       'workflows/:id',
       'executions',
@@ -86,11 +87,11 @@ describe('routes', () => {
     expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Сценарії');
   });
 
-  it('порожній шлях перенаправляє на /workflows', async () => {
+  it('порожній шлях відкриває «Огляд»', async () => {
     configure();
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/');
-    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Сценарії');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Огляд');
   });
 
   it('кожен маршрут відкриває сторінку з заголовком', async () => {

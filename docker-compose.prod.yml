@@ -76,6 +76,9 @@ services:
       OPENBP_EXECUTION_RETENTION_DAYS: ${OPENBP_EXECUTION_RETENTION_DAYS:-30}
       OPENBP_EXECUTION_RETENTION_CRON: ${OPENBP_EXECUTION_RETENTION_CRON:-0 0 3 * * ?}
       OPENBP_AUDIT_RETENTION_DAYS: ${OPENBP_AUDIT_RETENTION_DAYS:-365}
+      # Сповіщення адміністратору (F6-07): період перевірки й розсилки, с; 0 — вимкнено.
+      OPENBP_NOTIFICATIONS_INTERVAL_SEC: ${OPENBP_NOTIFICATIONS_INTERVAL_SEC:-30}
+      OPENBP_METRICS_ALLOW_ANONYMOUS: ${OPENBP_METRICS_ALLOW_ANONYMOUS:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -99,6 +102,8 @@ services:
       # Трейси OpenTelemetry (OTLP); порожньо — вимкнено.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-openbp-worker}
+      # /metrics воркера (F6-07) без входу; типово — лише з API-ключем admin'а.
+      OPENBP_METRICS_ALLOW_ANONYMOUS: ${OPENBP_METRICS_ALLOW_ANONYMOUS:-false}
     volumes:
       - files:/data/files
     depends_on:

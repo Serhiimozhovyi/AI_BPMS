@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ using OpenBP.Application.Credentials;
 using OpenBP.Application.DataTables;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Nodes;
+using OpenBP.Application.Notifications;
 using OpenBP.Application.Schedules;
 using OpenBP.Application.Webhooks;
 using OpenBP.Application.Workflows;
@@ -86,6 +88,10 @@ builder.Services.AddOpenBpScheduleServices();
 builder.Services.AddOpenBpExecutionRetention(ExecutionRetentionOptions.Parse(
     builder.Configuration[ExecutionRetentionOptions.DaysKey], builder.Configuration[ExecutionRetentionOptions.CronKey],
     builder.Configuration[ExecutionRetentionOptions.AuditDaysKey]));
+// Сповіщення адміністратору, «Огляд» і /metrics (F6-07): outbox розсилає Quartz-job, агрегати — теж job.
+builder.Services.AddOpenBpNotifications(int.TryParse(
+    builder.Configuration[NotificationJob.IntervalKey], NumberStyles.None, CultureInfo.InvariantCulture, out var notifyEverySec)
+    ? notifyEverySec : 30);
 builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
 // MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
@@ -106,8 +112,9 @@ app.UseAuthorization();
 
 app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
+app.MapOpenBpMetrics();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

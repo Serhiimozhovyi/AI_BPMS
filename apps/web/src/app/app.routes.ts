@@ -12,7 +12,13 @@ export const routes: Routes = [
     path: '',
     canActivateChild: [authGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'workflows' },
+      {
+        // «Огляд» (F6-07) — перша сторінка після входу.
+        path: '',
+        pathMatch: 'full',
+        title: $localize`:@@overview.title:Огляд`,
+        loadComponent: () => import('./pages/overview/overview.page').then((m) => m.OverviewPage),
+      },
       {
         path: 'workflows',
         title: $localize`:@@workflows.title:Сценарії`,
@@ -52,5 +58,5 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: '**', redirectTo: 'workflows' },
+  { path: '**', redirectTo: '' },
 ];

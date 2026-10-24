@@ -71,7 +71,9 @@ OIDC-провайдери задаються не в `.env`, а в `oidc.env` з
 | Змінна | Типово | Хто читає | Опис |
 |---|---|---|---|
 | `OPENBP_LOG_FORMAT` | `json` у продакшні, текст у розробці | api, worker | `json` — JSON-консоль, одна подія на рядок, зі scope `executionId`/`workflowId`. |
-| `OPENBP_WORKER_HEALTH_PORT` | `8089` | worker | Порт `/health/live` і `/health/ready` воркера (лише всередині мережі). |
+| `OPENBP_WORKER_HEALTH_PORT` | `8089` | worker | Порт `/health/live`, `/health/ready` і `/metrics` воркера (лише всередині мережі). |
+| `OPENBP_METRICS_ALLOW_ANONYMOUS` | `false` | api, worker | `true` — `GET /metrics` (Prometheus) без входу. Інакше потрібен API-ключ admin'а (`Authorization: Bearer …`) або сесія admin'а. |
+| `OPENBP_NOTIFICATIONS_INTERVAL_SEC` | `30` | api | Як часто перевіряти стан (воркери, бекап) і розсилати сповіщення адміністратору, с. `0` — не розсилати. |
 
 Рівні журналу задаються стандартними змінними .NET `Logging__LogLevel__<категорія>`, напр.
 `Logging__LogLevel__OpenBP=Debug` (у `docker-compose.prod.yml` їх треба додати в `environment` сервісу).
