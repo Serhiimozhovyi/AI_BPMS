@@ -446,7 +446,7 @@
 - DoD: тест вузла з 7 правилами і fallback; валідатор приймає ребра з виходів 4…N; старі сценарії сумісні (інакше `typeVersion` 2).
 
 ### F3-30 · `core.code`: `$node["…"]` і часовий пояс сценарію
-- model: `opus` · status: `review #79` · depends: F1-06, F1-07
+- model: `opus` · status: `done` · depends: F1-06, F1-07
 - Що: у `core.code` — `$node["Назва"].json` (лише читання, як у виразах) і `Date` у `settings.timezone` сценарію замість UTC (`options.TimeZone`). Зараз після кожного `mcp.tool` контекст доводиться відновлювати `core.set`, а дати `Europe/Kyiv` рахувати вручну.
 - DoD: тести: читання виходу попереднього вузла, неіснуючий вузол → помилка з назвою, `getHours()` у `Europe/Kyiv` узимку й улітку; `architecture.md` §5 і опис `describe_nodes` оновлено.
 
