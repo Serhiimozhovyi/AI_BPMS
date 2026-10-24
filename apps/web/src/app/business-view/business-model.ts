@@ -58,7 +58,7 @@ export interface BusinessConnector {
 export const FOLDED_TYPES: ReadonlySet<string> = new Set(['core.set', 'core.code', 'core.merge']);
 
 const DECISION_TYPES = new Set(['core.if', 'core.switch']);
-const WAIT_TYPES = new Set(['core.wait', 'core.waitFor']);
+const WAIT_TYPES = new Set(['core.wait', 'mcp.waitFor']);
 const AI_TYPES = new Set(['ai.llm', 'ai.agent']);
 const ALT_OUTPUTS = new Set([ERROR_OUTPUT, 'timeout']);
 
@@ -146,7 +146,7 @@ function stepKind(node: CanvasNode): BusinessStepKind {
 }
 
 function defaultLane(node: CanvasNode, connectorNames: ReadonlyMap<string, string>): BusinessLane {
-  if (node.type === 'mcp.tool' || node.type === 'mcp.poll') {
+  if (node.type === 'mcp.tool' || node.type === 'mcp.poll' || node.type === 'mcp.waitFor') {
     const serverId = node.source.parameters?.['serverId'];
     const name = typeof serverId === 'string' ? connectorNames.get(serverId) : undefined;
     return name ? { id: `connector:${serverId as string}`, name } : otherLane();

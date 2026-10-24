@@ -93,7 +93,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
         Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(EncryptionKey));
         Servers = new McpServerSync(Db, _mcp, Credentials);
         DataTables = new PostgresDataTableStore(Db, new DataTableLimits(), TimeProvider.System);
-        var nodes = CoreNodes.All(time, DataTables).Concat(McpNodes.All(_mcp)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
+        var nodes = CoreNodes.All(time, DataTables).Concat(McpNodes.All(_mcp, time)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
 
         // core.webhook з'явиться в F2-10; до того прикладу telegram-1c.json потрібна заглушка (він запускається з pinData).
         if (!nodes.Any(n => n.Descriptor.Type == WebhookStub.Type))

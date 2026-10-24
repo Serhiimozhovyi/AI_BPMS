@@ -103,7 +103,7 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
             CoreNodes.All(dataTables: sp.GetRequiredService<PostgresDataTableStore>())
-                .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>()))
+                .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>(), sp.GetRequiredService<TimeProvider>()))
                 .Concat(AiNodes.All(
                     sp.GetRequiredService<HttpClient>(),
                     sp.GetRequiredService<IMcpServerRegistry>(),

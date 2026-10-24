@@ -79,7 +79,7 @@ public sealed class ConnectorTools
     [Description(
         "Lists the MCP servers connected to OpenBP and the tools each one exposes (name, title, description, inputSchema, " +
         "outputSchema — the shape of the item a `mcp.tool` node outputs, when the server declares it). " +
-        "Use a server's id as `serverId` and a tool's name as `toolName` in `mcp.tool` / `mcp.poll` nodes; " +
+        "Use a server's id as `serverId` and a tool's name as `toolName` in `mcp.tool` / `mcp.poll` / `mcp.waitFor` nodes; " +
         "the workflow format is described by the resource openbp://schema/workflow-format.")]
     public static Task<ConnectorsDescription> DescribeConnectors(IConnectorService connectors, CancellationToken ct) =>
         ConnectorsDescription.BuildAsync(connectors, ct);

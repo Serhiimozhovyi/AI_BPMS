@@ -9,11 +9,13 @@ namespace OpenBP.Mcp.Nodes;
 /// </summary>
 public static class McpNodes
 {
-    /// <summary>Створює <c>mcp.tool</c> і <c>mcp.poll</c> над спільним реєстром серверів.</summary>
+    /// <summary>Створює <c>mcp.tool</c>, <c>mcp.poll</c> і <c>mcp.waitFor</c> над спільним реєстром серверів.</summary>
     /// <param name="servers">Реєстр MCP-серверів.</param>
-    public static IReadOnlyList<INode> All(IMcpServerRegistry servers) =>
+    /// <param name="time">Джерело часу для <c>mcp.waitFor</c>; <c>null</c> — системний час.</param>
+    public static IReadOnlyList<INode> All(IMcpServerRegistry servers, TimeProvider? time = null) =>
     [
         new McpToolNode(servers),
         new McpPollNode(servers),
+        new McpWaitForNode(servers, time),
     ];
 }

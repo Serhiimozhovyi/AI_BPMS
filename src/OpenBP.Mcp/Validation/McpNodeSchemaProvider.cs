@@ -8,7 +8,7 @@ using OpenBP.Shared.Workflow;
 namespace OpenBP.Mcp.Validation;
 
 /// <summary>
-/// <see cref="INodeSchemaProvider"/> для вузлів <c>mcp.tool</c> і <c>mcp.poll</c> (правила 5–6 з docs/workflow-format.md):
+/// <see cref="INodeSchemaProvider"/> для вузлів <c>mcp.tool</c>, <c>mcp.poll</c> і <c>mcp.waitFor</c> (правила 5–6 з docs/workflow-format.md):
 /// <c>serverId</c> зареєстровано, tool <c>toolName</c> є в кеші сервера (інакше <see cref="WorkflowValidationCodes.McpToolUnknown"/>),
 /// <c>arguments</c> відповідають <c>inputSchema</c> tool'а (рядок <c>{{ }}</c> допустимий замість будь-якого типу).
 /// Решту типів делегує внутрішньому провайдеру (зазвичай <see cref="NodeRegistrySchemaProvider"/>).
@@ -21,8 +21,12 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
     /// <summary>Тип polling-тригера.</summary>
     public const string PollNodeType = "mcp.poll";
 
+    /// <summary>Тип вузла очікування умови (F5-03).</summary>
+    public const string WaitForNodeType = "mcp.waitFor";
+
     private static readonly NodePorts ToolPorts = new(1, 1);
     private static readonly NodePorts PollPorts = new(0, 1);
+    private static readonly NodePorts WaitForPorts = new(1, 2);
 
     private readonly IMcpServerRegistry _servers;
     private readonly INodeSchemaProvider? _inner;
@@ -43,6 +47,7 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
         {
             ToolNodeType => ToolPorts,
             PollNodeType => PollPorts,
+            WaitForNodeType => WaitForPorts,
             _ => null,
         };
 
@@ -50,7 +55,7 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
     public async Task<IReadOnlyList<WorkflowValidationError>> ValidateNodeAsync(NodeDefinition node, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(node);
-        if (node.Type is not (ToolNodeType or PollNodeType))
+        if (node.Type is not (ToolNodeType or PollNodeType or WaitForNodeType))
         {
             return _inner is null ? [] : await _inner.ValidateNodeAsync(node, ct).ConfigureAwait(false);
         }
