@@ -166,6 +166,7 @@ interface SaveRequest {
       gap: 16px;
       padding: 8px 16px;
       border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: var(--ac-white);
     }
 
     .editor__tools {
@@ -235,9 +236,18 @@ interface SaveRequest {
     .editor__palette {
       display: flex;
       flex-direction: column;
+      flex-shrink: 0;
       width: 260px;
       border-right: 1px solid var(--mat-sys-outline-variant);
       overflow-y: auto;
+    }
+
+    /* Бічні панелі непрозорі й над канвасом: вузли не просвічують крізь форму (AC-Kit: біле тло, тінь). */
+    .editor__palette,
+    .editor__panel {
+      position: relative;
+      z-index: 1;
+      background: var(--ac-white);
     }
 
     .editor__warning {
@@ -247,13 +257,17 @@ interface SaveRequest {
     }
 
     .editor__canvas {
+      position: relative;
       flex: 1;
       min-width: 0;
+      overflow: hidden;
     }
 
     .editor__panel {
+      flex-shrink: 0;
       width: 360px;
       border-left: 1px solid var(--mat-sys-outline-variant);
+      box-shadow: var(--ac-shadow);
       overflow-y: auto;
     }
   `,

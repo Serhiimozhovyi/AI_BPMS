@@ -57,7 +57,7 @@ export interface WorkflowSettingsDialogData {
           }
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label i18n="@@workflowsettings.errorWorkflow">Сценарій помилок</mat-label>
           <mat-select data-testid="settings-error-workflow" [value]="value().errorWorkflowId" (selectionChange)="patch({ errorWorkflowId: $event.value })">
             <mat-option [value]="null" i18n="@@workflowsettings.errorWorkflow.none">Немає</mat-option>
