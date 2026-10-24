@@ -248,3 +248,15 @@ jobs:
             echo '|---|---|'
             docker images --format '| {{.Repository}}:{{.Tag}} | {{.Size}} |' | grep 'openbp-'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  prod-smoke:
+    name: Продакшн Compose (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # F4-10: docker-compose.prod.yml з випадковими секретами → /health/ready → вхід адміном → приклад success.
+      - run: scripts/gen-env.sh
+      - run: scripts/smoke-prod.sh
+      - if: always()
+        run: docker compose -f docker-compose.prod.yml down -v

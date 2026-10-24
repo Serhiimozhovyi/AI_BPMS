@@ -1,0 +1,105 @@
+# Продакшн-розгортання OpenBP (F4-10). Змінні — у .env (scripts/gen-env.sh створює його з .env.example з
+# випадковими секретами). Запуск:  docker compose -f docker-compose.prod.yml up -d --build --wait
+# Назовні відкритий лише web (OPENBP_HTTP_PORT); воркерів можна додати: --scale worker=3.
+name: openbp-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-db-connection: &db-connection
+  ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-openbp};Username=${POSTGRES_USER:-openbp};Password=${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD у .env}"
+
+x-app-env: &app-env
+  <<: *db-connection
+  OPENBP_ENCRYPTION_KEY: ${OPENBP_ENCRYPTION_KEY:?задайте OPENBP_ENCRYPTION_KEY у .env (scripts/gen-env.sh)}
+  OPENBP_LOG_FORMAT: ${OPENBP_LOG_FORMAT:-json}
+  OPENBP_MAX_EXECUTION_TIMEOUT_SEC: ${OPENBP_MAX_EXECUTION_TIMEOUT_SEC:-3600}
+  TZ: ${TZ:-Europe/Kyiv}
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openbp}
+      POSTGRES_USER: ${POSTGRES_USER:-openbp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD у .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    logging: *logging
+
+  # Застосовує міграції і завершується; api і worker стартують лише після успіху.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/migrate.Dockerfile
+    image: openbp/migrate:${OPENBP_VERSION:-local}
+    restart: "no"
+    environment:
+      <<: *db-connection
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: openbp/api:${OPENBP_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      OPENBP_ADMIN_EMAIL: ${OPENBP_ADMIN_EMAIL:-}
+      OPENBP_ADMIN_PASSWORD: ${OPENBP_ADMIN_PASSWORD:-}
+      # Публічна адреса (як її бачить браузер і зовнішні сервіси): redirect URI OAuth2, адреси webhook-ів.
+      OPENBP_PUBLIC_URL: ${OPENBP_PUBLIC_URL:-}
+      OPENBP_EXECUTION_RETENTION_DAYS: ${OPENBP_EXECUTION_RETENTION_DAYS:-30}
+      OPENBP_EXECUTION_RETENTION_CRON: ${OPENBP_EXECUTION_RETENTION_CRON:-0 0 3 * * ?}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    image: openbp/worker:${OPENBP_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - files:/data/files
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    image: openbp/web:${OPENBP_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      OPENBP_API_UPSTREAM: api:8080
+    ports:
+      - "${OPENBP_HTTP_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  postgres-data:
+  files:

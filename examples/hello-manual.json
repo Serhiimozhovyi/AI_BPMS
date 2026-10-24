@@ -1,0 +1,34 @@
+{
+  "formatVersion": 1,
+  "name": "Привіт, OpenBP",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 60,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+    {
+      "id": "n_greeting",
+      "name": "Привітання",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [240, 0],
+      "parameters": { "fields": [ { "name": "greeting", "value": "Привіт з OpenBP" } ] }
+    },
+    {
+      "id": "n_length",
+      "name": "Довжина",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [480, 0],
+      "parameters": { "code": "return { ...$json, length: $json.greeting.length };" }
+    }
+  ],
+  "connections": [
+    { "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_greeting", "input": 0 } },
+    { "from": { "node": "n_greeting", "output": 0 }, "to": { "node": "n_length", "input": 0 } }
+  ],
+  "pinData": {}
+}
