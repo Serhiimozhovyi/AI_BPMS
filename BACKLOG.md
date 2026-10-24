@@ -907,7 +907,7 @@
 - DoD: тести: прогін з 3 кейсами проти фейкового HTTP моделі дає 2/3; `expression`-перевірка; результати зберігаються за версією; viewer не запускає; Vitest вкладки; `docs/mcp-server.md` оновлено.
 
 ### F6-18 · S3-сховище файлів і трейси OpenTelemetry
-- model: `sonnet` · status: `review` · depends: F3-19, F4-08
+- model: `sonnet` · status: `done` · depends: F3-19, F4-08
 - Що: `IBinaryStore` для S3-сумісного сховища (`Storage:S3` — endpoint, bucket, ключі зі змінних середовища; `AWSSDK.S3` або `Minio` — записати вибір і ліцензію в `THIRD_PARTY_NOTICES.md`), `BinaryRef.storage = s3`, читання лише своїх посилань; `minio` як опційний сервіс у `docker-compose.prod.yml` (профіль). OpenTelemetry (`OpenTelemetry.Extensions.Hosting`, OTLP exporter): span на виконання, вузол, виклик MCP tool, HTTP до моделі; `executionId`/`workflowId` у атрибутах; увімкнення через `OTEL_EXPORTER_OTLP_ENDPOINT`; секрети в атрибути не потрапляють.
 - DoD: тести сховища проти MinIO у Testcontainers (запис/читання/хеш/підроблений ref); воркер з двома екземплярами бачить спільні файли (інтеграційний); тест, що спans мають потрібні атрибути й не містять credentials; README/доки адміна оновлено.
 
