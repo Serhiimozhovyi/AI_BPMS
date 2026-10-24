@@ -70,6 +70,12 @@ const NO_PINNED: ReadonlySet<string> = new Set();
 const NO_COUNTS: ReadonlyMap<string, number> = new Map();
 
 export const NODE_WIDTH = 220;
+
+/** Крок кнопок «+»/«−» і межі масштабу. */
+const ZOOM_STEP = 1.25;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 2;
+
 const MIN_NODE_HEIGHT = 72;
 /** Вертикальний крок між портами: стільки, щоб підписи портів не накладались. */
 const PORT_STEP = 16;
@@ -281,13 +287,61 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           }
         </span>
       </ng-template>
+      <mini-map position="bottom-left" maskColor="rgb(244 243 248 / 0.7)" strokeColor="#b9b4cc" />
     </vflow>
+    <div class="controls" role="toolbar" i18n-aria-label="@@canvas.controls" aria-label="Керування канвасом" data-testid="canvas-controls">
+      @if (!readonly()) {
+        <button type="button" class="controls__btn controls__btn--wide" data-testid="canvas-arrange" i18n-title="@@canvas.arrange.hint" title="Розставити вузли зліва направо за з'єднаннями" (click)="arrangeClicked()" i18n="@@canvas.arrange">Вирівняти</button>
+      }
+      <button type="button" class="controls__btn" data-testid="canvas-fit" i18n-title="@@canvas.fit" title="Показати весь сценарій" (click)="fit()">⤢</button>
+      <button type="button" class="controls__btn" data-testid="canvas-zoom-in" i18n-title="@@canvas.zoomIn" title="Збільшити" (click)="zoomBy(ZOOM_STEP)">+</button>
+      <button type="button" class="controls__btn" data-testid="canvas-zoom-out" i18n-title="@@canvas.zoomOut" title="Зменшити" (click)="zoomBy(1 / ZOOM_STEP)">−</button>
+    </div>
   `,
   styles: `
     :host {
+      position: relative;
       display: block;
       width: 100%;
       height: 100%;
+    }
+
+    /* Мінікарта (F3-58) — лише показує: кліки проходять до вузлів під нею. */
+    :host ::ng-deep svg.root-svg > svg,
+    :host ::ng-deep svg.root-svg > rect {
+      pointer-events: none;
+    }
+
+    /* Кнопки канвасу (F3-58) — внизу праворуч, над полотном. */
+    .controls {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      gap: 4px;
+    }
+
+    .controls__btn {
+      min-width: 30px;
+      height: 30px;
+      padding: 0 6px;
+      border: 1px solid var(--ac-cool-grey);
+      border-radius: 6px;
+      background: var(--ac-white);
+      color: var(--ac-cool-grey-4);
+      font: 500 14px/1 Ubuntu, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgb(38 31 75 / 0.1);
+    }
+
+    .controls__btn--wide {
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .controls__btn:hover {
+      border-color: var(--ac-kit);
+      color: var(--ac-kit);
     }
 
     /* Картка вузла — у foreignObject ngx-vflow, який обрізає все за межами вузла; «+» біля порту стоїть за краєм. */
@@ -599,6 +653,9 @@ export class VflowCanvasComponent {
   /** ПКМ на вузлі, ребрі чи порожньому канвасі (F3-58); у режимі перегляду не надходить. */
   readonly contextMenu = output<CanvasContextMenuRequest>();
 
+  /** «Вирівняти» (F3-58): розставити вузли — рахує й застосовує `CanvasComponent`, тут лише кнопка і fit після. */
+  readonly arrange = output<void>();
+
   /** Клік по «не заповнено: N»: відкрити вузол із фокусом на першому незаповненому полі (F3-57). */
   readonly missingClick = output<MissingFieldRequest>();
 
@@ -741,6 +798,25 @@ export class VflowCanvasComponent {
   protected addFromPort(event: MouseEvent, node: string, output: number): void {
     event.stopPropagation();
     this.quickAdd.emit({ target: { kind: 'port', from: { node, output } }, anchor: anchorOf(event) });
+  }
+
+  protected readonly ZOOM_STEP = ZOOM_STEP;
+
+  protected arrangeClicked(): void {
+    if (this.readonly()) return;
+    this.arrange.emit();
+    // Нові позиції приходять через `model` — fit, коли вузли вже перебудовано.
+    requestAnimationFrame(() => requestAnimationFrame(() => this.fit()));
+  }
+
+  protected fit(): void {
+    this.flow()?.fitView({ padding: 0.15, duration: 200 });
+  }
+
+  protected zoomBy(factor: number): void {
+    const flow = this.flow();
+    if (!flow) return;
+    flow.zoomTo(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, flow.viewport().zoom * factor)));
   }
 
   protected readonly disableLabel = $localize`:@@canvas.tool.disable:Вимкнути (D)`;

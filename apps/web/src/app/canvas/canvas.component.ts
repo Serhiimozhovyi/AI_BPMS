@@ -4,7 +4,8 @@ import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workfl
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
 import { QuickAddRequest } from './quick-add';
-import { CanvasContextMenuRequest, MissingFieldRequest, NodeActionRequest, NodeErrors, NodeRenameRequest, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
+import { CanvasContextMenuRequest, MissingFieldRequest, NODE_WIDTH, NodeActionRequest, NodeErrors, NodeRenameRequest, NodeRunStatuses, VflowCanvasComponent, nodeHeight } from './vflow/vflow-canvas.component';
+import { layoutLeftToRight } from './auto-layout';
 
 /**
  * Канвас сценарію з власним API (docs/architecture.md §7, ADR-003): вхід — `WorkflowDefinition`, дескриптори
@@ -35,6 +36,7 @@ import { CanvasContextMenuRequest, MissingFieldRequest, NodeActionRequest, NodeE
     (nodeAction)="nodeAction.emit($event)"
     (renamed)="renamed.emit($event)"
     (contextMenu)="contextMenu.emit($event)"
+    (arrange)="arrange()"
   />`,
   styles: `
     :host {
@@ -115,6 +117,17 @@ export class CanvasComponent {
     }
     return byNode;
   });
+
+  /** «Вирівняти»: шарове розміщення зліва направо; змінюються лише позиції вузлів. */
+  protected arrange(): void {
+    if (this.readonly()) return;
+    const cards = new Map(this.model().nodes.map((n) => [n.id, n]));
+    const next = layoutLeftToRight(this.definition(), NODE_WIDTH, (node) => {
+      const card = cards.get(node.id);
+      return card ? nodeHeight(card) : nodeHeight({ inputs: ['main'], outputs: ['main'] });
+    });
+    if (next !== this.definition()) this.definitionChange.emit(next);
+  }
 
   protected moved(positions: NodePosition[]): void {
     if (this.readonly()) return;
