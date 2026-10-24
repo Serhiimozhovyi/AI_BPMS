@@ -340,3 +340,37 @@ test('F3-50: «+» на виділеному ребрі вставляє кро�
   await waitSaved(page);
   expect(graph(api.definition).edges).toEqual(['Ручний запуск#0->Код (JavaScript)#0', 'Код (JavaScript)#0->Задати поля#0'].sort());
 });
+
+test('F3-58: ПКМ → Дублювати, D вимикає вузол, перейменування з тулбару', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+
+  // ПКМ на вузлі — контекстне меню; «Дублювати» додає копію поруч.
+  await card(page, 'Задати поля').click({ button: 'right' });
+  await expect(page.getByTestId('context-menu')).toHaveAttribute('data-kind', 'node');
+  await page.getByTestId('menu-duplicate').click();
+  await expect(page.getByTestId('context-menu')).toHaveCount(0);
+  await expect(card(page, 'Задати поля 2')).toBeVisible();
+
+  // D на виділеному вузлі — вимикає (копія зсунута на 40 px і перекриває центр оригіналу — клік у кут).
+  await card(page, 'Задати поля').click({ position: { x: 12, y: 12 } });
+  await expect(card(page, 'Задати поля')).toHaveClass(/selected/);
+  await page.keyboard.press('d');
+  await expect(card(page, 'Задати поля')).toHaveClass(/disabled/);
+  await waitSaved(page);
+  expect(api.definition.nodes.find((n) => n.name === 'Задати поля')).toMatchObject({ disabled: true });
+
+  // Тулбар над карткою: «Перейменувати» — inline-поле, Enter зберігає.
+  await card(page, 'Задати поля 2').hover();
+  await card(page, 'Задати поля 2').getByTestId('node-tool-rename').click();
+  const input = page.getByTestId('node-rename');
+  await expect(input).toBeFocused();
+  await input.fill('Підготувати дані');
+  await input.press('Enter');
+  await expect(card(page, 'Підготувати дані')).toBeVisible();
+  await waitSaved(page);
+  expect(graph(api.definition).nodes).toEqual(['Задати поля:core.set', 'Підготувати дані:core.set']);
+});
