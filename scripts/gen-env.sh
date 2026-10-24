@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Створює .env з .env.example з випадковими секретами: пароль БД, ключ шифрування credentials, пароль адміністратора.
+# Створює .env з .env.example з випадковими секретами: пароль БД, ключ шифрування credentials, пароль адміністратора
+# і (закоментований) ключ MinIO.
 # Використання: scripts/gen-env.sh [файл]   (типово .env; наявний файл не перезаписується)
 set -euo pipefail
 
@@ -25,6 +26,7 @@ sed \
   -e "s|^OPENBP_ENCRYPTION_KEY=.*|OPENBP_ENCRYPTION_KEY=${ENCRYPTION_KEY}|" \
   -e "s/^OPENBP_ADMIN_EMAIL=.*/OPENBP_ADMIN_EMAIL=${ADMIN_EMAIL}/" \
   -e "s/^OPENBP_ADMIN_PASSWORD=.*/OPENBP_ADMIN_PASSWORD=${ADMIN_PASSWORD}/" \
+  -e "s/^# OPENBP_S3_SECRET_KEY=.*/# OPENBP_S3_SECRET_KEY=$(random_password 32)/" \
   -e "s/^OPENBP_BACKUP_UID=.*/OPENBP_BACKUP_UID=$(id -u)/" \
   -e "s/^OPENBP_BACKUP_GID=.*/OPENBP_BACKUP_GID=$(id -g)/" \
   "$ROOT/.env.example" > "$TARGET"

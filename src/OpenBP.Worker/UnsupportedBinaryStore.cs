@@ -9,7 +9,7 @@ namespace OpenBP.Worker;
 /// </summary>
 internal sealed class UnsupportedBinaryStore : IBinaryStore
 {
-    private const string Message = "Файлове сховище бінарних даних у воркері не налаштоване: задайте Storage:LocalPath (змінна Storage__LocalPath).";
+    private const string Message = "Файлове сховище бінарних даних у воркері не налаштоване: задайте Storage:LocalPath (змінна Storage__LocalPath) або Storage:S3:Bucket (Storage__S3__Bucket).";
 
     /// <inheritdoc />
     public Task<BinaryRef> PutAsync(Stream content, string mimeType, string? fileName, CancellationToken ct) =>

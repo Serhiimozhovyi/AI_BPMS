@@ -632,7 +632,7 @@
 Порядок: F3-65 → F3-66 → (F3-67 → F3-68) і F3-69 → F3-70. Формат F3-67 власник погодив 2026-10-24: «як на схемі-зразку».
 
 ### F3-65 · Бізнес-вигляд: модель доріжок і кроків
-- model: `sonnet` · status: `ready` · depends: —
+- model: `sonnet` · status: `done` agent/F3-65-business-model · depends: —
 - Що: чиста функція `apps/web/src/app/business-view/business-model.ts`: `buildBusinessView(definition, connectors) → { lanes, steps, edges }` за правилами `docs/business-view.md` §«Правила за замовчуванням»: доріжка за типом вузла (для `mcp.tool`/`mcp.poll` — назва конектора за `serverId`, невідомий конектор → «Інша система»), згортання `core.set`/`core.code`/`core.merge` і вимкнених вузлів з перез'єднанням ребер (без дублікатів ребер), вид кроку (`trigger`, `task`, `decision`, `wait`, `loop`), підписи гілок рішень, тривалість для `core.wait`. Розкладка — окрема чиста функція `layoutBusinessView(view) → координати` (колонка = ранг у DAG після згортання, рядок = доріжка, ортогональні шляхи стрілок). Функції читають бізнес-атрибути F3-67 (`business.lanes`, `business.steps` зі зв'язками, `node.business`, `connection.business.label`), якщо вони є, інакше — правила за замовчуванням; тип стрілки (`flow`, `timeout`/`error`, зв'язок `in`/`out` із зовнішнім кроком) і підпис — частина моделі. Формат сценарію не змінюється.
 - DoD: Vitest на всіх `examples/*.json`: детермінований результат, жодного технічного вузла серед кроків, ребра після згортання ведуть у ті самі видимі кроки, що й у графі; окремі тести: ланцюжок `set → code → set` згортається в одне ребро, `if` з обома гілками дає ромб з підписами «так»/«ні», крок не накладається на сусіда в розкладці; lint/test/build зелені.
 
@@ -907,7 +907,7 @@
 - DoD: тести: прогін з 3 кейсами проти фейкового HTTP моделі дає 2/3; `expression`-перевірка; результати зберігаються за версією; viewer не запускає; Vitest вкладки; `docs/mcp-server.md` оновлено.
 
 ### F6-18 · S3-сховище файлів і трейси OpenTelemetry
-- model: `sonnet` · status: `ready` · depends: F3-19, F4-08
+- model: `sonnet` · status: `done` · depends: F3-19, F4-08
 - Що: `IBinaryStore` для S3-сумісного сховища (`Storage:S3` — endpoint, bucket, ключі зі змінних середовища; `AWSSDK.S3` або `Minio` — записати вибір і ліцензію в `THIRD_PARTY_NOTICES.md`), `BinaryRef.storage = s3`, читання лише своїх посилань; `minio` як опційний сервіс у `docker-compose.prod.yml` (профіль). OpenTelemetry (`OpenTelemetry.Extensions.Hosting`, OTLP exporter): span на виконання, вузол, виклик MCP tool, HTTP до моделі; `executionId`/`workflowId` у атрибутах; увімкнення через `OTEL_EXPORTER_OTLP_ENDPOINT`; секрети в атрибути не потрапляють.
 - DoD: тести сховища проти MinIO у Testcontainers (запис/читання/хеш/підроблений ref); воркер з двома екземплярами бачить спільні файли (інтеграційний); тест, що спans мають потрібні атрибути й не містять credentials; README/доки адміна оновлено.
 

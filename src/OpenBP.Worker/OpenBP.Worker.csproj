@@ -9,6 +9,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../OpenBP.Application/OpenBP.Application.csproj" />
     <ProjectReference Include="../OpenBP.Data/OpenBP.Data.csproj" />
     <ProjectReference Include="../OpenBP.Mcp/OpenBP.Mcp.csproj" />
