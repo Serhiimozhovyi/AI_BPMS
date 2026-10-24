@@ -174,3 +174,123 @@ function uniqueName(name: string, taken: ReadonlySet<string>): string {
     if (!taken.has(candidate)) return candidate;
   }
 }
+
+/** Перемикає `disabled` вузлів (F3-58): якщо хоч один увімкнений — усі вимикаються, інакше всі вмикаються. */
+export function toggleDisabled(definition: WorkflowDefinition, ids: readonly string[]): WorkflowDefinition {
+  const set = new Set(ids);
+  const targets = definition.nodes.filter((n) => set.has(n.id));
+  if (targets.length === 0) return definition;
+  const disable = targets.some((n) => !n.disabled);
+  return {
+    ...definition,
+    nodes: definition.nodes.map((n) => {
+      if (!set.has(n.id)) return n;
+      if (disable) return { ...n, disabled: true };
+      const rest = { ...n };
+      delete rest.disabled;
+      return rest;
+    }),
+  };
+}
+
+/** Результат перейменування: нове визначення або причина, чому назва не підходить. */
+export type RenameResult = { definition: WorkflowDefinition; error: null } | { definition: null; error: 'empty' | 'taken' };
+
+/**
+ * Перейменовує вузол (F3-58): назва без пробілів по краях, не порожня й унікальна в сценарії. Посилання
+ * `$node["Стара"]` / `$node['Стара']` у рядках параметрів усіх вузлів (вирази `{{ }}`, код `core.code`) переписуються на нову
+ * назву — інакше вирази зламаються.
+ */
+export function renameNode(definition: WorkflowDefinition, nodeId: string, name: string): RenameResult {
+  const node = definition.nodes.find((n) => n.id === nodeId);
+  const next = name.trim();
+  if (!node || next === node.name) return { definition, error: null };
+  if (!next) return { definition: null, error: 'empty' };
+  if (definition.nodes.some((n) => n.id !== nodeId && n.name === next)) return { definition: null, error: 'taken' };
+  const old = node.name;
+  return {
+    definition: {
+      ...definition,
+      nodes: definition.nodes.map((n) => {
+        const parameters = renameReferences(n.parameters, old, next);
+        if (n.id === nodeId) return { ...n, name: next, parameters };
+        return parameters === n.parameters ? n : { ...n, parameters };
+      }),
+    },
+    error: null,
+  };
+}
+
+/** Рядки всередині значення: `$node["old"]` → `$node["new"]`; без змін — той самий об'єкт. */
+function renameReferences<T>(value: T, oldName: string, newName: string): T {
+  if (typeof value === 'string') {
+    if (!value.includes('$node')) return value;
+    const replaced = value.replace(/\$node\[\s*(["'])((?:\\.|(?!\1).)*)\1\s*\]/g, (match, quote: string, raw: string) => {
+      const name = quote === '"' ? safeJson(`"${raw}"`) : raw.replace(/\\(.)/g, '$1');
+      return name === oldName ? `$node[${JSON.stringify(newName)}]` : match;
+    });
+    return (replaced === value ? value : replaced) as T;
+  }
+  if (Array.isArray(value)) {
+    let changed = false;
+    const items = value.map((v) => {
+      const r = renameReferences(v, oldName, newName);
+      if (r !== v) changed = true;
+      return r;
+    });
+    return (changed ? items : value) as T;
+  }
+  if (value && typeof value === 'object') {
+    let changed = false;
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      const r = renameReferences(v, oldName, newName);
+      if (r !== v) changed = true;
+      result[k] = r;
+    }
+    return (changed ? result : value) as T;
+  }
+  return value;
+}
+
+function safeJson(text: string): string | null {
+  try {
+    return JSON.parse(text) as string;
+  } catch {
+    return null;
+  }
+}
+
+/** Напрямок переходу стрілками між вузлами (F3-58). */
+export type NeighborDirection = 'left' | 'right' | 'up' | 'down';
+
+/**
+ * Сусідній вузол для стрілок: праворуч — перший наступник за ребрами, ліворуч — перший попередник; вгору/вниз —
+ * найближчий вузол вище/нижче (відстань по x важить удвічі більше, щоб лишатися в тій самій колонці). Немає — `null`.
+ */
+export function neighborNode(definition: WorkflowDefinition, nodeId: string, direction: NeighborDirection): string | null {
+  const ids = new Set(definition.nodes.map((n) => n.id));
+  if (!ids.has(nodeId)) return null;
+  if (direction === 'right' || direction === 'left') {
+    const linked = definition.connections
+      .filter((e) => (direction === 'right' ? e?.from?.node === nodeId : e?.to?.node === nodeId))
+      .map((e) => (direction === 'right' ? e.to.node : e.from.node))
+      .filter((id) => ids.has(id) && id !== nodeId);
+    if (linked.length === 0) return null;
+    // Кілька — верхній за позицією, щоб перехід був передбачуваним.
+    const pos = new Map(definition.nodes.map((n) => [n.id, parsePosition(n.position)]));
+    return [...new Set(linked)].sort((a, b) => pos.get(a)!.y - pos.get(b)!.y || pos.get(a)!.x - pos.get(b)!.x)[0];
+  }
+  const from = parsePosition(definition.nodes.find((n) => n.id === nodeId)!.position);
+  const sign = direction === 'down' ? 1 : -1;
+  let best: { id: string; score: number } | null = null;
+  for (const n of definition.nodes) {
+    if (n.id === nodeId) continue;
+    const p = parsePosition(n.position);
+    const dy = (p.y - from.y) * sign;
+    if (dy <= 0) continue;
+    const score = dy + Math.abs(p.x - from.x) * 2;
+    if (!best || score < best.score) best = { id: n.id, score };
+  }
+  return best?.id ?? null;
+}

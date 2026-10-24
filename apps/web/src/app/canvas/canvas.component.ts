@@ -4,7 +4,7 @@ import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workfl
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
 import { QuickAddRequest } from './quick-add';
-import { MissingFieldRequest, NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
+import { CanvasContextMenuRequest, MissingFieldRequest, NodeActionRequest, NodeErrors, NodeRenameRequest, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
 
 /**
  * Канвас сценарію з власним API (docs/architecture.md §7, ADR-003): вхід — `WorkflowDefinition`, дескриптори
@@ -25,12 +25,16 @@ import { MissingFieldRequest, NodeErrors, NodeRunStatuses, VflowCanvasComponent 
     [runErrors]="runErrors()"
     [missingFields]="missingFields()"
     [selection]="selection()"
+    [renaming]="renaming()"
     [readonly]="readonly()"
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
     (selectionChange)="selectionChange.emit($event)"
     (quickAdd)="quickAdd.emit($event)"
     (missingClick)="missingClick.emit($event)"
+    (nodeAction)="nodeAction.emit($event)"
+    (renamed)="renamed.emit($event)"
+    (contextMenu)="contextMenu.emit($event)"
   />`,
   styles: `
     :host {
@@ -65,6 +69,9 @@ export class CanvasComponent {
   /** Незаповнені обов'язкові параметри за id вузла (F3-57). */
   readonly missingFields = input<ReadonlyMap<string, readonly string[]>>(new Map());
 
+  /** Вузол з inline-полем назви (F3-58). */
+  readonly renaming = input<string | null>(null);
+
   /** Виділені вузли й ребра. */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
@@ -76,6 +83,15 @@ export class CanvasComponent {
 
   /** Нове виділення після дій користувача на канвасі. */
   readonly selectionChange = output<CanvasSelection>();
+
+  /** Дія з тулбару вузла (F3-58). */
+  readonly nodeAction = output<NodeActionRequest>();
+
+  /** Inline-перейменування на картці завершено (`name: null` — скасовано). */
+  readonly renamed = output<NodeRenameRequest>();
+
+  /** ПКМ на канвасі (F3-58). */
+  readonly contextMenu = output<CanvasContextMenuRequest>();
 
   /** Клік по «не заповнено: N» на картці (F3-57). */
   readonly missingClick = output<MissingFieldRequest>();

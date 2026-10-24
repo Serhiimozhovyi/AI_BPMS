@@ -232,4 +232,41 @@ describe('CanvasComponent', () => {
     badge.click();
     expect(requests).toEqual([{ nodeId: 'n_1c', field: 'toolName' }]);
   });
+
+  it('тулбар вузла, inline-перейменування і ПКМ (F3-58) віддаються назовні; у перегляді тулбару немає', async () => {
+    const fixture = await create(demo());
+    const c = fixture.componentInstance;
+    const actions: unknown[] = [];
+    const renames: unknown[] = [];
+    const menus: unknown[] = [];
+    c.nodeAction.subscribe((a) => actions.push(a));
+    c.renamed.subscribe((r) => renames.push(r));
+    c.contextMenu.subscribe((m) => menus.push(m));
+    const host = fixture.nativeElement as HTMLElement;
+    const card = () => host.querySelector<HTMLElement>('[data-node-id="n_if"]')!;
+
+    card().querySelector<HTMLButtonElement>('[data-testid="node-tool-duplicate"]')!.click();
+    card().querySelector<HTMLButtonElement>('[data-testid="node-tool-toggle"]')!.click();
+    expect(actions).toEqual([
+      { nodeId: 'n_if', action: 'duplicate' },
+      { nodeId: 'n_if', action: 'toggle' },
+    ]);
+
+    fixture.componentRef.setInput('renaming', 'n_if');
+    fixture.detectChanges();
+    const input = card().querySelector<HTMLInputElement>('[data-testid="node-rename"]')!;
+    expect(input.value).toBe('Умова');
+    input.value = 'Перевірка';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    input.dispatchEvent(new Event('blur'));
+    expect(renames).toEqual([{ nodeId: 'n_if', name: 'Перевірка' }]);
+
+    card().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 6 }));
+    expect(menus).toEqual([{ target: { kind: 'node', nodeId: 'n_if' }, anchor: { x: 5, y: 6 } }]);
+
+    fixture.componentRef.setInput('readonly', true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(host.querySelector('[data-testid="node-toolbar"]')).toBeNull();
+  });
 });

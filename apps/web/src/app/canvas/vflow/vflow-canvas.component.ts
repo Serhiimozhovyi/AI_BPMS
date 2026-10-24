@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, booleanAttribute, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, booleanAttribute, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
 import { ConnectEndEvent, Connection, ConnectionSettings, Edge, Node, Vflow, VflowComponent, createEdges, createNodes } from 'ngx-vflow';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection } from '../canvas-edit';
 import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition } from '../canvas-model';
@@ -21,6 +21,29 @@ interface NodeData {
   runError: string | null;
   /** Незаповнені обов'язкові параметри (F3-57) — ключі полів у порядку форми. */
   missing: readonly string[];
+}
+
+/** Дія з тулбару над карткою вузла (F3-58). */
+export type NodeToolbarAction = 'run' | 'toggle' | 'duplicate' | 'delete' | 'rename';
+
+/** Дія над вузлом з тулбару. */
+export interface NodeActionRequest {
+  nodeId: string;
+  action: NodeToolbarAction;
+}
+
+/** Нова назва з inline-поля картки; `null` — скасовано (Escape). */
+export interface NodeRenameRequest {
+  nodeId: string;
+  name: string | null;
+}
+
+/** ПКМ на канвасі (F3-58): що під вказівником і де відкрити меню. */
+export type CanvasContextTarget = { kind: 'node'; nodeId: string } | { kind: 'edge'; edgeIndex: number } | { kind: 'canvas' };
+
+export interface CanvasContextMenuRequest {
+  target: CanvasContextTarget;
+  anchor: ScreenPoint;
 }
 
 /** Клік по «не заповнено: N» — відкрити вузол і поставити фокус на перше незаповнене поле. */
@@ -98,6 +121,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       (connectEnd)="connectEnded($event)"
       (nodesChanges.select)="selectionChanged()"
       (edgesChanges.select)="selectionChanged()"
+      (contextmenu)="openContextMenu($event)"
     >
       <ng-template nodeHtml let-ctx>
         <div
@@ -148,7 +172,39 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               >
             }
           </div>
-          <div class="node__name" [title]="ctx.data().node.name">{{ ctx.data().node.name }}</div>
+          @if (!readonly()) {
+            <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
+              <button type="button" class="node__tool" data-testid="node-tool-run" i18n-title="@@canvas.tool.run" title="Виконати вузол" (click)="act($event, ctx.node.id, 'run')">▶</button>
+              <button
+                type="button"
+                class="node__tool"
+                data-testid="node-tool-toggle"
+                [title]="ctx.data().node.disabled ? enableLabel : disableLabel"
+                (click)="act($event, ctx.node.id, 'toggle')"
+              >
+                ⏻
+              </button>
+              <button type="button" class="node__tool" data-testid="node-tool-duplicate" i18n-title="@@canvas.tool.duplicate" title="Дублювати (Ctrl+D)" (click)="act($event, ctx.node.id, 'duplicate')">⧉</button>
+              <button type="button" class="node__tool" data-testid="node-tool-rename" i18n-title="@@canvas.tool.rename" title="Перейменувати (F2)" (click)="act($event, ctx.node.id, 'rename')">✎</button>
+              <button type="button" class="node__tool node__tool--danger" data-testid="node-tool-delete" i18n-title="@@canvas.tool.delete" title="Видалити (Delete)" (click)="act($event, ctx.node.id, 'delete')">🗑</button>
+            </div>
+          }
+          @if (renaming() === ctx.node.id) {
+            <input
+              class="node__rename"
+              data-testid="node-rename"
+              i18n-aria-label="@@canvas.rename.label"
+              aria-label="Нова назва вузла"
+              [value]="ctx.data().node.name"
+              (mousedown)="$event.stopPropagation()"
+              (pointerdown)="$event.stopPropagation()"
+              (keydown.enter)="commitRename(ctx.node.id, $any($event.target).value)"
+              (keydown.escape)="cancelRename(ctx.node.id)"
+              (blur)="commitRename(ctx.node.id, $any($event.target).value)"
+            />
+          } @else {
+            <div class="node__name" [title]="ctx.data().node.name" (dblclick)="act($event, ctx.node.id, 'rename')">{{ ctx.data().node.name }}</div>
+          }
           @if (ctx.data().runError; as runError) {
             <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
           } @else {
@@ -343,6 +399,58 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       color: var(--ac-cool-grey-4);
     }
 
+    /* Тулбар над карткою (F3-58): при наведенні і на виділеному вузлі; за межею картки, як «+» біля порту. */
+    .node__toolbar {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      right: 0;
+      display: none;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--ac-cool-grey);
+      border-radius: 6px;
+      background: var(--ac-white);
+      box-shadow: 0 1px 4px rgb(38 31 75 / 0.12);
+    }
+
+    .node:hover .node__toolbar,
+    .node.selected .node__toolbar,
+    .node__toolbar:focus-within {
+      display: flex;
+    }
+
+    .node__tool {
+      width: 24px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: none;
+      color: var(--ac-cool-grey-4);
+      font: 13px/1 Ubuntu, sans-serif;
+      cursor: pointer;
+    }
+
+    .node__tool:hover,
+    .node__tool:focus-visible {
+      background: var(--ac-cool-grey);
+      color: var(--ac-kit);
+    }
+
+    .node__tool--danger:hover {
+      color: var(--ac-red);
+    }
+
+    .node__rename {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: 2px;
+      padding: 1px 4px;
+      border: 1px solid var(--ac-kit);
+      border-radius: 4px;
+      font: 500 13px/1.3 Ubuntu, sans-serif;
+    }
+
     /* Перший рядок помилки запуску (F3-57) замість підзаголовка; повний текст — у підказці й панелі вузла. */
     .node__run-error {
       overflow: hidden;
@@ -479,6 +587,18 @@ export class VflowCanvasComponent {
   /** Користувач змінив виділення (клік, рамка, Ctrl+клік). */
   readonly selectionChange = output<CanvasSelection>();
 
+  /** Вузол з відкритим inline-полем назви (F3-58); `null` — немає. */
+  readonly renaming = input<string | null>(null);
+
+  /** Дія з тулбару над карткою (F3-58). */
+  readonly nodeAction = output<NodeActionRequest>();
+
+  /** Inline-перейменування завершено або скасовано. */
+  readonly renamed = output<NodeRenameRequest>();
+
+  /** ПКМ на вузлі, ребрі чи порожньому канвасі (F3-58); у режимі перегляду не надходить. */
+  readonly contextMenu = output<CanvasContextMenuRequest>();
+
   /** Клік по «не заповнено: N»: відкрити вузол із фокусом на першому незаповненому полі (F3-57). */
   readonly missingClick = output<MissingFieldRequest>();
 
@@ -486,6 +606,9 @@ export class VflowCanvasComponent {
   readonly quickAdd = output<QuickAddRequest>();
 
   private readonly flow = viewChild(VflowComponent);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** Вузол, для якого inline-перейменування вже віддано (Enter + blur не дублюються). */
+  private renameDone: string | null = null;
 
   /** Останнє положення вказівника: `connectEnd` не несе координат, а палітра відкривається там, де відпустили. */
   private pointer: ScreenPoint | null = null;
@@ -563,6 +686,26 @@ export class VflowCanvasComponent {
       document.removeEventListener('pointerup', track, { capture: true });
     });
 
+    // Inline-поле назви: фокус і виділення тексту, щойно воно з'явилося.
+    effect(() => {
+      const id = this.renaming();
+      untracked(() => {
+        this.renameDone = null;
+        if (!id) return;
+        let tries = 0;
+        const focus = () => {
+          const el = this.host.nativeElement.querySelector<HTMLInputElement>(`[data-node-id="${CSS.escape(id)}"] [data-testid="node-rename"]`);
+          if (el) {
+            el.focus();
+            el.select();
+          } else if (++tries < 10) {
+            requestAnimationFrame(focus);
+          }
+        };
+        requestAnimationFrame(focus);
+      });
+    });
+
     // Виділення ззовні (вставка, видалення, undo) → сигнали `selected` наявних вузлів і ребер.
     effect(() => {
       const selection = this.selection();
@@ -598,6 +741,52 @@ export class VflowCanvasComponent {
   protected addFromPort(event: MouseEvent, node: string, output: number): void {
     event.stopPropagation();
     this.quickAdd.emit({ target: { kind: 'port', from: { node, output } }, anchor: anchorOf(event) });
+  }
+
+  protected readonly disableLabel = $localize`:@@canvas.tool.disable:Вимкнути (D)`;
+  protected readonly enableLabel = $localize`:@@canvas.tool.enable:Увімкнути (D)`;
+
+  protected act(event: MouseEvent, nodeId: string, action: NodeToolbarAction): void {
+    event.stopPropagation();
+    if (this.readonly()) return;
+    this.nodeAction.emit({ nodeId, action });
+  }
+
+  protected commitRename(nodeId: string, name: string): void {
+    // Enter і наступний blur приходять обидва — віддаємо лише перший.
+    if (this.renaming() !== nodeId || this.renameDone === nodeId) return;
+    this.renameDone = nodeId;
+    this.renamed.emit({ nodeId, name });
+  }
+
+  protected cancelRename(nodeId: string): void {
+    if (this.renaming() !== nodeId || this.renameDone === nodeId) return;
+    this.renameDone = nodeId;
+    this.renamed.emit({ nodeId, name: null });
+  }
+
+  /** ПКМ: вузол — за `data-node-id`, ребро — за порядком `g[edge]` (той самий, що в `edges()`), інакше — канвас. */
+  protected openContextMenu(event: MouseEvent): void {
+    if (this.readonly()) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('input, textarea')) return;
+    event.preventDefault();
+    const anchor: ScreenPoint = { x: event.clientX, y: event.clientY };
+    const nodeId = target?.closest('[data-node-id]')?.getAttribute('data-node-id');
+    if (nodeId) {
+      this.contextMenu.emit({ target: { kind: 'node', nodeId }, anchor });
+      return;
+    }
+    const edgeEl = target?.closest('g[edge]');
+    if (edgeEl) {
+      const index = [...this.host.nativeElement.querySelectorAll('g[edge]')].indexOf(edgeEl);
+      const edge = this.edges()[index];
+      if (edge) {
+        this.contextMenu.emit({ target: { kind: 'edge', edgeIndex: edgeIndex(edge) }, anchor });
+        return;
+      }
+    }
+    this.contextMenu.emit({ target: { kind: 'canvas' }, anchor });
   }
 
   protected openMissing(event: MouseEvent, nodeId: string, field: string): void {
