@@ -67,6 +67,21 @@ public sealed class CliRunTests : IDisposable
     }
 
     [Fact]
+    public async Task OrderTotal_GuideExample_ComputesTotalsWithExpressionsAndCode()
+    {
+        // Приклад з docs/guide/authors.md (вирази, Code eachItem/allItems, core.if): не має розходитися з посібником.
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(await File.ReadAllTextAsync(OrderTotal)));
+
+        var (code, stdout, stderr) = await RunAsync("run", OrderTotal);
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("\"total\": 300", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"text\": \"ПЕТРЕНКО: 2 рядки на 1200 грн\"", stdout, StringComparison.Ordinal);
+        Assert.Contains("▶ Велике замовлення? [core.if] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("Результат: Success", stdout, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Example_WithoutPin_WebhookNodeFailsWithHint()
     {
         var (code, stdout, _) = await RunAsync("run", Example, "--servers", WriteServers());
@@ -259,6 +274,8 @@ public sealed class CliRunTests : IDisposable
     private static string Example => Path.Combine(RepoRoot, "examples", "telegram-1c.json");
 
     private static string DailyReport => Path.Combine(RepoRoot, "examples", "daily-report.json");
+
+    private static string OrderTotal => Path.Combine(RepoRoot, "examples", "order-total.json");
 
     private static string YesterdayIn(TimeZoneInfo zone) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

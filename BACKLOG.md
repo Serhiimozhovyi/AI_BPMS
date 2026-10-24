@@ -712,7 +712,7 @@
 - DoD: кожна змінна з `.env.example` описана; посилання з README; перевірено, що команди в доках збігаються зі скриптами.
 
 ### F4-16 · Документація авторів сценаріїв та інтеграторів
-- model: `haiku` · status: `ready` · depends: F4-06, F4-13
+- model: `haiku` · status: `review #112` · depends: F4-06, F4-13
 - Що: `docs/guide/authors.md` — перший сценарій, тригери, вирази, Code, AI, помилки й error-workflow, тестовий запуск і pinned data, журнал виконань (зі скріншотами); `docs/guide/integrators.md` — REST за OpenAPI (ключі, приклади curl), webhook, `/mcp` для агентів (Claude Desktop), вбудовування `<openbp-canvas>`, свій конектор на Connector Kit.
 - DoD: кожен приклад curl/конфіг перевірено на локальному стенді; посилання з README.
 
