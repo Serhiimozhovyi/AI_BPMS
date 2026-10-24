@@ -237,6 +237,16 @@ public class JintExpressionEvaluatorTests
     }
 
     [Fact]
+    public void Vars_ExposeInstanceVariables()
+    {
+        var scope = Scope() with { Vars = new Dictionary<string, string> { ["region"] = "ua", ["api_url"] = "https://erp" } };
+
+        var result = _evaluator.Evaluate("{{ [$vars.region, $vars['api_url'], typeof $vars.missing] }}", scope);
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""["ua","https://erp","undefined"]"""), result), result?.ToJsonString());
+    }
+
+    [Fact]
     public void Execution_ExposesId()
     {
         var result = _evaluator.Evaluate("{{ $execution.id }}", Scope());

@@ -15,6 +15,8 @@ namespace OpenBP.Cli;
 /// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json] [--credentials creds.json]</c> — виконання сценарію без БД
 /// (docs/architecture.md §1): in-memory store, <c>core.*</c> і <c>mcp.*</c> вузли, Jint-вирази.
 /// Друкує input/output кожного вузла. Коди виходу: 0 — успіх, 1 — виконання завершилось не успіхом, 2 — помилка запуску.
+/// <c>openbp export | import | activate</c> — робота з запущеним OpenBP через REST для CI/CD (<see cref="RemoteCommands"/>):
+/// 1 — імпорт без відповідників, 2 — помилка аргументів чи відповідь OpenBP з помилкою.
 /// </summary>
 public static class CliApp
 {
@@ -28,11 +30,19 @@ public static class CliApp
     public const int UsageError = 2;
 
     private const string Usage = """
-        Використання: openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]
+        Використання:
+          openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]
+          openbp export <id> | --all [--out dir] [--url URL] [--api-key KEY]
+          openbp import <file.json> [--map map.json] [--url URL] [--api-key KEY]
+          openbp activate <id> [--url URL] [--api-key KEY]
 
           --pin        ручний тестовий запуск: вузли з pinData не виконуються, їхній вихід — закріплені items
           --servers    JSON з MCP-серверами, на які посилаються вузли mcp.* (serverId)
           --credentials JSON { "<credentialId>": { … } } з даними credentials для вузлів (напр. ai.llm)
+          --out        тека для файлів експорту (<id>.json); типово поточна
+          --map        JSON { "connectors": { "<ref>": "<id>" }, "credentials": { … }, "workflows": { … } }
+          --url        адреса OpenBP; типово змінна OPENBP_URL
+          --api-key    API-ключ (Bearer); типово змінна OPENBP_API_KEY — у CI беріть його із секрету
         """;
 
     /// <summary>Розбирає аргументи і виконує команду.</summary>
@@ -41,13 +51,28 @@ public static class CliApp
     /// <param name="stderr">Вивід помилок запуску.</param>
     /// <param name="ct">Скасування (Ctrl+C).</param>
     /// <returns>Код виходу.</returns>
-    public static async Task<int> RunAsync(string[] args, TextWriter stdout, TextWriter stderr, CancellationToken ct)
+    public static Task<int> RunAsync(string[] args, TextWriter stdout, TextWriter stderr, CancellationToken ct) =>
+        RunAsync(args, stdout, stderr, http: null, ct);
+
+    /// <summary>Те саме з власним HTTP-обробником для команд проти OpenBP (тести — <c>WebApplicationFactory</c>).</summary>
+    /// <param name="args">Аргументи командного рядка.</param>
+    /// <param name="stdout">Вивід звіту.</param>
+    /// <param name="stderr">Вивід помилок запуску.</param>
+    /// <param name="http">Обробник HTTP; <c>null</c> — звичайний.</param>
+    /// <param name="ct">Скасування (Ctrl+C).</param>
+    /// <returns>Код виходу.</returns>
+    public static async Task<int> RunAsync(string[] args, TextWriter stdout, TextWriter stderr, HttpMessageHandler? http, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(stdout);
         ArgumentNullException.ThrowIfNull(stderr);
         try
         {
+            if (args.Length > 0 && RemoteCommands.Names.Contains(args[0]))
+            {
+                return await RemoteCommands.RunAsync(args, stdout, http, ct).ConfigureAwait(false);
+            }
+
             var options = RunOptions.Parse(args);
             return await RunWorkflowAsync(options, stdout, ct).ConfigureAwait(false);
         }

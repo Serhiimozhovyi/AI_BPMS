@@ -9,12 +9,13 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
+import { VariablesSection } from '../../settings/variables-section.component';
 
-/** `/settings`: свої API-ключі (створення, відкликання) і підключення ШІ-агента до `/mcp` (F3-07). */
+/** `/settings`: свої API-ключі (створення, відкликання), підключення ШІ-агента до `/mcp` (F3-07) і змінні інстансу (F6-09). */
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule],
+  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
@@ -107,6 +108,10 @@ import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '.
         <button mat-stroked-button type="button" data-testid="copy-config" (click)="copy(config())" i18n="@@settings.copy">
           Скопіювати
         </button>
+      </div>
+
+      <div class="mt-8">
+        <app-variables-section />
       </div>
     </section>
   `,

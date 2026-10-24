@@ -1,3 +1,4 @@
+using OpenBP.Engine.Data;
 using OpenBP.Engine.Nodes;
 
 namespace OpenBP.Nodes.Core;
@@ -10,7 +11,8 @@ public static class CoreNodes
 {
     /// <summary>Створює по екземпляру кожного <c>core.*</c> вузла (усі версії).</summary>
     /// <param name="time">Джерело часу для <c>core.wait</c> і <c>core.schedule</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
-    public static IReadOnlyList<INode> All(TimeProvider? time = null) =>
+    /// <param name="dataTables">Сховище для <c>core.dataTable</c>; <c>null</c> — вузол лише описаний (палітра, валідація) і при виконанні дає помилку.</param>
+    public static IReadOnlyList<INode> All(TimeProvider? time = null, IDataTableStore? dataTables = null) =>
     [
         new ManualTriggerNode(),
         new WebhookNode(),
@@ -24,5 +26,6 @@ public static class CoreNodes
         new LoopNode(),
         new WaitNode(time),
         new CodeNode(),
+        new DataTableNode(dataTables),
     ];
 }

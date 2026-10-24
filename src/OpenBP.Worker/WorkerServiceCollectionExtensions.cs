@@ -2,9 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Ai;
+using OpenBP.Application.DataTables;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
+using OpenBP.Engine.Data;
 using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
@@ -72,8 +74,14 @@ public static class WorkerServiceCollectionExtensions
 
         // Таймаутом запиту до моделі керує сам вузол ai.llm (timeoutSec), тож HttpClient без власного таймауту.
         services.AddSingleton(_ => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+        // Таблиці даних (F6-11): сховище для core.dataTable з лімітами OPENBP_DATA_TABLE_*.
+        services.AddSingleton(_ => DataTableLimits.FromEnvironment());
+        services.AddSingleton(sp => new PostgresDataTableStore(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<DataTableLimits>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
-            CoreNodes.All()
+            CoreNodes.All(dataTables: sp.GetRequiredService<PostgresDataTableStore>())
                 .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>()))
                 .Concat(AiNodes.All(sp.GetRequiredService<HttpClient>()))));
         services.AddSingleton<IExpressionEvaluator>(_ => new JintExpressionEvaluator());

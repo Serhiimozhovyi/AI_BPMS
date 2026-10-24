@@ -54,4 +54,7 @@ public static class WorkflowValidationCodes
 
     /// <summary><c>settings.errorWorkflowId</c>: не id, сам сценарій, сценарію немає або в ньому немає <c>core.errorTrigger</c>.</summary>
     public const string ErrorWorkflowInvalid = "ERROR_WORKFLOW_INVALID";
+
+    /// <summary>Попередження (не помилка): <c>$vars.key</c> посилається на змінну інстансу, якої немає (F6-09).</summary>
+    public const string VariableUnknown = "VARIABLE_UNKNOWN";
 }

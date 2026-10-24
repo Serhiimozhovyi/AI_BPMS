@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
 using OpenBP.Application.Connectors;
+using OpenBP.Application.DataTables;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Nodes;
 using OpenBP.Application.Workflows;
@@ -27,6 +28,12 @@ public sealed class OpenBpResources
 
     /// <summary>Шаблон URI виконання.</summary>
     public const string ExecutionUriTemplate = "openbp://executions/{id}";
+
+    /// <summary>Шаблон URI таблиці даних.</summary>
+    public const string DataTableUriTemplate = "openbp://tables/{id}";
+
+    /// <summary>Найбільше рядків у ресурсі таблиці.</summary>
+    public const int DataTableResourceRows = 100;
 
     /// <summary>JSON Schema формату workflow з <c>OpenBP.Shared</c> — джерело правди для <c>create_workflow</c>/<c>update_workflow</c>.</summary>
     [McpServerResource(UriTemplate = WorkflowSchemaUri, Name = "workflow-format", Title = "Workflow format JSON Schema", MimeType = "application/schema+json")]
@@ -66,4 +73,13 @@ public sealed class OpenBpResources
     [Description("Snapshot of an execution with its steps; same content as the get_execution tool.")]
     public static async Task<string> Execution(IExecutionService executions, Guid id, CancellationToken ct) =>
         JsonSerializer.Serialize(await executions.GetAsync(id, ct).ConfigureAwait(false), McpJson.Options);
+
+    /// <summary>Структура таблиці і перші <see cref="DataTableResourceRows"/> рядків (те саме, що <c>query_table</c> без умов).</summary>
+    /// <param name="tables">Сервіс таблиць.</param>
+    /// <param name="id">Id або назва таблиці.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerResource(UriTemplate = DataTableUriTemplate, Name = "table", Title = "Data table", MimeType = "application/json")]
+    [Description("A data table with its columns and first 100 rows; same content as query_table without conditions.")]
+    public static async Task<string> DataTable(IDataTableService tables, string id, CancellationToken ct) =>
+        JsonSerializer.Serialize(await DataTableTools.QueryTable(tables, id, null, DataTableResourceRows, ct).ConfigureAwait(false), McpJson.Options);
 }

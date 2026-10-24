@@ -102,6 +102,9 @@ OPENBP_UPDATE_OPENAPI=1 dotnet test tests/OpenBP.Api.Tests --filter OpenApi
 ### Запуск сценарію з CLI
 
 `openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
+
+`openbp export | import | activate` переносять сценарії між середовищами через REST — для CI/CD, див. [docs/guide/integrators.md §7](docs/guide/integrators.md#7-перенесення-між-середовищами-і-cicd).
+
 Приклад «Заявка з Telegram → 1С» з [docs/workflow-format.md](docs/workflow-format.md) проти мок-MCP-серверів 1С і Telegram:
 
 ```bash

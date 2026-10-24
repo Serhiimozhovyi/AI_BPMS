@@ -1,4 +1,5 @@
 using OpenBP.Application.Auth;
+using OpenBP.Application.Workflows;
 using OpenBP.Shared.Validation;
 
 namespace OpenBP.Application.Errors;
@@ -129,3 +130,18 @@ public sealed class CredentialValidationException : OpenBpException
 /// <param name="Field">Назва поля (<c>apiKey</c>, <c>headers</c>, <c>type</c>…).</param>
 /// <param name="Message">Пояснення українською.</param>
 public sealed record CredentialFieldError(string Field, string Message);
+
+/// <summary>Імпорт сценарію: для частини посилань немає відповідника в цьому середовищі (F6-09). Відповідь містить <c>unmapped[]</c>.</summary>
+public sealed class ImportUnmappedException : OpenBpException
+{
+    /// <summary>Створює помилку.</summary>
+    /// <param name="unmapped">Посилання без відповідника.</param>
+    public ImportUnmappedException(IReadOnlyList<UnmappedReference> unmapped)
+        : base("IMPORT_UNMAPPED", 422, $"Для {unmapped?.Count ?? 0} посилань сценарію немає відповідника — вкажіть mapping.")
+    {
+        Unmapped = unmapped ?? [];
+    }
+
+    /// <summary>Посилання без відповідника.</summary>
+    public IReadOnlyList<UnmappedReference> Unmapped { get; }
+}

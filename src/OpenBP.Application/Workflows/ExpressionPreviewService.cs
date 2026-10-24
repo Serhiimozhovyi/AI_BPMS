@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
+using OpenBP.Application.Variables;
 using OpenBP.Data;
 using OpenBP.Engine;
 using OpenBP.Engine.Expressions;
@@ -10,7 +11,7 @@ namespace OpenBP.Application.Workflows;
 
 /// <summary>
 /// Реалізація <see cref="IExpressionPreviewService"/>: вираз обчислює <see cref="IExpressionEvaluator"/> хоста (Jint з лімітами
-/// виконання). Контекст — з запиту, інакше з <c>pinData</c> поточної версії сценарію; <c>$env</c> не підставляється —
+/// виконання). Контекст — з запиту, інакше з <c>pinData</c> поточної версії сценарію; <c>$vars</c> — змінні інстансу; <c>$env</c> не підставляється —
 /// вираз із ним повертає помилку «недоступно в попередньому перегляді», без обчислення.
 /// </summary>
 public sealed class ExpressionPreviewService(
@@ -51,6 +52,8 @@ public sealed class ExpressionPreviewService(
             Nodes = request.Nodes?.ToDictionary(p => p.Key, p => (IReadOnlyList<Item>)p.Value) ?? PinnedNodes(definition),
             Now = time.GetUtcNow(),
             Timezone = definition?.Settings.Timezone ?? "UTC",
+            // Змінні інстансу (F6-09) — не секрети, тож доступні й у перегляді, як у виконанні.
+            Vars = expression.Contains("$vars", StringComparison.Ordinal) ? await VariableService.LoadAsync(db, ct) : new Dictionary<string, string>(),
         };
 
         try

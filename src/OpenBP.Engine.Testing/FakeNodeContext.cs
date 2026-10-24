@@ -45,7 +45,12 @@ public sealed class FakeNodeContext : INodeContext
     /// <inheritdoc />
     public string Timezone { get; set; } = "UTC";
 
+    /// <summary>Змінні інстансу (<c>$vars</c>); тест задає їх напряму.</summary>
+    public Dictionary<string, string> Vars { get; init; } = new(StringComparer.Ordinal);
+
     IReadOnlyDictionary<string, IReadOnlyList<Item>> INodeContext.NodeOutputs => NodeOutputs;
+
+    IReadOnlyDictionary<string, string> INodeContext.Vars => Vars;
 
     IExecutionLogger INodeContext.Logger => Logger;
 

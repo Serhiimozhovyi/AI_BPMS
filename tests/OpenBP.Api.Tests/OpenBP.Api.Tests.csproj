@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Api/OpenBP.Api.csproj" />
+    <!-- openbp export/import/activate (F6-09) проти WebApplicationFactory. -->
+    <ProjectReference Include="../../src/OpenBP.Cli/OpenBP.Cli.csproj" />
     <!-- MCP-сервер для інтеграційних тестів конекторів (F2-13): stdio-процес і HTTP у процесі тестів. -->
     <ProjectReference Include="../OpenBP.Mcp.Tests/FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>

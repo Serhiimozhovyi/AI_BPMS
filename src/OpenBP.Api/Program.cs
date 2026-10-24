@@ -11,6 +11,7 @@ using OpenBP.Api.Nodes;
 using OpenBP.Api.OpenApi;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
+using OpenBP.Application.DataTables;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Nodes;
 using OpenBP.Application.Schedules;
@@ -54,6 +55,7 @@ builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
 // Межа таймауту виконання (F4-05): валідатор відхиляє settings.executionTimeoutSec більше за неї.
 builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<IConfiguration>()[WorkflowLimits.MaxExecutionTimeoutKey]));
 builder.Services.AddOpenBpWorkflowServices();
+builder.Services.AddOpenBpDataTableServices();
 // Попередній перегляд виразів у редакторі (F3-56): той самий Jint з лімітами, що й у Worker.
 builder.Services.AddSingleton<IExpressionEvaluator>(_ => new JintExpressionEvaluator());
 builder.Services.AddOpenBpNodeServices();
@@ -101,7 +103,7 @@ app.UseAuthorization();
 app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

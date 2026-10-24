@@ -99,7 +99,9 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 - `connections` — масив ребер; один вихід → кілька ребер (розгалуження), один вхід ← кілька ребер (items об'єднуються в порядку надходження). Індекс виходу відповідає `Descriptor.Outputs`; у вузлів з `continueOnFail: true` з'являється додатковий останній вихід `error`.
 - Цикли заборонені (валідатор перевіряє DAG). Ітерація — через `core.loop`.
 - `pinData` використовується тільки в ручному тестовому запуску.
-- Секретів у форматі немає: лише `credentialId` і `serverId`. При імпорті в інше середовище посилання перемаплюються в UI.
+- Секретів у форматі немає: лише `credentialId` і `serverId`. При імпорті в інше середовище посилання перемаплюються (див. «Експорт та імпорт»).
+- `$vars.key` — змінні інстансу (Налаштування → «Змінні»): спільні для всіх сценаріїв значення на зразок адреси ERP чи
+  коду регіону. Не секрети — для них credentials.
 - `timeoutSec` на вузлі перекриває дефолт (30 с для `mcp.tool`, 60 с для `ai.llm`, без ліміту для логіки).
 
 ## Обов'язкові поля
@@ -176,6 +178,36 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 
 Інші сценарії лімітами одного сценарію не блокуються.
 
+### Таблиці даних (`core.dataTable`)
+
+Вузол «Таблиця даних» читає й пише таблиці зі сторінки «Таблиці» (`/tables`, F6-11): довідники, черги, стан між
+запусками. Таблиця має колонки `{ name, type: string|number|boolean|date|json, key? }`; ключова — не більше однієї
+(рядок або число), за нею працюють `get`, `upsert`, `update`, `delete`. Без ключової колонки ключ рядка — згенерований id.
+
+```json
+{
+  "id": "n_save", "name": "Зберегти клієнта", "type": "core.dataTable", "typeVersion": 1, "position": [400, 0],
+  "parameters": {
+    "table": "Клієнти",
+    "operation": "upsert",
+    "values": { "email": "{{ $json.email }}", "visits": "{{ $json.visits }}" }
+  }
+}
+```
+
+- `table` — назва (без урахування регістру) або id; `operation` — `get` | `list` | `insert` | `upsert` | `update` | `delete`.
+- `key` — значення ключа для `get`, `update`, `delete`; для `insert`/`upsert` ключ береться з `values`.
+- `values` — значення колонок; змінюються лише передані (`update`, `upsert` по наявному рядку). Типи приводяться:
+  число з рядка `"3"`, булеве з `"true"`, дата — в ISO UTC; невідома колонка чи невідповідний тип — помилка вузла.
+- `where` — для `list`: `[{ column, operator, value }]` через AND; оператори `eq`, `ne`, `gt`, `gte`, `lt`, `lte`,
+  `contains` (підрядок без урахування регістру; для json — у будь-якому значенні всередині), `isEmpty`, `isNotEmpty`.
+  Колонки json — лише `contains`/`isEmpty`/`isNotEmpty`. `limit` — 1…1000, типово 100.
+- Вузол виконується для кожного вхідного item; вихід — item на кожен рядок результату: значення колонок плюс `_key`.
+  `get` без такого рядка — нуль items; `update` неіснуючого — помилка; `delete` — `{ _key, deleted }`.
+- `upsert` ідемпотентний: паралельні запуски з одним ключем дають один рядок.
+- Ліміти інстансу: рядків у таблиці — `OPENBP_DATA_TABLE_MAX_ROWS` (типово 100 000), розмір рядка —
+  `OPENBP_DATA_TABLE_MAX_ROW_BYTES` (типово 65 536 байт); перевищення — помилка вузла `DATA_TABLE_ROW_LIMIT` / `DATA_TABLE_ROW_TOO_LARGE`.
+
 ## Item і BinaryRef
 
 Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байти файлу в item не потрапляють, лише посилання на файлове сховище:
@@ -203,3 +235,40 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 8. `settings.errorWorkflowId` — інший існуючий сценарій з `core.errorTrigger` (`ERROR_WORKFLOW_INVALID`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.
+
+Окремо від помилок — попередження `warnings` (не заважають збереженню й активації): `VARIABLE_UNKNOWN` — `$vars.key` чи
+`$vars["key"]` у параметрах (зокрема в коді `core.code`) посилається на змінну, якої немає; до її створення вираз дає
+`undefined`.
+
+## Експорт та імпорт
+
+`GET /api/v1/workflows/{id}/export` (UI: «Експортувати» у списку сценаріїв, CLI: `openbp export`) віддає визначення
+поточної версії і маніфест залежностей:
+
+```json
+{
+  "definition": { "formatVersion": 1, "name": "Заявка з Telegram → 1С", "...": "..." },
+  "manifest": {
+    "connectors":  [{ "ref": "5f0c…", "name": "1С", "transport": "http" }],
+    "credentials": [{ "ref": "9a12…", "name": "Anthropic", "type": "openai-compatible" }],
+    "variables":   ["region"],
+    "workflows":   [{ "ref": "77de…", "name": "Сповіщення про помилки" }]
+  }
+}
+```
+
+`ref` — id у середовищі-джерелі, як він записаний у визначенні; секретів і значень змінних у файлі немає.
+
+`POST /api/v1/workflows/import { definition, manifest?, mapping?, groupId? }` (UI: «Імпорт», CLI: `openbp import`)
+створює **новий неактивний** сценарій. Кожне посилання (`serverId` і `credentialId` будь-де в `parameters`,
+`settings.errorWorkflowId`) отримує відповідник у цьому середовищі:
+
+1. явний `mapping: { connectors: { "<ref>": "<id>" }, credentials: { … }, workflows: { … } }`;
+2. інакше — єдиний об'єкт з тією самою назвою (без урахування регістру) і тим самим транспортом (конектор) чи типом
+   (credential) з маніфесту;
+3. без маніфесту посилання лишається, якщо такий id тут є.
+
+Якщо для чогось відповідника немає, відповідь — 422 `IMPORT_UNMAPPED` зі списком
+`unmapped: [{ kind: connector | credential | workflow, ref, name, type, reason: not_found | ambiguous | invalid }]`, і
+нічого не створюється. Після перемапінгу сценарій проходить звичайну валідацію (422 `WORKFLOW_INVALID`). Відповідь
+успіху — `{ workflow, mapping, missingVariables }`: `missingVariables` — ключі `$vars`, яких тут ще немає.

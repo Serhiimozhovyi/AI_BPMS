@@ -47,6 +47,9 @@ public interface INodeContext
     /// <summary>Часовий пояс сценарію (IANA, <c>settings.timezone</c>), напр. <c>Europe/Kyiv</c>.</summary>
     string Timezone { get; }
 
+    /// <summary>Змінні інстансу (<c>$vars</c>, F6-09): ключ → значення; не секрети.</summary>
+    IReadOnlyDictionary<string, string> Vars => new Dictionary<string, string>();
+
     /// <summary>Журнал виконання; <c>nodeId</c> підставляє вузол сам (<see cref="Node"/>).</summary>
     IExecutionLogger Logger { get; }
 

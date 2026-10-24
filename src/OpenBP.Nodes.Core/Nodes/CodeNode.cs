@@ -27,6 +27,7 @@ namespace OpenBP.Nodes.Core;
 /// не переносяться.
 /// </para>
 /// <para>
+/// <c>$vars.key</c> — змінні інстансу (F6-09) в обох режимах.
 /// <c>$node["Назва"]</c> вузла, який не виконувався, — помилка з його назвою. <c>Date</c> працює в часовому поясі
 /// сценарію (<c>settings.timezone</c>), а не в UTC.
 /// </para>
@@ -90,6 +91,7 @@ public sealed class CodeNode : INode
                         engine.SetValue("$json", parser.Parse(items[i].Json.ToJsonString()));
                         engine.SetValue("$index", i);
                         SetNodes(engine, parser, p.Code, nodes, i);
+                        SetVars(engine, parser, p.Code, ctx.Vars);
                     });
                     output.AddRange(ToJsonObjects(result, allowSingle: true).Select(json => ItemCopy.WithJson(items[i], json)));
                 }
@@ -101,6 +103,7 @@ public sealed class CodeNode : INode
                     var array = new JsonArray([.. items.Select(item => (JsonNode)item.Json.DeepClone())]);
                     engine.SetValue("items", parser.Parse(array.ToJsonString()));
                     SetNodes(engine, parser, first.Code, nodes, 0);
+                    SetVars(engine, parser, first.Code, ctx.Vars);
                 });
                 output.AddRange(ToJsonObjects(all, allowSingle: false).Select(json => new Item { Json = json }));
                 break;
@@ -136,6 +139,15 @@ public sealed class CodeNode : INode
 
         var factory = engine.Evaluate(NodeProxyFactory);
         engine.SetValue("$node", engine.Invoke(factory, parser.Parse(data.ToJsonString())));
+    }
+
+    /// <summary><c>$vars</c> — змінні інстансу (F6-09), лише якщо код їх згадує.</summary>
+    private static void SetVars(Jint.Engine engine, JsonParser parser, string code, IReadOnlyDictionary<string, string> vars)
+    {
+        if (code.Contains("$vars", StringComparison.Ordinal))
+        {
+            engine.SetValue("$vars", parser.Parse(System.Text.Json.JsonSerializer.Serialize(vars)));
+        }
     }
 
     private const string NodeProxyFactory = """

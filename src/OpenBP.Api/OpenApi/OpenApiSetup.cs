@@ -49,6 +49,12 @@ public static class OpenApiSetup
         /// <summary>Конектори.</summary>
         public const string Connectors = "Конектори";
 
+        /// <summary>Змінні інстансу.</summary>
+        public const string Variables = "Змінні";
+
+        /// <summary>Таблиці даних.</summary>
+        public const string DataTables = "Таблиці даних";
+
         /// <summary>Облікові дані.</summary>
         public const string Credentials = "Облікові дані";
 
@@ -64,6 +70,8 @@ public static class OpenApiSetup
         (Tags.Executions, "Запуск, історія, скасування, повтор і потік подій (SSE) виконань."),
         (Tags.Nodes, "Дескриптори вузлів для палітри редактора: параметри (JSON Schema), порти, категорії."),
         (Tags.Connectors, "MCP-сервери: реєстрація, список tools, тестові виклики."),
+        (Tags.Variables, "Змінні інстансу для `$vars.key` у виразах і core.code: читають усі, змінює admin. Не для секретів."),
+        (Tags.DataTables, "Таблиці даних для сценаріїв (вузол core.dataTable): структура, рядки, імпорт CSV. Читають усі, змінює editor."),
         (Tags.Credentials, "Облікові дані без значень секретів (лише admin), OAuth2-вхід."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
     ];

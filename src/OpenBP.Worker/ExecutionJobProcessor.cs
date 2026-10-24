@@ -6,6 +6,7 @@ using Npgsql;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
+using OpenBP.Application.Variables;
 using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
@@ -205,6 +206,7 @@ public sealed partial class ExecutionJobProcessor
         }
 
         var loadedStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false);
+        var vars = await LoadVariablesAsync(stoppingToken).ConfigureAwait(false);
         // Ручний тестовий запуск з канвасу показує дані вузлів завжди; решта — за settings.saveSuccessfulData (F4-07).
         var store = new PostgresExecutionStore(_contexts, _time, scrubber)
         {
@@ -228,6 +230,7 @@ public sealed partial class ExecutionJobProcessor
             DestinationNodeId = payload.DestinationNodeId,
             RunData = payload.RunData ?? new Dictionary<string, Item[][]>(),
             InputOverrides = payload.InputOverrides ?? new Dictionary<string, IReadOnlyList<Item>>(),
+            Vars = vars,
             NodeStates = loadedStates,
         };
 
@@ -489,6 +492,12 @@ public sealed partial class ExecutionJobProcessor
             .SingleOrDefaultAsync(ct)
             .ConfigureAwait(false);
         return definition is null ? null : WorkflowJson.Deserialize(definition);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> LoadVariablesAsync(CancellationToken ct)
+    {
+        await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await VariableService.LoadAsync(db, ct).ConfigureAwait(false);
     }
 
     private async Task<IReadOnlyDictionary<string, JsonObject>> LoadNodeStatesAsync(Guid workflowId, CancellationToken ct)

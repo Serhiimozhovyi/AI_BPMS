@@ -114,6 +114,20 @@ public class ExpressionPreviewTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Vars_AreAvailable_LikeInExecution()
+    {
+        var admin = await LoginAsync(UserRole.Admin);
+        var key = $"region_{Guid.NewGuid():N}";
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/v1/variables/{key}", new { value = "ua-central" })).StatusCode);
+        var client = await LoginAsync(UserRole.Editor);
+        var id = await CreateWorkflowAsync(client);
+
+        var result = await EvaluateAsync(client, id, new { expression = $"{{{{ $vars.{key}.toUpperCase() }}}}", nodeId = "n_set" });
+
+        Assert.Equal("UA-CENTRAL", result.GetProperty("value").GetString());
+    }
+
+    [Fact]
     public async Task UnknownWorkflow_Is404_AndViewerIsForbidden()
     {
         var editor = await LoginAsync(UserRole.Editor);

@@ -34,6 +34,7 @@ public static class McpServerSetup
             .WithTools<WorkflowGroupTools>(McpJson.Options)
             .WithTools<ExecutionTools>(McpJson.Options)
             .WithTools<TestNodeTool>(McpJson.Options)
+            .WithTools<DataTableTools>(McpJson.Options)
             .WithResources<OpenBpResources>();
         return services;
     }

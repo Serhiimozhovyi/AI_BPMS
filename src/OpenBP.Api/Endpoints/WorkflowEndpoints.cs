@@ -52,6 +52,23 @@ public static class WorkflowEndpoints
             service.ValidateAsync(Required(body.Definition), body.Active, ct))
             .WithSummary("Перевірити визначення без збереження");
 
+        workflows.MapPost("/import", async (WorkflowImportRequest body, IWorkflowTransferService service, CancellationToken ct) =>
+        {
+            var result = await service.ImportAsync(body, ct);
+            return Results.Created($"/api/v1/workflows/{result.Workflow.Id}", result);
+        })
+            .WithSummary("Імпортувати сценарій з експорту")
+            .WithDescription("Створює новий неактивний сценарій. `serverId`/`credentialId`/`settings.errorWorkflowId` перемаплюються: " +
+                             "`mapping` → єдиний об'єкт з тією самою назвою і транспортом/типом із `manifest`. Незмаплене — " +
+                             "422 IMPORT_UNMAPPED з `unmapped[]`, нічого не створено. `missingVariables` — ключі `$vars`, яких тут немає.")
+            .Produces<WorkflowImportResult>(StatusCodes.Status201Created);
+
+        workflows.MapGet("/{id:guid}/export", (Guid id, IWorkflowTransferService service, CancellationToken ct) =>
+            service.ExportAsync(id, ct))
+            .WithSummary("Експортувати сценарій з маніфестом залежностей")
+            .WithDescription("Визначення поточної версії і `manifest` (конектори, credentials, ключі змінних, сценарій помилок) " +
+                             "з назвами й типами — без секретів і значень змінних. Тіло для `POST /workflows/import`.");
+
         workflows.MapGet("/{id:guid}", (Guid id, IWorkflowService service, CancellationToken ct) =>
             service.GetAsync(id, ct))
             .WithSummary("Сценарій з поточною версією");
