@@ -269,4 +269,26 @@ describe('CanvasComponent', () => {
     await fixture.whenStable();
     expect(host.querySelector('[data-testid="node-toolbar"]')).toBeNull();
   });
+
+  it('«Вирівняти» (F3-58): нові позиції зліва направо, ребра ті самі; кнопки fit/zoom на місці', async () => {
+    const def = demo();
+    def.nodes[2] = { ...def.nodes[2], position: [0, 600] };
+    const fixture = await create(def);
+    const changes: WorkflowDefinition[] = [];
+    fixture.componentInstance.definitionChange.subscribe((d) => changes.push(d));
+    const host = fixture.nativeElement as HTMLElement;
+    for (const id of ['canvas-fit', 'canvas-zoom-in', 'canvas-zoom-out']) expect(host.querySelector(`[data-testid="${id}"]`)).not.toBeNull();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="canvas-arrange"]')!.click();
+
+    expect(changes).toHaveLength(1);
+    const xs = changes[0].nodes.map((n) => n.position[0]);
+    expect(xs[0]).toBeLessThan(xs[1]);
+    expect(xs[1]).toBeLessThan(xs[2]);
+    expect(changes[0].connections).toBe(def.connections);
+
+    fixture.componentRef.setInput('readonly', true);
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="canvas-arrange"]')).toBeNull();
+  });
 });

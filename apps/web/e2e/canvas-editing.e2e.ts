@@ -376,3 +376,36 @@ test('F3-58: ПКМ → Дублювати, D вимикає вузол, пер�
   await waitSaved(page);
   expect(graph(api.definition).nodes).toEqual(['Задати поля:core.set', 'Підготувати дані:core.set']);
 });
+
+test('F3-58: «Вирівняти» розставляє вузли зліва направо і не змінює ребра; є мінікарта і масштаб', async ({ page }) => {
+  const api = new FakeApi();
+  const node = (id: string, name: string, type: string, x: number, y: number): Node => ({ id, name, type, typeVersion: 1, position: [x, y], parameters: {} });
+  api.definition = {
+    ...api.definition,
+    nodes: [node('t', 'Ручний запуск', 'core.manualTrigger', 600, 300), node('s', 'Задати поля', 'core.set', 0, 0), node('c', 'Код (JavaScript)', 'core.code', 300, 500)],
+    connections: [
+      { from: { node: 't', output: 0 }, to: { node: 's', input: 0 } },
+      { from: { node: 's', output: 0 }, to: { node: 'c', input: 0 } },
+    ],
+  };
+  const edgesBefore = structuredClone(api.definition.connections);
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id]')).toHaveCount(3);
+  await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(1);
+
+  await page.getByTestId('canvas-arrange').click();
+  await waitSaved(page);
+  const x = Object.fromEntries(api.definition.nodes.map((n) => [n.id, n.position[0]]));
+  expect(x['t']).toBeLessThan(x['s']);
+  expect(x['s']).toBeLessThan(x['c']);
+  expect(api.definition.connections).toEqual(edgesBefore);
+  await expect(page.locator('path.edge')).toHaveCount(2);
+
+  // «+» збільшує картки, fit повертає весь сценарій у видиму область.
+  const before = (await card(page, 'Задати поля').boundingBox())!.width;
+  await page.getByTestId('canvas-zoom-in').click();
+  await expect.poll(async () => (await card(page, 'Задати поля').boundingBox())!.width).toBeGreaterThan(before);
+  await page.getByTestId('canvas-fit').click();
+  for (const name of ['Ручний запуск', 'Задати поля', 'Код (JavaScript)']) await expect(card(page, name)).toBeInViewport();
+});
