@@ -22,6 +22,19 @@ public static class ConnectorEndpoints
             service.ListAsync(new PageRequest { Page = page ?? 1, PageSize = pageSize ?? PageRequest.DefaultPageSize }, ct))
             .WithSummary("Список MCP-серверів зі станом");
 
+        connectors.MapGet("/catalog", (IConnectorCatalogService catalog, CancellationToken ct) => catalog.ListAsync(ct))
+            .WithSummary("Каталог конекторів")
+            .WithDescription("Маніфести `connectors/*/connector.json` і зовнішнього каталогу `OPENBP_CONNECTOR_CATALOG_URL` з уже встановленими конекторами (F6-16).");
+
+        connectors.MapPost("/catalog/{catalogId}/install", async (string catalogId, ConnectorInstallRequest? request, IConnectorCatalogService catalog, CancellationToken ct) =>
+        {
+            var created = await catalog.InstallAsync(catalogId, request, ct);
+            return Results.Created($"/api/v1/connectors/{created.Summary.Id}", created);
+        })
+            .WithSummary("Встановити конектор з каталогу")
+            .WithDescription("Створює MCP-сервер з типовими налаштуваннями запису і одразу читає tools; облікові дані додаються окремо.")
+            .Produces<ConnectorDetail>(StatusCodes.Status201Created);
+
         connectors.MapGet("/{id:guid}", (Guid id, IConnectorService service, CancellationToken ct) =>
             service.GetAsync(id, ct))
             .WithSummary("MCP-сервер з налаштуваннями і кешем tools");

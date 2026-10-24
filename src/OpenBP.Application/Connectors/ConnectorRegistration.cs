@@ -63,6 +63,7 @@ internal static class ConnectorRegistration
                 Arguments = config.Arguments ?? [],
                 Environment = config.Environment,
                 WorkingDirectory = string.IsNullOrWhiteSpace(config.WorkingDirectory) ? null : config.WorkingDirectory,
+                Catalog = CatalogId(config.Catalog),
             },
             McpTransportKind.Stdio => throw new ArgumentException("Для stdio потрібне поле config.command.", nameof(config)),
             McpTransportKind.Http when config.Url is { IsAbsoluteUri: true } url
@@ -70,11 +71,14 @@ internal static class ConnectorRegistration
                                        {
                                            Url = url,
                                            Headers = config.Headers,
+                                           Catalog = CatalogId(config.Catalog),
                                        },
             McpTransportKind.Http => throw new ArgumentException("Для http потрібне поле config.url з абсолютною http(s)-адресою.", nameof(config)),
             _ => throw new ArgumentException($"Невідомий транспорт «{transport}».", nameof(transport)),
         };
     }
+
+    private static string? CatalogId(string? catalog) => string.IsNullOrWhiteSpace(catalog) ? null : catalog.Trim();
 
     /// <summary><c>config</c> з рядка; некоректний JSON — порожні налаштування.</summary>
     public static ConnectorConfig ReadConfig(McpServerEntity row)

@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { AuthService } from '../../auth/auth.service';
 import { ConnectorDetail, ConnectorSummary } from '../../connectors/connectors-api.service';
 import { ConnectorsPage } from './connectors.page';
 
@@ -16,7 +18,7 @@ const detail: ConnectorDetail = {
 
 describe('ConnectorsPage', () => {
   async function setup(items: ConnectorSummary[] = [ok, broken]) {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
     const fixture = TestBed.createComponent(ConnectorsPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -46,7 +48,7 @@ describe('ConnectorsPage', () => {
   });
 
   it('помилка завантаження показується', async () => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
     const fixture = TestBed.createComponent(ConnectorsPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
@@ -116,5 +118,37 @@ describe('ConnectorsPage', () => {
     expect(host.querySelector('[data-testid="connector-form"]')).toBeNull();
     expect(host.querySelector('[data-connector="c1"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="connector-detail"]')).not.toBeNull();
+  });
+
+  it('?catalog=<id> відкриває вкладку «Каталог» з підсвіченим записом; встановлений конектор повертає до списку', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ catalog: 'telegram' }) } } },
+      ],
+    });
+    TestBed.inject(AuthService).user.set({ id: 'u1', email: 'a@openbp.test', role: 'admin' } as never);
+    const fixture = TestBed.createComponent(ConnectorsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    http.expectOne('/api/v1/credentials/types').flush([]);
+    http.expectOne('/api/v1/connectors/catalog').flush([
+      { manifest: { id: 'telegram', name: 'Telegram Bot API', description: '', transport: 'http', http: { url: 'http://telegram:8080/mcp' }, triggers: [] }, source: 'builtin', installed: [] },
+    ]);
+    await render(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-catalog="telegram"]')?.classList).toContain('border-ac-kit');
+    expect(host.querySelector('[data-testid="add-button"]')).toBeNull();
+
+    (host.querySelector('[data-testid="catalog-install"]') as HTMLButtonElement).click();
+    http.expectOne('/api/v1/connectors/catalog/telegram/install').flush({ ...detail, summary: { ...ok, id: 'c9', name: 'Telegram Bot API' } });
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="catalog-list"]')).toBeNull();
+    expect(host.querySelector('[data-connector="c9"]')?.textContent).toContain('Telegram Bot API');
+    expect(host.querySelector('[data-testid="connector-detail"] h2')?.textContent).toContain('Telegram Bot API');
   });
 });

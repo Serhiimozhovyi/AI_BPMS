@@ -18,6 +18,8 @@ export interface ConnectorSummary {
   toolsCachedAt: string | null;
   /** Проєкт (F6-14); `null` — спільний. */
   projectId?: string | null;
+  /** Запис каталогу, з якого встановлено (F6-16); `null` — додано вручну. */
+  catalogId?: string | null;
 }
 
 /** `ConnectorConfig` — налаштування транспорту без секретів. */
@@ -28,6 +30,47 @@ export interface ConnectorConfig {
   workingDirectory?: string | null;
   url?: string | null;
   headers?: Record<string, string> | null;
+  /** Запис каталогу (F6-16). */
+  catalog?: string | null;
+}
+
+/** Ключ credential'а з маніфесту (`ConnectorManifestKey`). */
+export interface ConnectorManifestKey {
+  name: string;
+  title?: string | null;
+  required: boolean;
+  secret: boolean;
+}
+
+/** Маніфест `connector.json` (F6-16, docs/connectors.md §5.1). */
+export interface ConnectorManifest {
+  id: string;
+  name: string;
+  description: string;
+  icon?: string | null;
+  transport: ConnectorTransport;
+  stdio?: { command: string; arguments?: string[] | null; environment?: Record<string, string> | null } | null;
+  http?: { url: string; headers?: Record<string, string> | null } | null;
+  credential?: { env?: ConnectorManifestKey[] | null; headers?: ConnectorManifestKey[] | null } | null;
+  triggers: unknown[];
+}
+
+/** Запис `GET /api/v1/connectors/catalog`. */
+export interface ConnectorCatalogEntry {
+  manifest: ConnectorManifest;
+  source: 'builtin' | 'external';
+  installed: ConnectorSummary[];
+}
+
+/** Ключі credential'а запису для транспорту: `env` для stdio, `headers` для http. */
+export function manifestKeys(manifest: ConnectorManifest, transport: ConnectorTransport): ConnectorManifestKey[] {
+  return (transport === 'http' ? manifest.credential?.headers : manifest.credential?.env) ?? [];
+}
+
+/** Транспорти, для яких у записі є налаштування; типовий — першим. */
+export function manifestTransports(manifest: ConnectorManifest): ConnectorTransport[] {
+  const all = (['stdio', 'http'] as const).filter((t) => manifest[t]);
+  return [manifest.transport, ...all.filter((t) => t !== manifest.transport)];
 }
 
 /** `McpToolInfo` — tool із кешу discovery. */
@@ -92,6 +135,20 @@ export class ConnectorsApiService {
 
   create(input: ConnectorInput): Observable<ConnectorDetail> {
     return this.http.post<ConnectorDetail>(this.base, input);
+  }
+
+  update(id: string, input: ConnectorInput): Observable<ConnectorDetail> {
+    return this.http.put<ConnectorDetail>(`${this.base}/${encodeURIComponent(id)}`, input);
+  }
+
+  /** Каталог конекторів (F6-16). */
+  catalog(): Observable<ConnectorCatalogEntry[]> {
+    return this.http.get<ConnectorCatalogEntry[]>(`${this.base}/catalog`);
+  }
+
+  /** Встановити з каталогу: сервер створює конектор з типовими налаштуваннями й читає tools. */
+  install(catalogId: string, request: { name?: string; transport?: ConnectorTransport; projectId?: string | null }): Observable<ConnectorDetail> {
+    return this.http.post<ConnectorDetail>(`${this.base}/catalog/${encodeURIComponent(catalogId)}/install`, request);
   }
 
   refreshTools(id: string): Observable<ConnectorDetail> {

@@ -256,6 +256,51 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.
 
+### 5.1. Маніфест `connector.json` і каталог (F6-16)
+
+Кожен `connectors/<id>` і шаблон Connector Kit мають `connector.json` (схема —
+`tools/connector-template/schemas/connector.schema.json`). З нього сторінка «Конектори → Каталог» встановлює конектор
+одним кліком:
+
+```json
+{
+  "id": "telegram",
+  "name": "Telegram Bot API",
+  "description": "Повідомлення, кнопки, документи й оновлення бота Telegram.",
+  "icon": "✈️",
+  "transport": "stdio",
+  "stdio": { "command": "dotnet", "arguments": ["/opt/openbp/connectors/telegram/OpenBP.Connectors.Telegram.dll"] },
+  "http": { "url": "http://telegram:8080/mcp" },
+  "credential": {
+    "env": [{ "name": "TELEGRAM_BOT_TOKEN", "title": "Токен бота від @BotFather", "required": true, "secret": true }],
+    "headers": []
+  },
+  "triggers": []
+}
+```
+
+- `id` — стабільний ідентифікатор (`^[a-z0-9][a-z0-9._-]{0,63}$`): ним встановлений конектор прив'язаний до запису
+  (`config.catalog`, у списку — `catalogId`), а шаблони сценаріїв посилаються на потрібні конектори.
+- `transport` — типовий транспорт; для нього обов'язкові налаштування `stdio` (`command`, `arguments`, `environment`,
+  `workingDirectory`) або `http` (`url`, `headers`). Можна описати обидва — користувач обирає при встановленні.
+- `credential.env` / `credential.headers` — ключі credential'а `mcp.stdio` / `mcp.http`: після встановлення форма
+  облікових даних відкривається з цими назвами, лишається вписати значення. Секретів у маніфесті немає.
+- `triggers` — пресети тригерів конектора (F6-13); поки порожній масив.
+- Типовий шлях stdio — `/opt/openbp/connectors/<id>/<збірка>.dll`: туди адміністратор кладе `dotnet publish` конектора
+  (docs/admin/README.md). Інший шлях чи URL змінюється після встановлення так само, як у доданого вручну конектора.
+
+Каталог (`GET /api/v1/connectors/catalog`, viewer) — вбудовані маніфести `connectors/*/connector.json` (ресурси збірки
+Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }` за адресою `OPENBP_CONNECTOR_CATALOG_URL` (http(s) або шлях
+до файлу; читається не частіше ніж раз на 5 хв, недоступний — лише вбудовані з попередженням у журналі; запис з id
+вбудованого ігнорується). Кожен запис має `source` (`builtin` | `external`) і `installed` — видимі користувачу
+конектори з нього. `POST /api/v1/connectors/catalog/{id}/install { name?, transport?, projectId? }` створює конектор з
+типовими налаштуваннями (права й discovery — як у `POST /connectors`) і повертає `ConnectorDetail`; транспорт без
+налаштувань у маніфесті — 400.
+
+Шаблони «Почати з прикладу» оголошують залежності в `examples/templates.json` (`"connectors": ["telegram", "onec"]`,
+поле `connectors` у `GET /workflows/templates`): якщо такого конектора ще не встановлено, у списку шаблонів поруч
+з'являється посилання на запис каталогу (`/connectors?catalog=<id>`).
+
 Наші конектори лежать у `connectors/<назва>`: це проєкти, створені з шаблону (`dotnet new openbp-connector`), з
 власними sln і `Directory.*.props`, поза `OpenBP.sln`; CI job «Конектори» збирає, форматує й тестує кожен.
 

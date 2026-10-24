@@ -1,11 +1,11 @@
 {
-  "$comment": "Каталог шаблонів «Почати з прикладу» (F3-59): які файли examples/ показувати в редакторі і з яким описом. Файл вбудовується в OpenBP.Api.",
+  "$comment": "Каталог шаблонів «Почати з прикладу» (F3-59): які файли examples/ показувати в редакторі і з яким описом; connectors — id записів каталогу конекторів (connectors/*/connector.json), без яких шаблон не запрацює (F6-16). Файл вбудовується в OpenBP.Api.",
   "templates": [
     { "file": "hello-manual.json", "description": "Ручний запуск, Set і Code — найпростіший сценарій, щоб познайомитися з канвасом." },
     { "file": "order-total.json", "description": "Підсумок замовлення: вирази {{ }}, Code-вузол і умова над items." },
-    { "file": "telegram-1c.json", "description": "Заявка з Telegram: ШІ розбирає текст, створює документ в 1С і відповідає клієнту." },
-    { "file": "telegram-1c-ollama.json", "description": "Те саме, що «Заявка з Telegram → 1С», але з локальною моделлю Ollama." },
-    { "file": "daily-report.json", "description": "Щоранку за розкладом: продажі з 1С → звіт → лист через Microsoft Graph." },
-    { "file": "kit-approval-business.json", "description": "Погодження задачі в Кіт 2 з розміткою бізнес-вигляду: доріжки, дії людей, підписи стрілок." }
+    { "file": "telegram-1c.json", "connectors": ["telegram", "onec"], "description": "Заявка з Telegram: ШІ розбирає текст, створює документ в 1С і відповідає клієнту." },
+    { "file": "telegram-1c-ollama.json", "connectors": ["telegram", "onec"], "description": "Те саме, що «Заявка з Telegram → 1С», але з локальною моделлю Ollama." },
+    { "file": "daily-report.json", "connectors": ["onec", "msgraph"], "description": "Щоранку за розкладом: продажі з 1С → звіт → лист через Microsoft Graph." },
+    { "file": "kit-approval-business.json", "connectors": ["telegram", "msgraph"], "description": "Погодження задачі в Кіт 2 з розміткою бізнес-вигляду: доріжки, дії людей, підписи стрілок." }
   ]
 }

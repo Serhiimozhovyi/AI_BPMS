@@ -1,0 +1,41 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "msgraph",
+  "name": "Microsoft Graph: пошта",
+  "description": "Листи, вкладення й надсилання пошти через Microsoft Graph (client credentials).",
+  "icon": "✉️",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/msgraph/OpenBP.Connectors.MsGraph.dll"
+    ]
+  },
+  "http": {
+    "url": "http://msgraph:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "TENANT_ID",
+        "title": "Tenant ID застосунку Entra",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "CLIENT_ID",
+        "title": "Client ID застосунку",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "CLIENT_SECRET",
+        "title": "Client secret застосунку",
+        "required": true,
+        "secret": true
+      }
+    ],
+    "headers": []
+  },
+  "triggers": []
+}

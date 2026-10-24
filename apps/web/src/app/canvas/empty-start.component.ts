@@ -1,18 +1,33 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { RouterLink } from '@angular/router';
+import { catchError, forkJoin, map, of } from 'rxjs';
+import { ConnectorsApiService } from '../connectors/connectors-api.service';
 import { WorkflowTemplate, WorkflowsApiService } from '../workflows/workflows-api.service';
 import { ScreenPoint } from './quick-add';
 
 /**
  * Порожній сценарій (F3-59): картка по центру канвасу — «Додати тригер» (спливаюча палітра лише з тригерами) або
  * «Почати з прикладу» (шаблони з `GET /workflows/templates`) або
- * «Описати процес» (помічник, F3-60). Що робити з вибором — вирішує редактор.
+ * «Описати процес» (помічник, F3-60). Що робити з вибором — вирішує редактор. Шаблон, якому бракує конекторів з каталогу
+ * (F6-16), показує їх із посиланням «Встановити».
  */
+
+/** Конектор каталогу, якого шаблону бракує. */
+export interface MissingConnector {
+  id: string;
+  name: string;
+}
+
+/** Залежності шаблону, яких немає серед встановлених конекторів (`catalogId`). */
+export function missingConnectors(template: WorkflowTemplate, installed: ReadonlySet<string>, names: ReadonlyMap<string, string>): MissingConnector[] {
+  return (template.connectors ?? []).filter((id) => !installed.has(id)).map((id) => ({ id, name: names.get(id) ?? id }));
+}
 @Component({
   selector: 'app-empty-start',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule],
+  imports: [MatButtonModule, RouterLink],
   template: `
     <section class="start" data-testid="empty-start" aria-labelledby="empty-start-title">
       @if (templates(); as list) {
@@ -27,6 +42,15 @@ import { ScreenPoint } from './quick-add';
                 <span class="start__name">{{ t.name }}</span>
                 <span class="start__description">{{ t.description }}</span>
               </button>
+              @if (missing()[t.id]; as need) {
+                <p class="start__missing" data-testid="template-missing" [attr.data-template-missing]="t.id">
+                  <span i18n="@@emptystart.templates.missing">Потрібні конектори:</span>
+                  @for (c of need; track c.id) {
+                    <a [routerLink]="['/connectors']" [queryParams]="{ catalog: c.id }" [attr.data-install]="c.id">{{ c.name }}</a>
+                  }
+                  <span i18n="@@emptystart.templates.missingHint">— встановіть з каталогу.</span>
+                </p>
+              }
             </li>
           } @empty {
             <li class="start__description" i18n="@@emptystart.templates.empty">Прикладів немає.</li>
@@ -122,6 +146,19 @@ import { ScreenPoint } from './quick-add';
       background: var(--ac-cool-grey);
     }
 
+    .start__missing {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 0 12px 4px;
+      color: var(--ac-cool-grey-4);
+      font: 400 12px/16px Ubuntu, sans-serif;
+    }
+
+    .start__missing a {
+      color: var(--ac-kit);
+    }
+
     .start__name {
       font: 500 14px/20px Ubuntu, sans-serif;
     }
@@ -129,6 +166,7 @@ import { ScreenPoint } from './quick-add';
 })
 export class EmptyStartComponent {
   private readonly workflows = inject(WorkflowsApiService);
+  private readonly connectors = inject(ConnectorsApiService);
   private readonly destroyRef = inject(DestroyRef);
 
   /** «Додати тригер»: точка, біля якої відкрити спливаючу палітру. */
@@ -142,6 +180,8 @@ export class EmptyStartComponent {
   protected readonly templates = signal<WorkflowTemplate[] | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Конектори, яких бракує шаблонам (id шаблону → список); порожні не зберігаються. */
+  protected readonly missing = signal<Record<string, MissingConnector[]>>({});
 
   protected loadTemplates(): void {
     this.loading.set(true);
@@ -153,11 +193,34 @@ export class EmptyStartComponent {
         next: (list) => {
           this.loading.set(false);
           this.templates.set(list);
+          this.checkConnectors(list);
         },
         error: () => {
           this.loading.set(false);
           this.error.set($localize`:@@emptystart.templates.error:Не вдалося завантажити приклади. Спробуйте ще раз.`);
         },
+      });
+  }
+
+  /** Перевіряє залежності шаблонів; без доступу до конекторів чи каталогу підказок просто немає. */
+  private checkConnectors(list: WorkflowTemplate[]): void {
+    if (!list.some((t) => (t.connectors ?? []).length > 0)) return;
+    forkJoin({
+      installed: this.connectors.list().pipe(map((page) => new Set(page.items.map((c) => c.catalogId).filter((id): id is string => !!id)))),
+      names: this.connectors.catalog().pipe(map((entries) => new Map(entries.map((e) => [e.manifest.id, e.manifest.name] as const)))),
+    })
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((result) => {
+        if (!result) return;
+        const missing: Record<string, MissingConnector[]> = {};
+        for (const t of list) {
+          const need = missingConnectors(t, result.installed, result.names);
+          if (need.length > 0) missing[t.id] = need;
+        }
+        this.missing.set(missing);
       });
   }
 

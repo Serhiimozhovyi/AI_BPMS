@@ -1,0 +1,41 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "onec",
+  "name": "1С (OData)",
+  "description": "Замовлення, звіт продажів і згенеровані з $metadata tools над OData 1С (standard.odata).",
+  "icon": "🧾",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/onec/OpenBP.Connectors.OneC.dll"
+    ]
+  },
+  "http": {
+    "url": "http://onec:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "Connector__BaseUrl",
+        "title": "Адреса OData, напр. http://srv/trade/odata/standard.odata/",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "ONEC_USERNAME",
+        "title": "Користувач 1С",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "ONEC_PASSWORD",
+        "title": "Пароль користувача 1С",
+        "required": false,
+        "secret": true
+      }
+    ],
+    "headers": []
+  },
+  "triggers": []
+}

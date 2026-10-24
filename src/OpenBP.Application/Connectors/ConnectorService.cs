@@ -104,6 +104,8 @@ public sealed class ConnectorService(
         }
 
         var (name, config) = await ValidateAsync(input, ct);
+        // Прив'язка до запису каталогу (F6-16) зберігається, якщо PUT її не передав.
+        config = config with { Catalog = config.Catalog ?? ConnectorRegistration.ReadConfig(row).Catalog };
         row.ProjectId = input.ProjectId;
         row.Name = name;
         row.Transport = ConnectorRegistration.TransportValue(input.Transport);
@@ -416,14 +418,15 @@ public sealed class ConnectorService(
             value is JsonValue v && v.TryGetValue<string>(out var s) && string.Equals(s, serverId, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ConnectorSummary Summary(McpServerEntity row, IReadOnlyList<McpToolInfo> tools) => new(
+    internal static ConnectorSummary Summary(McpServerEntity row, IReadOnlyList<McpToolInfo> tools) => new(
         row.Id,
         row.Name,
         ConnectorRegistration.ParseTransport(row.Transport),
         ConnectorRegistration.ParseStatus(row.Status),
         tools.Count,
         row.ToolsCachedAt,
-        row.ProjectId);
+        row.ProjectId,
+        ConnectorRegistration.ReadConfig(row).Catalog);
 
     /// <summary>Конектор чужого проєкту виглядає як відсутній (F6-14).</summary>
     private async Task RequireVisibleAsync(McpServerEntity row, CancellationToken ct)
