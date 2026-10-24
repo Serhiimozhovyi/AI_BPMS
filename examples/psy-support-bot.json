@@ -42,6 +42,42 @@
       }
     },
     {
+      "id": "n_if_callback",
+      "name": "Кнопка?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        160
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.callback_id }}",
+            "operator": "isNotEmpty"
+          }
+        ]
+      },
+      "notes": "Підтверджуємо натискання першою дією, до звернення до psy-support: Telegram чекає відповідь лише кілька секунд."
+    },
+    {
+      "id": "n_ack",
+      "name": "Підтвердити натискання",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        160
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "answer_callback_query",
+        "arguments": "{{ ({ callback_query_id: $json.callback_id }) }}"
+      },
+      "continueOnFail": true,
+      "notes": "«query is too old» (оновлення прийшло із запізненням, напр. після перезапуску) — не збій: екран усе одно оновиться."
+    },
+    {
       "id": "n_switch",
       "name": "Розділ",
       "type": "core.switch",
@@ -256,40 +292,7 @@
         400
       ],
       "parameters": {
-        "code": "// Екран → виклики Telegram: кнопка редагує своє повідомлення, решта (і new_message) — нове повідомлення.\nconst r = $json;\nconst u = $node[\"Розбір\"].json;\nconst s = r.screen || {};\nconst clean = (o) => {\n  const x = {};\n  for (const k of Object.keys(o)) if (o[k] !== null && o[k] !== undefined) x[k] = o[k];\n  return x;\n};\nconst edit = !!u.callback_id && !!u.message_id && !s.new_message;\nconst message = { chat_id: u.chat_id, text: s.text, parse_mode: s.parse_mode, reply_markup: s.reply_markup };\nreturn {\n  ok: r.ok,\n  code: r.code,\n  answer: u.callback_id ? { callback_query_id: u.callback_id } : null,\n  edit: edit ? clean(Object.assign({ message_id: u.message_id }, message)) : null,\n  send: edit ? null : clean(message),\n  notifications: (r.notifications || []).map((n) => clean({ chat_id: n.chat_id, text: n.text, parse_mode: 'HTML', reply_markup: n.reply_markup })),\n  commands: r.commands || null,\n};"
-      }
-    },
-    {
-      "id": "n_if_callback",
-      "name": "Кнопка?",
-      "type": "core.if",
-      "typeVersion": 1,
-      "position": [
-        1300,
-        160
-      ],
-      "parameters": {
-        "conditions": [
-          {
-            "left": "{{ $json.answer }}",
-            "operator": "isNotEmpty"
-          }
-        ]
-      }
-    },
-    {
-      "id": "n_ack",
-      "name": "Підтвердити натискання",
-      "type": "mcp.tool",
-      "typeVersion": 1,
-      "position": [
-        1560,
-        160
-      ],
-      "parameters": {
-        "serverId": "srv_telegram",
-        "toolName": "answer_callback_query",
-        "arguments": "{{ $json.answer }}"
+        "code": "// Екран → виклики Telegram: кнопка редагує своє повідомлення, решта (і new_message) — нове повідомлення.\nconst r = $json;\nconst u = $node[\"Розбір\"].json;\nconst s = r.screen || {};\nconst clean = (o) => {\n  const x = {};\n  for (const k of Object.keys(o)) if (o[k] !== null && o[k] !== undefined) x[k] = o[k];\n  return x;\n};\nconst edit = !!u.callback_id && !!u.message_id && !s.new_message;\nconst message = { chat_id: u.chat_id, text: s.text, parse_mode: s.parse_mode, reply_markup: s.reply_markup };\nreturn {\n  ok: r.ok,\n  code: r.code,\n  edit: edit ? clean(Object.assign({ message_id: u.message_id }, message)) : null,\n  send: edit ? null : clean(message),\n  notifications: (r.notifications || []).map((n) => clean({ chat_id: n.chat_id, text: n.text, parse_mode: 'HTML', reply_markup: n.reply_markup })),\n  commands: r.commands || null,\n};"
       }
     },
     {
@@ -412,6 +415,16 @@
       },
       "to": {
         "node": "n_parse",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_parse",
+        "output": 0
+      },
+      "to": {
+        "node": "n_if_callback",
         "input": 0
       }
     },
@@ -562,16 +575,6 @@
       },
       "to": {
         "node": "n_answer",
-        "input": 0
-      }
-    },
-    {
-      "from": {
-        "node": "n_answer",
-        "output": 0
-      },
-      "to": {
-        "node": "n_if_callback",
         "input": 0
       }
     },

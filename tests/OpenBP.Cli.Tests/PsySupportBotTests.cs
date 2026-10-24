@@ -223,6 +223,10 @@ public sealed class PsySupportBotTests(PsySupportFixture psy) : IClassFixture<Ps
         Assert.Contains("▶ Підтвердити натискання [mcp.tool] — Success", menu, StringComparison.Ordinal);
         Assert.Contains("▶ Змінити повідомлення [mcp.tool] — Success", menu, StringComparison.Ordinal);
         Assert.Contains("\"messageId\": 77", menu, StringComparison.Ordinal);
+        // Натискання підтверджується першою дією, до psy-support: Telegram чекає відповідь лише кілька секунд.
+        Assert.True(
+            menu.IndexOf("▶ Підтвердити натискання", StringComparison.Ordinal) < menu.IndexOf("▶ psy-support: меню", StringComparison.Ordinal),
+            menu);
     }
 
     [Fact]
