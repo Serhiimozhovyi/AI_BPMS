@@ -386,6 +386,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status");
 
+                    b.Property<string>("SubSteps")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sub_steps");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ExecutionId");

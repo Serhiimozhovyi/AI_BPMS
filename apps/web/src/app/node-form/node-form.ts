@@ -33,9 +33,9 @@ export function parameterFields(
   return withCredentialFields(baseFields(type, descriptor, tool), descriptor, credentials, parameters);
 }
 
-/** Типи credential'а, які приймає вимога вузла: для `ai.llm` — за обраним провайдером. */
+/** Типи credential'а, які приймає вимога вузла: для `ai.llm` і `ai.agent` — за обраним провайдером. */
 export function credentialTypesFor(nodeType: string, requirement: CredentialRequirement, parameters: Record<string, unknown>): string[] {
-  if (nodeType === 'ai.llm') {
+  if (nodeType === 'ai.llm' || nodeType === 'ai.agent') {
     const provider = parameters['provider'];
     return typeof provider === 'string' && provider && !isExpressionText(provider) ? [provider] : ['anthropic', 'openai', 'openai-compatible'];
   }

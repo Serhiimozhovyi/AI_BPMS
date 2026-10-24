@@ -19,6 +19,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Ai/OpenBP.Ai.csproj" />
     <ProjectReference Include="../../src/OpenBP.Engine.Testing/OpenBP.Engine.Testing.csproj" />
+    <!-- ai.agent (F6-12): інструменти агента — tools FakeServer у процесі тестів. -->
+    <ProjectReference Include="../OpenBP.Mcp.Tests/FakeServer/OpenBP.Mcp.FakeServer.csproj" />
   </ItemGroup>
 
 </Project>
