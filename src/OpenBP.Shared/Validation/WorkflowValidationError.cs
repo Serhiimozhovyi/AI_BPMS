@@ -48,4 +48,7 @@ public static class WorkflowValidationCodes
 
     /// <summary>Активація: шлях <c>core.webhook</c> уже зайнятий іншим активним сценарієм або іншим вузлом цього.</summary>
     public const string WebhookPathConflict = "WEBHOOK_PATH_CONFLICT";
+
+    /// <summary><c>settings.executionTimeoutSec</c> більший за серверну межу <c>OPENBP_MAX_EXECUTION_TIMEOUT_SEC</c>.</summary>
+    public const string ExecutionTimeoutTooLarge = "EXECUTION_TIMEOUT_TOO_LARGE";
 }

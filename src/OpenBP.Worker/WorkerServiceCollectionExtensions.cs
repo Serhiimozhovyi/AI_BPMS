@@ -9,6 +9,7 @@ using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Nodes.Core;
+using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Worker;
 
@@ -47,6 +48,7 @@ public static class WorkerServiceCollectionExtensions
         }
 
         services.AddSingleton(queueOptions);
+        services.AddSingleton(WorkflowLimits.Parse(configuration[WorkflowLimits.MaxExecutionTimeoutKey]));
 
         var storage = new BinaryStorageOptions();
         configuration.GetSection(BinaryStorageOptions.Section).Bind(storage);
@@ -85,7 +87,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetService<IBinaryStore>(),
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionJobProcessor>>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<WorkflowLimits>()));
         services.AddSingleton(sp => new PollJobProcessor(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

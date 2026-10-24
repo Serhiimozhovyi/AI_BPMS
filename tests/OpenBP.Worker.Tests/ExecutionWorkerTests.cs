@@ -104,6 +104,42 @@ public sealed class ExecutionWorkerTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task WorkflowTimeout_FinishesTimedOut()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var definition = Workflows.Waiting(waitMs: 60_000);
+        definition.Settings.ExecutionTimeoutSec = 1;
+        var (workflowId, versionId) = await worker.SaveWorkflowAsync(definition);
+        var executionId = await worker.LaunchAsync(workflowId, versionId);
+        await worker.StartAsync();
+
+        var execution = await worker.WaitForFinalAsync(executionId, TimeSpan.FromSeconds(15));
+
+        Assert.Equal(ExecutionStatuses.TimedOut, execution.Status);
+        Assert.Contains("(1 с)", execution.Error);
+        Assert.DoesNotContain(await worker.StepsAsync(executionId), s => s.NodeId == "n_set");
+        await WaitForNoJobsAsync(worker);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(600)]
+    public async Task ServerLimit_AppliesWhenSmallerThanWorkflowTimeout(int workflowTimeoutSec)
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres, limits: new WorkflowLimits { MaxExecutionTimeoutSec = 1 });
+        var definition = Workflows.Waiting(waitMs: 60_000);
+        definition.Settings.ExecutionTimeoutSec = workflowTimeoutSec;
+        var (workflowId, versionId) = await worker.SaveWorkflowAsync(definition);
+        var executionId = await worker.LaunchAsync(workflowId, versionId);
+        await worker.StartAsync();
+
+        var execution = await worker.WaitForFinalAsync(executionId, TimeSpan.FromSeconds(15));
+
+        Assert.Equal(ExecutionStatuses.TimedOut, execution.Status);
+        Assert.Contains("(1 с)", execution.Error);
+    }
+
+    [Fact]
     public async Task CancellingBeforeStart_FinishesCancelledWithoutRunning()
     {
         await using var worker = await WorkerHarness.CreateAsync(postgres);

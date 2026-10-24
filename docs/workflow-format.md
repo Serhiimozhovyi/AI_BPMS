@@ -106,6 +106,19 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 
 - Сценарій: `formatVersion` (= 1), `name`, `settings`, `nodes`, `connections`, `pinData` (може бути `{}`).
 - `settings`: `timezone`, `executionTimeoutSec`, `errorWorkflowId` (`null`, якщо немає), `saveSuccessfulData`.
+  У редакторі їх змінює діалог «Налаштування» (кнопка на панелі інструментів).
+
+### Таймаут виконання і серверна межа
+
+`executionTimeoutSec` — найбільший час виконання сценарію в секундах; `0` — власного ліміту немає. Сервер має межу
+`OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (типово 3600):
+
+- збереження зі значенням, більшим за межу, відхиляється помилкою `EXECUTION_TIMEOUT_TOO_LARGE` з
+  `path: "/settings/executionTimeoutSec"`;
+- воркер застосовує менше з двох значень — тож сценарій з `0` чи версія, збережена до зменшення межі, теж
+  не працює довше за неї;
+- виконання, що перевищило час, завершується станом `timed_out` (REST, SSE, MCP і журнал виконань в UI), вузол,
+  що працював, — `cancelled`, наступні вузли не запускаються.
 - Вузол: `id`, `name`, `type`, `typeVersion` (≥ 1), `position` (`[x, y]`), `parameters` (об'єкт). Необов'язкові: `timeoutSec`, `retry` (`maxTries`, `waitMs`), `continueOnFail`, `disabled`, `notes`.
 - Ребро: `from.node` + `from.output`, `to.node` + `to.input` (індекси від 0).
 - Невідомі поля на будь-якому рівні дозволені й зберігаються при (де)серіалізації.
@@ -133,5 +146,6 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 4. Активний сценарій має ≥ 1 тригер.
 5. Параметри кожного вузла відповідають його схемі (рядок `{{ }}` допустимий замість будь-якого типу). Для `mcp.tool` схема — `inputSchema` tool'а з кешу; якщо сервер невідомий або tool не знайдено — помилка з кодом `MCP_TOOL_UNKNOWN`.
 6. `serverId`/`credentialId` існують і доступні користувачу.
+7. `settings.executionTimeoutSec` не більший за серверну межу `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (`EXECUTION_TIMEOUT_TOO_LARGE`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.

@@ -145,6 +145,32 @@ public class WorkflowTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Execution_timeout_above_server_limit_returns_422_with_field_path()
+    {
+        await using var limited = api.WithWebHostBuilder(b => b.UseSetting("OPENBP_MAX_EXECUTION_TIMEOUT_SEC", "60"));
+        var editor = await LoginAsync(UserRole.Editor, limited);
+
+        var tooLong = Definition(Unique("Таймаут")).Replace("\"executionTimeoutSec\": 0", "\"executionTimeoutSec\": 61");
+        var problem = await AssertProblemAsync(await editor.PostAsync(Base, Json(tooLong)), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        var error = Assert.Single(problem.GetProperty("errors").EnumerateArray());
+        Assert.Equal("EXECUTION_TIMEOUT_TOO_LARGE", error.GetProperty("code").GetString());
+        Assert.Equal("/settings/executionTimeoutSec", error.GetProperty("path").GetString());
+
+        var atLimit = Definition(Unique("Таймаут")).Replace("\"executionTimeoutSec\": 0", "\"executionTimeoutSec\": 60");
+        Assert.Equal(HttpStatusCode.Created, (await editor.PostAsync(Base, Json(atLimit))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Execution_timeout_default_server_limit_is_one_hour()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+
+        var tooLong = Definition(Unique("Таймаут")).Replace("\"executionTimeoutSec\": 0", "\"executionTimeoutSec\": 3601");
+        var problem = await AssertProblemAsync(await editor.PostAsync(Base, Json(tooLong)), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        Assert.Equal(["EXECUTION_TIMEOUT_TOO_LARGE"], ErrorCodes(problem));
+    }
+
+    [Fact]
     public async Task Create_without_body_returns_400()
     {
         var editor = await LoginAsync(UserRole.Editor);
