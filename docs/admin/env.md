@@ -47,6 +47,7 @@ OIDC-провайдери задаються не в `.env`, а в `oidc.env` з
 | `OPENBP_DATA_TABLE_MAX_ROWS` | `100000` | api, worker | Найбільше рядків в одній таблиці даних (F6-11). Понад ліміт — помилка `DATA_TABLE_ROW_LIMIT`. |
 | `OPENBP_DATA_TABLE_MAX_ROW_BYTES` | `65536` | api, worker | Найбільший розмір рядка таблиці даних у JSON, байт. |
 | `OPENBP_EXECUTION_RETENTION_DAYS` | `30` | api | Завершені виконання, старші за N днів, видаляються. `0` — не видаляти. |
+| `OPENBP_AUDIT_RETENTION_DAYS` | `365` | api | Записи журналу аудиту, старші за N днів, видаляються тим самим job'ом. `0` — не видаляти. |
 | `OPENBP_EXECUTION_RETENTION_CRON` | `0 0 3 * * ?` | api | Розклад очищення: Quartz cron або 5 полів crontab, час `TZ`. |
 
 ## Бекапи

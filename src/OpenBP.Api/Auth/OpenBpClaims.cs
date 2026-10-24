@@ -9,6 +9,7 @@ public static class OpenBpClaims
     public const string Subject = "sub";
     public const string Email = "email";
     public const string Role = "role";
+    public const string ApiKeyId = "api_key_id";
 
     /// <summary><see cref="ClaimsPrincipal"/> користувача для схеми <paramref name="scheme"/>.</summary>
     /// <param name="user">Користувач.</param>
@@ -25,6 +26,11 @@ public static class OpenBpClaims
             scheme,
             Email,
             Role);
+        if (user.ApiKeyId is { } keyId)
+        {
+            identity.AddClaim(new Claim(ApiKeyId, keyId.ToString()));
+        }
+
         return new ClaimsPrincipal(identity);
     }
 }
@@ -46,4 +52,8 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
 
     /// <inheritdoc />
     public UserRole? Role => UserRoles.TryParse(Principal?.FindFirst(OpenBpClaims.Role)?.Value);
+
+    /// <inheritdoc />
+    public Guid? ApiKeyId =>
+        Guid.TryParse(Principal?.FindFirst(OpenBpClaims.ApiKeyId)?.Value, out var id) ? id : null;
 }

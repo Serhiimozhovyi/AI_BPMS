@@ -81,6 +81,24 @@ public sealed class DataRowEntity
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>
+/// Запис журналу аудиту (F6-15): хто, коли і що змінив. <c>Details</c> — jsonb без значень секретів
+/// (лише назви, типи, імена полів).
+/// </summary>
+public sealed class AuditEntryEntity
+{
+    public Guid Id { get; set; }
+    public DateTimeOffset At { get; set; }
+    /// <summary><c>null</c> — дія системи (напр. запобіжник вимкнув сценарій).</summary>
+    public Guid? UserId { get; set; }
+    /// <summary>Ключ, яким автентифіковано запит (REST чи MCP); <c>null</c> — сесія UI.</summary>
+    public Guid? ApiKeyId { get; set; }
+    public string Action { get; set; } = "";
+    public string EntityType { get; set; } = "";
+    public string? EntityId { get; set; }
+    public string Details { get; set; } = "{}";
+}
+
 /// <summary>Змінна інстансу (<c>$vars.key</c>, F6-09): не секрет — секрети лишаються в credentials.</summary>
 public sealed class VariableEntity
 {

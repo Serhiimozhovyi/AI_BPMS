@@ -178,6 +178,12 @@ public sealed class WorkflowLimitsTests(PostgresFixture postgres)
         Assert.False((await WorkflowAsync(worker, workflowId)).Active);
         await using var db = worker.Db.CreateDbContext();
         Assert.False(await db.Webhooks.AnyAsync(w => w.WorkflowId == workflowId));
+
+        // F6-15: деактивацію запобіжником видно в журналі аудиту як дію системи.
+        var audit = await db.AuditLog.AsNoTracking().SingleAsync(a => a.EntityId == workflowId.ToString());
+        Assert.Equal("workflow.deactivated", audit.Action);
+        Assert.Null(audit.UserId);
+        Assert.Contains("disableAfterErrors", audit.Details, StringComparison.Ordinal);
     }
 
     [Fact]

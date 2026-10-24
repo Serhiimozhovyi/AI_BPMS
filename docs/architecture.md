@@ -116,6 +116,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням) |
 | `data_tables` | id, name, normalized_name (unique), columns (jsonb: `[{ name, type, key? }]`), created_at, updated_at (F6-11) |
 | `data_rows` | table_id → data_tables (cascade), key (PK разом з table_id), data (jsonb), created_at, updated_at; індекс (table_id, created_at) |
+| `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
@@ -157,6 +158,15 @@ Quartz тримає власні таблиці для розкладів. Бі�
 - Jint: без CLR-interop, без мережі, з лімітами. stdio MCP-сервери — з таймаутами і лімітами пам'яті.
 - Webhook: опційна автентифікація (header-токен / Basic).
 - Ролі перевіряються в application-шарі, тобто однаково для REST, MCP і UI.
+- Журнал аудиту (F6-15): сервіси змін додають запис `audit_log` у той самий `OpenBpDbContext` (`AuditTrail.Audit`), тож
+  він зберігається тим самим `SaveChanges` і в тій самій транзакції, що й зміна. Пишуться: сценарій створено,
+  збережено (нова версія), перейменовано, активовано, деактивовано (зокрема запобіжником `disableAfterErrors` —
+  з `user_id = null`), видалено; credential створено, перейменовано, замінено значення (лише імена полів), видалено;
+  конектор створено, змінено, видалено (без `config` — там можуть бути заголовки й змінні оточення з секретами);
+  API-ключ створено, відкликано; змінну задано, видалено; таблицю даних створено, змінено, видалено. Запит з API-ключем
+  несе claim `api_key_id`, тож у записі видно, через який ключ (REST чи MCP) зроблено зміну. Читає лише admin
+  (`GET /audit`, блок у `/settings`); записи старші за `OPENBP_AUDIT_RETENTION_DAYS` (типово 365) видаляє job F4-07.
+  Користувачів, ролей, проєктів і задач F6-02 ще немає — їхні дії додаються разом із цими функціями.
 
 ## 9. Готові компоненти
 
@@ -239,6 +249,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
 | `GET /workflows/{id}/export` | editor | `{ definition, manifest: { connectors: [{ ref, name, transport }], credentials: [{ ref, name, type }], variables: [key], workflows: [{ ref, name }] } }` — без секретів і значень змінних (F6-09) |
 | `POST /workflows/import { definition, manifest?, mapping?, groupId? }` | editor | 201 `{ workflow, mapping, missingVariables }` — новий неактивний сценарій; `serverId`/`credentialId`/`settings.errorWorkflowId` перемаплюються (`mapping` → єдиний об'єкт з тією самою назвою і транспортом/типом); незмаплене — 422 `IMPORT_UNMAPPED` з `unmapped: [{ kind, ref, name, type, reason }]`, нічого не створено |
+| `GET /audit?userId&action&entityType&entityId&from&to&page&pageSize` | admin | `PageResult<AuditEntry>` (`{ id, at, userId, userEmail, apiKeyId, apiKeyName, action, entityType, entityId, details }`), нові першими; `action` — точна дія або префікс із крапкою (`workflow.`) — F6-15 |
 | `GET /variables` · `PUT /variables/{key} { value, description? }` · `DELETE /variables/{key}` | viewer (читання), admin | `VariableDto[]` · `VariableDto` (створює або змінює) · 204 |
 | `GET /tables` · `GET /tables/{id або назва}` · `POST /tables { name, columns }` · `PUT /tables/{id} { name, columns }` · `DELETE /tables/{id}` | viewer (читання), editor | `DataTableSummary[]` (`{ id, name, columns, rowCount, updatedAt }`) · `DataTableSummary` · 201 · `DataTableSummary` · 204; повтор назви — 409 `DATA_TABLE_NAME_TAKEN`, зміна ключа таблиці з рядками — 409 `DATA_TABLE_KEY_CHANGE`, колонки — 422 `DATA_TABLE_COLUMNS_INVALID` (F6-11) |
 | `GET /tables/{id}/rows?search&page&pageSize` · `POST /tables/{id}/rows { values }` · `PATCH /tables/{id}/rows/{key} { values }` · `DELETE /tables/{id}/rows/{key}` · `POST /tables/{id}/import { csv }` | viewer (читання), editor | `PageResult<DataRowDto>` (`{ key, data, createdAt, updatedAt }`) · 201 · `DataRowDto` · 204 · `{ inserted, updated }`; помилки значень — 422 `DATA_TABLE_*`, дубль ключа — 409 `DATA_TABLE_KEY_DUPLICATE`; CSV перевіряється повністю до запису |

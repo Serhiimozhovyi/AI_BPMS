@@ -21,6 +21,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
+    public DbSet<AuditEntryEntity> AuditLog => Set<AuditEntryEntity>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -83,6 +84,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.Data).HasColumnType("jsonb");
             e.HasIndex(x => new { x.TableId, x.CreatedAt });
             e.HasOne<DataTableEntity>().WithMany().HasForeignKey(x => x.TableId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<AuditEntryEntity>(e =>
+        {
+            e.ToTable("audit_log");
+            e.Property(x => x.Details).HasColumnType("jsonb");
+            e.HasIndex(x => x.At);
+            e.HasIndex(x => new { x.EntityType, x.EntityId });
         });
         b.Entity<ExecutionEntity>(e =>
         {

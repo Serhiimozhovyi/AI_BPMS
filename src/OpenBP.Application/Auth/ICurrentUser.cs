@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using OpenBP.Application.Errors;
 
 namespace OpenBP.Application.Auth;
@@ -33,6 +34,9 @@ public interface ICurrentUser
 
     /// <summary>Роль; для неавтентифікованого запиту не визначена (<c>null</c>).</summary>
     UserRole? Role { get; }
+
+    /// <summary><c>api_keys.id</c>, якщо запит автентифіковано API-ключем (REST чи MCP); для журналу аудиту (F6-15).</summary>
+    Guid? ApiKeyId => null;
 }
 
 /// <summary>Перевірка прав для сервісів.</summary>
@@ -71,7 +75,8 @@ public static class CurrentUserExtensions
 /// <param name="Id"><c>users.id</c>.</param>
 /// <param name="Email">Email.</param>
 /// <param name="Role">Роль.</param>
-public sealed record UserInfo(Guid Id, string Email, UserRole Role);
+/// <param name="ApiKeyId">Ключ, яким автентифіковано запит (не віддається назовні).</param>
+public sealed record UserInfo(Guid Id, string Email, UserRole Role, [property: JsonIgnore] Guid? ApiKeyId = null);
 
 /// <summary>API-ключ у списку (<c>GET /api-keys</c>); сам ключ не зберігається і не повертається.</summary>
 /// <param name="Id"><c>api_keys.id</c>.</param>
