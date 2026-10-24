@@ -70,4 +70,27 @@ public interface INodeContext
     void RecordSubStep(Execution.SubStep step)
     {
     }
+
+    /// <summary>
+    /// Пробудження після <see cref="Suspend"/> (F5-02): стан, який вузол передав, і запланований час; <c>null</c> —
+    /// звичайний запуск.
+    /// </summary>
+    NodeResumption? Resumption => null;
+
+    /// <summary>
+    /// Призупиняє виконання до <paramref name="resumeAt"/> (довге очікування, F5-02): вузол повертає результат цього
+    /// виклику, движок пише крок <c>waiting</c>, не планує наступників і звільняє воркер. На пробудженні вузол
+    /// запускається знову з тими самими items і <see cref="Resumption"/>. Секретів у <paramref name="state"/> не класти.
+    /// </summary>
+    /// <param name="resumeAt">Коли розбудити (UTC).</param>
+    /// <param name="state">Невеликий стан вузла до пробудження.</param>
+    /// <returns>Значення, яке вузол повертає з <see cref="INode.ExecuteAsync"/>.</returns>
+    /// <exception cref="NotSupportedException">Контекст не підтримує призупинення.</exception>
+    Item[][] Suspend(DateTimeOffset resumeAt, JsonObject? state = null) =>
+        throw new NotSupportedException("Цей контекст не підтримує довге очікування.");
 }
+
+/// <summary>Пробудження вузла після призупинення (F5-02).</summary>
+/// <param name="ResumeAt">Запланований час пробудження.</param>
+/// <param name="State">Стан, переданий у <see cref="INodeContext.Suspend"/> (порожній, якщо не передано).</param>
+public sealed record NodeResumption(DateTimeOffset ResumeAt, JsonObject State);

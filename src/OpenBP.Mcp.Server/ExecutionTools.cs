@@ -40,7 +40,7 @@ public sealed class ExecutionTools
         [Description("Workflow id.")] Guid id,
         [Description("Trigger node id to start from; omit to start from every node without incoming connections.")] string? startNodeId = null,
         [Description("Items the trigger fires with (e.g. a webhook body as [{\"json\": {...}}]); requires startNodeId.")] Item[]? startItems = null,
-        [Description("Wait for the execution to finish.")] bool wait = true,
+        [Description("Wait for the execution to finish (or to reach state waiting — a long core.wait).")] bool wait = true,
         [Description("How long to wait, in seconds (1–600).")] int timeoutSec = DefaultWaitSec,
         [Description("Correlation key (up to 200 characters), e.g. a deal id.")] string? correlationKey = null,
         CancellationToken ct = default)
@@ -78,7 +78,7 @@ public sealed class ExecutionTools
     public static Task<PageResult<ExecutionSummary>> ListExecutions(
         IExecutionService executions,
         [Description("Only executions of this workflow.")] Guid? workflowId = null,
-        [Description("Only in this state: queued, running, cancelling, success, error, cancelled, timed_out.")] string? status = null,
+        [Description("Only in this state: queued, running, waiting, cancelling, success, error, cancelled, timed_out.")] string? status = null,
         [Description("Page number, starting at 1.")] int page = 1,
         [Description("Only executions with this correlation key (exact match), e.g. all processes of one deal.")] string? correlationKey = null,
         CancellationToken ct = default) =>
@@ -93,7 +93,7 @@ public sealed class ExecutionTools
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "cancel_execution", Title = "Cancel execution", Destructive = true, Idempotent = true, UseStructuredContent = true)]
     [Description(
-        "Cancels an execution: queued becomes cancelled at once, running becomes cancelling and stops at the worker's next heartbeat. " +
+        "Cancels an execution: queued or waiting becomes cancelled at once, running becomes cancelling and stops at the worker's next heartbeat. " +
         "Does nothing for a finished execution.")]
     public static Task<ExecutionSummary> CancelExecution(
         IExecutionService executions,
@@ -119,7 +119,7 @@ public sealed class ExecutionTools
         CancellationToken ct = default) =>
         executions.ResumeFromFailedAsync(id, items, ct);
 
-    /// <summary>Чекає фінального стану за потоком подій; вихід за <paramref name="timeout"/> — не помилка.</summary>
+    /// <summary>Чекає фінального стану чи очікування (<c>waiting</c>) за потоком подій; вихід за <paramref name="timeout"/> — не помилка.</summary>
     internal static async Task WaitForFinalStateAsync(IExecutionEventSource events, Guid executionId, TimeSpan timeout, CancellationToken ct)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -128,7 +128,7 @@ public sealed class ExecutionTools
         {
             await foreach (var e in events.SubscribeAsync(executionId, afterStepId: null, deadline.Token).ConfigureAwait(false))
             {
-                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsFinal(state))
+                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsSettled(state))
                 {
                     return;
                 }

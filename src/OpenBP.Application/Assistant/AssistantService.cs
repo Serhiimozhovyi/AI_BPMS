@@ -343,7 +343,7 @@ public sealed class AssistantService(
             var started = await owner.executions.StartNodeAsync(workflowId, nodeId, items, ct);
             await foreach (var e in owner.events.SubscribeAsync(started.Id, afterStepId: null, ct))
             {
-                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsFinal(state))
+                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsSettled(state))
                 {
                     break;
                 }

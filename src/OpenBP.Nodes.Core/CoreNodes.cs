@@ -25,7 +25,8 @@ public static class CoreNodes
         new DecisionTableNode(),
         new MergeNode(),
         new LoopNode(),
-        new WaitNode(time),
+        new WaitNode(time, 1),
+        new WaitNode(time, 2),
         new CodeNode(),
         new DataTableNode(dataTables),
     ];

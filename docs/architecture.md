@@ -364,7 +364,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `explain` | `ExplainJobPayload { workflowId, version }` | `IWorkflowService` при збереженні (з паузою 15 с), `POST /workflows/{id}/explanation` (одразу) | `WorkflowExplainer`: версія вже не поточна → нічого; інакше пояснення моделлю помічника в `workflow_explanations` (F3-72, §10.8) |
 
 Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;
-`cancelling` — тимчасовий стан після запиту на скасування. Рядок `executions` створює `IExecutionLauncher`
+`cancelling` — тимчасовий стан після запиту на скасування; `running` ⇄ `waiting` — довге очікування (F5-02, нижче). Рядок `executions` створює `IExecutionLauncher`
 зі статусом `queued` (клієнт одразу отримує id для SSE), `started_at`/`heartbeat_at` ставить воркер при взятті job.
 
 Обробка job `execution` воркером (F2-07/F2-08):
@@ -374,9 +374,27 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 3. Під час виконання кожні `HeartbeatInterval` (5 с): `JobQueue.ExtendLockAsync` + `executions.heartbeat_at`;
    статус став `cancelling` → скасувати `CancellationToken`.
 4. Підсумок → `PostgresExecutionStore.FinishAsync`, `node_state` з `ExecutionResult.NodeStates`, `CompleteAsync`.
+   `ExecutionStatus.Waiting` → див. «Довге очікування».
 5. Необроблена помилка воркера → `FailAsync` (повтор з backoff; наступна спроба йде через крок 2 як resume);
    `Dropped` → статус виконання `error` з повідомленням про вичерпані спроби.
 6. Лічильник `attempts` job'а = кількість падінь воркера на цьому виконанні; помилки вузлів у нього не входять — їх обробляє движок (retry вузла, `continueOnFail`).
+
+Довге очікування (F5-02, docs/kit-sales.md §2):
+- Вузол викликає `ctx.Suspend(resumeAt, state)` і повертає його результат. Движок пише крок `waiting`
+  (`execution_steps.resume_at`, `wait_state` jsonb, вхідні items), не планує наступників вузла, доводить до кінця інші
+  гілки й повертає `ExecutionStatus.Waiting` з найранішим `ResumeAt` і `WaitingNodeId`.
+- Воркер **однією транзакцією**: `executions.status = waiting`, `resume_at`, `waiting_node_id`; новий job `execution` із
+  тим самим payload і `run_at = resume_at`; видалення поточного job'а. Слот воркера звільняється одразу; рестарт Api чи
+  воркера нічого не губить. Якщо тим часом запитали скасування (`cancelling`) — виконання стає `cancelled`.
+- Job пробудження бере будь-який воркер, коли настає `run_at`: `waiting` → `running` (`resume_at`/`waiting_node_id`
+  очищаються) і `ResumeAsync` зі знімка. Вузол, чий останній крок `waiting`, виконується знову з `ctx.Resumption`
+  (стан і запланований час) і сам вирішує: віддати items далі чи призупинитись ще раз.
+- Скасування `waiting` через API — одразу `cancelled` (воркер не потрібен); job пробудження побачить фінальний стан і
+  завершиться без виконання. Повтор (`retry`) `waiting` — 409, як для незавершеного.
+- `executionTimeoutSec` рахується на кожен прохід окремо, тож час у `waiting` не входить. Ліміт `concurrency` (F6-06)
+  `waiting` не рахує; `correlation.skipIfActive` (F5-04) — рахує як активне.
+- SSE не закривається на `waiting`; MCP `run_workflow`, помічник і оцінки перестають чекати на `waiting`
+  (`ExecutionStates.IsSettled`).
 
 Відновлення (F2-08): `ReleaseStaleLocksAsync` раз на `LockTimeout / 2` повертає job'и впалих воркерів;
 виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)
@@ -385,7 +403,7 @@ job береться лише за вільного слота.
 
 Ключ кореляції (F5-04, docs/workflow-format.md «Ключ кореляції»): `ExecutionLauncher` пише `correlation_key`; з
 `settings.correlation.skipIfActive` запуск із ключем іде під тим самим advisory lock, що й ліміти, і за активного
-(`queued`/`running`/`cancelling`) виконання з тим самим ключем записується як `cancelled` без job.
+(`queued`/`running`/`waiting`/`cancelling`) виконання з тим самим ключем записується як `cancelled` без job.
 
 Ліміти сценарію (F6-06, docs/workflow-format.md «Ліміти навантаження»); не діють на `manual`:
 - **Рішення при запуску.** `ExecutionLauncher` бере `pg_advisory_xact_lock(hashtextextended('launch:' + workflowId, 0))`
@@ -416,7 +434,7 @@ job береться лише за вільного слота.
 `startNodeId` = цей вузол, `startItems` = його вихід 0 (тригер не виконується знову, тож webhook/`mcp.poll`/розклад
 повторюються з тими самими items); інакше — старт з усіх вузлів без вхідних ребер. `pinData` у `retry` не
 застосовується, `destinationNodeId`/`runData` ручного запуску не переносяться (повторюється весь граф).
-Незавершене (`queued`/`running`/`cancelling`) → 409 `EXECUTION_NOT_FINISHED`; потрібна роль editor.
+Незавершене (`queued`/`running`/`waiting`/`cancelling`) → 409 `EXECUTION_NOT_FINISHED`; потрібна роль editor.
 Успішне виконання без збережених даних (`saveSuccessfulData: false`) → 409 `EXECUTION_DATA_NOT_SAVED`.
 
 Продовження з вузла, що впав (`IExecutionService.ResumeFromFailedAsync`, `POST /executions/{id}/resume`, MCP
@@ -441,7 +459,7 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
   `OPENBP_EXECUTION_RETENTION_CRON` (типово `0 0 3 * * ?` — щодня о 03:00 за часом сервера; можна 5 полів crontab)
   видаляє завершені виконання з кроками, що закінчились раніше ніж `OPENBP_EXECUTION_RETENTION_DAYS` днів тому
   (типово 30; `0` — не видаляти). Видалення йде пачками по 500 виконань, кожна пачка — окрема транзакція;
-  `queued`/`running`/`cancelling` не чіпаються. Кількість видаленого пишеться в журнал.
+  `queued`/`running`/`waiting`/`cancelling` не чіпаються. Кількість видаленого пишеться в журнал.
 - Quartz-job `execution-stats` в Api (`ExecutionStatsJob`, кожні 5 хв) перераховує `execution_stats` за останні 3 години
   одним `INSERT … SELECT … ON CONFLICT DO UPDATE` над `executions.finished_at` (індекс); порожня таблиця — за всю історію.
   Тривалість — у кошиках гістограми, тож p50/p95 у «Огляді» — верхня межа кошика. Видалення старих виконань

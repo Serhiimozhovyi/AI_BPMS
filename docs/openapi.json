@@ -3481,7 +3481,7 @@
           "Виконання"
         ],
         "summary": "Історія виконань",
-        "description": "Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).",
+        "description": "Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).",
         "parameters": [
           {
             "name": "workflowId",
@@ -3798,7 +3798,7 @@
           "Виконання"
         ],
         "summary": "Потік подій виконання (SSE)",
-        "description": "`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану.",
+        "description": "`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану; у стані `waiting` (довге очікування) лишається відкритим.",
         "parameters": [
           {
             "name": "id",
@@ -6626,7 +6626,8 @@
           "success",
           "error",
           "cancelled",
-          "timed_out"
+          "timed_out",
+          "waiting"
         ]
       },
       "ExecutionStepDto": {
@@ -6705,6 +6706,13 @@
             "items": {
               "$ref": "#/components/schemas/SubStep"
             }
+          },
+          "resumeAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -6767,6 +6775,19 @@
             "format": "uuid"
           },
           "correlationKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resumeAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "waitingNodeId": {
             "type": [
               "null",
               "string"
@@ -7767,7 +7788,8 @@
           "success",
           "error",
           "skipped",
-          "cancelled"
+          "cancelled",
+          "waiting"
         ],
         "description": "Результат одного запуску вузла (поле `execution_steps.status`)."
       },

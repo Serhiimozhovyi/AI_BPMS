@@ -26,6 +26,10 @@ namespace OpenBP.Engine.Execution;
 /// <item><see cref="ExecutionRequest.DestinationNodeId"/> («Виконати вузол»): виконуються лише цей вузол і його попередники,
 /// а сам він — навіть із <c>pinData</c>/<c>RunData</c>.</item>
 /// <item>Вимкнений вузол (<c>disabled: true</c>) не виконується — items з його входів проходять на вихід 0.</item>
+/// <item>Вузол, що викликав <see cref="Nodes.INodeContext.Suspend"/> (F5-02), отримує крок <see cref="StepStatus.Waiting"/>;
+/// його наступники не плануються, інші гілки виконуються до кінця, а результат — <see cref="ExecutionStatus.Waiting"/> з
+/// найранішим <see cref="ExecutionResult.ResumeAt"/>. <c>ResumeAsync</c> запускає такий вузол знову з
+/// <see cref="Nodes.INodeContext.Resumption"/>.</item>
 /// </list>
 /// </summary>
 public sealed class WorkflowExecutor
@@ -114,6 +118,9 @@ public sealed class WorkflowExecutor
     /// — <see cref="ExecutionSnapshot.StartedAt"/>. Таймаут сценарію відлічується від моменту відновлення.</item>
     /// <item>Стан вузлів (<c>NodeState</c>), виконаних до падіння, кроки не містять — береться з
     /// <see cref="ExecutionRequest.NodeStates"/>.</item>
+    /// <item>Вузол, чий останній крок <see cref="StepStatus.Waiting"/>, виконується знову з
+    /// <see cref="Nodes.INodeContext.Resumption"/> (стан і час із цього кроку) — так виконання прокидається після
+    /// довгого очікування (F5-02).</item>
     /// </list>
     /// </summary>
     /// <param name="snapshot">Знімок із <see cref="IExecutionStore.LoadAsync"/>: збережені кроки виконання.</param>
@@ -158,6 +165,14 @@ public sealed class WorkflowExecutor
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
 
         var run = new RunState(request);
+        foreach (var (nodeId, step) in latest)
+        {
+            if (step.Status == StepStatus.Waiting)
+            {
+                run.Resumptions[nodeId] = new Nodes.NodeResumption(step.ResumeAt ?? step.FinishedAt, step.WaitState ?? []);
+            }
+        }
+
         _services.Logger.Log(
             LogLevel.Info,
             null,
@@ -201,6 +216,13 @@ public sealed class WorkflowExecutor
                     return Finish(run, startedAt, Interrupted(ct, timeoutSec), node.Definition.Id);
                 }
 
+                if (step.Status == StepStatus.Waiting)
+                {
+                    // Наступники чекають на пробудження; інші гілки йдуть далі.
+                    run.Waiting.Add(step);
+                    continue;
+                }
+
                 if (!IsCompleted(node, step))
                 {
                     _services.Logger.Log(LogLevel.Error, node.Definition.Id, $"Вузол «{node.Definition.Name}» завершився помилкою: {step.Error!.Message}");
@@ -216,6 +238,13 @@ public sealed class WorkflowExecutor
                     queue.Enqueue(next);
                 }
             }
+        }
+
+        if (run.Waiting.Count > 0)
+        {
+            var first = run.Waiting.MinBy(w => w.ResumeAt)!;
+            _services.Logger.Log(LogLevel.Info, first.NodeId, $"Виконання чекає до {first.ResumeAt:O}.");
+            return Finish(run, startedAt, (ExecutionStatus.Waiting, null), null) with { ResumeAt = first.ResumeAt, WaitingNodeId = first.NodeId };
         }
 
         return Finish(run, startedAt, (ExecutionStatus.Success, null), null);
@@ -316,7 +345,10 @@ public sealed class WorkflowExecutor
             IReadOnlyList<Item>[] attemptInputs = [.. inputs.Select(i => (IReadOnlyList<Item>)[.. i.Select(RunState.Clone)])];
             var ctx = new EngineNodeContext(
                 definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
-                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state);
+                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state)
+            {
+                Resumption = run.Resumptions.GetValueOrDefault(definition.Id),
+            };
             subSteps = ctx.SubSteps;
 
             // Span спроби (F6-18): без параметрів і items — лише ідентифікатори вузла.
@@ -329,6 +361,13 @@ public sealed class WorkflowExecutor
             try
             {
                 var output = await node.Impl.ExecuteAsync(ctx, token).ConfigureAwait(false);
+                if (ctx.Suspension is { } suspension)
+                {
+                    _services.Logger.Log(LogLevel.Info, definition.Id, $"Вузол «{definition.Name}» чекає до {suspension.ResumeAt:O}.");
+                    span?.SetTag(OpenBpTelemetry.Status, "waiting");
+                    return Step(StepStatus.Waiting, Ports(node.OutputCount, [])) with { ResumeAt = suspension.ResumeAt, WaitState = suspension.State };
+                }
+
                 EnsureShape(node, output);
                 if (ctx.NodeState.Count > 0 || request.NodeStates.ContainsKey(definition.Id))
                 {
@@ -521,6 +560,12 @@ public sealed class WorkflowExecutor
         public ExecutionRequest Request { get; } = request;
 
         public List<StepRecord> Steps { get; } = [];
+
+        /// <summary>Кроки вузлів, що призупинили виконання в цьому проході.</summary>
+        public List<StepRecord> Waiting { get; } = [];
+
+        /// <summary>Пробудження вузлів, що чекали (з останніх кроків <see cref="StepStatus.Waiting"/> знімка).</summary>
+        public Dictionary<string, Nodes.NodeResumption> Resumptions { get; } = new(StringComparer.Ordinal);
 
         public Dictionary<string, JsonObject> NodeStates { get; } =
             request.NodeStates.ToDictionary(p => p.Key, p => (JsonObject)p.Value.DeepClone(), StringComparer.Ordinal);

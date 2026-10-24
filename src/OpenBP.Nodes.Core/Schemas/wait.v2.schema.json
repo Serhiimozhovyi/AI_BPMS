@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.wait",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "duration",
+        "until"
+      ],
+      "default": "duration",
+      "description": "duration — чекати amount одиниць unit; until — чекати до дати until"
+    },
+    "amount": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Тривалість для mode = duration (разом не більше 90 днів)"
+    },
+    "unit": {
+      "type": "string",
+      "enum": [
+        "seconds",
+        "minutes",
+        "hours",
+        "days"
+      ],
+      "default": "minutes"
+    },
+    "until": {
+      "type": "string",
+      "description": "Дата ISO 8601 для mode = until, напр. 2026-11-03T09:00; без зсуву — у часовому поясі сценарію. Можна вираз {{ }}"
+    }
+  }
+}

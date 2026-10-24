@@ -65,7 +65,7 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
     };
 
     /// <summary>Статус виконання, що чекає (довге очікування, F5-02).</summary>
-    public const string WaitingStatus = "waiting";
+    public const string WaitingStatus = ExecutionStatuses.Waiting;
 
     /// <inheritdoc />
     public async Task<OverviewResult> GetAsync(string range, CancellationToken ct)

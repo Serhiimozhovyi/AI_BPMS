@@ -286,7 +286,7 @@ public sealed class EvaluationService(
         {
             await foreach (var e in events.SubscribeAsync(executionId, afterStepId: null, deadline.Token))
             {
-                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsFinal(state))
+                if (e.Kind == ExecutionEventKind.Status && e.State is { } state && ExecutionStates.IsSettled(state))
                 {
                     return;
                 }

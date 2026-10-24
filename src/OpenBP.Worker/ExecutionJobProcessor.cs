@@ -31,7 +31,10 @@ namespace OpenBP.Worker;
 /// зі знімка <see cref="PostgresExecutionStore.LoadAsync"/>.</item>
 /// <item>Кожні <see cref="WorkerOptions.HeartbeatInterval"/>: <see cref="JobQueue.ExtendLockAsync"/> і <c>heartbeat_at</c>;
 /// стан <c>cancelling</c> скасовує виконання; втрачений lock зупиняє його без запису підсумку (виконання вже веде інший воркер).</item>
-/// <item>Підсумок → <see cref="PostgresExecutionStore.FinishAsync"/>, <c>node_state</c>, <see cref="JobQueue.CompleteAsync"/>.</item>
+/// <item>Підсумок → <see cref="PostgresExecutionStore.FinishAsync"/>, <c>node_state</c>, <see cref="JobQueue.CompleteAsync"/>.
+/// <see cref="ExecutionStatus.Waiting"/> (довге очікування, F5-02) → в одній транзакції стан <c>waiting</c> з <c>resume_at</c>,
+/// новий job з <c>run_at = resume_at</c> і завершення поточного; <c>waiting</c> на пробудженні → <c>running</c> і
+/// <c>ResumeAsync</c>.</item>
 /// <item>Необроблена помилка воркера або зупинка процесу → <see cref="JobQueue.FailAsync"/>; <see cref="JobFailureOutcome.Dropped"/>
 /// → стан <c>error</c> з повідомленням про вичерпані спроби.</item>
 /// </list>
@@ -158,6 +161,15 @@ public sealed partial class ExecutionJobProcessor
                     await CompleteJobAsync(job).ConfigureAwait(false);
                     return;
                 case ExecutionStatuses.Running:
+                    resume = true;
+                    break;
+                case ExecutionStatuses.Waiting:
+                    if (!await TryWakeAsync(executionId, stoppingToken).ConfigureAwait(false))
+                    {
+                        // Скасовано між читанням і оновленням — читаємо знову.
+                        continue;
+                    }
+
                     resume = true;
                     break;
                 case ExecutionStatuses.Queued:
@@ -288,6 +300,14 @@ public sealed partial class ExecutionJobProcessor
         if (heartbeat.LockLost)
         {
             LogLockLost(_logger, executionId);
+            return;
+        }
+
+        if (engineError is null && result!.Status == ExecutionStatus.Waiting)
+        {
+            span?.SetTag(OpenBpTelemetry.Status, ExecutionStatuses.Waiting);
+            await SaveNodeStatesAsync(payload.WorkflowId, loadedStates, result.NodeStates).ConfigureAwait(false);
+            await SuspendAsync(job, result).ConfigureAwait(false);
             return;
         }
 
@@ -548,6 +568,71 @@ public sealed partial class ExecutionJobProcessor
         return updated == 1;
     }
 
+    /// <summary><c>waiting</c> → <c>running</c> на пробудженні; <c>false</c>, якщо стан уже інший (скасовано).</summary>
+    private async Task<bool> TryWakeAsync(Guid executionId, CancellationToken ct)
+    {
+        var now = _time.GetUtcNow();
+        await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        var updated = await db.Executions
+            .Where(e => e.Id == executionId && e.Status == ExecutionStatuses.Waiting)
+            .ExecuteUpdateAsync(
+                s => s
+                    .SetProperty(e => e.Status, ExecutionStatuses.Running)
+                    .SetProperty(e => e.HeartbeatAt, now)
+                    .SetProperty(e => e.ResumeAt, (DateTimeOffset?)null)
+                    .SetProperty(e => e.WaitingNodeId, (string?)null),
+                ct)
+            .ConfigureAwait(false);
+        return updated == 1;
+    }
+
+    /// <summary>
+    /// Призупинення (F5-02): однією транзакцією стан <c>waiting</c> з <c>resume_at</c>, job пробудження з тим самим payload
+    /// і <c>run_at = resume_at</c> і завершення поточного job'а — тож рестарт посеред цього нічого не губить і не дублює.
+    /// Якщо тим часом запитали скасування — виконання стає <c>cancelled</c>.
+    /// </summary>
+    private async Task SuspendAsync(ClaimedJob job, ExecutionResult result)
+    {
+        var resumeAt = result.ResumeAt!.Value.ToUniversalTime();
+        await using var db = await _contexts.CreateDbContextAsync().ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync().ConfigureAwait(false);
+        var updated = await db.Executions
+            .Where(e => e.Id == result.ExecutionId && e.Status == ExecutionStatuses.Running)
+            .ExecuteUpdateAsync(
+                s => s
+                    .SetProperty(e => e.Status, ExecutionStatuses.Waiting)
+                    .SetProperty(e => e.ResumeAt, resumeAt)
+                    .SetProperty(e => e.WaitingNodeId, result.WaitingNodeId),
+                CancellationToken.None)
+            .ConfigureAwait(false);
+        if (updated == 1)
+        {
+            db.Jobs.Add(new JobEntity { Id = SequentialGuid.Next(_time), Kind = job.Kind, Payload = job.Payload, RunAt = resumeAt });
+            await db.SaveChangesAsync().ConfigureAwait(false);
+        }
+
+        var completed = await db.Jobs
+            .Where(j => j.Id == job.Id && j.LockedBy == WorkerId)
+            .ExecuteDeleteAsync()
+            .ConfigureAwait(false);
+        if (completed == 0)
+        {
+            // Lock уже не наш — виконання веде інший воркер; нічого не змінюємо.
+            LogJobLockLost(_logger, job.Id);
+            return;
+        }
+
+        await tx.CommitAsync().ConfigureAwait(false);
+        if (updated == 1)
+        {
+            LogSuspended(_logger, result.ExecutionId, resumeAt, result.WaitingNodeId);
+        }
+        else
+        {
+            await SetFinalAsync(result.ExecutionId, ExecutionStatuses.Cancelled, null, ExecutionStatuses.Cancelling).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Фінальний стан без результату движка; не перезаписує вже фінальний стан.</summary>
     private async Task SetFinalAsync(Guid executionId, string status, string? error, string? onlyFrom = null)
     {
@@ -697,6 +782,9 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Виконання {ExecutionId}: не вдалося запустити сценарій помилок {ErrorWorkflowId}.")]
     private static partial void LogErrorWorkflowFailure(ILogger logger, Exception exception, Guid executionId, string errorWorkflowId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Виконання {ExecutionId}: чекає до {ResumeAt:O} (вузол {NodeId}).")]
+    private static partial void LogSuspended(ILogger logger, Guid executionId, DateTimeOffset resumeAt, string? nodeId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Job {JobId}: lock уже не належить воркеру при завершенні.")]
     private static partial void LogJobLockLost(ILogger logger, Guid jobId);

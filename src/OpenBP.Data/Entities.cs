@@ -326,6 +326,10 @@ public sealed class ExecutionEntity
     public Guid? ResumedFromExecutionId { get; set; }
     /// <summary>Ключ кореляції (F5-04): Id угоди, контрагента тощо; до 200 символів.</summary>
     public string? CorrelationKey { get; set; }
+    /// <summary>Для <c>waiting</c> — коли розбудити (F5-02); інакше <c>null</c>.</summary>
+    public DateTimeOffset? ResumeAt { get; set; }
+    /// <summary>Для <c>waiting</c> — вузол із найранішим <see cref="ResumeAt"/>.</summary>
+    public string? WaitingNodeId { get; set; }
     public string? Error { get; set; }
     /// <summary>
     /// Запланований час старту з урахуванням ліміту частоти (F6-06); заповнюється лише для запусків, на які діє
@@ -348,6 +352,10 @@ public sealed class ExecutionStepEntity
     public string? Error { get; set; }
     /// <summary>jsonb: підкроки (F6-12, <c>SubStep[]</c>); <c>null</c> — немає.</summary>
     public string? SubSteps { get; set; }
+    /// <summary>Для кроку <c>waiting</c> — коли розбудити вузол (F5-02).</summary>
+    public DateTimeOffset? ResumeAt { get; set; }
+    /// <summary>jsonb: стан вузла до пробудження для кроку <c>waiting</c>; <c>null</c> — немає.</summary>
+    public string? WaitState { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
 }

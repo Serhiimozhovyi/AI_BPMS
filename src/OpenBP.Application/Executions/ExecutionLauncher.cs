@@ -203,13 +203,14 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
 
     /// <summary>
     /// <c>settings.correlation.skipIfActive</c>: причина пропуску, якщо в сценарію вже є активне (у черзі, в роботі,
-    /// скасовується) виконання з тим самим ключем; інакше <c>null</c>.
+    /// чекає, скасовується) виконання з тим самим ключем; інакше <c>null</c>.
     /// </summary>
     private async Task<string?> DuplicateReasonAsync(Guid workflowId, string correlationKey, CancellationToken ct)
     {
         var active = await db.Executions.AsNoTracking()
             .Where(e => e.WorkflowId == workflowId && e.CorrelationKey == correlationKey
-                && (e.Status == ExecutionStatuses.Queued || e.Status == ExecutionStatuses.Running || e.Status == ExecutionStatuses.Cancelling))
+                && (e.Status == ExecutionStatuses.Queued || e.Status == ExecutionStatuses.Running
+                    || e.Status == ExecutionStatuses.Cancelling || e.Status == ExecutionStatuses.Waiting))
             .OrderBy(e => e.Id)
             .Select(e => (Guid?)e.Id)
             .FirstOrDefaultAsync(ct);
