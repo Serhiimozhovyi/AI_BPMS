@@ -414,6 +414,7 @@
 - model: `opus` · status: `ready` · depends: F2-07
 - Що: змінна `$binary` у `{{ }}` — посилання на файли поточного item'а (`BinaryRef` з `docs/workflow-format.md`: `fileName`, `mimeType`, `fileSize`…; байтів немає), і `$node["Назва"].binary` — файли відповідного item'а попереднього вузла. Знайдено ручною перевіркою F3-17: агент написав `{{ $binary.data.fileName }}` і отримав `$binary is not defined`.
 - DoD: тести обчислювача (`$binary.data.fileName`, item без файлів → `{}`, `$node[…].binary`); тест движка з вузлом, що повертає binary item; `architecture.md` (змінні виразів) і опис `describe_nodes` оновлено.
+
 ### F3-24 · Сторінка входу в UI
 - model: `sonnet` · status: `done` · depends: F2-05
 - Що: `/login` у SPA (email + пароль → `POST /auth/login`, cookie-сесія); решта маршрутів під guard'ом (`GET /auth/me`, без сесії — на `/login?returnUrl=…`, лише шлях усередині застосунку); 401 від Api посеред роботи — на `/login` з поверненням; у тулбарі email користувача і «Вийти» (`POST /auth/logout`); тексти через i18n. Знайдено під час локального розгортання: Api вимагає входу з F2-05, а в UI сторінки входу не було, тож зайти в UI було неможливо. Форма мінімальна на Material + Tailwind; стиль AC-Kit — окрема задача редизайну.
