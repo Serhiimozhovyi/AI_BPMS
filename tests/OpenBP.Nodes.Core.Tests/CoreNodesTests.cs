@@ -23,6 +23,8 @@ public class CoreNodesTests
         { "core.loop", """{"list":"{{ $json.lines }}","batchSize":1}""" },
         { "core.wait", """{"amount":5,"unit":"seconds"}""" },
         { "core.code", """{"code":"return $json;","mode":"eachItem"}""" },
+        { "core.dataTable", """{"table":"Клієнти","operation":"list","where":[{"column":"city","operator":"eq","value":"{{ $json.city }}"}],"limit":10}""" },
+        { "core.dataTable", """{"table":"{{ $vars.table }}","operation":"upsert","values":{"phone":"{{ $json.phone }}"}}""" },
     };
 
     public static TheoryData<string, string> InvalidParameters => new()
@@ -45,6 +47,10 @@ public class CoreNodesTests
         { "core.loop", """{"list":5}""" },
         { "core.wait", """{"amount":-1}""" },
         { "core.code", """{"code":""}""" },
+        { "core.dataTable", """{"table":"t","operation":"merge"}""" },
+        { "core.dataTable", """{"operation":"get","key":"1"}""" },
+        { "core.dataTable", """{"table":"t","operation":"list","limit":5000}""" },
+        { "core.dataTable", """{"table":"t","operation":"list","where":[{"column":"a","operator":"like"}]}""" },
     };
 
     [Fact]
@@ -56,7 +62,7 @@ public class CoreNodesTests
             registry.Register(node);
         }
 
-        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code"];
+        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable"];
         Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Distinct().Order());
         foreach (var type in expected)
         {

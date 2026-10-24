@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.dataTable",
+  "$defs": {
+    "filter": {
+      "type": "object",
+      "required": [
+        "column",
+        "operator"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Колонка таблиці"
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "isEmpty",
+            "isNotEmpty"
+          ]
+        },
+        "value": {
+          "description": "Значення; не потрібне для isEmpty, isNotEmpty"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "required": [
+    "table",
+    "operation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "table": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Id або назва таблиці даних"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "get",
+        "list",
+        "insert",
+        "upsert",
+        "update",
+        "delete"
+      ]
+    },
+    "key": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "Ключ рядка для get, update, delete"
+    },
+    "where": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/filter"
+      },
+      "description": "Умови для list (усі разом)"
+    },
+    "values": {
+      "type": "object",
+      "description": "Значення колонок для insert, upsert, update"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 100,
+      "description": "Найбільше рядків для list"
+    }
+  }
+}

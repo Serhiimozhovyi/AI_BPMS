@@ -11,6 +11,8 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<VariableEntity> Variables => Set<VariableEntity>();
+    public DbSet<DataTableEntity> DataTables => Set<DataTableEntity>();
+    public DbSet<DataRowEntity> DataRows => Set<DataRowEntity>();
     public DbSet<CredentialEntity> Credentials => Set<CredentialEntity>();
     public DbSet<McpServerEntity> McpServers => Set<McpServerEntity>();
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
@@ -67,6 +69,20 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("variables");
             e.HasKey(x => x.Key);
+        });
+        b.Entity<DataTableEntity>(e =>
+        {
+            e.ToTable("data_tables");
+            e.Property(x => x.Columns).HasColumnType("jsonb");
+            e.HasIndex(x => x.NormalizedName).IsUnique();
+        });
+        b.Entity<DataRowEntity>(e =>
+        {
+            e.ToTable("data_rows");
+            e.HasKey(x => new { x.TableId, x.Key });
+            e.Property(x => x.Data).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.TableId, x.CreatedAt });
+            e.HasOne<DataTableEntity>().WithMany().HasForeignKey(x => x.TableId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ExecutionEntity>(e =>
         {
