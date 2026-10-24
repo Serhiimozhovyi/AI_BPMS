@@ -66,6 +66,17 @@
         "--project",
         "../connectors/onec/src/OpenBP.Connectors.OneC"
       ]
+    },
+    {
+      "id": "srv_psy_support",
+      "name": "psy-support (справжній; база — зі змінної ConnectionStrings__PsySupport оболонки)",
+      "transport": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "../connectors/psy-support/src/OpenBP.Connectors.PsySupport"
+      ]
     }
   ]
 }

@@ -1,0 +1,683 @@
+{
+  "formatVersion": 1,
+  "name": "Бот психологічної підтримки",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 60,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": false
+  },
+  "nodes": [
+    {
+      "id": "n_webhook",
+      "name": "Telegram",
+      "type": "core.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "path": "psy-bot",
+        "auth": {
+          "type": "header",
+          "credentialId": "cred_psy_bot_webhook",
+          "headerName": "X-Telegram-Bot-Api-Secret-Token"
+        }
+      },
+      "notes": "setWebhook з secret_token; credential cred_psy_bot_webhook — { token } з тим самим секретом."
+    },
+    {
+      "id": "n_parse",
+      "name": "Розбір",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ],
+      "parameters": {
+        "code": "// Telegram update → поля для tools бота (docs/psy-support.md §6). Інші види оновлень відкидаються.\nconst u = $json.body || {};\nconst cb = u.callback_query || null;\nconst m = cb ? cb.message : u.message;\nif (!m) return null;\nconst from = cb ? cb.from : (m.from || {});\nconst data = cb ? String(cb.data || '') : String(m.text || '').trim();\nconst contact = !cb && m.contact\n  ? { user_id: m.contact.user_id === undefined ? null : m.contact.user_id, phone_number: String(m.contact.phone_number) }\n  : null;\nconst rules = [\n  ['menu', /^m:(psy|help|sos)$/],\n  ['materials', /^(m:mat$|mt:)/],\n  ['consult', /^(m:cons$|c:)/],\n  ['events', /^(m:ev$|e:)/],\n  ['bst', /^(m:bst$|b:)/],\n  ['cabinet', /^(\\/psy$|p:)/],\n];\nlet section = cb ? 'menu' : 'start';\nfor (const [name, re] of rules) {\n  if (re.test(data)) { section = name; break; }\n}\nreturn {\n  section,\n  telegram_id: from.id,\n  name: from.first_name || null,\n  chat_id: m.chat.id,\n  message_id: cb ? m.message_id : null,\n  callback_id: cb ? cb.id : null,\n  data,\n  contact,\n};"
+      }
+    },
+    {
+      "id": "n_switch",
+      "name": "Розділ",
+      "type": "core.switch",
+      "typeVersion": 2,
+      "position": [
+        480,
+        400
+      ],
+      "parameters": {
+        "rules": [
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "start"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "menu"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "materials"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "consult"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "events"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "bst"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "left": "{{ $json.section }}",
+                "operator": "equals",
+                "right": "cabinet"
+              }
+            ]
+          }
+        ]
+      },
+      "notes": "Вихід 0 — fallback (невідомий розділ нікуди не йде), вихід i + 1 — правило i."
+    },
+    {
+      "id": "n_start",
+      "name": "psy-support: старт",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        100
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_start",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "name": "{{ $json.name }}",
+          "contact": "{{ $json.contact }}"
+        }
+      }
+    },
+    {
+      "id": "n_menu",
+      "name": "psy-support: меню",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_menu",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "data": "{{ $json.data }}"
+        }
+      }
+    },
+    {
+      "id": "n_materials",
+      "name": "psy-support: матеріали",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_materials",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "data": "{{ $json.data }}"
+        }
+      }
+    },
+    {
+      "id": "n_consult",
+      "name": "psy-support: консультації",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        400
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_consult",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "data": "{{ $json.data }}"
+        }
+      }
+    },
+    {
+      "id": "n_events",
+      "name": "psy-support: події",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        500
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_events",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "data": "{{ $json.data }}"
+        }
+      }
+    },
+    {
+      "id": "n_bst",
+      "name": "psy-support: БСТ",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        600
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_bst",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "data": "{{ $json.data }}"
+        }
+      }
+    },
+    {
+      "id": "n_cabinet",
+      "name": "psy-support: кабінет",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        700
+      ],
+      "parameters": {
+        "serverId": "srv_psy_support",
+        "toolName": "bot_cabinet",
+        "arguments": {
+          "telegram_id": "{{ $json.telegram_id }}",
+          "data": "{{ $json.data }}"
+        }
+      }
+    },
+    {
+      "id": "n_answer",
+      "name": "Відповідь",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        400
+      ],
+      "parameters": {
+        "code": "// Екран → виклики Telegram: кнопка редагує своє повідомлення, решта (і new_message) — нове повідомлення.\nconst r = $json;\nconst u = $node[\"Розбір\"].json;\nconst s = r.screen || {};\nconst clean = (o) => {\n  const x = {};\n  for (const k of Object.keys(o)) if (o[k] !== null && o[k] !== undefined) x[k] = o[k];\n  return x;\n};\nconst edit = !!u.callback_id && !s.new_message;\nconst message = { chat_id: u.chat_id, text: s.text, parse_mode: s.parse_mode, reply_markup: s.reply_markup };\nreturn {\n  ok: r.ok,\n  code: r.code,\n  answer: u.callback_id ? { callback_query_id: u.callback_id } : null,\n  edit: edit ? clean(Object.assign({ message_id: u.message_id }, message)) : null,\n  send: edit ? null : clean(message),\n  notifications: (r.notifications || []).map((n) => clean({ chat_id: n.chat_id, text: n.text, parse_mode: 'HTML', reply_markup: n.reply_markup })),\n  commands: r.commands || null,\n};"
+      }
+    },
+    {
+      "id": "n_if_callback",
+      "name": "Кнопка?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        160
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.answer }}",
+            "operator": "isNotEmpty"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_ack",
+      "name": "Підтвердити натискання",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        160
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "answer_callback_query",
+        "arguments": "{{ $json.answer }}"
+      }
+    },
+    {
+      "id": "n_if_edit",
+      "name": "Редагувати?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        340
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.edit }}",
+            "operator": "isNotEmpty"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_edit",
+      "name": "Змінити повідомлення",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "edit_message_text",
+        "arguments": "{{ $json.edit }}"
+      },
+      "continueOnFail": true,
+      "notes": "Повторне натискання тієї самої кнопки Telegram відхиляє як «message is not modified» — це не помилка сценарію."
+    },
+    {
+      "id": "n_send",
+      "name": "Надіслати відповідь",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        400
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": "{{ $json.send }}"
+      }
+    },
+    {
+      "id": "n_loop",
+      "name": "Сповіщення",
+      "type": "core.loop",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        540
+      ],
+      "parameters": {
+        "list": "{{ $json.notifications }}"
+      }
+    },
+    {
+      "id": "n_notify",
+      "name": "Надіслати сповіщення",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        540
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": "{{ $json }}"
+      }
+    },
+    {
+      "id": "n_if_commands",
+      "name": "Команди?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        680
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.commands }}",
+            "operator": "isNotEmpty"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_commands",
+      "name": "Команди психолога",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        680
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "set_my_commands",
+        "arguments": "{{ $json.commands }}"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_webhook",
+        "output": 0
+      },
+      "to": {
+        "node": "n_parse",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_parse",
+        "output": 0
+      },
+      "to": {
+        "node": "n_switch",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 1
+      },
+      "to": {
+        "node": "n_start",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_start",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 2
+      },
+      "to": {
+        "node": "n_menu",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_menu",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 3
+      },
+      "to": {
+        "node": "n_materials",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_materials",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 4
+      },
+      "to": {
+        "node": "n_consult",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_consult",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 5
+      },
+      "to": {
+        "node": "n_events",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_events",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 6
+      },
+      "to": {
+        "node": "n_bst",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_bst",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_switch",
+        "output": 7
+      },
+      "to": {
+        "node": "n_cabinet",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_cabinet",
+        "output": 0
+      },
+      "to": {
+        "node": "n_answer",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_answer",
+        "output": 0
+      },
+      "to": {
+        "node": "n_if_callback",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_if_callback",
+        "output": 0
+      },
+      "to": {
+        "node": "n_ack",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_answer",
+        "output": 0
+      },
+      "to": {
+        "node": "n_if_edit",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_if_edit",
+        "output": 0
+      },
+      "to": {
+        "node": "n_edit",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_if_edit",
+        "output": 1
+      },
+      "to": {
+        "node": "n_send",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_answer",
+        "output": 0
+      },
+      "to": {
+        "node": "n_loop",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_loop",
+        "output": 0
+      },
+      "to": {
+        "node": "n_notify",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_answer",
+        "output": 0
+      },
+      "to": {
+        "node": "n_if_commands",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_if_commands",
+        "output": 0
+      },
+      "to": {
+        "node": "n_commands",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {
+    "n_webhook": [
+      {
+        "json": {
+          "headers": {},
+          "body": {
+            "update_id": 1,
+            "message": {
+              "message_id": 1,
+              "from": {
+                "id": 100500,
+                "first_name": "Тест"
+              },
+              "chat": {
+                "id": 100500,
+                "type": "private"
+              },
+              "text": "/start"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

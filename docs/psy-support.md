@@ -186,6 +186,31 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
   → set_my_commands (якщо commands)
 ```
 
+Сценарій — `examples/psy-support-bot.json`:
+
+- «Розбір» відкидає оновлення без `message` і `callback_query`. Розділ визначається так: кнопки — за префіксом
+  `data`; текст `/psy` — кабінет; решта тексту й контакт — `bot_start`.
+- «Відповідь» (`core.code`) перетворює екран на аргументи tools Telegram:
+  - кнопка — `answer_callback_query` і `edit_message_text` того самого повідомлення;
+  - `new_message` або текст — `send_message`;
+  - `null`-поля відкидаються.
+- «Змінити повідомлення» має `continueOnFail`, бо повторне натискання тієї самої кнопки Telegram відхиляє як «message is not
+  modified».
+- `saveSuccessfulData: false`: виходи вузлів містять телефони й факт запису (§8), тому дані успішних виконань не
+  зберігаються.
+- Webhook перевіряє `X-Telegram-Bot-Api-Secret-Token` (credential `cred_psy_bot_webhook` — `{ token }`, той самий секрет
+  передається в `set_webhook`).
+
+Перевірка в CLI — `tests/OpenBP.Cli.Tests/PsySupportBotTests.cs`:
+- справжній psy-support (stdio) працює з Postgres у Testcontainers, а мок Telegram — це `FakeServer --mock telegram`
+  з контрактом `connectors/telegram`;
+- кожен крок — окремий прогін із оновленням у `pinData`.
+
+Ручний прогін на тестовому боті (не бойовому):
+1. Зареєструйте в `examples/servers.json` сервери `srv_psy_support` і `srv_telegram_bot` з токеном тестового бота
+   в `TELEGRAM_BOT_TOKEN`.
+2. Замініть у сценарії `srv_telegram` на `srv_telegram_bot`.
+
 Окремий сценарій «Шедулер»: `core.schedule` (щохвилини) → `due_notifications` → цикл `send_message` →
 `mark_notifications_sent`; `core.schedule` (щоночі) → `generate_slots` і `anonymize_old_records`.
 

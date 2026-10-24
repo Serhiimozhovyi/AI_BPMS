@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -204,7 +205,10 @@ public sealed record OrderLine(string Sku, double Qty);
 /// <summary>Результат <c>create_order</c>.</summary>
 public sealed record CreatedOrder(int Number, string Customer, int LineCount);
 
-/// <summary>Мок Telegram Bot API для прикладу <c>examples/telegram-1c.json</c> (<c>--mock telegram</c>).</summary>
+/// <summary>
+/// Мок Telegram Bot API (<c>--mock telegram</c>) для прикладів <c>examples/telegram-1c.json</c> і
+/// <c>examples/psy-support-bot.json</c>: tools і аргументи — як у <c>connectors/telegram</c>, відповідь повторює запит.
+/// </summary>
 [McpServerToolType]
 public static class MockTelegramTools
 {
@@ -213,11 +217,66 @@ public static class MockTelegramTools
     [Description("Надсилає текстове повідомлення в чат Telegram.")]
     public static SentMessage SendMessage(
         [Description("Id чату")] long chat_id,
-        [Description("Текст")] string text) => new(true, chat_id, text);
+        [Description("Текст")] string text,
+        [Description("HTML, MarkdownV2 або Markdown")] string? parse_mode = null,
+        [Description("Клавіатура (об'єкт Bot API)")] JsonElement? reply_markup = null) =>
+        new(true, chat_id, text, parse_mode, Markup(reply_markup));
+
+    /// <summary>«Редагує» повідомлення бота.</summary>
+    [McpServerTool(Name = "edit_message_text", Title = "Змінити повідомлення", UseStructuredContent = true)]
+    [Description("Замінює текст і inline-клавіатуру повідомлення бота.")]
+    public static EditedMessage EditMessageText(
+        [Description("Id чату")] long chat_id,
+        [Description("Id повідомлення")] long message_id,
+        [Description("Новий текст")] string text,
+        [Description("HTML, MarkdownV2 або Markdown")] string? parse_mode = null,
+        [Description("Нова inline-клавіатура")] JsonElement? reply_markup = null) =>
+        new(true, chat_id, message_id, text, parse_mode, Markup(reply_markup));
+
+    /// <summary>Підтверджує натискання кнопки.</summary>
+    [McpServerTool(Name = "answer_callback_query", Title = "Відповісти на натискання", UseStructuredContent = true)]
+    [Description("Підтверджує натискання inline-кнопки.")]
+    public static AnsweredCallback AnswerCallbackQuery(
+        [Description("callback_query.id")] string callback_query_id,
+        [Description("Сповіщення")] string? text = null) => new(true, callback_query_id);
+
+    /// <summary>Задає меню команд.</summary>
+    [McpServerTool(Name = "set_my_commands", Title = "Команди бота", UseStructuredContent = true)]
+    [Description("Задає меню команд бота.")]
+    public static CommandsSet SetMyCommands(
+        [Description("Команди: [{ command, description }]")] JsonElement commands,
+        [Description("BotCommandScope")] JsonElement? scope = null) => new(true, commands, scope);
+
+    private static JsonElement? Markup(JsonElement? value)
+    {
+        if (value is not { ValueKind: JsonValueKind.Object } markup)
+        {
+            return null;
+        }
+
+        string[] kinds = ["inline_keyboard", "keyboard", "remove_keyboard", "force_reply"];
+        return kinds.Count(k => markup.TryGetProperty(k, out _)) == 1
+            ? markup
+            : throw new McpException("reply_markup — об'єкт з одним з полів inline_keyboard, keyboard, remove_keyboard або force_reply.");
+    }
 }
 
 /// <summary>Результат <c>send_message</c>.</summary>
-public sealed record SentMessage(bool Ok, long ChatId, string Text);
+public sealed record SentMessage(
+    bool Ok,
+    long ChatId,
+    string Text,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParseMode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? ReplyMarkup = null);
+
+/// <summary>Результат <c>edit_message_text</c>.</summary>
+public sealed record EditedMessage(bool Ok, long ChatId, long MessageId, string Text, string? ParseMode, JsonElement? ReplyMarkup);
+
+/// <summary>Результат <c>answer_callback_query</c>.</summary>
+public sealed record AnsweredCallback(bool Ok, string CallbackQueryId);
+
+/// <summary>Результат <c>set_my_commands</c>.</summary>
+public sealed record CommandsSet(bool Ok, JsonElement Commands, JsonElement? Scope);
 
 /// <summary>
 /// Мок Microsoft Graph (<c>--mock msgraph</c>) для прикладу <c>examples/daily-report.json</c> і наскрізного тесту PRD №3:
