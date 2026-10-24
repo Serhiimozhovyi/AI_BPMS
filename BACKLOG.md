@@ -810,7 +810,7 @@
 - DoD: тести Api + Worker (Testcontainers): три режими; таймаут `whenFinished` → 504; `respondToWebhook` з бінарним файлом; дубль за ключем → та сама відповідь, одне виконання; після вікна → нове виконання; валідатор; `docs/workflow-format.md`, `docs/connectors.md` §6, `architecture.md` §10.5 оновлено.
 
 ### F6-06 · Паралельність, частота й запобіжник на сценарій
-- model: `opus` · status: `ready` · depends: F4-05, F2-03
+- model: `opus` · status: `done` · depends: F4-05, F2-03
 - Що: нові `settings`: `concurrency { max (1…), onLimit: queue | drop }` — `JobQueue.ClaimAsync` не бере job сценарію, якщо `running` виконань ≥ `max` (`queue` — лишається в черзі в порядку `run_at`, `drop` — виконання `cancelled` з причиною); `throttle { limit, periodSec }` — зайві запуски відкладаються на початок наступного вікна (`queue`) або відкидаються; `disableAfterErrors: N` (0 — вимкнено) — після N помилкових виконань підряд у режимі тригера сценарій деактивується, запис у журнал воркера і подія для сповіщень (F6-07); ручні запуски й `retry` не рахуються. Ліміт за ключем кореляції лишається у F5-04; тут — ліміти на сценарій загалом. Діалог «Налаштування» (F4-05) — нова секція; валідатор перевіряє межі; MCP `update_workflow` приймає ті самі поля.
 - DoD: тести (Testcontainers): `max: 1` — 5 вебхуків виконуються послідовно в порядку надходження; `drop`; `throttle` 2 за 10 с з фейковим часом; `disableAfterErrors: 3` деактивує після третьої помилки, успіх скидає лічильник; інші сценарії не блокуються; Vitest діалогу; `docs/workflow-format.md`, `architecture.md` §10.4 оновлено.
 
