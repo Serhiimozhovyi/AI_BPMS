@@ -835,7 +835,7 @@
 - DoD: рев'ю власником; тести (Testcontainers): збереження активного не змінює те, що виконує вебхук; `publish` перемикає; зламана чернетка не публікується, продакшн не зачеплено; тестовий запуск іде з чернетки; MCP; Vitest індикатора й diff; Playwright: змінити → перевірити, що вебхук виконує стару версію → опублікувати → нову; `architecture.md` §10.2, `docs/mcp-server.md` оновлено.
 
 ### F6-11 · Таблиці даних
-- model: `opus` · status: `review` · depends: F2-01, F3-26
+- model: `opus` · status: `done` · depends: F2-01, F3-26
 - Що: сутності `data_tables (id, name, columns: [{ name, type: string|number|boolean|date|json, key? }])` і `data_rows (table_id, key, data jsonb, created_at, updated_at)` з унікальним індексом за ключем; `IDataTableService`; REST `/api/v1/tables` (CRUD таблиць — editor; рядки — читання для всіх, запис editor; імпорт CSV); вузол `core.dataTable { table, operation: get | list | insert | upsert | update | delete, key, where (прості умови за колонками), values, limit }` — по item на рядок результату; ліміти `OPENBP_DATA_TABLE_MAX_ROWS` (типово 100 000) і розмір рядка. UI `/tables`: список таблиць, редактор колонок, перегляд рядків з пошуком і правкою, імпорт CSV (AC-Kit). MCP tools `list_tables`, `query_table`, resource `openbp://tables/{id}`.
 - DoD: тести сервісу і вузла (Testcontainers): усі операції; `upsert` за ключем ідемпотентний; паралельні `upsert` одного ключа → один рядок; ліміт рядків → помилка вузла; типи колонок валідуються; viewer не пише; Vitest сторінки; `docs/workflow-format.md`, `architecture.md` §6, `docs/mcp-server.md` оновлено.
 
