@@ -25,6 +25,12 @@ public sealed class ExecutionService(
     /// <summary>Код конфлікту: дані успішного виконання не збережено (<c>saveSuccessfulData: false</c>) — стартових items немає.</summary>
     public const string ExecutionDataNotSavedCode = "EXECUTION_DATA_NOT_SAVED";
 
+    /// <summary>Код конфлікту: продовжити можна лише виконання <c>error</c> або <c>timed_out</c> (F6-08).</summary>
+    public const string ExecutionNotFailedCode = "EXECUTION_NOT_FAILED";
+
+    /// <summary>Код помилки валідації: нові вхідні items нікуди подати (немає вузла, що впав, або в нього немає входу).</summary>
+    public const string ResumeInputNotApplicableCode = "RESUME_INPUT_NOT_APPLICABLE";
+
     private const string Entity = "execution";
 
     /// <inheritdoc />
@@ -286,5 +292,105 @@ public sealed class ExecutionService(
         return await launcher.LaunchAsync(
             new ExecutionLaunch(original.WorkflowId, ExecutionMode.Retry, startNodeId, startItems, VersionId: original.VersionId),
             ct);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Нове виконання <see cref="ExecutionMode.Resume"/> тієї самої версії отримує копії кроків вихідного, що дали
+    /// результат (<c>success</c>, <c>skipped</c>, <c>error</c> вузла з <c>continueOnFail</c>), в одній транзакції з
+    /// рядком виконання і job'ом; воркер відновлює його як після падіння (<c>ResumeAsync</c>), тож ці вузли не
+    /// виконуються знову, а вузол, що впав, — виконується з тими самими входами або з <paramref name="items"/> на вході 0.
+    /// Старт — як у <see cref="RetryAsync"/>: тригер, що має крок, якщо він один.
+    /// </remarks>
+    public async Task<ExecutionSummary> ResumeFromFailedAsync(Guid id, IReadOnlyList<Item>? items, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        var original = await db.Executions.AsNoTracking()
+            .Where(e => e.Id == id)
+            .Select(e => new { e.WorkflowId, e.VersionId, e.Status })
+            .SingleOrDefaultAsync(ct)
+            ?? throw new NotFoundException(Entity, id);
+        if (original.Status is not (ExecutionStatuses.Error or ExecutionStatuses.TimedOut))
+        {
+            throw new ConflictException(ExecutionNotFailedCode, $"Виконання «{id}» у стані {original.Status}; продовжити можна лише error або timed_out.");
+        }
+
+        var definition = WorkflowJson.Deserialize(await db.WorkflowVersions.AsNoTracking()
+            .Where(v => v.Id == original.VersionId)
+            .Select(v => v.Definition)
+            .SingleAsync(ct));
+        var nodes = definition.Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
+        var steps = await db.ExecutionSteps.AsNoTracking()
+            .Where(s => s.ExecutionId == id)
+            .OrderBy(s => s.Id)
+            .ToListAsync(ct);
+
+        bool Completed(ExecutionStepEntity s) =>
+            s.Status == StepStatuses.ToDb(StepStatus.Success)
+            || s.Status == StepStatuses.ToDb(StepStatus.Skipped)
+            || (s.Status == StepStatuses.ToDb(StepStatus.Error) && nodes.TryGetValue(s.NodeId, out var n) && n.ContinueOnFail == true);
+
+        var kept = steps.Where(s => nodes.ContainsKey(s.NodeId) && Completed(s)).ToList();
+        if (kept.Any(s => s.Output is null))
+        {
+            throw new ConflictException(ExecutionDataNotSavedCode, $"Виходи вузлів виконання «{id}» не збережено — продовжити неможливо.");
+        }
+
+        // Вузол, що впав: останній крок без результату (помилка без continueOnFail або перерваний таймаутом).
+        var failedNodeId = steps.LastOrDefault(s => !Completed(s))?.NodeId;
+        Dictionary<string, IReadOnlyList<Item>>? overrides = null;
+        if (items is not null)
+        {
+            if (failedNodeId is null || !definition.Connections.Any(c => c.To.Node == failedNodeId))
+            {
+                throw new WorkflowValidationException([new(
+                    ResumeInputNotApplicableCode,
+                    failedNodeId is null
+                        ? "У виконанні немає вузла, що впав, — нові вхідні items нікуди подати."
+                        : $"Вузол «{failedNodeId}» не має входу — нові вхідні items нікуди подати.",
+                    failedNodeId,
+                    "items")]);
+            }
+
+            overrides = new(StringComparer.Ordinal) { [failedNodeId] = items };
+        }
+
+        var roots = definition.Nodes.Select(n => n.Id).Where(n => !definition.Connections.Any(c => c.To.Node == n)).ToHashSet(StringComparer.Ordinal);
+        var rootSteps = steps.Where(s => s.RunIndex == 0 && roots.Contains(s.NodeId)).Select(s => s.NodeId).Distinct().ToList();
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var summary = await launcher.LaunchAsync(
+            new ExecutionLaunch(
+                original.WorkflowId,
+                ExecutionMode.Resume,
+                rootSteps.Count == 1 ? rootSteps[0] : null,
+                VersionId: original.VersionId,
+                ResumedFromExecutionId: id,
+                InputOverrides: overrides),
+            ct);
+        if (summary.State == ExecutionState.Queued)
+        {
+            foreach (var step in kept)
+            {
+                db.ExecutionSteps.Add(new ExecutionStepEntity
+                {
+                    Id = SequentialGuid.Next(time),
+                    ExecutionId = summary.Id,
+                    NodeId = step.NodeId,
+                    RunIndex = step.RunIndex,
+                    Status = step.Status,
+                    Input = step.Input,
+                    Output = step.Output,
+                    Error = step.Error,
+                    StartedAt = step.StartedAt,
+                    FinishedAt = step.FinishedAt,
+                });
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return summary;
     }
 }

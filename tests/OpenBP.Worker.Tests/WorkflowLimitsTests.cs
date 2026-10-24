@@ -71,11 +71,17 @@ public sealed class WorkflowLimitsTests(PostgresFixture postgres)
         var other = await LaunchAsync(worker, otherId);
 
         await worker.StartAsync();
-        Assert.Equal(ExecutionStatuses.Success, (await worker.WaitForFinalAsync(other.Id)).Status);
-        Assert.Equal(ExecutionStatuses.Success, (await worker.WaitForFinalAsync(manual.Id)).Status);
-        Assert.Equal(ExecutionStatuses.Queued, (await worker.ExecutionAsync(second.Id)).Status);
-        Assert.Equal(ExecutionStatuses.Success, (await worker.WaitForFinalAsync(first.Id)).Status);
-        Assert.Equal(ExecutionStatuses.Success, (await worker.WaitForFinalAsync(second.Id)).Status);
+        var otherRow = await worker.WaitForFinalAsync(other.Id);
+        var manualRow = await worker.WaitForFinalAsync(manual.Id);
+        var firstRow = await worker.WaitForFinalAsync(first.Id);
+        var secondRow = await worker.WaitForFinalAsync(second.Id);
+        Assert.All([otherRow, manualRow, firstRow, secondRow], r => Assert.Equal(ExecutionStatuses.Success, r.Status));
+
+        // Інший сценарій і ручний запуск стартували, поки йшов перший; другий — лише після нього (за часом, а не за
+        // станом у момент перевірки: під навантаженням CI перший може встигнути завершитись раніше).
+        Assert.True(otherRow.StartedAt < firstRow.FinishedAt);
+        Assert.True(manualRow.StartedAt < firstRow.FinishedAt);
+        Assert.True(secondRow.StartedAt >= firstRow.FinishedAt);
     }
 
     [Fact]

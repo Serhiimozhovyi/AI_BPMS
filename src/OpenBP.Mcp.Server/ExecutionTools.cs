@@ -95,6 +95,24 @@ public sealed class ExecutionTools
         CancellationToken ct = default) =>
         executions.CancelAsync(id, ct);
 
+    /// <summary><c>resume_execution</c> (F6-08).</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="items">Нові items на вхід 0 вузла, що впав.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "resume_execution", Title = "Resume execution from failed node", Destructive = false, Idempotent = false, UseStructuredContent = true)]
+    [Description(
+        "Continues a failed (error or timed_out) execution from the node that failed: a new execution (mode resume) of the same " +
+        "workflow version; nodes that already succeeded are not executed again, their outputs are reused. The failed node runs " +
+        "with the same input, or with `items` as its input 0 (fix the data and resume). Returns the new execution, queued; " +
+        "poll it with get_execution.")]
+    public static Task<ExecutionSummary> ResumeExecution(
+        IExecutionService executions,
+        [Description("Id of the failed execution.")] Guid id,
+        [Description("New input items for input 0 of the failed node, e.g. [{\"json\": {...}}]; omit to reuse the original input.")] Item[]? items = null,
+        CancellationToken ct = default) =>
+        executions.ResumeFromFailedAsync(id, items, ct);
+
     /// <summary>Чекає фінального стану за потоком подій; вихід за <paramref name="timeout"/> — не помилка.</summary>
     internal static async Task WaitForFinalStateAsync(IExecutionEventSource events, Guid executionId, TimeSpan timeout, CancellationToken ct)
     {

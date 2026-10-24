@@ -38,6 +38,11 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             throw new ArgumentException("destinationNodeId і runData — лише для ручного запуску.", nameof(launch));
         }
 
+        if (launch.Mode != ExecutionMode.Resume && (launch.ResumedFromExecutionId is not null || launch.InputOverrides is { Count: > 0 }))
+        {
+            throw new ArgumentException("resumedFromExecutionId і inputOverrides — лише для продовження (resume).", nameof(launch));
+        }
+
         var workflow = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == launch.WorkflowId)
             .Select(w => new { w.Active, w.CurrentVersionId })
@@ -122,6 +127,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
                 Mode = ExecutionModes.ToDb(launch.Mode),
                 Status = ExecutionStatuses.Queued,
                 ScheduledAt = scheduledAt,
+                ResumedFromExecutionId = launch.ResumedFromExecutionId,
             };
             if (dropReason is not null)
             {
@@ -146,6 +152,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
                     RunData = launch.RunData is { Count: > 0 } runData ? runData : null,
                     ConcurrencyKey = queueLimited ? launch.WorkflowId.ToString() : null,
                     ConcurrencyMax = queueLimited ? concurrency!.Max : null,
+                    InputOverrides = launch.InputOverrides is { Count: > 0 } overrides ? overrides : null,
                 };
                 db.Executions.Add(execution);
                 db.Jobs.Add(new JobEntity

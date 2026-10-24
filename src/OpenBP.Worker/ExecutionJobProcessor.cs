@@ -156,7 +156,8 @@ public sealed partial class ExecutionJobProcessor
                         continue;
                     }
 
-                    resume = false;
+                    // Продовження з вузла, що впав (F6-08): кроки до нього вже скопійовано — відновлюємо зі знімка.
+                    resume = payload.Mode == ExecutionMode.Resume;
                     break;
                 default:
                     throw new InvalidOperationException($"Невідомий стан виконання «{status}».");
@@ -226,6 +227,7 @@ public sealed partial class ExecutionJobProcessor
             StartItems = payload.StartItems,
             DestinationNodeId = payload.DestinationNodeId,
             RunData = payload.RunData ?? new Dictionary<string, Item[][]>(),
+            InputOverrides = payload.InputOverrides ?? new Dictionary<string, IReadOnlyList<Item>>(),
             NodeStates = loadedStates,
         };
 

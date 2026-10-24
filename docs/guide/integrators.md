@@ -67,7 +67,7 @@ curl -N "$OPENBP_URL/api/v1/executions/<executionId>/events" -H "Authorization: 
 ```
 
 Інше: `GET /api/v1/workflows` (список), `PUT /api/v1/workflows/{id}` (нова версія), `POST …/activate` і
-`…/deactivate`, `GET /api/v1/executions?workflowId=…`, `POST /api/v1/executions/{id}/cancel` і `…/retry`,
+`…/deactivate`, `GET /api/v1/executions?workflowId=…`, `POST /api/v1/executions/{id}/cancel`, `…/retry` і `…/resume` (продовжити з вузла, що впав),
 `POST /api/v1/workflows/validate` з `{ "definition": { … } }` (перевірити без збереження). Повний перелік — в OpenAPI.
 
 ## 3. Webhook-и

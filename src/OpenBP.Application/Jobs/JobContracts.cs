@@ -53,6 +53,9 @@ public sealed record ExecutionJobPayload
 
     /// <summary>Ліміт одночасних виконань групи <see cref="ConcurrencyKey"/> (<c>JobQueue.ConcurrencyMaxField</c>).</summary>
     public int? ConcurrencyMax { get; init; }
+
+    /// <summary>Нові items на вхід 0 вузла (<see cref="ExecutionRequest.InputOverrides"/>); лише <see cref="ExecutionMode.Resume"/>.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides { get; init; }
 }
 
 /// <summary>Payload job <see cref="JobKinds.Poll"/>: який вузол опитати. Стан вузла воркер читає з <c>node_state</c>.</summary>

@@ -1819,6 +1819,72 @@
         ]
       }
     },
+    "/api/v1/executions/{id}/resume": {
+      "post": {
+        "tags": [
+          "Виконання"
+        ],
+        "summary": "Продовжити помилкове виконання з вузла, що впав",
+        "description": "Нове виконання `mode = resume` тієї самої версії: успішні вузли не виконуються знову, вузол, що впав, — з тими самими входами або з `items` на вході 0. Лише для `error`/`timed_out` (інакше 409 EXECUTION_NOT_FAILED); `items` без вузла, що впав, або для вузла без входу — 422 RESUME_INPUT_NOT_APPLICABLE.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ResumeExecutionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/executions/{id}/events": {
       "get": {
         "tags": [
@@ -3284,7 +3350,8 @@
           "manual",
           "trigger",
           "retry",
-          "error"
+          "error",
+          "resume"
         ],
         "description": "Режим запуску виконання (поле `executions.mode`, docs/architecture.md §6)."
       },
@@ -3419,6 +3486,13 @@
               "null",
               "string"
             ]
+          },
+          "resumedFromExecutionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -3804,6 +3878,20 @@
           }
         },
         "description": "Помилка (RFC 9457) з машинним кодом."
+      },
+      "ResumeExecutionRequest": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            }
+          }
+        }
       },
       "StartExecutionRequest": {
         "examples": [

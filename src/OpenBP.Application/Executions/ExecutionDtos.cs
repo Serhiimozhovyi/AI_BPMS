@@ -79,6 +79,7 @@ public static class ExecutionStates
 /// <param name="StartedAt">Початок (воркер узяв job); <c>null</c> для <see cref="ExecutionState.Queued"/>.</param>
 /// <param name="FinishedAt">Завершення; <c>null</c>, поки не фінальний стан.</param>
 /// <param name="Error">Повідомлення помилки для <see cref="ExecutionState.Error"/>/<see cref="ExecutionState.TimedOut"/>.</param>
+/// <param name="ResumedFromExecutionId">Для <see cref="ExecutionMode.Resume"/> — виконання, яке це продовжує (F6-08).</param>
 public sealed record ExecutionSummary(
     Guid Id,
     Guid WorkflowId,
@@ -87,7 +88,8 @@ public sealed record ExecutionSummary(
     ExecutionState State,
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt,
-    string? Error);
+    string? Error,
+    Guid? ResumedFromExecutionId = null);
 
 /// <summary>Виконання з кроками (<c>GET /executions/{id}</c>); кроки вже очищені від секретів (F2-04).</summary>
 /// <param name="Summary">Заголовок виконання.</param>
@@ -138,6 +140,10 @@ public sealed record StartExecutionRequest(
     string? DestinationNodeId = null,
     IReadOnlyDictionary<string, Item[][]>? RunData = null);
 
+/// <summary>Тіло <c>POST /executions/{id}/resume</c> (F6-08).</summary>
+/// <param name="Items">Нові items на вхід 0 вузла, що впав; <c>null</c> — ті самі, що були у вихідному виконанні.</param>
+public sealed record ResumeExecutionRequest(IReadOnlyList<Item>? Items = null);
+
 /// <summary>Внутрішній запит на запуск для <see cref="IExecutionLauncher"/> (тригери і сервіс запусків).</summary>
 /// <param name="WorkflowId">Сценарій; виконується його поточна версія, якщо не задано <paramref name="VersionId"/>.</param>
 /// <param name="Mode">Режим.</param>
@@ -146,6 +152,8 @@ public sealed record StartExecutionRequest(
 /// <param name="DestinationNodeId">Лише <see cref="ExecutionMode.Manual"/>: «Виконати вузол» (див. <see cref="StartExecutionRequest"/>).</param>
 /// <param name="RunData">Лише <see cref="ExecutionMode.Manual"/>: виходи вузлів попереднього запуску.</param>
 /// <param name="VersionId">Конкретна версія сценарію (повтор, <see cref="ExecutionMode.Retry"/>); <c>null</c> — поточна.</param>
+/// <param name="ResumedFromExecutionId">Лише <see cref="ExecutionMode.Resume"/>: виконання, яке продовжується.</param>
+/// <param name="InputOverrides">Лише <see cref="ExecutionMode.Resume"/>: нові items на вхід 0 вузла, що впав.</param>
 public sealed record ExecutionLaunch(
     Guid WorkflowId,
     ExecutionMode Mode,
@@ -153,7 +161,9 @@ public sealed record ExecutionLaunch(
     IReadOnlyList<Item>? StartItems = null,
     string? DestinationNodeId = null,
     IReadOnlyDictionary<string, Item[][]>? RunData = null,
-    Guid? VersionId = null);
+    Guid? VersionId = null,
+    Guid? ResumedFromExecutionId = null,
+    IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null);
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

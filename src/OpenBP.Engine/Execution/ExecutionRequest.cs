@@ -9,6 +9,7 @@ public sealed record ExecutionRequest
     private static readonly IReadOnlyDictionary<string, string> EmptyEnv = new Dictionary<string, string>();
     private static readonly IReadOnlyDictionary<string, JsonObject> EmptyStates = new Dictionary<string, JsonObject>();
     private static readonly IReadOnlyDictionary<string, Item[][]> EmptyRunData = new Dictionary<string, Item[][]>();
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<Item>> EmptyInputOverrides = new Dictionary<string, IReadOnlyList<Item>>();
 
     /// <summary>
     /// Ідентифікатор виконання. Рядок <c>executions</c> створює хост до запуску (у тестах і CLI —
@@ -48,6 +49,12 @@ public sealed record ExecutionRequest
     /// запуску, не викликаючи попередників удруге.
     /// </summary>
     public IReadOnlyDictionary<string, Item[][]> RunData { get; init; } = EmptyRunData;
+
+    /// <summary>
+    /// Items, що замінюють вхід 0 вузла, коли він виконується (продовження з вузла, що впав, з виправленими даними,
+    /// <see cref="ExecutionMode.Resume"/>). Інші входи вузла збираються як звичайно.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<Item>> InputOverrides { get; init; } = EmptyInputOverrides;
 
     /// <summary>Дозволені змінні середовища для виразів (<c>$env</c>); лише білий список, без секретів.</summary>
     public IReadOnlyDictionary<string, string> Env { get; init; } = EmptyEnv;

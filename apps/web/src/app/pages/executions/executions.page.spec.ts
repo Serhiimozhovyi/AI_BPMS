@@ -194,6 +194,58 @@ describe('ExecutionsPage', () => {
     expect(FakeEventSource.last?.url).toBe('/api/v1/executions/e3/events');
   });
 
+  it('«Продовжити з вузла»: незмінені items — без тіла, виправлені — нові items на вхід вузла, що впав', async () => {
+    const s = await setup();
+    await openDetail(s, failedDetail);
+    s.host.querySelector<HTMLButtonElement>('[data-testid="resume-button"]')!.click();
+    await render(s.harness);
+    const panel = s.host.querySelector('[data-testid="resume-panel"]')!;
+    expect(panel.textContent).toContain('1С: замовлення');
+    const editor = panel.querySelector<HTMLTextAreaElement>('[data-testid="resume-items"]')!;
+    expect(JSON.parse(editor.value)).toEqual([{ json: { in: 'n_1c' } }]);
+
+    // Некоректний JSON — помилка, кнопка вимкнена.
+    editor.value = '[{ json';
+    editor.dispatchEvent(new Event('input'));
+    await render(s.harness);
+    expect(panel.querySelector('[data-testid="resume-items-error"]')?.textContent).toContain('JSON');
+    expect(panel.querySelector<HTMLButtonElement>('[data-testid="resume-submit"]')!.disabled).toBe(true);
+
+    editor.value = '[{ "json": { "in": "виправлено" } }]';
+    editor.dispatchEvent(new Event('input'));
+    await render(s.harness);
+    panel.querySelector<HTMLButtonElement>('[data-testid="resume-submit"]')!.click();
+    const request = s.http.expectOne({ method: 'POST', url: '/api/v1/executions/e1/resume' });
+    expect(request.request.body).toEqual({ items: [{ json: { in: 'виправлено' } }] });
+    const resumed: ExecutionSummary = { ...failed, id: 'e4', mode: 'resume', state: 'queued', startedAt: null, finishedAt: null, error: null, resumedFromExecutionId: 'e1' };
+    request.flush(resumed);
+    expectList(s.http).flush({ items: [resumed, failed, running], page: 1, pageSize: 50, total: 3 });
+    s.http.expectOne('/api/v1/executions/e4').flush({ summary: resumed, steps: [failedDetail.steps[0]] });
+    s.http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    await render(s.harness);
+
+    const detail = s.host.querySelector('[data-testid="execution-detail"]')!;
+    expect(detail.textContent).toContain('Продовження');
+    expect(detail.querySelector('[data-testid="resumed-from"]')?.textContent).toContain('e1');
+    expect(detail.querySelector('[data-testid="resume-button"]')).toBeNull();
+  });
+
+  it('«Продовжити з вузла» без змін надсилає порожнє тіло; для успішного виконання кнопки немає', async () => {
+    const s = await setup();
+    await openDetail(s, failedDetail);
+    s.host.querySelector<HTMLButtonElement>('[data-testid="resume-button"]')!.click();
+    await render(s.harness);
+    s.host.querySelector<HTMLButtonElement>('[data-testid="resume-submit"]')!.click();
+    const request = s.http.expectOne({ method: 'POST', url: '/api/v1/executions/e1/resume' });
+    expect(request.request.body).toEqual({});
+    request.flush({ summary: failed }, { status: 403, statusText: 'Forbidden' });
+    await render(s.harness);
+    expect(s.host.querySelector('[data-testid="action-error"]')).not.toBeNull();
+
+    await openDetail(s, { summary: { ...failed, state: 'success', error: null }, steps: [] });
+    expect(s.host.querySelector('[data-testid="resume-button"]')).toBeNull();
+  });
+
   it('виконання, що йде: живе оновлення кроків і стану через SSE; «Скасувати»', async () => {
     const s = await setup();
     await openDetail(s, { summary: running, steps: [] });

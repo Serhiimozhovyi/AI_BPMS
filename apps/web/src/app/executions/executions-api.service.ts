@@ -21,12 +21,14 @@ export interface ExecutionSummary {
   id: string;
   workflowId: string;
   versionId: string;
-  /** `error` — запуск сценарію помилок (`core.errorTrigger`, F4-06). */
-  mode: 'manual' | 'trigger' | 'retry' | 'error';
+  /** `error` — запуск сценарію помилок (`core.errorTrigger`, F4-06); `resume` — продовження з вузла, що впав (F6-08). */
+  mode: 'manual' | 'trigger' | 'retry' | 'error' | 'resume';
   state: ExecutionState;
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+  /** Для `resume` — виконання, яке це продовжує. */
+  resumedFromExecutionId?: string | null;
 }
 
 /** `ExecutionStepDto` — крок виконання (вже очищений від секретів). */
@@ -128,6 +130,14 @@ export class ExecutionsApiService {
   }
 
   /**
+   * `POST /executions/{id}/resume` (F6-08) — продовжити помилкове виконання з вузла, що впав; `items` — нові items на
+   * вхід 0 цього вузла, без них — ті самі, що були.
+   */
+  resume(id: string, items?: ExecutionItem[] | null): Observable<ExecutionSummary> {
+    return this.http.post<ExecutionSummary>(`${this.url(id)}/resume`, items ? { items } : {});
+  }
+
+  /**
    * Події виконання з SSE: кроки і зміни стану; фінальний стан завершує потік. Обрив з'єднання `EventSource`
    * відновлює сам (з `Last-Event-ID`, тож кроки не дублюються); якщо з'єднання закрите остаточно — помилка потоку.
    */
@@ -192,5 +202,26 @@ export function executionModeLabel(mode: ExecutionSummary['mode']): string {
       return $localize`:@@executions.mode.retry:Повтор`;
     case 'error':
       return $localize`:@@executions.mode.error:Сценарій помилок`;
+    case 'resume':
+      return $localize`:@@executions.mode.resume:Продовження`;
   }
+}
+
+/** Крок вузла, що впав: останній з помилкою чи перерваний (`null`, якщо таймаут настав між вузлами). */
+export function failedStep(detail: ExecutionDetail): ExecutionStep | null {
+  return [...detail.steps].reverse().find((s) => s.status === 'error' || s.status === 'cancelled') ?? null;
+}
+
+/** Розбір тексту редактора вхідних items: масив об'єктів `{ json: {...} }`. */
+export function parseItems(text: string): { items: ExecutionItem[] } | { error: string } {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { error: $localize`:@@executions.resume.invalidJson:Некоректний JSON.` };
+  }
+  const valid =
+    Array.isArray(value) &&
+    value.every((i) => typeof i === 'object' && i !== null && !Array.isArray(i) && typeof (i as { json?: unknown }).json === 'object' && (i as { json?: unknown }).json !== null);
+  return valid ? { items: value as ExecutionItem[] } : { error: $localize`:@@executions.resume.notItems:Очікується масив items виду [{ "json": { … } }].` };
 }

@@ -104,6 +104,8 @@ public sealed class ExecutionEntity
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
     public DateTimeOffset? HeartbeatAt { get; set; }
+    /// <summary>Виконання, яке продовжує це (<c>mode = resume</c>, F6-08).</summary>
+    public Guid? ResumedFromExecutionId { get; set; }
     public string? Error { get; set; }
     /// <summary>
     /// Запланований час старту з урахуванням ліміту частоти (F6-06); заповнюється лише для запусків, на які діє

@@ -110,6 +110,9 @@ public class ExecutionToolsTests(McpServerFactory mcp)
 
         // Скасування фінального виконання нічого не змінює.
         Assert.Equal("success", (string?)(await CallAsync(editor, "cancel_execution", new() { ["id"] = id }))["state"]);
+
+        // Продовжити можна лише помилкове виконання (F6-08).
+        Assert.Equal("EXECUTION_NOT_FAILED", (string?)(await ErrorAsync(editor, "resume_execution", new() { ["id"] = id }))["code"]);
     }
 
     [Fact]
@@ -127,6 +130,7 @@ public class ExecutionToolsTests(McpServerFactory mcp)
         var id = (string)started["summary"]!["id"]!;
         Assert.Equal(id, (string?)(await CallAsync(viewer, "get_execution", new() { ["id"] = id }))["summary"]!["id"]);
         Assert.Equal("FORBIDDEN", (string?)(await ErrorAsync(viewer, "cancel_execution", new() { ["id"] = id }))["code"]);
+        Assert.Equal("FORBIDDEN", (string?)(await ErrorAsync(viewer, "resume_execution", new() { ["id"] = id }))["code"]);
     }
 
     [Fact]
@@ -138,6 +142,7 @@ public class ExecutionToolsTests(McpServerFactory mcp)
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "run_workflow", new() { ["id"] = missing }))["code"]);
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "get_execution", new() { ["id"] = missing }))["code"]);
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "cancel_execution", new() { ["id"] = missing }))["code"]);
+        Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "resume_execution", new() { ["id"] = missing }))["code"]);
         var ex = await Assert.ThrowsAsync<McpProtocolException>(() => editor.ReadResourceAsync($"openbp://executions/{missing}").AsTask());
         Assert.Equal(McpErrorCode.ResourceNotFound, ex.ErrorCode);
     }

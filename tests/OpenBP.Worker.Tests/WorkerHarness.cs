@@ -356,6 +356,10 @@ internal sealed class WorkerHarness : IAsyncDisposable
         await StopAsync();
         await _mcp.DisposeAsync();
         _http.Dispose();
+
+        // Кожен тест — своя БД і свій пул Npgsql; без очищення простійні з'єднання всіх тестів колекції лишаються
+        // відкритими й упираються в max_connections контейнера («too many clients»).
+        NpgsqlConnection.ClearPool(new NpgsqlConnection(ConnectionString));
     }
 
     /// <summary>Заглушка тригера <c>core.webhook</c> до F2-10: працює лише з pinData/startItems.</summary>
