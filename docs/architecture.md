@@ -229,6 +229,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `GET /connectors` · `GET /connectors/{id}` · `GET /connectors/{id}/tools` | viewer | `PageResult<ConnectorSummary>` · `ConnectorDetail` · `McpToolInfo[]` |
 | `POST /connectors` · `PUT /connectors/{id}` · `DELETE /connectors/{id}` · `POST /connectors/{id}/refresh-tools` | admin | `ConnectorDetail`; 409 при видаленні, якщо є активні сценарії з цим сервером |
 | `POST /connectors/{id}/tools/{tool}/call { arguments }` | editor | `ToolCallResult` |
+| `GET /credentials/options?type` | editor | `CredentialOption[]` `{ id, name, type }` — для вибору у вузлі й конекторі (F4-03) |
 | `GET /credentials/types` | admin | `CredentialTypeInfo[]`: тип, поля (`text`/`secret`/`url`/`secretMap`), JSON Schema (секрети — `writeOnly`) |
 | `GET /credentials` · `GET /credentials/{id}` | admin | `CredentialSummary[]` · `CredentialSummary`: `{ id, name, type, fields, createdBy, usedBy: { connectors, workflows }, error }` — `fields` лише шляхи заповнених полів (`apiKey`, `headers.Authorization`), значень немає ніколи |
 | `POST /credentials { name, type, data }` · `PATCH /credentials/{id} { name?, data? }` · `DELETE /credentials/{id}` | admin | 201 `CredentialSummary` · `CredentialSummary` (часткова заміна: ключ замінює, `null` видаляє, решта лишається; для `headers`/`env` — на рівні їхніх ключів) · 204; 400 `CREDENTIAL_INVALID` з `errors: [{ field, message }]`; 409 `CREDENTIAL_IN_USE`, якщо на credential посилається конектор або поточна версія будь-якого сценарію |

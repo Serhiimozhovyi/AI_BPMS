@@ -27,13 +27,14 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
-    <form class="flex flex-col gap-2" data-testid="credential-form" (submit)="$event.preventDefault(); save()">
+    <!-- Не <form>: компонент вкладається у форму конектора (F4-03), а вкладені форми HTML не дозволяє. -->
+    <div class="flex flex-col gap-2" data-testid="credential-form">
       <mat-form-field appearance="outline">
         <mat-label i18n="@@credentials.form.name">Назва</mat-label>
         <input matInput name="name" data-testid="credential-name" [value]="name()" (input)="name.set(text($event))" />
       </mat-form-field>
 
-      @if (!credential()) {
+      @if (!credential() && availableTypes().length > 1) {
         <mat-form-field appearance="outline">
           <mat-label i18n="@@credentials.form.type">Тип</mat-label>
           <mat-select data-testid="credential-type" [value]="typeName()" (selectionChange)="selectType($event.value)">
@@ -123,14 +124,14 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
       }
 
       <div class="flex gap-2">
-        <button mat-flat-button type="submit" data-testid="credential-save" [disabled]="saving() || !type()" i18n="@@credentials.form.save">
+        <button mat-flat-button type="button" data-testid="credential-save" (click)="save()" [disabled]="saving() || !type()" i18n="@@credentials.form.save">
           Зберегти
         </button>
         <button mat-button type="button" data-testid="credential-cancel" (click)="cancelled.emit()" i18n="@@credentials.form.cancel">
           Скасувати
         </button>
       </div>
-    </form>
+    </div>
   `,
 })
 export class CredentialFormComponent implements OnInit {

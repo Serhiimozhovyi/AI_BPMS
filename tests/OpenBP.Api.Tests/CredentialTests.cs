@@ -172,6 +172,28 @@ public class CredentialTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Options_are_available_to_editor_without_data()
+    {
+        var admin = await LoginAsync(UserRole.Admin);
+        var name = Unique("Опція");
+        var id = (await CreateAsync(admin, new { name, type = "openai", data = new { apiKey = Secret } })).GetProperty("id").GetGuid();
+        var editor = await LoginAsync(UserRole.Editor);
+
+        var response = await editor.GetAsync($"{Base}/options?type=openai");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(Secret, body);
+        var options = JsonDocument.Parse(body).RootElement;
+        var option = options.EnumerateArray().Single(o => o.GetProperty("id").GetGuid() == id);
+        Assert.Equal(name, option.GetProperty("name").GetString());
+        Assert.All(options.EnumerateArray(), o => Assert.Equal("openai", o.GetProperty("type").GetString()));
+        Assert.False(option.TryGetProperty("fields", out _));
+
+        var viewer = await LoginAsync(UserRole.Viewer);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync($"{Base}/options")).StatusCode);
+    }
+
+    [Fact]
     public async Task Anonymous_is_401()
     {
         var anonymous = api.CreateClient();

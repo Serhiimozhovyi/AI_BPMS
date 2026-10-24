@@ -16,6 +16,7 @@ import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
 import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed } from '../../canvas/test-run';
 import { ExecutionsApiService, StartExecutionRequest } from '../../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorMessage } from '../../connectors/connectors-api.service';
+import { CredentialOption, CredentialsApiService } from '../../credentials/credentials-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../../node-form/expression-suggest';
 import { MCP_TOOL_TYPES, updateNode } from '../../node-form/node-form';
 import { NodePanelComponent } from '../../node-form/node-panel.component';
@@ -129,7 +130,7 @@ interface SaveRequest {
           </div>
           @if (selectedNode(); as node) {
             <aside class="editor__panel">
-              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [expressionContext]="selectedExpressionContext()" (nodeChange)="nodeEdited($event)" />
+              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" (nodeChange)="nodeEdited($event)" />
               <div class="editor__node-actions" data-testid="node-actions">
                 <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску" i18n="@@workfloweditor.runNode">Виконати вузол</button>
                 @if (selectedPinned()) {
@@ -258,6 +259,7 @@ export class WorkflowEditorPage implements OnInit {
   private readonly workflows = inject(WorkflowsApiService);
   private readonly nodes = inject(NodesApiService);
   private readonly connectors = inject(ConnectorsApiService);
+  private readonly credentialsApi = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly clipboard = inject(CanvasClipboardService);
   private readonly executions = inject(ExecutionsApiService);
@@ -271,6 +273,8 @@ export class WorkflowEditorPage implements OnInit {
   protected readonly definition = signal<WorkflowDefinition | null>(null);
   protected readonly descriptors = signal<NodeTypeInfo[]>([]);
   private readonly servers = signal<PaletteServer[]>([]);
+  /** Облікові дані для вибору у вузлах (F4-03); `null` — недоступні (немає прав або помилка), поля лишаються текстовими. */
+  protected readonly credentialOptions = signal<CredentialOption[] | null>(null);
   protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
   /** Останній тестовий запуск цього сценарію. */
   protected readonly testRun = signal<TestRun | null>(null);
@@ -393,6 +397,14 @@ export class WorkflowEditorPage implements OnInit {
     this.loadServers()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((servers) => this.servers.set(servers));
+
+    this.credentialsApi
+      .options()
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((options) => this.credentialOptions.set(options));
   }
 
   protected add(item: PaletteItem): void {

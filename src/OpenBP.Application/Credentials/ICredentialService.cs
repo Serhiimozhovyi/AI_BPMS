@@ -35,6 +35,12 @@ public sealed record CredentialSummary(
     CredentialUsage UsedBy,
     string? Error);
 
+/// <summary>Credential для вибору у формі вузла чи конектора (<c>GET /credentials/options</c>): лише id, назва, тип.</summary>
+/// <param name="Id">Id.</param>
+/// <param name="Name">Назва.</param>
+/// <param name="Type">Тип.</param>
+public sealed record CredentialOption(Guid Id, string Name, string Type);
+
 /// <summary>Тіло <c>POST /credentials</c>.</summary>
 /// <param name="Name">Назва, непорожня.</param>
 /// <param name="Type">Тип з каталогу.</param>
@@ -47,7 +53,8 @@ public sealed record CredentialCreateInput(string Name, string Type, JsonObject 
 public sealed record CredentialUpdateInput(string? Name = null, JsonObject? Data = null);
 
 /// <summary>
-/// Credentials (docs/architecture.md §8, §10): REST <c>/credentials</c> і сторінка UI. Лише <see cref="UserRole.Admin"/>.
+/// Credentials (docs/architecture.md §8, §10): REST <c>/credentials</c> і сторінка UI. Лише <see cref="UserRole.Admin"/>,
+/// крім <see cref="OptionsAsync"/> (<see cref="UserRole.Editor"/>: автор сценарію обирає credential у вузлі).
 /// Значення секретів назовні не віддаються ніколи — лише назви заповнених полів.
 /// </summary>
 public interface ICredentialService
@@ -58,6 +65,11 @@ public interface ICredentialService
     /// <summary>Усі credentials за назвою.</summary>
     /// <param name="ct">Скасування.</param>
     Task<IReadOnlyList<CredentialSummary>> ListAsync(CancellationToken ct);
+
+    /// <summary>Список для вибору (id, назва, тип) без даних і використання.</summary>
+    /// <param name="type">Лише цього типу; <c>null</c> — усі.</param>
+    /// <param name="ct">Скасування.</param>
+    Task<IReadOnlyList<CredentialOption>> OptionsAsync(string? type, CancellationToken ct);
 
     /// <summary>Один credential.</summary>
     /// <param name="id">Id.</param>
