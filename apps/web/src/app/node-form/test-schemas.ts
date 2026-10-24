@@ -57,6 +57,35 @@ export const IF_SCHEMA: JsonSchema = {
   },
 };
 
+export const SWITCH_SCHEMA: JsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  title: 'core.switch',
+  type: 'object',
+  required: ['rules'],
+  additionalProperties: false,
+  $defs: {
+    condition: (IF_SCHEMA['$defs'] as Record<string, unknown>)['condition'],
+    rule: {
+      type: 'object',
+      required: ['conditions'],
+      additionalProperties: false,
+      properties: {
+        conditions: { type: 'array', items: { $ref: '#/$defs/condition' } },
+        combine: { type: 'string', enum: ['and', 'or'], default: 'and' },
+      },
+    },
+  },
+  properties: {
+    rules: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 4,
+      items: { $ref: '#/$defs/rule' },
+      description: 'Правило i спрямовує item на вихід rule{i}; жодне не виконалось — вихід fallback',
+    },
+  },
+};
+
 export const MCP_TOOL_SCHEMA: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   title: 'mcp.tool',
@@ -103,5 +132,6 @@ function descriptor(type: string, group: NodeTypeInfo['group'], outputs: string[
 
 export const SET_DESCRIPTOR = descriptor('core.set', 'transform', ['main'], SET_SCHEMA);
 export const IF_DESCRIPTOR = descriptor('core.if', 'logic', ['true', 'false'], IF_SCHEMA);
+export const SWITCH_DESCRIPTOR = descriptor('core.switch', 'logic', ['rule0', 'rule1', 'rule2', 'rule3', 'fallback'], SWITCH_SCHEMA);
 export const CODE_DESCRIPTOR = descriptor('core.code', 'transform', ['main'], CODE_SCHEMA);
 export const MCP_TOOL_DESCRIPTOR = descriptor('mcp.tool', 'integration', ['main'], MCP_TOOL_SCHEMA);

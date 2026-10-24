@@ -1,11 +1,13 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
+import { isAssignmentSchema, isCombineSchema, isConditionSchema, isRuleSchema, operatorLabel } from './conditions';
 import { ValueRules, isPlainObject } from './node-value';
 
 /**
  * JSON Schema параметрів → поля ngx-formly (F2-18). Підтримується підмножина, яку дають дескриптори `core.*`
  * і `inputSchema` MCP tools: `type` (зокрема `[T, "null"]`), `enum`/`const`, `properties`/`required`, `items`,
  * локальні `$ref` (`#/$defs/…`, `#/definitions/…`), `title`, `description`, `default`, `minimum`.
- * Решта (`oneOf`, кілька типів, об'єкти без `properties`) редагується як JSON-значення.
+ * Решта (`oneOf`, кілька типів, об'єкти без `properties`) редагується як JSON-значення. Умови, «AND/OR» і присвоєння
+ * впізнаються за формою схеми й отримують власні типи полів (F3-53, `conditions.ts`).
  * Значення за замовчуванням у модель не підставляються — лише показуються підказкою: відкриття панелі не змінює вузол.
  */
 
@@ -16,6 +18,12 @@ export const VALUE_FIELD = 'app-value';
 export const ARRAY_FIELD = 'app-array';
 export const CODE_FIELD = 'app-code';
 export const SECTION_WRAPPER = 'app-section';
+/** Умова «ліве · оператор · праве» в один ряд (F3-53). */
+export const CONDITION_FIELD = 'app-condition';
+/** Перемикач «усі умови (AND) / будь-яка (OR)» чіпами (F3-53). */
+export const COMBINE_FIELD = 'app-combine';
+/** Таблиця присвоєнь «поле = значення» `core.set` (F3-53). */
+export const ASSIGNMENTS_FIELD = 'app-assignments';
 
 /** Глибина вкладеності, після якої об'єкти й масиви редагуються як JSON (захист від рекурсивних `$ref`). */
 const MAX_DEPTH = 6;
@@ -35,6 +43,17 @@ export interface NodeFieldProps {
   placeholder?: string;
   rules?: ValueRules;
   multiline?: boolean;
+  /** Масив: підпис кнопки додавання (типово «Додати»). */
+  addLabel?: string;
+  /** Масив правил `core.switch`: над кожним — вихідний порт `rule{i}`. */
+  rulePorts?: boolean;
+  /** Масив: межі кількості елементів зі схеми (`minItems`/`maxItems`). */
+  minItems?: number;
+  maxItems?: number;
+  /** Масив: «Видалити» компактною кнопкою «✕» (умови, правила). */
+  compact?: boolean;
+  /** Рядок-назва присвоєння: автодоповнення іменами полів входу. */
+  suggestInputFields?: boolean;
 }
 
 /** Поля форми для об'єктної схеми (параметри вузла). Не об'єкт — порожній список. */
@@ -65,12 +84,20 @@ function fieldFor(key: string | undefined, raw: JsonSchema, required: boolean, r
   if (schema['default'] !== undefined && schema['default'] !== null) props.placeholder = defaultHint(schema['default']);
 
   const enumValues = Array.isArray(schema['enum']) ? schema['enum'] : 'const' in schema ? [schema['const']] : null;
+  if (enumValues && isCombineSchema(schema)) {
+    const label = props.label === key ? $localize`:@@cond.combine:Як поєднати умови` : props.label;
+    return { key, type: COMBINE_FIELD, props: { ...props, label, rules: { kind: 'enum', options: enumValues } } };
+  }
   if (enumValues) {
     return valueField(key, props, { kind: 'enum', options: enumValues });
   }
 
   const types = typesOf(schema);
   const type = types.length === 1 ? types[0] : undefined;
+
+  if (type === 'object' && depth < MAX_DEPTH && isPlainObject(schema['properties']) && isConditionSchema(schema)) {
+    return { key, type: CONDITION_FIELD, props, fieldGroup: conditionParts(schema, root, depth) };
+  }
 
   if (type === 'object' && depth < MAX_DEPTH && isPlainObject(schema['properties'])) {
     const nested = requiredOf(schema);
@@ -83,6 +110,24 @@ function fieldFor(key: string | undefined, raw: JsonSchema, required: boolean, r
   }
 
   if (type === 'array' && depth < MAX_DEPTH && isPlainObject(schema['items'])) {
+    const items = resolve(schema['items'], root, 0);
+    if (typeof schema['minItems'] === 'number') props.minItems = schema['minItems'];
+    if (typeof schema['maxItems'] === 'number') props.maxItems = schema['maxItems'];
+    // Назва без `title` у схемі — ключ; для впізнаних масивів — людська назва.
+    const untitled = props.label === key;
+    if (isPlainObject(items['properties']) && isAssignmentSchema(items)) {
+      if (untitled) props.label = $localize`:@@set.fields:Поля`;
+      return { key, type: ASSIGNMENTS_FIELD, props, fieldArray: { fieldGroup: assignmentParts(items, root, depth) } };
+    }
+    if (isConditionSchema(items)) {
+      if (untitled) props.label = $localize`:@@cond.conditions:Умови`;
+      props.addLabel = $localize`:@@cond.add:Додати умову`;
+      props.compact = true;
+    } else if (isRuleSchema(items)) {
+      if (untitled) props.label = $localize`:@@cond.rules:Правила`;
+      props.addLabel = $localize`:@@cond.addRule:Додати правило`;
+      props.rulePorts = true;
+    }
     return {
       key,
       type: ARRAY_FIELD,
@@ -104,6 +149,37 @@ function fieldFor(key: string | undefined, raw: JsonSchema, required: boolean, r
     default:
       return valueField(key, { ...props, multiline: true }, { kind: 'json' });
   }
+}
+
+/** Частини умови: ліве значення й праве — однорядкові, оператор — список з підписами українською. */
+function conditionParts(schema: JsonSchema, root: JsonSchema, depth: number): FormlyFieldConfig[] {
+  const required = requiredOf(schema);
+  return Object.entries(properties(schema)).map(([k, p]) => {
+    const field = fieldFor(k, asSchema(p), required.has(k), root, depth + 1);
+    const props = field.props as NodeFieldProps;
+    if (k === 'left') return { ...field, props: { ...props, multiline: false, label: $localize`:@@cond.left:Значення`, description: undefined, placeholder: '{{ $json.поле }}' } };
+    if (k === 'right') return { ...field, props: { ...props, multiline: false, label: $localize`:@@cond.right:Порівняти з`, description: undefined } };
+    if (k === 'operator' && props.rules?.kind === 'enum') {
+      const options = props.rules.options ?? [];
+      return { ...field, props: { ...props, label: $localize`:@@cond.operator:Оператор`, rules: { ...props.rules, labels: options.map((o) => operatorLabel(String(o))) } } };
+    }
+    return field;
+  });
+}
+
+/** Частини присвоєння: назва з автодоповненням полями входу, значення — однорядкове. */
+function assignmentParts(schema: JsonSchema, root: JsonSchema, depth: number): FormlyFieldConfig[] {
+  const required = requiredOf(schema);
+  return Object.entries(properties(schema)).map(([k, p]) => {
+    const field = fieldFor(k, asSchema(p), required.has(k), root, depth + 1);
+    const props = field.props as NodeFieldProps;
+    if (k === 'name') return { ...field, props: { ...props, label: $localize`:@@set.name:Поле`, description: undefined, suggestInputFields: true } };
+    return { ...field, props: { ...props, label: $localize`:@@set.value:Значення`, description: undefined, multiline: false } };
+  });
+}
+
+function properties(schema: JsonSchema): Record<string, unknown> {
+  return isPlainObject(schema['properties']) ? schema['properties'] : {};
 }
 
 function valueField(key: string | undefined, props: NodeFieldProps, rules: ValueRules): FormlyFieldConfig {
