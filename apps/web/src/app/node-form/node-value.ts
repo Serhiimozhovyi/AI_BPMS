@@ -12,6 +12,10 @@ export interface ValueRules {
   kind: ValueKind;
   /** Для `enum` — допустимі значення. */
   options?: readonly unknown[];
+  /** Для `enum` — підписи значень у тому ж порядку (напр. назви credentials для їхніх id); немає — саме значення. */
+  labels?: readonly string[];
+  /** Для `enum` — значення, що показуються в списку, але є помилкою `missing` (напр. id видаленого credential'а). */
+  missing?: readonly unknown[];
   /** Для `json` — очікуваний тип (`object` / `array`), якщо схема його задає. */
   jsonType?: 'object' | 'array';
   minimum?: number;
@@ -66,7 +70,7 @@ export function parseValue(text: string, rules: ValueRules): unknown {
 }
 
 /** Код помилки значення або `null`. Порожнє значення не помилка — обов'язковість перевіряє `required`. */
-export type ValueErrorCode = 'expression' | 'number' | 'integer' | 'boolean' | 'enum' | 'object' | 'array' | 'minimum';
+export type ValueErrorCode = 'expression' | 'number' | 'integer' | 'boolean' | 'enum' | 'missing' | 'object' | 'array' | 'minimum';
 
 export function valueError(value: unknown, rules: ValueRules): ValueErrorCode | null {
   if (value === undefined || value === null) return null;
@@ -83,6 +87,7 @@ export function valueError(value: unknown, rules: ValueRules): ValueErrorCode | 
       return typeof value === 'boolean' ? null : 'boolean';
     case 'enum': {
       const key = JSON.stringify(value);
+      if ((rules.missing ?? []).some((o) => JSON.stringify(o) === key)) return 'missing';
       return (rules.options ?? []).some((o) => JSON.stringify(o) === key) ? null : 'enum';
     }
     case 'json':
@@ -111,6 +116,8 @@ export function valueErrorMessage(code: string, rules?: ValueRules): string {
       return $localize`:@@nodeform.error.boolean:Очікується true, false або вираз {{ }}`;
     case 'enum':
       return $localize`:@@nodeform.error.enum:Значення не з переліку`;
+    case 'missing':
+      return $localize`:@@nodeform.error.missing:Не знайдено: облікові дані видалено або недоступні`;
     case 'object':
       return $localize`:@@nodeform.error.object:Очікується JSON-об'єкт або вираз {{ }}`;
     case 'array':

@@ -51,7 +51,10 @@ describe('WorkflowEditorPage', () => {
     });
     const fixture = TestBed.createComponent(WorkflowEditorPage);
     fixture.detectChanges();
-    return { fixture, http: TestBed.inject(HttpTestingController), host: fixture.nativeElement as HTMLElement };
+    const http = TestBed.inject(HttpTestingController);
+    // Облікові дані для вибору у вузлах (F4-03) — тут не перевіряються.
+    http.expectOne((r) => r.url === '/api/v1/credentials/options').flush([]);
+    return { fixture, http, host: fixture.nativeElement as HTMLElement };
   }
 
   async function render(fixture: ReturnType<typeof setup>['fixture']) {

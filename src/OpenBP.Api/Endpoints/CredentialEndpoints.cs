@@ -2,7 +2,7 @@ using OpenBP.Application.Credentials;
 
 namespace OpenBP.Api.Endpoints;
 
-/// <summary>Маршрути <c>/credentials</c> (F4-01). Ролі перевіряє <see cref="ICredentialService"/> (лише admin).</summary>
+/// <summary>Маршрути <c>/credentials</c> (F4-01, F4-03). Ролі перевіряє <see cref="ICredentialService"/> (admin; <c>/options</c> — editor).</summary>
 public static class CredentialEndpoints
 {
     /// <summary>Додає маршрути до групи <c>/api/v1</c>.</summary>
@@ -12,6 +12,8 @@ public static class CredentialEndpoints
         var credentials = api.MapGroup("/credentials");
 
         credentials.MapGet("/types", (ICredentialService service) => service.Types());
+
+        credentials.MapGet("/options", (ICredentialService service, CancellationToken ct, string? type) => service.OptionsAsync(type, ct));
 
         credentials.MapGet("/", (ICredentialService service, CancellationToken ct) => service.ListAsync(ct));
 

@@ -75,4 +75,37 @@ describe('ConnectorFormComponent', () => {
     expect(host.querySelector('[data-testid="form-error"]')?.textContent).toContain('Credential не знайдено');
     expect(fixture.componentInstance.saving()).toBe(false);
   });
+
+  it('облікові дані: список за транспортом; створені тут же — обрано', async () => {
+    const { fixture, http } = setup();
+    const c = fixture.componentInstance;
+    http.expectOne((r) => r.url === '/api/v1/credentials/options').flush([
+      { id: 'a', name: 'Env', type: 'mcp.stdio' },
+      { id: 'b', name: 'Headers', type: 'mcp.http' },
+      { id: 'c', name: 'LLM', type: 'anthropic' },
+    ]);
+    http.expectOne('/api/v1/credentials/types').flush([
+      { type: 'mcp.http', displayName: 'HTTP', description: '', fields: [{ name: 'headers', title: 'Заголовки', kind: 'secretMap', required: true }], schema: {} },
+    ]);
+    expect(c.matchingCredentials().map((x) => x.id)).toEqual(['a']);
+    c.form.patchValue({ credentialId: 'a' });
+    c.form.patchValue({ transport: 'http' });
+    expect(c.matchingCredentials().map((x) => x.id)).toEqual(['b']);
+    expect(c.form.controls.credentialId.value).toBe('');
+
+    c.credentialCreated({ id: 'd', name: 'Новий', type: 'mcp.http', fields: ['headers.Authorization'], createdBy: null, usedBy: { connectors: [], workflows: [] }, error: null });
+    expect(c.matchingCredentials().map((x) => x.id)).toEqual(['b', 'd']);
+    expect(c.form.controls.credentialId.value).toBe('d');
+    expect(c.creatingCredential()).toBe(false);
+  });
+
+  it('облікові дані недоступні (не admin) — порожній список без кнопки «Створити»', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne((r) => r.url === '/api/v1/credentials/options').flush(null, { status: 403, statusText: 'Forbidden' });
+    http.expectOne('/api/v1/credentials/types').flush(null, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.credentials()).toEqual([]);
+    expect(host.querySelector('[data-testid="create-credential"]')).toBeNull();
+  });
 });

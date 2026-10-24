@@ -1,6 +1,7 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { McpToolInfo } from '../connectors/connectors-api.service';
-import { NodeTypeInfo } from '../nodes/nodes-api.service';
+import { CredentialOption } from '../credentials/credentials-api.service';
+import { CredentialRequirement, NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowNode } from '../workflows/workflows-api.service';
 import { isPlainObject } from './node-value';
 import { CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
@@ -16,9 +17,71 @@ export const MCP_TOOL_TYPES: readonly string[] = ['mcp.tool', 'mcp.poll'];
 /** Тип вузла, чий параметр `code` редагується в Monaco (F2-19). */
 export const CODE_NODE_TYPE = 'core.code';
 
-/** Поля параметрів: зі схеми дескриптора; для `mcp.tool` `arguments` — з `inputSchema` tool'а (невідомий tool — JSON); `code` у `core.code` — Monaco. */
-export function parameterFields(type: string, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null | undefined): FormlyFieldConfig[] {
+/**
+ * Поля параметрів: зі схеми дескриптора; для `mcp.tool` `arguments` — з `inputSchema` tool'а (невідомий tool — JSON);
+ * `code` у `core.code` — Monaco; параметри з `credentials` дескриптора — список облікових даних потрібного типу (F4-03),
+ * якщо `credentials` завантажено (`null` — недоступні, поле лишається текстовим).
+ */
+export function parameterFields(
+  type: string,
+  descriptor: NodeTypeInfo | undefined,
+  tool: McpToolInfo | null | undefined,
+  credentials: readonly CredentialOption[] | null = null,
+  parameters: Record<string, unknown> = {},
+): FormlyFieldConfig[] {
   if (!descriptor) return [];
+  return withCredentialFields(baseFields(type, descriptor, tool), descriptor, credentials, parameters);
+}
+
+/** Типи credential'а, які приймає вимога вузла: для `ai.llm` — за обраним провайдером. */
+export function credentialTypesFor(nodeType: string, requirement: CredentialRequirement, parameters: Record<string, unknown>): string[] {
+  if (nodeType === 'ai.llm') {
+    const provider = parameters['provider'];
+    return typeof provider === 'string' && provider && !isExpressionText(provider) ? [provider] : ['anthropic', 'openai', 'openai-compatible'];
+  }
+  return [requirement.type];
+}
+
+function withCredentialFields(
+  fields: FormlyFieldConfig[],
+  descriptor: NodeTypeInfo,
+  credentials: readonly CredentialOption[] | null,
+  parameters: Record<string, unknown>,
+): FormlyFieldConfig[] {
+  const requirements = descriptor.credentials ?? [];
+  if (!credentials || requirements.length === 0) return fields;
+  return fields.map((f) => {
+    const requirement = requirements.find((r) => r.parameter === f.key);
+    if (!requirement) return f;
+    const types = credentialTypesFor(descriptor.type, requirement, parameters);
+    const matching = credentials.filter((c) => types.includes(c.type));
+    const current = parameters[requirement.parameter];
+    const missing = typeof current === 'string' && current && !matching.some((c) => c.id === current) ? [current] : [];
+    const props = f.props as NodeFieldProps;
+    return {
+      key: f.key,
+      type: VALUE_FIELD,
+      props: {
+        ...props,
+        label: props.label === requirement.parameter ? $localize`:@@nodeform.credential:Облікові дані` : props.label,
+        required: requirement.required || props.required,
+        rules: {
+          kind: 'enum',
+          options: [...matching.map((c) => c.id), ...missing],
+          labels: [...matching.map((c) => c.name), ...missing.map((id) => $localize`:@@nodeform.credential.missing:${id}:id: — не знайдено`)],
+          missing,
+          allowExpression: false,
+        },
+      } satisfies NodeFieldProps,
+    };
+  });
+}
+
+function isExpressionText(value: string): boolean {
+  return value.includes('{{');
+}
+
+function baseFields(type: string, descriptor: NodeTypeInfo, tool: McpToolInfo | null | undefined): FormlyFieldConfig[] {
   if (type === CODE_NODE_TYPE) return schemaFields(descriptor.parametersSchema).map((f) => (f.key === 'code' ? { ...f, type: CODE_FIELD } : f));
   if (!MCP_TOOL_TYPES.includes(type)) return schemaFields(descriptor.parametersSchema);
   const argumentsSchema = isPlainObject(tool?.inputSchema)

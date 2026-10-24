@@ -43,6 +43,19 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<CredentialOption>> OptionsAsync(string? type, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        var query = db.Credentials.AsNoTracking();
+        if (!string.IsNullOrEmpty(type))
+        {
+            query = query.Where(c => c.Type == type);
+        }
+
+        return await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Select(c => new CredentialOption(c.Id, c.Name, c.Type)).ToListAsync(ct);
+    }
+
+    /// <inheritdoc />
     public async Task<CredentialSummary> GetAsync(Guid id, CancellationToken ct)
     {
         currentUser.Require(UserRole.Admin);

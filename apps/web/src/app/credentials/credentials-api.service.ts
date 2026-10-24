@@ -40,6 +40,13 @@ export interface CredentialSummary {
   error: string | null;
 }
 
+/** Credential для вибору (`GET /credentials/options`, роль editor): без даних. */
+export interface CredentialOption {
+  id: string;
+  name: string;
+  type: string;
+}
+
 /** Дані credential'а: рядки або об'єкти «назва → рядок»; `null` у PATCH видаляє. */
 export type CredentialData = Record<string, string | Record<string, string | null> | null>;
 
@@ -51,6 +58,11 @@ export class CredentialsApiService {
 
   types(): Observable<CredentialTypeInfo[]> {
     return this.http.get<CredentialTypeInfo[]>(`${this.base}/types`);
+  }
+
+  /** Список для вибору у вузлі чи конекторі; доступний editor. */
+  options(type?: string): Observable<CredentialOption[]> {
+    return this.http.get<CredentialOption[]>(`${this.base}/options`, type ? { params: { type } } : {});
   }
 
   list(): Observable<CredentialSummary[]> {

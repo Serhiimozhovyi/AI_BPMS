@@ -1,6 +1,7 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { WorkflowDefinition, WorkflowNode, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { applyCommon, applyParameters, commonModel, parameterFields, updateNode } from './node-form';
+import { applyCommon, applyParameters, commonModel, credentialTypesFor, parameterFields, updateNode } from './node-form';
+import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { formatValue, parseValue, valueError } from './node-value';
 import { ARRAY_FIELD, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
 import { FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_SCHEMA } from './test-schemas';
@@ -154,3 +155,65 @@ describe('applyParameters / applyCommon / updateNode', () => {
     expect(updateNode(def, node({ id: 'zzz' }))).toBe(def);
   });
 });
+
+describe('вибір облікових даних (F4-03)', () => {
+  const llm: NodeTypeInfo = {
+    type: 'ai.llm',
+    version: 1,
+    displayName: 'LLM',
+    group: 'ai',
+    inputs: ['main'],
+    outputs: ['main'],
+    parametersSchema: {
+      type: 'object',
+      required: ['provider', 'credentialId'],
+      properties: { provider: { type: 'string', enum: ['anthropic', 'openai', 'openai-compatible'] }, credentialId: { type: 'string' } },
+    },
+    credentials: [{ name: 'llm', type: 'openai-compatible', parameter: 'credentialId', required: true }],
+    isTrigger: false,
+  };
+  const options = [
+    { id: 'a1', name: 'Anthropic прод', type: 'anthropic' },
+    { id: 'o1', name: 'OpenAI', type: 'openai' },
+    { id: 'h1', name: 'Headers', type: 'mcp.http' },
+  ];
+
+  function credentialField(parameters: Record<string, unknown>) {
+    const fields = parameterFields('ai.llm', llm, null, options, parameters);
+    return fields.find((f) => f.key === 'credentialId')!;
+  }
+
+  it('список лише потрібного типу (для ai.llm — за провайдером), назви як підписи', () => {
+    const rules = credentialField({ provider: 'anthropic' }).props!['rules'] as { kind: string; options: string[]; labels: string[] };
+    expect(rules.kind).toBe('enum');
+    expect(rules.options).toEqual(['a1']);
+    expect(rules.labels).toEqual(['Anthropic прод']);
+    expect(credentialField({}).props!['label']).toBe('Облікові дані');
+    expect(credentialTypesFor('ai.llm', llm.credentials![0], {})).toEqual(['anthropic', 'openai', 'openai-compatible']);
+  });
+
+  it('обране значення пишеться в параметр вузла', () => {
+    const n = node({ type: 'ai.llm', parameters: { provider: 'openai' } });
+    const field = credentialField({ provider: 'openai' });
+    const rules = field.props!['rules'] as ValueRulesLike;
+    expect(parseValue('o1', rules)).toBe('o1');
+    expect(applyParameters(n, { provider: 'openai', credentialId: 'o1' }).parameters).toEqual({ provider: 'openai', credentialId: 'o1' });
+    expect(valueError('o1', rules)).toBeNull();
+  });
+
+  it('видалений id — у списку з позначкою і помилкою поля', () => {
+    const rules = credentialField({ provider: 'anthropic', credentialId: 'gone' }).props!['rules'] as ValueRulesLike & { labels: string[] };
+    expect(rules.options).toContain('gone');
+    expect(rules.labels.at(-1)).toContain('не знайдено');
+    expect(valueError('gone', rules)).toBe('missing');
+  });
+
+  it('без списку (немає прав) — звичайне текстове поле', () => {
+    const fields = parameterFields('ai.llm', llm, null, null, {});
+    const rules = fields.find((f) => f.key === 'credentialId')!.props!['rules'] as { kind: string };
+    expect(rules.kind).toBe('string');
+  });
+});
+
+type ValueRulesLike = Parameters<typeof valueError>[1];
+

@@ -216,7 +216,10 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
   });
 
   protected readonly choices = computed(() =>
-    (this.rules.options ?? []).map((value) => ({ value, label: typeof value === 'string' ? value : JSON.stringify(value) })),
+    (this.rules.options ?? []).map((value, i) => ({
+      value,
+      label: this.rules.labels?.[i] ?? (typeof value === 'string' ? value : JSON.stringify(value)),
+    })),
   );
 
   protected readonly errorText = computed(() => {

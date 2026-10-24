@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, effect, input, linkedSignal, output
 import { FormGroup } from '@angular/forms';
 import { FormlyFieldConfig, FormlyForm, FormlyFormOptions } from '@ngx-formly/core';
 import { McpToolInfo } from '../connectors/connectors-api.service';
+import { CredentialOption } from '../credentials/credentials-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
 import { CommonModel, MCP_TOOL_TYPES, applyCommon, applyParameters, commonFields, commonModel, parameterFields, parametersModel } from './node-form';
@@ -15,6 +16,7 @@ interface PanelState {
   node: WorkflowNode;
   descriptor: NodeTypeInfo | undefined;
   tool: McpToolInfo | null;
+  credentials: readonly CredentialOption[] | null;
   paramsForm: FormGroup;
   paramsModel: Record<string, unknown>;
   paramsFields: FormlyFieldConfig[];
@@ -117,6 +119,9 @@ export class NodePanelComponent {
   /** Для `mcp.tool`: tool із `tools_cache` (його `inputSchema` описує `arguments`). */
   readonly tool = input<McpToolInfo | null>(null);
 
+  /** Облікові дані для вибору в параметрах з `credentials` дескриптора (F4-03); `null` — недоступні, поле текстове. */
+  readonly credentials = input<readonly CredentialOption[] | null>(null);
+
   /** Що підказувати в полях виразів `{{ }}` (F2-19): інші вузли, поля останнього тестового output. */
   readonly expressionContext = input<ExpressionContext>(EMPTY_EXPRESSION_CONTEXT);
 
@@ -135,14 +140,14 @@ export class NodePanelComponent {
   /** Останній вузол, відправлений з панелі: коли він повертається через `node`, форму не перебудовуємо. */
   private lastEmitted: WorkflowNode | null = null;
 
-  protected readonly state = linkedSignal<{ node: WorkflowNode; descriptor: NodeTypeInfo | undefined; tool: McpToolInfo | null }, PanelState>({
-    source: () => ({ node: this.node(), descriptor: this.descriptor(), tool: this.tool() }),
+  protected readonly state = linkedSignal<PanelSource, PanelState>({
+    source: () => ({ node: this.node(), descriptor: this.descriptor(), tool: this.tool(), credentials: this.credentials() }),
     computation: (src, previous) => {
       const prev = previous?.value;
-      if (prev && src.node === this.lastEmitted && src.descriptor === prev.descriptor && src.tool === prev.tool) {
+      if (prev && src.node === this.lastEmitted && src.descriptor === prev.descriptor && src.tool === prev.tool && src.credentials === prev.credentials) {
         return { ...prev, node: src.node };
       }
-      return createState(src.node, src.descriptor, src.tool, this.formState);
+      return createState(src, this.formState);
     },
   });
 
@@ -168,15 +173,24 @@ export class NodePanelComponent {
 
 let nextStateId = 0;
 
-function createState(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null, formState: NodeFormState): PanelState {
+interface PanelSource {
+  node: WorkflowNode;
+  descriptor: NodeTypeInfo | undefined;
+  tool: McpToolInfo | null;
+  credentials: readonly CredentialOption[] | null;
+}
+
+function createState({ node, descriptor, tool, credentials }: PanelSource, formState: NodeFormState): PanelState {
+  const paramsModel = parametersModel(node);
   return {
     id: ++nextStateId,
     node,
     descriptor,
     tool,
+    credentials,
     paramsForm: new FormGroup({}),
-    paramsModel: parametersModel(node),
-    paramsFields: parameterFields(node.type, descriptor, tool),
+    paramsModel,
+    paramsFields: parameterFields(node.type, descriptor, tool, credentials, paramsModel),
     paramsOptions: { formState },
     commonForm: new FormGroup({}),
     commonModel: commonModel(node),
