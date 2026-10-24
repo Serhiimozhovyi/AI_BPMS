@@ -674,7 +674,7 @@
 - DoD: тести Api проти фейкового провайдера (job з паузою після збереження, лише поточна версія, пересування — без нового запиту, помилка моделі видна, not_configured без job'а, ролі); тест воркера (job → пояснення); Vitest картки (опитування, застаріле, «Пояснити заново»); `docs/architecture.md` і `docs/openapi.json` оновлено.
 
 ### F3-73 · Пояснення сценарію від ШІ-агента через MCP
-- model: `opus` · status: `review` · depends: F3-72
+- model: `opus` · status: `done` · depends: F3-72
 - Запит власника (2026-10-24): пояснення має писати Claude чи ChatGPT, підключений до OpenBP через MCP, а не модель за API-ключем.
 - Що: `/mcp` tools `get_workflow_explanation` (viewer) і `save_workflow_explanation` (editor, `text` ≤ 50 000) поверх `IWorkflowExplanationService`, REST `PUT /workflows/{id}/explanation`; описи `create_workflow`/`update_workflow` підказують агенту писати пояснення після збереження, опис `save_workflow_explanation` задає структуру. Збереження з тим самим відбитком (пересунули вузли) лишає пояснення актуальним без моделі; відбиток не залежить від порядку ключів jsonb. Картка в редакторі підказує, що пояснення пише агент через MCP або модель із налаштувань.
 - DoD: тести `/mcp` (зберегти, пересування — актуальне, зміна кроку — застаріле, viewer — FORBIDDEN, порожній текст — помилка); тест Api `PUT`; `docs/mcp-server.md`, `docs/architecture.md`, `docs/openapi.json` оновлено.
