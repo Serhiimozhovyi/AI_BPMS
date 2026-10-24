@@ -516,6 +516,11 @@
 - Що: у `connectors/msgraph` tools того самого контракту, що й F3-28 (`read_sheets`, `update_row`, `append_row`, `upsert_row`, `append_rows`; `spreadsheet_id` → `{ drive_id, item_id }` або посилання на файл), поверх Graph Excel API (`/drives/{id}/items/{id}/workbook`: `worksheets/{name}/usedRange`, `range(address=…)` PATCH; дописування — `tables/{name}/rows/add`, бо в таблиці Excel воно атомарне, на відміну від запису «в кінець usedRange»). Сесія книги (`createSession`, `persistChanges: true`) на один виклик tool'а. Дозволи застосунку: `Sites.Selected` з доступом лише до потрібного сайту (README: як видати), запасний варіант — `Files.ReadWrite.All`. Запит власника: бот психологічної підтримки має працювати і з Excel у SharePoint, не лише з Google Sheets.
 - DoD: тести проти фейку Graph на ті самі сценарії, що й F3-28 (успіх кожного tool'а, невідома колонка, 401 → одне повторне отримання токена, 423/429/503 з `Retry-After` → `isError`); `upsert_row` і `append_row` працюють і з листом без таблиці Excel (помилка з підказкою створити таблицю); `docs/connectors.md` і README оновлено.
 
+### F3-36 · UI: непрозорі панелі редактора й діалоги за AC-Kit
+- model: `sonnet` · status: `review` · depends: F3-26
+- Що: баг від власника (2026-10-24): бічна панель налаштувань вузла прозора, крізь неї видно вузли й лінії канвасу, текст накладається. Палітра, панель вузла й рядок інструментів редактора — біле тло над канвасом, канвас обрізає вміст своєю областю; діалоги, select і autocomplete — непрозорі білі з радіусом AC-Kit.
+- DoD: перевірено в браузері (вузли під панеллю не видно); lint/test/build/e2e зелені.
+
 ## Фаза 4 — Продуктова готовність
 
 Критерій фази (`docs/roadmap.md`): інсталяція у клієнта за документацією без нашої участі.
