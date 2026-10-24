@@ -180,6 +180,22 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 
 Інші сценарії лімітами одного сценарію не блокуються.
 
+### Очікування (`core.wait`)
+
+- Версія 1 (`typeVersion: 1`, збережені сценарії): `amount` у `unit` (`milliseconds`…`hours`), до 1 год; пауза тримає
+  воркер.
+- Версія 2 (`typeVersion: 2`, палітра пропонує її для нових вузлів, F5-02): `mode: "duration"` — `amount` у `unit`
+  (`seconds`, `minutes`, `hours`, `days`); `mode: "until"` — `until`, дата ISO 8601 (можна вираз), без зсуву — у
+  `settings.timezone`. Найдовше — 90 днів; минула дата — items ідуть далі одразу. До 30 с вузол чекає в пам'яті, довше —
+  виконання переходить у стан `waiting` до `resumeAt`, воркер вільний, а в призначений час виконання прокидається й
+  продовжує з наступного вузла (docs/architecture.md §10.4 «Довге очікування»). Скасувати `waiting` можна з журналу
+  виконань, REST або MCP `cancel_execution`.
+
+```json
+{ "id": "n_wait", "name": "Чекати 2 дні", "type": "core.wait", "typeVersion": 2, "position": [400, 0],
+  "parameters": { "mode": "duration", "amount": 2, "unit": "days" } }
+```
+
 ### Ключ кореляції
 
 Ключ кореляції (F5-04) — бізнес-ідентифікатор запуску (id угоди, номер заявки), щоб знаходити всі виконання по
@@ -200,7 +216,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 "settings": { "correlation": { "skipIfActive": true } }
 ```
 
-- `skipIfActive` — якщо в сценарію вже є активне виконання (`queued`, `running`, `cancelling`) з тим самим ключем,
+- `skipIfActive` — якщо в сценарію вже є активне виконання (`queued`, `running`, `waiting`, `cancelling`) з тим самим ключем,
   новий запуск одразу записується як `cancelled` з поясненням у `error` (id активного виконання), job не ставиться;
   webhook відповідає 202 з id цього запису. Діє на всі режими, зокрема ручний запуск із ключем. Запуск без ключа не
   перевіряється. У редакторі — перемикач у діалозі «Налаштування».

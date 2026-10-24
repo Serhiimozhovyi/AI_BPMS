@@ -45,7 +45,7 @@ public static class ExecutionEndpoints
                 new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), from, to, correlationKey),
                 new PageRequest { Page = page ?? 1, PageSize = pageSize ?? PageRequest.DefaultPageSize },
                 ct))
-            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).");
+            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).");
 
         executions.MapGet("/{id:guid}", (Guid id, IExecutionService service, CancellationToken ct) =>
             service.GetAsync(id, ct))
@@ -75,7 +75,7 @@ public static class ExecutionEndpoints
 
         executions.MapGet("/{id:guid}/events", StreamEventsAsync)
             .WithSummary("Потік подій виконання (SSE)")
-            .WithDescription("`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану.")
+            .WithDescription("`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану; у стані `waiting` (довге очікування) лишається відкритим.")
             .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
 
         return api;

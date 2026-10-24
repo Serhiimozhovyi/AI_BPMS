@@ -1563,6 +1563,8 @@ export class WorkflowEditorComponent implements OnInit {
         return $localize`:@@workfloweditor.run.queued:У черзі`;
       case 'running':
         return $localize`:@@workfloweditor.run.running:Виконується`;
+      case 'waiting':
+        return $localize`:@@workfloweditor.run.waiting:Очікує: вузол «Очікування» продовжить виконання в призначений час`;
       case 'cancelling':
         return $localize`:@@workfloweditor.run.cancelling:Скасовується`;
       case 'success':
@@ -1635,6 +1637,8 @@ export class WorkflowEditorComponent implements OnInit {
         return $localize`:@@noderun.status.skipped:пропущено`;
       case 'cancelled':
         return $localize`:@@noderun.status.cancelled:скасовано`;
+      case 'waiting':
+        return $localize`:@@noderun.status.waiting:очікує`;
     }
   }
 

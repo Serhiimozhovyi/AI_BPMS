@@ -3,11 +3,14 @@ import { Injectable, InjectionToken, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE, PageResult } from '../connectors/connectors-api.service';
 
-/** `ExecutionState` (snake_case, як у БД): `queued → running → success | error | cancelled | timed_out`. */
-export type ExecutionState = 'queued' | 'running' | 'cancelling' | 'success' | 'error' | 'cancelled' | 'timed_out';
+/**
+ * `ExecutionState` (snake_case, як у БД): `queued → running → success | error | cancelled | timed_out`;
+ * `running ⇄ waiting` — довге очікування (F5-02).
+ */
+export type ExecutionState = 'queued' | 'running' | 'waiting' | 'cancelling' | 'success' | 'error' | 'cancelled' | 'timed_out';
 
-/** `StepStatus` кроку (camelCase). */
-export type StepStatus = 'success' | 'error' | 'skipped' | 'cancelled';
+/** `StepStatus` кроку (camelCase); `waiting` — вузол чекає до `resumeAt` (F5-02). */
+export type StepStatus = 'success' | 'error' | 'skipped' | 'cancelled' | 'waiting';
 
 /** Item між вузлами (docs/workflow-format.md, «Item і BinaryRef»). */
 export interface ExecutionItem {
@@ -31,6 +34,10 @@ export interface ExecutionSummary {
   resumedFromExecutionId?: string | null;
   /** Ключ кореляції (F5-04): бізнес-ідентифікатор запуску, напр. id угоди. */
   correlationKey?: string | null;
+  /** Для `waiting` — коли виконання прокинеться (F5-02). */
+  resumeAt?: string | null;
+  /** Для `waiting` — вузол, що чекає. */
+  waitingNodeId?: string | null;
 }
 
 /** `StepError` — помилка вузла (F3-57): `message` — що сталося і що зробити, `details` — технічні подробиці. */
@@ -73,6 +80,8 @@ export interface ExecutionStep {
   finishedAt: string;
   /** Підкроки агента (F6-12); зазвичай немає. */
   subSteps?: SubStep[] | null;
+  /** Для кроку `waiting` — коли вузол прокинеться (F5-02). */
+  resumeAt?: string | null;
 }
 
 /** `ExecutionDetail` — `GET /executions/{id}`. */
@@ -202,7 +211,7 @@ export class ExecutionsApiService {
 }
 
 /** Усі стани для фільтра журналу. */
-export const EXECUTION_STATES: readonly ExecutionState[] = ['queued', 'running', 'cancelling', 'success', 'error', 'cancelled', 'timed_out'];
+export const EXECUTION_STATES: readonly ExecutionState[] = ['queued', 'running', 'waiting', 'cancelling', 'success', 'error', 'cancelled', 'timed_out'];
 
 /** Назва стану українською. */
 export function executionStateLabel(state: ExecutionState): string {
@@ -211,6 +220,8 @@ export function executionStateLabel(state: ExecutionState): string {
       return $localize`:@@executions.state.queued:У черзі`;
     case 'running':
       return $localize`:@@executions.state.running:Виконується`;
+    case 'waiting':
+      return $localize`:@@executions.state.waiting:Очікує`;
     case 'cancelling':
       return $localize`:@@executions.state.cancelling:Скасовується`;
     case 'success':

@@ -173,6 +173,9 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             </h2>
             <span [class]="stateClass(d.summary.state)" data-testid="detail-state">{{ stateLabel(d.summary.state) }}</span>
             <span class="opacity-70">{{ modeLabel(d.summary.mode) }}</span>
+            @if (d.summary.state === 'waiting' && waitingUntil(d); as until) {
+              <span data-testid="detail-resume-at" i18n="@@executions.waitingUntil">до {{ until | date: 'short' }}</span>
+            }
             @if (canCancel(d.summary.state)) {
               <button mat-stroked-button type="button" data-testid="cancel-button" [disabled]="acting()" (click)="cancel(d.summary.id)" i18n="@@executions.cancel">
                 Скасувати
@@ -481,7 +484,12 @@ export class ExecutionsPage implements OnInit {
   }
 
   canCancel(state: ExecutionState): boolean {
-    return state === 'queued' || state === 'running';
+    return state === 'queued' || state === 'running' || state === 'waiting';
+  }
+
+  /** Коли виконання прокинеться: із заголовка або (після події SSE) з останнього кроку `waiting`. */
+  waitingUntil(detail: ExecutionDetail): string | null {
+    return detail.summary.resumeAt ?? detail.steps.filter((s) => s.status === 'waiting').at(-1)?.resumeAt ?? null;
   }
 
   canRetry(state: ExecutionState): boolean {
@@ -541,6 +549,8 @@ export class ExecutionsPage implements OnInit {
       case 'error':
       case 'timed_out':
         return 'text-red-700';
+      case 'waiting':
+        return 'text-blue-700';
       default:
         return 'opacity-70';
     }
@@ -552,6 +562,8 @@ export class ExecutionsPage implements OnInit {
         return 'text-green-700';
       case 'error':
         return 'text-red-700';
+      case 'waiting':
+        return 'text-blue-700';
       default:
         return 'opacity-50';
     }

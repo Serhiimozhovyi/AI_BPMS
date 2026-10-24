@@ -191,6 +191,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.HasIndex(x => new { x.WorkflowId, x.StartedAt });
             e.HasIndex(x => new { x.WorkflowId, x.ScheduledAt }).HasFilter("scheduled_at IS NOT NULL");
             e.Property(x => x.CorrelationKey).HasMaxLength(200);
+            e.Property(x => x.WaitingNodeId).HasMaxLength(200);
             e.HasIndex(x => new { x.WorkflowId, x.CorrelationKey }).HasFilter("correlation_key IS NOT NULL");
         });
         b.Entity<ExecutionStepEntity>(e =>
@@ -199,6 +200,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.Input).HasColumnType("jsonb");
             e.Property(x => x.Output).HasColumnType("jsonb");
             e.Property(x => x.SubSteps).HasColumnType("jsonb");
+            e.Property(x => x.WaitState).HasColumnType("jsonb");
             e.HasIndex(x => x.ExecutionId);
         });
         b.Entity<JobEntity>(e =>

@@ -14,4 +14,10 @@ public enum StepStatus
 
     /// <summary>Виконання скасовано (<see cref="CancellationToken"/> або таймаут) під час роботи вузла.</summary>
     Cancelled = 3,
+
+    /// <summary>
+    /// Вузол призупинив виконання до <see cref="StepRecord.ResumeAt"/> (довге очікування, F5-02); на пробудженні він
+    /// виконується знову з <see cref="Nodes.INodeContext.Resumption"/>.
+    /// </summary>
+    Waiting = 4,
 }

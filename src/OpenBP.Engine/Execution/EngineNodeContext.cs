@@ -67,6 +67,17 @@ internal sealed class EngineNodeContext : INodeContext
     /// <summary>Підкроки цієї спроби в порядку запису.</summary>
     public List<SubStep> SubSteps { get; } = [];
 
+    public NodeResumption? Resumption { get; init; }
+
+    /// <summary>Призупинення, яке запросив вузол; <c>null</c> — вузол не призупинявся.</summary>
+    public (DateTimeOffset ResumeAt, JsonObject State)? Suspension { get; private set; }
+
+    public Item[][] Suspend(DateTimeOffset resumeAt, JsonObject? state = null)
+    {
+        Suspension = (resumeAt.ToUniversalTime(), state is null ? [] : (JsonObject)state.DeepClone());
+        return [];
+    }
+
     public void RecordSubStep(SubStep step)
     {
         ArgumentNullException.ThrowIfNull(step);

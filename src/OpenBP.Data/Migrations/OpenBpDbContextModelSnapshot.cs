@@ -432,6 +432,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("mode");
 
+                    b.Property<DateTimeOffset?>("ResumeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resume_at");
+
                     b.Property<Guid?>("ResumedFromExecutionId")
                         .HasColumnType("uuid")
                         .HasColumnName("resumed_from_execution_id");
@@ -452,6 +456,11 @@ namespace OpenBP.Data.Migrations
                     b.Property<Guid>("VersionId")
                         .HasColumnType("uuid")
                         .HasColumnName("version_id");
+
+                    b.Property<string>("WaitingNodeId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("waiting_node_id");
 
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("uuid")
@@ -548,6 +557,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("output");
 
+                    b.Property<DateTimeOffset?>("ResumeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resume_at");
+
                     b.Property<int>("RunIndex")
                         .HasColumnType("integer")
                         .HasColumnName("run_index");
@@ -564,6 +577,10 @@ namespace OpenBP.Data.Migrations
                     b.Property<string>("SubSteps")
                         .HasColumnType("jsonb")
                         .HasColumnName("sub_steps");
+
+                    b.Property<string>("WaitState")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("wait_state");
 
                     b.HasKey("Id");
 

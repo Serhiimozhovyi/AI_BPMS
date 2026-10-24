@@ -151,8 +151,9 @@ public sealed class ExecutionService(
 
             var updated = status switch
             {
-                ExecutionStatuses.Queued => await db.Executions
-                    .Where(e => e.Id == id && e.Status == ExecutionStatuses.Queued)
+                // У черзі чи в очікуванні воркер виконання не тримає — скасовуємо одразу; job побачить фінальний стан.
+                ExecutionStatuses.Queued or ExecutionStatuses.Waiting => await db.Executions
+                    .Where(e => e.Id == id && e.Status == status)
                     .ExecuteUpdateAsync(
                         s => s.SetProperty(e => e.Status, ExecutionStatuses.Cancelled)
                             .SetProperty(e => e.FinishedAt, time.GetUtcNow()),
@@ -281,7 +282,7 @@ public sealed class ExecutionService(
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException(Entity, id);
         await RequireWorkflowAsync(original.WorkflowId, UserRole.Editor, ct, (Entity, id));
-        if (original.Status is ExecutionStatuses.Queued or ExecutionStatuses.Running or ExecutionStatuses.Cancelling)
+        if (original.Status is ExecutionStatuses.Queued or ExecutionStatuses.Running or ExecutionStatuses.Cancelling or ExecutionStatuses.Waiting)
         {
             throw new ConflictException(ExecutionNotFinishedCode, $"Виконання «{id}» ще не завершене ({original.Status}); повторити можна лише завершене.");
         }
