@@ -2,6 +2,7 @@ import { Clipboard } from '@angular/cdk/clipboard';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { AuthService, UserInfo } from '../../auth/auth.service';
 import { ApiKeyInfo } from '../../settings/api-keys-api.service';
 import { SettingsPage } from './settings.page';
 
@@ -9,11 +10,12 @@ const claude: ApiKeyInfo = { id: 'k1', name: 'Claude', createdBy: 'u1', lastUsed
 const cursor: ApiKeyInfo = { id: 'k2', name: 'Cursor', createdBy: 'u1', lastUsedAt: null };
 
 describe('SettingsPage', () => {
-  async function setup(items: ApiKeyInfo[] = [claude, cursor]) {
+  async function setup(items: ApiKeyInfo[] = [claude, cursor], role?: UserInfo['role']) {
     const copy = vi.fn().mockReturnValue(true);
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(), { provide: Clipboard, useValue: { copy } }],
     });
+    if (role) TestBed.inject(AuthService).user.set({ id: 'u1', email: 'u@openbp.test', role });
     const fixture = TestBed.createComponent(SettingsPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -108,5 +110,16 @@ describe('SettingsPage', () => {
     expect(config.mcpServers.openbp.headers.Authorization).toBe('Bearer <ваш API-ключ>');
     host.querySelector<HTMLButtonElement>('[data-testid="copy-config"]')!.click();
     expect(copy).toHaveBeenCalledWith(expect.stringContaining('"mcpServers"'));
+  });
+
+  it('журнал аудиту бачить лише admin', async () => {
+    const editor = await setup([], 'editor');
+    expect(editor.host.querySelector('[data-testid="audit-section"]')).toBeNull();
+    editor.http.match('/api/v1/variables');
+    TestBed.resetTestingModule();
+
+    const admin = await setup([], 'admin');
+    expect(admin.host.querySelector('[data-testid="audit-section"]')).not.toBeNull();
+    expect(admin.http.match((r) => r.url === '/api/v1/audit')).toHaveLength(1);
   });
 });

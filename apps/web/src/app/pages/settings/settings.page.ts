@@ -9,13 +9,18 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
+import { AuthService } from '../../auth/auth.service';
+import { AuditSection } from '../../settings/audit-section.component';
 import { VariablesSection } from '../../settings/variables-section.component';
 
-/** `/settings`: свої API-ключі (створення, відкликання), підключення ШІ-агента до `/mcp` (F3-07) і змінні інстансу (F6-09). */
+/**
+ * `/settings`: свої API-ключі (створення, відкликання), підключення ШІ-агента до `/mcp` (F3-07), змінні інстансу (F6-09)
+ * і журнал аудиту для admin (F6-15).
+ */
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection],
+  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection, AuditSection],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
@@ -113,6 +118,12 @@ import { VariablesSection } from '../../settings/variables-section.component';
       <div class="mt-8">
         <app-variables-section />
       </div>
+
+      @if (isAdmin()) {
+        <div class="mt-8" data-testid="audit-section">
+          <app-audit-section />
+        </div>
+      }
     </section>
   `,
 })
@@ -120,7 +131,9 @@ export class SettingsPage implements OnInit {
   private readonly api = inject(ApiKeysApiService);
   private readonly clipboard = inject(Clipboard);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
 
+  readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
   readonly keys = signal<ApiKeyInfo[]>([]);
   readonly created = signal<ApiKeyCreated | null>(null);
   readonly loading = signal(false);

@@ -1,4 +1,6 @@
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Engine.Execution;
@@ -63,6 +65,8 @@ public static class WorkflowCircuitBreaker
         await WebhookRegistrar.RemoveAsync(db, workflowId, ct);
         workflow.Active = false;
         workflow.UpdatedAt = time.GetUtcNow();
+        db.Audit(null, workflow.UpdatedAt, AuditActions.WorkflowDeactivated, AuditEntities.Workflow, workflowId.ToString(),
+            new JsonObject { ["name"] = workflow.Name, ["reason"] = "disableAfterErrors", ["errors"] = threshold });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return true;

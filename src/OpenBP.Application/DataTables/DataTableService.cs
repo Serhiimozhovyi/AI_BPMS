@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
@@ -59,6 +60,7 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
             UpdatedAt = now,
         };
         db.DataTables.Add(table);
+        db.Audit(currentUser, now, AuditActions.DataTableCreated, AuditEntities.DataTable, table.Id.ToString(), AuditDetails(trimmed, columns));
         await SaveAsync(trimmed, ct);
         return ToSummary(table, 0);
     }
@@ -92,6 +94,7 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
         table.NormalizedName = trimmed.ToUpperInvariant();
         table.Columns = PostgresDataTableStore.SerializeColumns(columns);
         table.UpdatedAt = time.GetUtcNow();
+        db.Audit(currentUser, table.UpdatedAt, AuditActions.DataTableUpdated, AuditEntities.DataTable, id.ToString(), AuditDetails(trimmed, columns));
         await SaveAsync(trimmed, ct);
         await tx.CommitAsync(ct);
         return ToSummary(table, rows);
@@ -101,11 +104,21 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         currentUser.Require(UserRole.Editor);
-        if (await db.DataTables.Where(t => t.Id == id).ExecuteDeleteAsync(ct) == 0)
-        {
-            throw new NotFoundException(Entity, id);
-        }
+        var name = await db.DataTables.Where(t => t.Id == id).Select(t => t.Name).SingleOrDefaultAsync(ct)
+                   ?? throw new NotFoundException(Entity, id);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.DataTables.Where(t => t.Id == id).ExecuteDeleteAsync(ct);
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.DataTableDeleted, AuditEntities.DataTable, id.ToString(), new JsonObject { ["name"] = name });
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
+
+    /// <summary>Подробиці для журналу аудиту: назва і колонки (рядки не пишуться).</summary>
+    private static JsonObject AuditDetails(string name, IReadOnlyList<DataColumn> columns) => new()
+    {
+        ["name"] = name,
+        ["columns"] = new JsonArray([.. columns.Select(c => (JsonNode?)JsonValue.Create(c.Name))]),
+    };
 
     /// <inheritdoc />
     public async Task<PageResult<DataRowDto>> ListRowsAsync(Guid id, string? search, PageRequest page, CancellationToken ct)

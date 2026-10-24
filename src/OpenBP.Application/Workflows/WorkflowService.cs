@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
@@ -116,6 +117,8 @@ public sealed class WorkflowService(
 
         db.Workflows.Add(workflow);
         db.WorkflowVersions.Add(version);
+        db.Audit(currentUser, now, AuditActions.WorkflowCreated, AuditEntities.Workflow, workflow.Id.ToString(),
+            new JsonObject { ["name"] = name, ["version"] = 1 });
         await db.SaveChangesAsync(ct);
         return ToDetail(workflow, version);
     }
@@ -140,6 +143,8 @@ public sealed class WorkflowService(
         workflow.CurrentVersionId = version.Id;
         workflow.UpdatedAt = now;
         db.WorkflowVersions.Add(version);
+        db.Audit(currentUser, now, AuditActions.WorkflowSaved, AuditEntities.Workflow, id.ToString(),
+            new JsonObject { ["name"] = workflow.Name, ["version"] = version.Version, ["active"] = workflow.Active });
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         if (workflow.Active)
@@ -181,8 +186,15 @@ public sealed class WorkflowService(
         }
 
         var workflow = await FindAsync(id, ct);
+        var previous = workflow.Name;
         workflow.Name = name.Trim();
         workflow.UpdatedAt = time.GetUtcNow();
+        if (previous != workflow.Name)
+        {
+            db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowRenamed, AuditEntities.Workflow, id.ToString(),
+                new JsonObject { ["name"] = workflow.Name, ["previousName"] = previous });
+        }
+
         await db.SaveChangesAsync(ct);
         return await DetailAsync(workflow, ct);
     }
@@ -230,6 +242,8 @@ public sealed class WorkflowService(
         workflow.Active = true;
         workflow.UpdatedAt = time.GetUtcNow();
         workflow.ActivatedAt = workflow.UpdatedAt;
+        db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowActivated, AuditEntities.Workflow, id.ToString(),
+            new JsonObject { ["name"] = workflow.Name, ["version"] = version.Version });
         try
         {
             await db.SaveChangesAsync(ct);
@@ -255,6 +269,8 @@ public sealed class WorkflowService(
             await WebhookRegistrar.RemoveAsync(db, id, ct);
             workflow.Active = false;
             workflow.UpdatedAt = time.GetUtcNow();
+            db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowDeactivated, AuditEntities.Workflow, id.ToString(),
+                new JsonObject { ["name"] = workflow.Name });
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             await schedules.RemoveAsync(id, ct);
@@ -282,6 +298,10 @@ public sealed class WorkflowService(
         await db.NodeStates.Where(s => s.WorkflowId == id).ExecuteDeleteAsync(ct);
         await db.WorkflowVersions.Where(v => v.WorkflowId == id).ExecuteDeleteAsync(ct);
         await db.Workflows.Where(w => w.Id == id).ExecuteDeleteAsync(ct);
+        db.Entry(workflow).State = EntityState.Detached;
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.WorkflowDeleted, AuditEntities.Workflow, id.ToString(),
+            new JsonObject { ["name"] = workflow.Name });
+        await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
 
