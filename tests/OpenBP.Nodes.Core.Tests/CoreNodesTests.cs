@@ -57,7 +57,7 @@ public class CoreNodesTests
         }
 
         string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code"];
-        Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Order());
+        Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Distinct().Order());
         foreach (var type in expected)
         {
             var node = registry.Resolve(type, 1);
@@ -72,6 +72,7 @@ public class CoreNodesTests
         Assert.True(registry.Resolve("core.schedule", 1).Descriptor.IsTrigger);
         Assert.Equal(2, registry.Resolve("core.merge", 1).Descriptor.Inputs.Count);
         Assert.Equal(5, registry.Resolve("core.switch", 1).Descriptor.Outputs.Count);
+        Assert.Equal(17, registry.Resolve("core.switch", 2).Descriptor.Outputs.Count);
     }
 
     [Theory]
@@ -95,7 +96,8 @@ public class CoreNodesTests
 
     private static IReadOnlyList<WorkflowValidationError> Validate(string type, string parameters)
     {
-        var node = CoreNodes.All().Single(n => n.Descriptor.Type == type);
+        // Найновіша версія типу — та, яку додає палітра.
+        var node = CoreNodes.All().Where(n => n.Descriptor.Type == type).MaxBy(n => n.Descriptor.Version)!;
         return ParameterSchemaValidator.Validate(node.Descriptor.ParametersSchema, JsonNode.Parse(parameters), "n1", "/parameters");
     }
 }

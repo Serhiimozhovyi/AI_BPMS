@@ -1,7 +1,9 @@
 using System.Text.Json.Nodes;
 using OpenBP.Engine.Execution;
 using OpenBP.Engine.Testing;
+using OpenBP.Engine.Validation;
 using OpenBP.Expressions;
+using OpenBP.Shared.Validation;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Nodes.Core.Tests;
@@ -55,10 +57,64 @@ public class CoreNodesExecutionTests
             [.. result.OutputOf("m").Select(i => i.Json.ToJsonString())]);
     }
 
-    private static void Node(WorkflowDefinition workflow, string id, string type, string parameters) =>
+    [Fact]
+    public async Task Switch_v2_with_7_rules_validates_and_runs_v1_keeps_old_indexes()
+    {
+        var registry = new InMemoryNodeRegistry();
+        foreach (var node in CoreNodes.All())
+        {
+            registry.Register(node);
+        }
+
+        var validator = new WorkflowValidator(new NodeRegistrySchemaProvider(registry));
+        string[] kinds = ["start", "contact", "menu", "book", "cancel", "event", "sos"];
+        var rules = string.Join(",", kinds.Select(k => $$$"""{"conditions":[{"left":"{{ $json.k }}","operator":"equals","right":"{{{k}}}"}]}"""));
+
+        var workflow = new WorkflowDefinition { Name = "Маршрутизатор" };
+        Node(workflow, "t", "core.manualTrigger", "{}");
+        Node(workflow, "s", "core.set", """{"fields":[{"name":"k","value":"event"}]}""");
+        Node(workflow, "sw", "core.switch", $$"""{"rules":[{{rules}}]}""", typeVersion: 2);
+        Edge(workflow, "t", "s");
+        Edge(workflow, "s", "sw");
+        for (var output = 0; output <= kinds.Length; output++)
+        {
+            Node(workflow, $"o{output}", "core.set", $$"""{"fields":[{"name":"out","value":{{output}}}]}""");
+            Edge(workflow, "sw", $"o{output}", output: output);
+        }
+
+        Assert.Empty(await validator.ValidateAsync(WorkflowJson.Serialize(workflow)));
+
+        var store = new InMemoryExecutionStore();
+        var request = new ExecutionRequest { ExecutionId = Guid.NewGuid(), Workflow = workflow };
+        store.Register(new ExecutionSnapshot
+        {
+            Id = request.ExecutionId,
+            WorkflowId = "wf_switch",
+            Workflow = workflow,
+            Mode = request.Mode,
+            StartedAt = DateTimeOffset.UtcNow,
+        });
+        var executor = new WorkflowExecutor(
+            registry, store, new JintExpressionEvaluator(), new FakeCredentialProvider(), new InMemoryBinaryStore(), new InMemoryExecutionLogger());
+        var result = await executor.RunAsync(request, CancellationToken.None);
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        Assert.Equal(6, Assert.Single(result.OutputOf("o6")).Json["out"]!.GetValue<int>()); // «event» — правило 5, вихід 6
+
+        // Версія 1: ребро з fallback (вихід 4) лишається валідним, з виходу 7 — помилка порту.
+        workflow.Nodes.Single(n => n.Id == "sw").TypeVersion = 1;
+        workflow.Nodes.Single(n => n.Id == "sw").Parameters = (JsonObject)JsonNode.Parse("""{"rules":[{"conditions":[]}]}""")!;
+        workflow.Connections.RemoveAll(c => c.From.Node == "sw" && c.From.Output is > 4 and < 7);
+        var errors = await validator.ValidateAsync(WorkflowJson.Serialize(workflow));
+        var error = Assert.Single(errors);
+        Assert.Contains("7", error.Message, StringComparison.Ordinal);
+    }
+
+    private static void Node(WorkflowDefinition workflow, string id, string type, string parameters, int typeVersion = 1) =>
         workflow.Nodes.Add(new NodeDefinition
         {
             Id = id,
+            TypeVersion = typeVersion,
             Name = $"Вузол {id}",
             Type = type,
             Parameters = (JsonObject)JsonNode.Parse(parameters)!,

@@ -82,6 +82,52 @@ describe('canvas-model', () => {
     expect(byId.get('n_1c')).toMatchObject({ group: 'integration', disabled: true, subtitle: 'mcp.tool · create_order' });
   });
 
+  it('core.switch v2: fallback і по порту на правило; порт з ребром не ховається; v1 — усі 5 портів', () => {
+    const rules = (n: number) => Array.from({ length: n }, () => ({ conditions: [] }));
+    const switchV2 = {
+      type: 'core.switch',
+      version: 2,
+      displayName: 'Перемикач',
+      group: 'logic' as const,
+      inputs: ['main'],
+      outputs: ['fallback', ...Array.from({ length: 16 }, (_, i) => `rule${i}`)],
+      parametersSchema: { type: 'object' },
+      isTrigger: false,
+    };
+    const switchV1 = { ...switchV2, version: 1, outputs: ['rule0', 'rule1', 'rule2', 'rule3', 'fallback'] };
+    const node = (id: string, typeVersion: number, parameters: Record<string, unknown>, extra: object = {}) => ({
+      id,
+      name: id,
+      type: 'core.switch',
+      typeVersion,
+      position: [0, 0] as [number, number],
+      parameters,
+      ...extra,
+    });
+    const definition = {
+      formatVersion: 1,
+      name: 'switch',
+      settings: {},
+      pinData: {},
+      nodes: [
+        node('seven', 2, { rules: rules(7) }),
+        node('none', 2, {}),
+        node('edge', 2, { rules: rules(2) }),
+        node('cof', 2, { rules: rules(2) }, { continueOnFail: true }),
+        node('old', 1, { rules: rules(2) }),
+      ],
+      connections: [{ from: { node: 'edge', output: 9 }, to: { node: 'seven', input: 0 } }],
+    } as unknown as WorkflowDefinition;
+
+    const byId = new Map(toCanvasModel(definition, [switchV1, switchV2]).nodes.map((n) => [n.id, n.outputs]));
+
+    expect(byId.get('seven')).toEqual(['fallback', 'rule0', 'rule1', 'rule2', 'rule3', 'rule4', 'rule5', 'rule6']);
+    expect(byId.get('none')).toEqual(['fallback', 'rule0']);
+    expect(byId.get('edge')).toEqual(switchV2.outputs.slice(0, 10));
+    expect(byId.get('cof')).toEqual([...switchV2.outputs, 'error']);
+    expect(byId.get('old')).toEqual(switchV1.outputs);
+  });
+
   it('невідомий тип отримує порти за ребрами, щоб жодне ребро не зникло', () => {
     const model = toCanvasModel(workflowWithExtras(), SAMPLE_DESCRIPTORS);
     const future = model.nodes.find((n) => n.id === 'n_future')!;
