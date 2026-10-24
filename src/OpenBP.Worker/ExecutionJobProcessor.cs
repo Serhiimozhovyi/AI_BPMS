@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,7 @@ using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
+using OpenBP.Engine.Diagnostics;
 using OpenBP.Engine.Execution;
 using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
@@ -178,6 +180,11 @@ public sealed partial class ExecutionJobProcessor
             ["executionId"] = payload.ExecutionId,
             ["workflowId"] = payload.WorkflowId,
         });
+        // Span виконання (F6-18): корінь для span-ів вузлів, MCP tool і запитів до моделі.
+        using var span = OpenBpTelemetry.Source.StartActivity(OpenBpTelemetry.ExecutionSpan);
+        span?.SetTag(OpenBpTelemetry.ExecutionId, payload.ExecutionId.ToString());
+        span?.SetTag(OpenBpTelemetry.WorkflowId, payload.WorkflowId.ToString());
+        span?.SetTag(OpenBpTelemetry.ExecutionMode, ExecutionModes.ToDb(payload.Mode));
         var executionId = payload.ExecutionId;
         var workflow = await LoadWorkflowAsync(payload.VersionId, stoppingToken).ConfigureAwait(false);
         if (workflow is null)
@@ -275,6 +282,9 @@ public sealed partial class ExecutionJobProcessor
             return;
         }
 
+        var finalStatus = engineError is null ? ExecutionStatuses.ToDb(result!.Status) : ExecutionStatuses.Error;
+        span?.SetTag(OpenBpTelemetry.Status, finalStatus);
+        span?.SetStatus(finalStatus == ExecutionStatuses.Success ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
         if (engineError is not null)
         {
             await SetFinalAsync(executionId, ExecutionStatuses.Error, scrubber.Scrub(engineError)).ConfigureAwait(false);

@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Json.Schema;
 using OpenBP.Engine;
+using OpenBP.Engine.Diagnostics;
 using OpenBP.Engine.Nodes;
 using OpenBP.Shared.Workflow;
 
@@ -137,19 +139,23 @@ public sealed class AiLlmNode : INode
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
         string content;
+        // Span запиту до моделі (F6-18): провайдер і модель, без промпту, відповіді й ключа.
+        using var span = OpenBpTelemetry.StartChild(OpenBpTelemetry.LlmSpan, ActivityKind.Client);
+        span?.SetTag(OpenBpTelemetry.GenAiSystem, p.Provider);
+        span?.SetTag(OpenBpTelemetry.GenAiModel, p.Model);
         try
         {
             content = await provider.CompleteAsync(request, cts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested && OpenBpTelemetry.Fail(span, ex))
         {
             throw new LlmException($"Перевищено таймаут запиту до моделі ({timeout.TotalSeconds:0.##} с).");
         }
-        catch (LlmException ex)
+        catch (LlmException ex) when (OpenBpTelemetry.Fail(span, ex))
         {
             throw new LlmException(Redact(ex.Message, credential), ex.InnerException);
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException ex) when (OpenBpTelemetry.Fail(span, ex))
         {
             throw new LlmException(Redact($"Провайдер недоступний: {ex.Message}", credential));
         }

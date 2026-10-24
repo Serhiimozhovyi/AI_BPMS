@@ -52,4 +52,37 @@ public sealed class BinaryStorageOptions
     /// Не задано — сховища немає, і вузли з файлами завершуються помилкою.
     /// </summary>
     public string? LocalPath { get; set; }
+
+    /// <summary>
+    /// S3-сумісне сховище (<c>Storage:S3</c>, F6-18). Задано <see cref="S3StorageOptions.Bucket"/> — нові файли пишуться
+    /// в S3, а файли з <see cref="LocalPath"/> (якщо задано) лишаються доступними на читання.
+    /// </summary>
+    public S3StorageOptions S3 { get; set; } = new();
+}
+
+/// <summary>Налаштування <see cref="S3BinaryStore"/> (секція <c>Storage:S3</c>, змінні <c>Storage__S3__*</c>).</summary>
+public sealed class S3StorageOptions
+{
+    /// <summary>
+    /// Адреса S3-сумісного сервісу (<c>http://minio:9000</c>); не задано — AWS S3 у регіоні <see cref="Region"/>.
+    /// </summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary>Бакет; не задано — S3 вимкнено. Якщо бакета немає, воркер створює його при першому записі.</summary>
+    public string? Bucket { get; set; }
+
+    /// <summary>Регіон підпису запитів; для MinIO будь-який, типово <c>us-east-1</c>.</summary>
+    public string Region { get; set; } = "us-east-1";
+
+    /// <summary>
+    /// Ключ доступу (<c>Storage__S3__AccessKey</c>); разом із <see cref="SecretKey"/>. Не задано — стандартний ланцюжок
+    /// AWS SDK (<c>AWS_ACCESS_KEY_ID</c>/<c>AWS_SECRET_ACCESS_KEY</c>, роль інстансу).
+    /// </summary>
+    public string? AccessKey { get; set; }
+
+    /// <summary>Секретний ключ (<c>Storage__S3__SecretKey</c>).</summary>
+    public string? SecretKey { get; set; }
+
+    /// <summary>Адресація <c>endpoint/bucket/key</c> замість піддомену бакета; MinIO її потребує, типово <c>true</c>.</summary>
+    public bool ForcePathStyle { get; set; } = true;
 }
