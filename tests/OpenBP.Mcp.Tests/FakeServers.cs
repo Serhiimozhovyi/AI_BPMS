@@ -8,13 +8,13 @@ namespace OpenBP.Mcp.Tests;
 internal static class FakeServers
 {
     /// <summary>stdio: <c>dotnet OpenBP.Mcp.FakeServer.dll</c> з теки тестів.</summary>
-    public static McpServerConfig Stdio(string id = "srv_fake") => new()
+    public static McpServerConfig Stdio(string id = "srv_fake", params string[] args) => new()
     {
         Id = id,
         Name = "Fake (stdio)",
         Transport = McpTransportKind.Stdio,
         Command = DotNet,
-        Arguments = [Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll")],
+        Arguments = [Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll"), .. args],
     };
 
     /// <summary>http: сервер у процесі тестів на вільному порту.</summary>
