@@ -31,6 +31,16 @@ export interface ExecutionSummary {
   resumedFromExecutionId?: string | null;
 }
 
+/** `StepError` — помилка вузла (F3-57): `message` — що сталося і що зробити, `details` — технічні подробиці. */
+export interface StepError {
+  message: string;
+  type?: string | null;
+  attempts?: number;
+  details?: string | null;
+  /** Індекс item'а на вході, на якому впав вузол; `null` — невідомо. */
+  itemIndex?: number | null;
+}
+
 /** `ExecutionStepDto` — крок виконання (вже очищений від секретів). */
 export interface ExecutionStep {
   id: string;
@@ -41,7 +51,7 @@ export interface ExecutionStep {
   input: ExecutionItem[][];
   /** Items на виходах — по масиву на порт. */
   output: ExecutionItem[][];
-  error: { message: string; type?: string | null; attempts?: number } | null;
+  error: StepError | null;
   startedAt: string;
   finishedAt: string;
 }

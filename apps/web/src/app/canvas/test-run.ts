@@ -102,6 +102,16 @@ export function nodeStatuses(run: TestRun | null): ReadonlyMap<string, NodeRunSt
   return result;
 }
 
+/** Повідомлення помилки кожного вузла, що впав у запуску (F3-57) — перший рядок показує картка. */
+export function nodeRunErrors(run: TestRun | null): ReadonlyMap<string, string> {
+  const result = new Map<string, string>();
+  if (!run) return result;
+  for (const [nodeId, step] of run.steps) {
+    if (step.status === 'error' && step.error?.message) result.set(nodeId, step.error.message);
+  }
+  return result;
+}
+
 /** Items виходу 0 кожного виконаного вузла — «останній тестовий output» для підказок виразів (F2-19). */
 export function runOutputs(run: TestRun | null): Record<string, ExecutionItem[]> {
   const result: Record<string, ExecutionItem[]> = {};

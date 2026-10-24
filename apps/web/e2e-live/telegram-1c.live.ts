@@ -352,3 +352,42 @@ test('telegram-1c: редактор виразу показує результа
   await page.getByTestId('expr-apply').click();
   await expect(text).toHaveValue('Замовлення №{{ $json.number }}{{ $now.getFullYear() }}');
 });
+
+test('telegram-1c: незаповнене поле і помилка виразу видні на картці вузла, у панелі — повний текст (F3-57)', async ({ page }) => {
+  await openExample(page);
+  const reply = page.locator('[data-node-id="n_reply"]');
+  await reply.click();
+
+  // Порожній обов'язковий аргумент — «не заповнено: 1» на картці ще до запуску; клік — фокус на полі.
+  const text = page.getByTestId('field-text');
+  await text.fill('');
+  const missing = reply.getByTestId('node-missing');
+  await expect(missing).toHaveText('не заповнено: 1');
+  await page.locator('[data-node-id="n_1c"]').click();
+  await missing.click();
+  await expect(text).toBeFocused();
+
+  // Вираз, що падає на вхідному item: запуск зупиняється на вузлі, картка показує перший рядок повідомлення.
+  await text.fill('Замовлення {{ $json.number.missing.deep }}');
+  await expect(missing).toHaveCount(0);
+  const started = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && /^\/api\/v1\/workflows\/[^/]+\/executions$/.test(new URL(r.url()).pathname),
+  );
+  await page.getByTestId('run').click();
+  await started;
+  await expect(page.getByTestId('run-status')).toHaveAttribute('data-state', 'error', { timeout: 90_000 });
+  await expect(reply).toHaveAttribute('data-run-status', 'error');
+  const cardError = reply.getByTestId('node-run-error');
+  await expect(cardError).toContainText('Вираз у параметрі «arguments.text» не обчислився');
+  await expect(cardError).toHaveAttribute('title', /Перевірте вираз у редакторі виразів/);
+
+  // Панель: повний текст без слова «помилка», технічні подробиці окремо; «Показати вхідні дані» — вкладка входу.
+  await reply.click();
+  await page.getByTestId('panel-tab-output').click();
+  const message = page.getByTestId('node-run-error-message');
+  await expect(message).toContainText('Перевірте вираз у редакторі виразів на вхідних даних.');
+  await expect(message).not.toContainText(/помилк/i);
+  await expect(page.getByTestId('node-run-error-details')).toBeAttached();
+  await page.getByTestId('node-run-error-input').click();
+  await expect(page.getByTestId('panel-tab-input')).toHaveAttribute('aria-selected', 'true');
+});

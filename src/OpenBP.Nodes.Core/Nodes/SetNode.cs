@@ -32,9 +32,16 @@ public sealed class SetNode : INode
             ct.ThrowIfCancellationRequested();
             var p = ctx.Params<SetParameters>(i);
             var json = p.KeepOnlySet ? new JsonObject() : (JsonObject)items[i].Json.DeepClone();
-            foreach (var field in p.Fields)
+            try
             {
-                SetPath(json, field.Name, field.Value?.DeepClone());
+                foreach (var field in p.Fields)
+                {
+                    SetPath(json, field.Name, field.Value?.DeepClone());
+                }
+            }
+            catch (CoreNodeException ex)
+            {
+                throw ex.AtItem(i, items.Count);
             }
 
             output[i] = ItemCopy.WithJson(items[i], json);
@@ -48,7 +55,7 @@ public sealed class SetNode : INode
         var segments = path.Split('.');
         if (string.IsNullOrWhiteSpace(path) || Array.Exists(segments, s => s.Length == 0))
         {
-            throw new CoreNodeException($"Некоректна назва поля «{path}»: очікується шлях на кшталт order.customer.");
+            throw new CoreNodeException($"Некоректна назва поля «{path}». Вкажіть шлях на кшталт order.customer.");
         }
 
         var current = root;
@@ -66,7 +73,7 @@ public sealed class SetNode : INode
                     break;
                 default:
                     throw new CoreNodeException(
-                        $"Не можу задати поле «{path}»: «{string.Join('.', segments[..(i + 1)])}» не є об'єктом.");
+                        $"Поле «{path}» не задати: «{string.Join('.', segments[..(i + 1)])}» не є об'єктом. Змініть назву поля або спершу задайте «{string.Join('.', segments[..(i + 1)])}» об'єктом.");
             }
         }
 

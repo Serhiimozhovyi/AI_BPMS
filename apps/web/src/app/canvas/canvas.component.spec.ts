@@ -201,4 +201,35 @@ describe('CanvasComponent', () => {
     expect(card('n_1c').getAttribute('data-run-status')).toBeNull();
     expect(card('n_1c').querySelector('[data-testid="node-run-badge"]')).toBeNull();
   });
+
+  it('помилка запуску (F3-57): перший рядок замість підзаголовка, повний текст — у підказці', async () => {
+    const fixture = await create(demo());
+    fixture.componentRef.setInput('runStatuses', new Map([['n_if', 'error']]));
+    fixture.componentRef.setInput('runErrors', new Map([['n_if', 'Поле «x» порожнє. Вкажіть значення.\nдругий рядок']]));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const card = (fixture.nativeElement as HTMLElement).querySelector('[data-node-id="n_if"]')!;
+    const line = card.querySelector('[data-testid="node-run-error"]')!;
+    expect(line.textContent?.trim()).toBe('Поле «x» порожнє. Вкажіть значення.');
+    expect(line.getAttribute('title')).toContain('другий рядок');
+    expect(card.querySelector('.node__type')).toBeNull();
+  });
+
+  it('«не заповнено: N» (F3-57): лічильник на картці, клік віддає перше поле', async () => {
+    const fixture = await create(demo());
+    fixture.componentRef.setInput('missingFields', new Map([['n_1c', ['toolName', 'arguments.text']]]));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const requests: unknown[] = [];
+    fixture.componentInstance.missingClick.subscribe((r) => requests.push(r));
+
+    const host = fixture.nativeElement as HTMLElement;
+    const badge = host.querySelector<HTMLButtonElement>('[data-node-id="n_1c"] [data-testid="node-missing"]')!;
+    expect(badge.textContent?.trim()).toBe('не заповнено: 2');
+    expect(badge.title).toContain('toolName, arguments.text');
+    expect(host.querySelector('[data-node-id="n_if"] [data-testid="node-missing"]')).toBeNull();
+    badge.click();
+    expect(requests).toEqual([{ nodeId: 'n_1c', field: 'toolName' }]);
+  });
 });

@@ -15,4 +15,12 @@ public sealed class CoreNodeException : EngineException
         : base(message, innerException)
     {
     }
+
+    /// <summary>Та сама помилка з позначкою item'а, на якому впав вузол (<see cref="EngineException.AtItem"/>).</summary>
+    /// <param name="itemIndex">Індекс item'а від 0.</param>
+    /// <param name="itemCount">Скільки items на вході.</param>
+    public CoreNodeException AtItem(int itemIndex, int itemCount) =>
+        ItemIndex is not null
+            ? this
+            : new(AtItem(Message, itemIndex, itemCount), InnerException) { Details = Details, ItemIndex = itemIndex };
 }

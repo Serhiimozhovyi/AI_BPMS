@@ -17,7 +17,7 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider
         var baseUrl = request.Credential["baseUrl"]?.GetValue<string>();
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var root) || root.Scheme is not ("http" or "https"))
         {
-            throw new LlmException("Credential openai-compatible: baseUrl має бути абсолютною http(s)-адресою.");
+            throw new LlmException("У credential openai-compatible baseUrl не є повною http(s)-адресою. Вкажіть адресу на кшталт https://host/v1.");
         }
 
         return await SendAsync(root, request.Credential["apiKey"]?.GetValue<string>(), request, "max_tokens", ct).ConfigureAwait(false);
@@ -84,6 +84,6 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider
             // нижче — єдине повідомлення про нерозбірливу відповідь
         }
 
-        throw new LlmException("Провайдер повернув відповідь без choices[0].message.content.");
+        throw new LlmException("Модель повернула відповідь без тексту (choices[0].message.content). Повторіть запуск або перевірте сумісність провайдера.");
     }
 }

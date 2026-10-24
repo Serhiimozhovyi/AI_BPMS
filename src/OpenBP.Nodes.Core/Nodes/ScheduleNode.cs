@@ -51,7 +51,7 @@ public sealed class ScheduleNode : INode
         }
         catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
         {
-            throw new CoreNodeException($"Невідомий часовий пояс «{timezone}» вузла «{ctx.Node.Name}».");
+            throw new CoreNodeException($"Невідомий часовий пояс «{timezone}» вузла «{ctx.Node.Name}». Виберіть часовий пояс зі списку.");
         }
 
         return Task.FromResult<Item[][]>([[CreateItem(_time.GetUtcNow(), timezone, zone)]]);

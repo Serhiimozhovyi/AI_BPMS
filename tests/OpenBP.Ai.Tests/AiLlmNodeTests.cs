@@ -85,6 +85,10 @@ public sealed class AiLlmNodeTests
         Assert.Contains($"HTTP {(int)status}", ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(ApiKey, ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(ApiKey, ex.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(ApiKey, ex.Details ?? "", StringComparison.Ordinal);
+        Assert.Contains("bad key", ex.Details, StringComparison.Ordinal);
+        Assert.DoesNotContain("bad key", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("помилк", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -95,6 +99,8 @@ public sealed class AiLlmNodeTests
         var ex = await Assert.ThrowsAsync<LlmException>(() => RunAsync(http, new { }));
 
         Assert.DoesNotContain(ApiKey, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(ApiKey, ex.Details ?? "", StringComparison.Ordinal);
+        Assert.StartsWith("Провайдер моделі недоступний", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

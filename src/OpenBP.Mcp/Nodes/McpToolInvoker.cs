@@ -26,12 +26,13 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
     {
         if (string.IsNullOrWhiteSpace(p.ServerId) || string.IsNullOrWhiteSpace(p.ToolName))
         {
-            throw new McpToolException($"Вузол «{ctx.Node.Name}»: параметри serverId і toolName обов'язкові.");
+            throw new McpToolException("У вузлі не обрано конектор або дію. Відкрийте вузол і оберіть їх.");
         }
 
         var serverId = p.ServerId;
         var toolName = p.ToolName;
         var arguments = BuildArguments(ctx.Node, serverId, toolName, p.Arguments);
+        EnsureRequired(serverId, toolName, arguments);
         var timeout = Timeout(ctx.Node);
         var serverName = servers.TryGetServer(serverId, out var config) ? config.Name : serverId;
 
@@ -46,18 +47,74 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
         }
         catch (McpProtocolException ex)
         {
-            throw new McpToolException($"Tool «{toolName}» на сервері «{serverName}» відхилив виклик: {ex.Message}", ex);
+            throw new McpToolException(
+                $"Конектор «{serverName}» відхилив дію «{toolName}»: {FirstLine(ex.Message)}. Перевірте аргументи вузла або оновіть список дій у розділі «Конектори».",
+                ex)
+            {
+                Details = ex.Message,
+            };
+        }
+        catch (McpUnavailableException ex)
+        {
+            throw new McpToolException(
+                $"{ex.Message.TrimEnd('.')}. Перевірте конектор у розділі «Конектори» (або збільште таймаут вузла) і повторіть запуск.",
+                ex)
+            {
+                Details = ex.InnerException?.Message,
+            };
+        }
+        catch (McpServerUnknownException ex)
+        {
+            throw new McpToolException("Конектор вузла не знайдено — можливо, його видалено. Оберіть конектор у вузлі заново.", ex)
+            {
+                Details = ex.Message,
+            };
         }
 
         if (result.IsError == true)
         {
             var details = string.Join("\n", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
             throw new McpToolException(
-                $"Tool «{toolName}» на сервері «{serverName}» повернув помилку{(details.Length == 0 ? "." : $": {details}")}");
+                details.Length == 0
+                    ? $"Дія «{toolName}» конектора «{serverName}» не виконалась. Перевірте аргументи вузла і повторіть запуск."
+                    : $"Дія «{toolName}» конектора «{serverName}» не виконалась: {FirstLine(details)}. Перевірте аргументи вузла і повторіть запуск.")
+            {
+                Details = details.Length == 0 ? null : details,
+            };
         }
 
         var itemsPath = string.IsNullOrWhiteSpace(p.ItemsPath) ? null : p.ItemsPath;
         return await ToItemsAsync(ctx, result, itemsPath, toolName, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Обов'язкові аргументи з <c>inputSchema</c> tool'а (якщо список tools сервера вже отримано) не порожні після
+    /// обчислення виразів: інакше — «Поле «chat_id» порожнє. Вкажіть значення або вираз.» до виклику tool'а.
+    /// </summary>
+    private void EnsureRequired(string serverId, string toolName, Dictionary<string, JsonElement> arguments)
+    {
+        if (servers.GetToolsCache(serverId)?.Find(toolName)?.InputSchema["required"] is not JsonArray required)
+        {
+            return;
+        }
+
+        foreach (var name in required.Select(r => r?.GetValue<string>()).OfType<string>())
+        {
+            var empty = !arguments.TryGetValue(name, out var value)
+                || value.ValueKind == JsonValueKind.Null
+                || (value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString()));
+            if (empty)
+            {
+                throw new McpToolException($"Поле «{name}» порожнє. Вкажіть значення або вираз, що його повертає.");
+            }
+        }
+    }
+
+    /// <summary>Перший рядок тексту без крапки в кінці — для повідомлення; увесь текст — у Details.</summary>
+    private static string FirstLine(string text)
+    {
+        var line = text.Split('\n', 2)[0].Trim();
+        return line.Length > 200 ? line[..200] + "…" : line.TrimEnd('.');
     }
 
     /// <summary>Таймаут вузла: <c>timeoutSec</c> або <see cref="McpToolNode.DefaultTimeout"/>.</summary>
@@ -84,7 +141,7 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
             null => [],
             JsonObject obj => obj,
             _ => throw new McpToolException(
-                $"Вузол «{node.Name}»: arguments мають бути об'єктом, а отримано {evaluated.GetValueKind()}."),
+                $"Аргументи дії мають бути об'єктом, а отримано {evaluated.GetValueKind()}. Задайте аргументи полями або виразом, що повертає об'єкт."),
         };
 
         var properties = (servers.GetToolsCache(serverId)?.Find(toolName)?.InputSchema["properties"]) as JsonObject;
@@ -117,7 +174,10 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
         }
         catch (ExpressionException ex)
         {
-            throw new McpToolException($"Аргумент {expression}: {ex.Message}", ex);
+            throw new McpToolException($"Аргумент {expression}: {ex.Message.TrimEnd('.')}. Змініть вираз, щоб він повертав значення потрібного типу.", ex)
+            {
+                Details = ex.Message,
+            };
         }
     }
 
@@ -133,7 +193,8 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
 
         if (itemsPath is not null)
         {
-            throw new McpToolException($"Tool «{toolName}» не повернув structuredContent, тож itemsPath «{itemsPath}» нема до чого застосувати.");
+            throw new McpToolException(
+                $"Дія «{toolName}» повернула відповідь без структури (structuredContent), тож шлях до записів «{itemsPath}» не застосувати. Очистьте поле itemsPath.");
         }
 
         var items = new List<Item>(result.Content.Count);
@@ -186,7 +247,7 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
         if (node is not JsonArray array)
         {
             throw new McpToolException(
-                $"Tool «{toolName}»: за itemsPath «{itemsPath}» очікувався масив, а знайдено {(node is null ? "нічого" : node.GetValueKind().ToString())}.");
+                $"Дія «{toolName}»: за шляхом itemsPath «{itemsPath}» очікувався масив, а знайдено {(node is null ? "нічого" : node.GetValueKind().ToString())}. Вкажіть шлях до масиву у відповіді або очистьте itemsPath.");
         }
 
         return [.. array.Select(element => new Item

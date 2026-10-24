@@ -54,6 +54,24 @@ describe('NodeRunDataComponent', () => {
     expect(host.querySelectorAll('[data-testid="node-run-output"]')[1].textContent).toContain('error · 1');
   });
 
+  it('помилка (F3-57): повний текст, item, технічні подробиці й кнопка до вхідних даних', () => {
+    const host = render({
+      id: 's1',
+      nodeId: 'n_1c',
+      runIndex: 0,
+      status: 'error',
+      input: [[{ json: {} }, { json: {} }]],
+      output: [[]],
+      error: { message: 'Поле «text» порожнє [item 1]. Вкажіть значення.', details: 'HTTP 400: text is required', itemIndex: 1 },
+      startedAt: '',
+      finishedAt: '',
+    });
+    expect(host.querySelector('[data-testid="node-run-error-message"]')?.textContent).toBe('Поле «text» порожнє [item 1]. Вкажіть значення.');
+    expect(host.querySelector('[data-testid="node-run-error-item"]')?.textContent).toContain('item 1');
+    expect(host.querySelector('[data-testid="node-run-error-details"]')?.textContent).toContain('HTTP 400');
+    expect(host.querySelector('[data-testid="node-run-error-input"]')).not.toBeNull();
+  });
+
   it('без назв портів (журнал виконань) нумерує порти, а не називає перший error', () => {
     const host = render(
       {

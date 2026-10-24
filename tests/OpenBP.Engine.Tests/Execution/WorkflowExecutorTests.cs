@@ -257,7 +257,8 @@ public sealed class WorkflowExecutorTests
 
         Assert.Equal(ExecutionStatus.Error, result.Status);
         Assert.Equal("f", result.FailedNodeId);
-        Assert.Equal("Зламано", result.Error!.Message);
+        Assert.StartsWith("Вузол зупинився через непередбачений збій.", result.Error!.Message, StringComparison.Ordinal);
+        Assert.Equal("Зламано", result.Error.Details);
         Assert.Equal(nameof(InvalidOperationException), result.Error.Type);
         Assert.Equal(StepStatus.Error, result.StepOf("f")!.Status);
         Assert.Null(result.StepOf("after"));

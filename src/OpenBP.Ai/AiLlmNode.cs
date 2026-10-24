@@ -56,7 +56,14 @@ public sealed class AiLlmNode : INode
         var items = ctx.Items();
         for (var i = 0; i < items.Count; i++)
         {
-            output.Add(await CompleteItemAsync(ctx, i, timeout, ct).ConfigureAwait(false));
+            try
+            {
+                output.Add(await CompleteItemAsync(ctx, i, timeout, ct).ConfigureAwait(false));
+            }
+            catch (LlmException ex) when (ex.ItemIndex is null)
+            {
+                throw new LlmException(EngineException.AtItem(ex.Message, i, items.Count), ex.InnerException) { Details = ex.Details, ItemIndex = i };
+            }
         }
 
         return [[.. output]];
@@ -91,7 +98,7 @@ public sealed class AiLlmNode : INode
         }
         catch (JsonException ex)
         {
-            throw new LlmException($"Відповідь моделі не є коректним JSON: {ex.Message}", ex);
+            throw new LlmException("Відповідь моделі не є коректним JSON. Уточніть у промпті формат відповіді або спростіть outputSchema.", ex) { Details = ex.Message };
         }
 
         var schema = JsonSchema.FromText(outputSchema.ToJsonString());
@@ -107,12 +114,12 @@ public sealed class AiLlmNode : INode
                 .SelectMany(d => d.Errors!.Select(e => $"{d.InstanceLocation}: {e.Value}"))
                 .Distinct(StringComparer.Ordinal)
                 .Take(5);
-            throw new LlmException($"Відповідь моделі не відповідає outputSchema: {string.Join("; ", problems)}.");
+            throw new LlmException("Відповідь моделі не відповідає outputSchema. Уточніть промпт або послабте схему (менше обов'язкових полів).") { Details = string.Join("; ", problems) };
         }
 
         return parsed is JsonObject obj
             ? new Item { Json = obj }
-            : throw new LlmException("outputSchema має описувати JSON-об'єкт: item.json — завжди об'єкт.");
+            : throw new LlmException("outputSchema описує не об'єкт, а item.json — завжди об'єкт. Задайте в схемі \"type\": \"object\".");
     }
 
     private async Task<Item> CompleteItemAsync(INodeContext ctx, int index, TimeSpan timeout, CancellationToken ct)
@@ -123,12 +130,12 @@ public sealed class AiLlmNode : INode
             "openai-compatible" => _openAiCompatible,
             "openai" => _openAi,
             "anthropic" => _anthropic,
-            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}»; очікується anthropic, openai або openai-compatible."),
+            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai або openai-compatible."),
         };
 
         if (string.IsNullOrWhiteSpace(p.Model) || string.IsNullOrWhiteSpace(p.Prompt))
         {
-            throw new LlmException("Параметри model і prompt обов'язкові.");
+            throw new LlmException("Не задано модель або промпт. Заповніть поля model і prompt.");
         }
 
         var credential = await ctx.GetCredentialAsync("llm", ct).ConfigureAwait(false);
@@ -143,15 +150,18 @@ public sealed class AiLlmNode : INode
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new LlmException($"Перевищено таймаут запиту до моделі ({timeout.TotalSeconds:0.##} с).");
+            throw new LlmException($"Модель не відповіла за {timeout.TotalSeconds:0.##} с. Збільште таймаут вузла або скоротіть промпт.");
         }
         catch (LlmException ex)
         {
-            throw new LlmException(Redact(ex.Message, credential), ex.InnerException);
+            throw Redacted(ex, credential);
         }
         catch (HttpRequestException ex)
         {
-            throw new LlmException(Redact($"Провайдер недоступний: {ex.Message}", credential));
+            throw new LlmException("Провайдер моделі недоступний. Перевірте мережу і baseUrl credential'а, потім повторіть запуск.")
+            {
+                Details = Redact(ex.Message, credential),
+            };
         }
 
         try
@@ -160,9 +170,13 @@ public sealed class AiLlmNode : INode
         }
         catch (LlmException ex)
         {
-            throw new LlmException(Redact(ex.Message, credential), ex.InnerException);
+            throw Redacted(ex, credential);
         }
     }
+
+    /// <summary>Та сама помилка без секретів credential'а у повідомленні й подробицях.</summary>
+    private static LlmException Redacted(LlmException ex, JsonObject credential) =>
+        new(Redact(ex.Message, credential), ex.InnerException) { Details = ex.Details is null ? null : Redact(ex.Details, credential) };
 
     private sealed class LlmParameters
     {

@@ -23,9 +23,21 @@ interface PortView {
         <span class="run__status run__status--{{ s.status }}" data-testid="node-run-status">{{ statusLabel() }}</span>
       </h3>
       @if (s.error; as error) {
-        <p class="run__error" role="alert" data-testid="node-run-error">{{ error.message }}</p>
+        <div class="run__error" role="alert" data-testid="node-run-error">
+          <p class="m-0" data-testid="node-run-error-message">{{ error.message }}</p>
+          @if (error.itemIndex !== null && error.itemIndex !== undefined) {
+            <p class="run__error-note m-0" data-testid="node-run-error-item" i18n="@@noderun.error.item">Вузол зупинився на item {{ error.itemIndex }} вхідних даних.</p>
+          }
+          @if (error.details) {
+            <details class="run__error-note" data-testid="node-run-error-details">
+              <summary i18n="@@noderun.error.details">Технічні подробиці</summary>
+              <pre class="run__json">{{ error.details }}</pre>
+            </details>
+          }
+          <button type="button" class="run__error-input" data-testid="node-run-error-input" (click)="inputTitle.scrollIntoView({ block: 'nearest' })" i18n="@@noderun.error.showInput">Показати вхідні дані</button>
+        </div>
       }
-      <h4 class="run__subtitle" i18n="@@noderun.input">Вхід</h4>
+      <h4 #inputTitle class="run__subtitle" i18n="@@noderun.input">Вхід</h4>
       @for (port of inputs(); track $index) {
         <div class="run__port" data-testid="node-run-input">
           <div class="run__port-label">{{ port.label }} · {{ port.items.length }}</div>
@@ -102,8 +114,27 @@ interface PortView {
     }
 
     .run__error {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
       font-size: 13px;
       color: var(--mat-sys-error);
+    }
+
+    .run__error-note {
+      max-width: 100%;
+      color: var(--ac-cool-grey-4);
+    }
+
+    .run__error-input {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--ac-kit);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
     }
 
     .run__empty {

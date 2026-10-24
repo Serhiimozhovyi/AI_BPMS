@@ -73,9 +73,22 @@ internal sealed class EngineNodeContext : INodeContext
     public T Params<T>(int itemIndex)
     {
         var scope = Scope(itemIndex);
-        var evaluated = Evaluate(Node.Parameters, scope) ?? new JsonObject();
-        return evaluated.Deserialize<T>(WorkflowJson.Options)
-            ?? throw new JsonException($"Параметри вузла «{Node.Name}» не десеріалізуються у {typeof(T).Name}.");
+        var evaluated = Evaluate(Node.Parameters, scope, "") ?? new JsonObject();
+        try
+        {
+            return evaluated.Deserialize<T>(WorkflowJson.Options)
+                ?? throw new JsonException($"null замість {typeof(T).Name}.");
+        }
+        catch (JsonException ex)
+        {
+            var field = string.IsNullOrEmpty(ex.Path) || ex.Path == "$" ? "" : $" (поле {ex.Path.TrimStart('$', '.')})";
+            throw new EngineException(
+                $"Параметри вузла мають невідповідний тип{field}{ItemLabel(itemIndex)}. Відкрийте вузол і виправте значення або вираз.", ex)
+            {
+                Details = ex.Message,
+                ItemIndex = itemIndex,
+            };
+        }
     }
 
     public Task<JsonObject> GetCredentialAsync(string name, CancellationToken ct = default)
@@ -130,8 +143,14 @@ internal sealed class EngineNodeContext : INodeContext
         };
     }
 
-    /// <summary>Копія параметрів, де кожен рядок з <c>{{ }}</c> замінено результатом виразу.</summary>
-    private JsonNode? Evaluate(JsonNode node, ExpressionScope scope)
+    /// <summary>Позначка item'а в повідомленні: лише коли на вході більше одного item'а.</summary>
+    private string ItemLabel(int itemIndex) => Items(0).Count > 1 ? $" [item {itemIndex}]" : "";
+
+    /// <summary>
+    /// Копія параметрів, де кожен рядок з <c>{{ }}</c> замінено результатом виразу. Вираз, що не обчислився, —
+    /// <see cref="ExpressionException"/> з назвою параметра й item'ом; текст Jint — у <see cref="EngineException.Details"/>.
+    /// </summary>
+    private JsonNode? Evaluate(JsonNode node, ExpressionScope scope, string path)
     {
         switch (node)
         {
@@ -139,20 +158,36 @@ internal sealed class EngineNodeContext : INodeContext
                 var copy = new JsonObject();
                 foreach (var (key, value) in obj)
                 {
-                    copy[key] = value is null ? null : Evaluate(value, scope);
+                    copy[key] = value is null ? null : Evaluate(value, scope, path.Length == 0 ? key : $"{path}.{key}");
                 }
 
                 return copy;
             case JsonArray array:
                 var list = new JsonArray();
-                foreach (var value in array)
+                for (var i = 0; i < array.Count; i++)
                 {
-                    list.Add(value is null ? null : Evaluate(value, scope));
+                    list.Add(array[i] is { } value ? Evaluate(value, scope, $"{path}[{i}]") : null);
                 }
 
                 return list;
             case JsonValue value when value.TryGetValue<string>(out var text) && ExpressionSyntax.ContainsExpression(text):
-                return _expressions.Evaluate(text, scope);
+                try
+                {
+                    return _expressions.Evaluate(text, scope);
+                }
+                catch (ExpressionException ex)
+                {
+                    // Причина — сирий текст обчислювача (Details), щоб не дублювати «Вираз не виконався».
+                    var reason = ex.Details ?? ex.Message;
+                    throw new ExpressionException(
+                        text,
+                        $"Вираз у параметрі «{path}» не обчислився{ItemLabel(scope.ItemIndex)}: {reason.TrimEnd('.')}. Перевірте вираз у редакторі виразів на вхідних даних.",
+                        ex)
+                    {
+                        Details = reason,
+                        ItemIndex = scope.ItemIndex,
+                    };
+                }
             default:
                 return node.DeepClone();
         }

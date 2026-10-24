@@ -36,12 +36,13 @@ public sealed class LoopNode : INode
             if (p.List is not JsonArray list)
             {
                 throw new CoreNodeException(
-                    $"Параметр list має бути масивом (напр. {{{{ $json.lines }}}}), а отримано {(p.List is null ? "null" : p.List.GetValueKind().ToString())}.");
+                    $"Параметр list має бути масивом (напр. {{{{ $json.lines }}}}), а отримано {(p.List is null ? "null" : p.List.GetValueKind().ToString())}. Вкажіть вираз, що повертає масив.")
+                    .AtItem(i, items.Count);
             }
 
             if (p.BatchSize < 1)
             {
-                throw new CoreNodeException($"batchSize має бути ≥ 1, а задано {p.BatchSize}.");
+                throw new CoreNodeException($"Розмір пачки batchSize має бути не менше 1, а задано {p.BatchSize}. Вкажіть 1 або більше.").AtItem(i, items.Count);
             }
 
             if (p.BatchSize == 1)

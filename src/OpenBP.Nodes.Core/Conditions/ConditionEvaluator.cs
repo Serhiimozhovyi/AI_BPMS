@@ -17,7 +17,7 @@ public static class ConditionEvaluator
         {
             "and" => group.Conditions.TrueForAll(Evaluate),
             "or" => group.Conditions.Exists(Evaluate),
-            _ => throw new CoreNodeException($"Невідомий спосіб поєднання умов «{group.Combine}»; очікується and або or."),
+            _ => throw new CoreNodeException($"Невідомий спосіб поєднання умов «{group.Combine}». Оберіть «і» (and) або «або» (or)."),
         };
     }
 
@@ -45,7 +45,7 @@ public static class ConditionEvaluator
             ConditionOperators.IsNotEmpty => !IsEmpty(left),
             ConditionOperators.IsTrue => Boolean(condition, left),
             ConditionOperators.IsFalse => !Boolean(condition, left),
-            _ => throw new CoreNodeException($"Невідомий оператор умови «{condition.Operator}»."),
+            _ => throw new CoreNodeException($"Невідомий оператор умови «{condition.Operator}». Оберіть оператор зі списку."),
         };
     }
 
@@ -64,7 +64,7 @@ public static class ConditionEvaluator
         if (!TryNumber(condition.Left, strict: false, out var a) || !TryNumber(condition.Right, strict: false, out var b))
         {
             throw new CoreNodeException(
-                $"Оператор «{condition.Operator}» порівнює лише числа, а отримано {Describe(condition.Left)} і {Describe(condition.Right)}.");
+                $"Оператор «{condition.Operator}» порівнює лише числа, а отримано {Describe(condition.Left)} і {Describe(condition.Right)}. Перетворіть значення на число (Number(…)) або оберіть інший оператор.");
         }
 
         return a.CompareTo(b);
@@ -76,7 +76,7 @@ public static class ConditionEvaluator
         JsonValue value when value.GetValueKind() == JsonValueKind.String =>
             value.GetValue<string>().Contains(String(condition, condition.Right), StringComparison.Ordinal),
         _ => throw new CoreNodeException(
-            $"Оператор «{condition.Operator}» працює з рядком або масивом, а отримано {Describe(condition.Left)}."),
+            $"Оператор «{condition.Operator}» працює з рядком або масивом, а отримано {Describe(condition.Left)}. Вкажіть рядок чи масив або оберіть інший оператор."),
     };
 
     private static bool IsEmpty(JsonNode? node) => node switch
@@ -92,12 +92,12 @@ public static class ConditionEvaluator
     private static string String(Condition condition, JsonNode? node) =>
         node is JsonValue value && value.GetValueKind() == JsonValueKind.String
             ? value.GetValue<string>()
-            : throw new CoreNodeException($"Оператор «{condition.Operator}» працює з рядками, а отримано {Describe(node)}.");
+            : throw new CoreNodeException($"Оператор «{condition.Operator}» працює з рядками, а отримано {Describe(node)}. Перетворіть значення на рядок (String(…)) або оберіть інший оператор.");
 
     private static bool Boolean(Condition condition, JsonNode? node) =>
         node is JsonValue value && value.GetValueKind() is JsonValueKind.True or JsonValueKind.False
             ? value.GetValue<bool>()
-            : throw new CoreNodeException($"Оператор «{condition.Operator}» очікує булеве значення, а отримано {Describe(node)}.");
+            : throw new CoreNodeException($"Оператор «{condition.Operator}» очікує true або false, а отримано {Describe(node)}. Вкажіть булеве значення або оберіть інший оператор.");
 
     /// <summary>Число з JSON; у нестрогому режимі — також рядок із числом (результат шаблону <c>"{{ … }}"</c>).</summary>
     private static bool TryNumber(JsonNode? node, bool strict, out double number)

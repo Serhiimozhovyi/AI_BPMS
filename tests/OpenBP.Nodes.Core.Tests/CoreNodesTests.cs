@@ -101,6 +101,31 @@ public class CoreNodesTests
         Assert.All(errors, e => Assert.Equal(WorkflowValidationCodes.ParameterInvalid, e.Code));
     }
 
+    [Theory]
+    [MemberData(nameof(InvalidParameters))]
+    public void Schema_errors_are_readable(string type, string parameters)
+    {
+        var errors = Validate(type, parameters);
+
+        Assert.All(errors, e =>
+        {
+            Assert.Matches("^(Параметр «|Не заповнено)", e.Message);
+            Assert.DoesNotContain("[\"", e.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("помилк", e.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("exception", e.Message, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public void Missing_required_field_is_named()
+    {
+        var errors = Validate("core.loop", "{}");
+
+        var error = Assert.Single(errors);
+        Assert.Contains("«list»", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Вкажіть значення або вираз", error.Message, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<WorkflowValidationError> Validate(string type, string parameters)
     {
         // Найновіша версія типу — та, яку додає палітра.

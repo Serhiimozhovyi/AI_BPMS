@@ -13,7 +13,7 @@ namespace OpenBP.Mcp.Nodes;
 /// результат: <c>structuredContent</c> → один item (або item на елемент масиву за <c>itemsPath</c>),
 /// інакше по item на <c>content</c>-блок.
 /// <c>isError: true</c> → <see cref="McpToolException"/>; недоступність і таймаут (<c>timeoutSec</c>, за замовчуванням
-/// <see cref="DefaultTimeout"/>) → <see cref="McpUnavailableException"/>.
+/// <see cref="DefaultTimeout"/>) → теж <see cref="McpToolException"/> з підказкою; причина — <c>InnerException</c> (<see cref="McpUnavailableException"/>).
 /// </summary>
 public sealed class McpToolNode : INode
 {
@@ -54,7 +54,14 @@ public sealed class McpToolNode : INode
         {
             ct.ThrowIfCancellationRequested();
             var p = ctx.Params<McpCallParameters>(i);
-            output.AddRange(await _invoker.CallAsync(ctx, p, ct).ConfigureAwait(false));
+            try
+            {
+                output.AddRange(await _invoker.CallAsync(ctx, p, ct).ConfigureAwait(false));
+            }
+            catch (McpToolException ex)
+            {
+                throw ex.AtItem(i, count);
+            }
         }
 
         return [[.. output]];

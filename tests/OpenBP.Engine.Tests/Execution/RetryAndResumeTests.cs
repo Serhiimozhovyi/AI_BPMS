@@ -54,7 +54,7 @@ public sealed class RetryAndResumeTests
         Assert.Equal("f", result.FailedNodeId);
         Assert.Equal(4, FlakyNode(g).Calls);
         Assert.Equal(4, result.Error!.Attempts);
-        Assert.Equal("Збій 4", result.Error.Message);
+        Assert.Equal("Збій 4", result.Error.Details);
         Assert.Equal([10, 20, 40], time.Delays.Select(d => (int)d.TotalMilliseconds));
         Assert.Null(result.StepOf("after"));
     }
@@ -172,13 +172,13 @@ public sealed class RetryAndResumeTests
         Assert.Null(result.FailedNodeId);
         var step = result.StepOf("f")!;
         Assert.Equal(StepStatus.Error, step.Status);
-        Assert.Equal("Зламано", step.Error!.Message);
+        Assert.Equal("Зламано", step.Error!.Details);
         Assert.Equal(2, step.Output.Length);
         Assert.Empty(step.Output[0]);
         Assert.Equal(StepStatus.Skipped, result.StepOf("ok")!.Status);
         Assert.Equal(StepStatus.Success, result.StepOf("onError")!.Status);
         var error = Assert.Single(result.OutputOf("onError")).Json["error"]!;
-        Assert.Equal("Зламано", error["message"]!.GetValue<string>());
+        Assert.Equal("Зламано", error["details"]!.GetValue<string>());
         Assert.Equal(nameof(InvalidOperationException), error["type"]!.GetValue<string>());
         Assert.Equal(1, error["attempts"]!.GetValue<int>());
         Assert.Contains(g.Store.StepsOf(result.ExecutionId), s => s.NodeId == "f" && s.Status == StepStatus.Error);
@@ -360,7 +360,7 @@ public sealed class RetryAndResumeTests
 
         Assert.Equal(ExecutionStatus.Success, resumed.Status);
         Assert.Equal(1, ((FuncNode)g.Registry.Resolve(Fail, 1)).Calls);
-        Assert.Equal("Зламано", resumed.OutputOf("onError")[0].Json["error"]!["message"]!.GetValue<string>());
+        Assert.Equal("Зламано", resumed.OutputOf("onError")[0].Json["error"]!["details"]!.GetValue<string>());
     }
 
     [Fact]

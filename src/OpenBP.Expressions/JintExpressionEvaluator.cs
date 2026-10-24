@@ -155,7 +155,7 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
         }
         catch (JavaScriptException ex)
         {
-            throw new ExpressionException(expression, $"Помилка у виразі: {ex.Message}", ex);
+            throw new ExpressionException(expression, $"Вираз не виконався: {ex.Message}", ex) { Details = ex.Message };
         }
         catch (TimeoutException ex)
         {
@@ -171,7 +171,7 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
         }
         catch (Exception ex) when (ex is JintException or Acornima.SyntaxErrorException or Acornima.ParseErrorException)
         {
-            throw new ExpressionException(expression, $"Помилка у виразі: {ex.Message}", ex);
+            throw new ExpressionException(expression, $"Вираз не виконався: {ex.Message}", ex) { Details = ex.Message };
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
         {

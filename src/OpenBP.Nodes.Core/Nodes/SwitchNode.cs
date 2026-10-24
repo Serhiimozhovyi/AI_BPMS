@@ -71,16 +71,23 @@ public sealed class SwitchNode : INode
         {
             ct.ThrowIfCancellationRequested();
             var p = ctx.Params<SwitchParameters>(i);
-            if (p.Rules.Count > _maxRules)
+            try
             {
-                throw new CoreNodeException($"Перемикач версії {Descriptor.Version} підтримує до {_maxRules} правил, а задано {p.Rules.Count}.");
-            }
+                if (p.Rules.Count > _maxRules)
+                {
+                    throw new CoreNodeException($"Перемикач версії {Descriptor.Version} підтримує до {_maxRules} правил, а задано {p.Rules.Count}. Приберіть зайві правила.");
+                }
 
-            var target = p.Rules.FindIndex(ConditionEvaluator.Evaluate);
-            var output = _fallbackFirst
-                ? target + 1
-                : target < 0 ? _maxRules : target;
-            outputs[output].Add(ItemCopy.Clone(items[i]));
+                var target = p.Rules.FindIndex(ConditionEvaluator.Evaluate);
+                var output = _fallbackFirst
+                    ? target + 1
+                    : target < 0 ? _maxRules : target;
+                outputs[output].Add(ItemCopy.Clone(items[i]));
+            }
+            catch (CoreNodeException ex)
+            {
+                throw ex.AtItem(i, items.Count);
+            }
         }
 
         return Task.FromResult(outputs.Select(o => o.ToArray()).ToArray());

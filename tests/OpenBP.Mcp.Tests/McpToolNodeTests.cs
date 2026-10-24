@@ -124,6 +124,32 @@ public sealed class McpToolNodeTests : IAsyncLifetime
 
         Assert.Contains("fail", ex.Message);
         Assert.Contains("клієнта не знайдено", ex.Message);
+        Assert.Contains("клієнта не знайдено", ex.Details, StringComparison.Ordinal);
+        Assert.EndsWith("Перевірте аргументи вузла і повторіть запуск.", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EmptyRequiredArgumentFailsBeforeTheCall()
+    {
+        await _registry.RefreshToolsAsync(_server.Config.Id);
+        var node = new McpToolNode(_registry);
+        var ctx = Context("echo", """{"text":"  "}""", "{}");
+
+        var ex = await Assert.ThrowsAsync<McpToolException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+
+        Assert.Equal("Поле «text» порожнє. Вкажіть значення або вираз, що його повертає.", ex.Message);
+    }
+
+    [Fact]
+    public async Task FailingItemIsMarkedWhenThereAreSeveralItems()
+    {
+        var node = new McpToolNode(_registry);
+        var ctx = Context("fail", """{"reason":"ні"}""", "{}", "{}");
+
+        var ex = await Assert.ThrowsAsync<McpToolException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+
+        Assert.Equal(0, ex.ItemIndex);
+        Assert.Contains("[item 0]", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -143,10 +169,11 @@ public sealed class McpToolNodeTests : IAsyncLifetime
         ctx.Node.TimeoutSec = 1;
 
         var watch = Stopwatch.StartNew();
-        var ex = await Assert.ThrowsAsync<McpUnavailableException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<McpToolException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
         watch.Stop();
 
-        Assert.Equal(_server.Config.Id, ex.ServerId);
+        Assert.Equal(_server.Config.Id, Assert.IsType<McpUnavailableException>(ex.InnerException).ServerId);
+        Assert.Contains("Перевірте конектор", ex.Message, StringComparison.Ordinal);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"Таймаут спрацював за {watch.Elapsed}.");
     }
 
@@ -167,7 +194,9 @@ public sealed class McpToolNodeTests : IAsyncLifetime
         var ctx = Context("echo", """{"text":"x"}""", "{}");
         ctx.Parameters = new JsonObject { ["serverId"] = "srv_missing", ["toolName"] = "echo", ["arguments"] = new JsonObject { ["text"] = "x" } };
 
-        await Assert.ThrowsAsync<McpServerUnknownException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<McpToolException>(() => node.ExecuteAsync(ctx, CancellationToken.None));
+        Assert.IsType<McpServerUnknownException>(ex.InnerException);
+        Assert.Contains("Оберіть конектор", ex.Message, StringComparison.Ordinal);
     }
 
     private FakeNodeContext Context(string tool, string arguments, params string[] items)

@@ -8,6 +8,8 @@ import { Observable, Subscription, catchError, filter, forkJoin, map, of, switch
 import { Autosave } from '../canvas/autosave';
 import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
+import { missingFieldsByNode } from '../canvas/missing-fields';
+import { MissingFieldRequest } from '../canvas/vflow/vflow-canvas.component';
 import { CanvasComponent } from '../canvas/canvas.component';
 import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
@@ -20,7 +22,7 @@ import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickA
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
-import { TestRun, ancestorIds, applyEvent, isRunning, itemCounts, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
+import { TestRun, ancestorIds, applyEvent, isRunning, itemCounts, nodeRunErrors, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
 import { ExecutionItem, ExecutionsApiService, StartExecutionRequest, StepStatus } from '../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
@@ -196,11 +198,14 @@ export interface EditorErrorEvent {
               [errors]="validationErrors()"
               [runStatuses]="runStatuses()"
               [itemCounts]="itemCounts()"
+              [runErrors]="runErrors()"
+              [missingFields]="missingFields()"
               [selection]="selection()"
               [readonly]="readonly()"
               (definitionChange)="changed($event)"
               (selectionChange)="selection.set($event)"
               (quickAdd)="openQuickAdd($event)"
+              (missingClick)="openMissing($event)"
             />
             @if (quickAdd(); as qa) {
               <div class="editor__backdrop" data-testid="quick-add-backdrop" (pointerdown)="closeQuickAdd()"></div>
@@ -243,7 +248,7 @@ export interface EditorErrorEvent {
                 </nav>
               }
               <div class="editor__io">
-                <div class="editor__col editor__col--data" data-testid="panel-input" [hidden]="!wide() && panelTab() !== 'input'">
+                <div #inputCol tabindex="-1" class="editor__col editor__col--data" data-testid="panel-input" [hidden]="!wide() && panelTab() !== 'input'">
                   <app-node-data-view side="input" [title]="inputTitle" [ports]="inputPorts()" [mappable]="!readonly()" [expression]="inputExpression()" (pick)="mapField($event)">
                     @if (inputSources().length > 0) {
                       <label dataHeader class="editor__source">
@@ -313,7 +318,21 @@ export interface EditorErrorEvent {
                       <span dataHeader class="editor__step" data-testid="node-run-status" i18n="@@workfloweditor.output.pinned">закріплено</span>
                     }
                     @if (selectedStep()?.error; as error) {
-                      <p dataNote class="editor__step-error" role="alert" data-testid="node-run-error">{{ error.message }}</p>
+                      <div dataNote class="editor__step-error" role="alert" data-testid="node-run-error">
+                        <p class="m-0" data-testid="node-run-error-message">{{ error.message }}</p>
+                        @if (error.itemIndex !== null && error.itemIndex !== undefined) {
+                          <p class="editor__step-error-item m-0" data-testid="node-run-error-item" i18n="@@workfloweditor.error.item">Вузол зупинився на item {{ error.itemIndex }} вхідних даних.</p>
+                        }
+                        @if (error.details) {
+                          <details class="editor__step-error-details" data-testid="node-run-error-details">
+                            <summary i18n="@@workfloweditor.error.details">Технічні подробиці</summary>
+                            <pre class="m-0">{{ error.details }}</pre>
+                          </details>
+                        }
+                        @if (selectedDescriptor()?.inputs?.length) {
+                          <button mat-stroked-button type="button" data-testid="node-run-error-input" (click)="showInput()" i18n="@@workfloweditor.error.showInput">Показати вхідні дані</button>
+                        }
+                      </div>
                     }
                     <p dataEmpty class="editor__empty m-0" data-testid="output-empty" i18n="@@workfloweditor.output.empty">Виконайте вузол («Тестувати крок»), щоб побачити вихід.</p>
                   </app-node-data-view>
@@ -595,9 +614,29 @@ export interface EditorErrorEvent {
     }
 
     .editor__step-error {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
       margin: 0 0 8px;
       font-size: 13px;
       color: var(--mat-sys-error);
+    }
+
+    .editor__step-error-item {
+      color: var(--ac-cool-grey-4);
+    }
+
+    .editor__step-error-details {
+      max-width: 100%;
+      color: var(--ac-cool-grey-4);
+    }
+
+    .editor__step-error-details pre {
+      overflow-x: auto;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   `,
 })
@@ -654,6 +693,8 @@ export class WorkflowEditorComponent implements OnInit {
   /** Ключі останніх доданих елементів палітри (секція «Останні»). */
   private readonly recent = signal<string[]>(readRecent());
   private readonly canvasArea = viewChild<ElementRef<HTMLElement>>('canvasArea');
+  private readonly inputCol = viewChild<ElementRef<HTMLElement>>('inputCol');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly history = new EditHistory<WorkflowDefinition | null>(null);
   private readonly autosave = new Autosave<SaveRequest, WorkflowDetail>(
@@ -795,6 +836,24 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly itemCounts = computed(() => itemCounts(this.testRun()));
 
   protected readonly runStatuses = computed(() => nodeStatuses(this.testRun()));
+  /** Повідомлення помилок вузлів останнього запуску — перший рядок на картці (F3-57). */
+  protected readonly runErrors = computed(() => nodeRunErrors(this.testRun()));
+  /** Незаповнені обов'язкові параметри вузлів — «не заповнено: N» на картці до збереження (F3-57). */
+  protected readonly missingFields = computed(() => {
+    const def = this.definition();
+    if (!def || this.readonly()) return new Map<string, string[]>();
+    const index = this.descriptorIndex();
+    const servers = this.servers();
+    return missingFieldsByNode(
+      def.nodes,
+      (n) => index.find(n.type, n.typeVersion),
+      (n) => {
+        if (!MCP_TOOL_TYPES.includes(n.type)) return null;
+        const { serverId, toolName } = n.parameters ?? {};
+        return servers.find((s) => s.id === serverId)?.tools.find((t) => t.name === toolName) ?? null;
+      },
+    );
+  });
   protected readonly running = computed(() => isRunning(this.testRun()));
   protected readonly canUndo = this.history.canUndo;
   protected readonly canRedo = this.history.canRedo;
@@ -947,6 +1006,38 @@ export class WorkflowEditorComponent implements OnInit {
   }
 
   /** Інша дія конектора з панелі (F3-55): `arguments` скидаються, з'єднання й позиція лишаються; дія — у «Останніх». */
+  /** «не заповнено: N» на картці: відкрити вузол на вкладці параметрів і поставити фокус на перше незаповнене поле. */
+  protected openMissing(request: MissingFieldRequest): void {
+    this.selection.set({ nodes: [request.nodeId], edges: [] });
+    this.panelTab.set('params');
+    const key = request.field.split('.').pop() ?? request.field;
+    const root = this.host.nativeElement;
+    let tries = 0;
+    // Панель і поля formly з'являються за кілька кадрів після виділення.
+    const focus = () => {
+      const field = root.querySelector<HTMLElement>(`[data-testid="panel-params"] [data-field="${CSS.escape(key)}"]`);
+      const control = field?.querySelector<HTMLElement>('input, textarea, mat-select, [contenteditable="true"], [tabindex]:not([tabindex="-1"])');
+      if (control) {
+        control.scrollIntoView?.({ block: 'center' });
+        control.focus();
+      } else if (++tries < 20) {
+        requestAnimationFrame(focus);
+      }
+    };
+    requestAnimationFrame(focus);
+  }
+
+  /** Кнопка «Показати вхідні дані» в помилці вузла: на вузькому екрані — вкладка входу, на широкому — прокрутка до неї. */
+  protected showInput(): void {
+    if (!this.wide()) {
+      this.panelTab.set('input');
+      return;
+    }
+    const col = this.inputCol()?.nativeElement;
+    col?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    col?.focus?.();
+  }
+
   protected toolChanged(nodeId: string, tool: McpToolInfo): void {
     const def = this.definition();
     const node = def?.nodes.find((n) => n.id === nodeId);
