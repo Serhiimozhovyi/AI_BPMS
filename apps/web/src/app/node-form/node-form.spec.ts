@@ -213,6 +213,7 @@ describe('вибір облікових даних (F4-03)', () => {
     expect(rules.labels).toEqual(['Anthropic прод']);
     expect(credentialField({}).props!['label']).toBe('Облікові дані');
     expect(credentialTypesFor('ai.llm', llm.credentials![0], {})).toEqual(['anthropic', 'openai', 'openai-compatible']);
+    expect(credentialTypesFor('ai.agent', llm.credentials![0], { provider: 'openai' })).toEqual(['openai']);
   });
 
   it('обране значення пишеться в параметр вузла', () => {
