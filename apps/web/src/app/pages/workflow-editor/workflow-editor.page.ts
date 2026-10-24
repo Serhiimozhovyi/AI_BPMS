@@ -201,13 +201,13 @@ interface SaveRequest {
 
     .editor__run--success {
       color: #fff;
-      background: #2e7d32;
+      background: var(--ac-green);
     }
 
     .editor__run--error,
     .editor__run--timed_out {
       color: #fff;
-      background: #c62828;
+      background: var(--ac-red);
     }
 
     .editor__count {

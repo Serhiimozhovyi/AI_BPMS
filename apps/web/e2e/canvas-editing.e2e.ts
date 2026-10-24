@@ -68,6 +68,7 @@ class FakeApi {
     await page.route('**/api/v1/**', async (route) => {
       const request = route.request();
       const path = new URL(request.url()).pathname;
+      if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u1', email: 'e2e@openbp.test', role: 'admin' } });
       if (path === '/api/v1/nodes') return route.fulfill({ json: DESCRIPTORS });
       if (path === '/api/v1/connectors') return route.fulfill({ json: { items: [], page: 1, pageSize: 200, total: 0 } });
       if (path === `/api/v1/workflows/${WORKFLOW_ID}`) {
