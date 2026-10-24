@@ -81,6 +81,8 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount }] }` — групи сценаріїв у порядку показу (F3-63) |
 | `create_workflow_group` | editor | `name` | створена група в кінці списку; назва унікальна без урахування регістру (`WORKFLOW_GROUP_NAME_TAKEN`) |
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
+| `list_tables` | viewer | — | `{ items: [{ id, name, columns: [{ name, type, key? }], rowCount, updatedAt }] }` — таблиці даних (F6-11) |
+| `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN` |
 | `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла) |
 | `test_node` | editor | `workflowId`, `nodeId`, `items?`, `timeoutSec?` | вхід і вихід одного вузла; помилка вузла — `NODE_FAILED` |
 | `get_execution` | viewer | `id` | те саме, що `run_workflow` |
@@ -136,6 +138,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `openbp://nodes` | те саме, що `describe_nodes` |
 | `openbp://workflows/{id}` | визначення поточної версії сценарію |
 | `openbp://executions/{id}` | знімок виконання з кроками, як `get_execution` |
+| `openbp://tables/{id}` | таблиця даних (id або назва) з першими 100 рядками, як `query_table` без умов |
 
 Невідомий id → JSON-RPC помилка `ResourceNotFound`.
 

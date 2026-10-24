@@ -59,6 +59,28 @@ public sealed class WorkflowGroupEntity
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+/// <summary>Таблиця даних (F6-11): колонки — JSON <c>[{ name, type, key }]</c>.</summary>
+public sealed class DataTableEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Назва у верхньому регістрі (інваріантна культура) — унікальність без урахування регістру.</summary>
+    public string NormalizedName { get; set; } = "";
+    public string Columns { get; set; } = "[]";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>Рядок таблиці даних: ключ унікальний у таблиці (значення ключової колонки або згенерований id).</summary>
+public sealed class DataRowEntity
+{
+    public Guid TableId { get; set; }
+    public string Key { get; set; } = "";
+    public string Data { get; set; } = "{}";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>Змінна інстансу (<c>$vars.key</c>, F6-09): не секрет — секрети лишаються в credentials.</summary>
 public sealed class VariableEntity
 {

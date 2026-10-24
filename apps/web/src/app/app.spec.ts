@@ -63,7 +63,7 @@ describe('App', () => {
 });
 
 describe('routes', () => {
-  it('/login без guard\'а, шість сторінок з architecture.md §7 — під guard\'ом', () => {
+  it('/login без guard\'а, сторінки з architecture.md §7 — під guard\'ом', () => {
     expect(routes[0].path).toBe('login');
     expect(routes[0].canActivateChild).toBeUndefined();
     const app = routes.find((r) => r.children)!;
@@ -72,6 +72,7 @@ describe('routes', () => {
       'workflows',
       'workflows/:id',
       'executions',
+      'tables',
       'connectors',
       'credentials',
       'settings',

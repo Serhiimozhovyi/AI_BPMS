@@ -114,6 +114,8 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `api_keys` | id, user_id, hash, name, last_used_at |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
 | `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням) |
+| `data_tables` | id, name, normalized_name (unique), columns (jsonb: `[{ name, type, key? }]`), created_at, updated_at (F6-11) |
+| `data_rows` | table_id → data_tables (cascade), key (PK разом з table_id), data (jsonb), created_at, updated_at; індекс (table_id, created_at) |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
@@ -125,6 +127,12 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |
 
+Таблиці даних (F6-11): правила значень і фільтрів — одні на всіх (`OpenBP.Engine.Data.DataTableRules`): вузол
+`core.dataTable`, REST, UI і MCP. Сховище `PostgresDataTableStore` пише рядки під `pg_advisory_xact_lock` таблиці
+(ліміт `OPENBP_DATA_TABLE_MAX_ROWS` тримається й за паралельних вставок), `upsert` — `INSERT … ON CONFLICT (table_id, key)
+DO UPDATE SET data = data_rows.data || EXCLUDED.data`; фільтри `where` перекладаються в SQL з назвою колонки параметром.
+Видалення колонки прибирає її значення з рядків; ключову колонку таблиці з рядками змінити не можна.
+
 Quartz тримає власні таблиці для розкладів. Бінарні дані — у файловому сховищі (локальна папка / S3-сумісне), в jsonb лише `BinaryRef`.
 
 Файлове сховище воркера — локальна папка `Storage:LocalPath` (змінна `Storage__LocalPath`; у Docker — шлях у volume):
@@ -135,7 +143,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 ## 7. Frontend (Angular)
 
-- Standalone-компоненти, Signals, роутинг: `/workflows`, `/workflows/:id` (канвас), `/executions`, `/connectors`, `/credentials`, `/settings`.
+- Standalone-компоненти, Signals, роутинг: `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tables` (таблиці даних, F6-11), `/connectors`, `/credentials`, `/settings`.
 - Вхід (F3-24): `/login` (email + пароль, `POST /auth/login`, cookie-сесія); решта маршрутів — під guard'ом, який перевіряє сесію через `GET /auth/me` і без неї веде на `/login?returnUrl=…` (лише шлях усередині застосунку). 401 від Api посеред роботи — теж на `/login` з поверненням; «Вийти» — `POST /auth/logout`.
 - Канвас — обраний у спайку фази 2 (ngx-vflow або Rete.js); обгорнутий у власний компонент `CanvasComponent`, щоб бібліотеку можна було замінити.
 - Форма вузла — ngx-formly з JSON Schema; для `mcp.tool` схема береться з `tools_cache`.
@@ -232,6 +240,8 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `GET /workflows/{id}/export` | editor | `{ definition, manifest: { connectors: [{ ref, name, transport }], credentials: [{ ref, name, type }], variables: [key], workflows: [{ ref, name }] } }` — без секретів і значень змінних (F6-09) |
 | `POST /workflows/import { definition, manifest?, mapping?, groupId? }` | editor | 201 `{ workflow, mapping, missingVariables }` — новий неактивний сценарій; `serverId`/`credentialId`/`settings.errorWorkflowId` перемаплюються (`mapping` → єдиний об'єкт з тією самою назвою і транспортом/типом); незмаплене — 422 `IMPORT_UNMAPPED` з `unmapped: [{ kind, ref, name, type, reason }]`, нічого не створено |
 | `GET /variables` · `PUT /variables/{key} { value, description? }` · `DELETE /variables/{key}` | viewer (читання), admin | `VariableDto[]` · `VariableDto` (створює або змінює) · 204 |
+| `GET /tables` · `GET /tables/{id або назва}` · `POST /tables { name, columns }` · `PUT /tables/{id} { name, columns }` · `DELETE /tables/{id}` | viewer (читання), editor | `DataTableSummary[]` (`{ id, name, columns, rowCount, updatedAt }`) · `DataTableSummary` · 201 · `DataTableSummary` · 204; повтор назви — 409 `DATA_TABLE_NAME_TAKEN`, зміна ключа таблиці з рядками — 409 `DATA_TABLE_KEY_CHANGE`, колонки — 422 `DATA_TABLE_COLUMNS_INVALID` (F6-11) |
+| `GET /tables/{id}/rows?search&page&pageSize` · `POST /tables/{id}/rows { values }` · `PATCH /tables/{id}/rows/{key} { values }` · `DELETE /tables/{id}/rows/{key}` · `POST /tables/{id}/import { csv }` | viewer (читання), editor | `PageResult<DataRowDto>` (`{ key, data, createdAt, updatedAt }`) · 201 · `DataRowDto` · 204 · `{ inserted, updated }`; помилки значень — 422 `DATA_TABLE_*`, дубль ключа — 409 `DATA_TABLE_KEY_DUPLICATE`; CSV перевіряється повністю до запису |
 | `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
 | `GET /workflows/{id}/versions` · `GET /workflows/{id}/versions/{version}` | viewer | `WorkflowVersionSummary[]` · визначення |
 | `POST /workflows/{id}/executions { startNodeId?, startItems?, destinationNodeId?, runData? }` | editor | 202 `ExecutionSummary` (ручний запуск; `destinationNodeId` — «Виконати вузол»: лише вузол і його попередники, сам вузол виконується навіть із `pinData`; `runData` — виходи вузлів попереднього запуску `{ nodeId: Item[][] }` по портах, такі вузли не виконуються, мають пріоритет над `pinData`; невідомий вузол → 422 `START_NODE_UNKNOWN`/`DESTINATION_NODE_UNKNOWN`) |

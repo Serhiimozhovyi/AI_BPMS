@@ -91,6 +91,74 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("credentials", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.DataRowEntity", b =>
+                {
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("table_id");
+
+                    b.Property<string>("Key")
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("data");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TableId", "Key");
+
+                    b.HasIndex("TableId", "CreatedAt");
+
+                    b.ToTable("data_rows", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.DataTableEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Columns")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("columns");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("data_tables", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.ExecutionEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -582,6 +650,15 @@ namespace OpenBP.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("workflow_versions", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.DataRowEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.DataTableEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBP.Data.UserLoginEntity", b =>

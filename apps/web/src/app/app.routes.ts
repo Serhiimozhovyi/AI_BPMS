@@ -30,6 +30,11 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/executions/executions.page').then((m) => m.ExecutionsPage),
       },
       {
+        path: 'tables',
+        title: $localize`:@@tables.title:Таблиці даних`,
+        loadComponent: () => import('./pages/tables/tables.page').then((m) => m.TablesPage),
+      },
+      {
         path: 'connectors',
         title: $localize`:@@connectors.title:Конектори`,
         loadComponent: () => import('./pages/connectors/connectors.page').then((m) => m.ConnectorsPage),
