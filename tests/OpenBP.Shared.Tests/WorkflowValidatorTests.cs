@@ -27,6 +27,45 @@ public class WorkflowValidatorTests
         Assert.Empty(errors);
     }
 
+    // ---------- Межа таймауту (F4-05) ----------
+
+    [Theory]
+    [InlineData(3600, null)]
+    [InlineData(3601, 3600)]
+    [InlineData(5000, null)]
+    public async Task ExecutionTimeoutAboveServerLimitIsFieldError(int timeoutSec, int? max)
+    {
+        var doc = WorkflowTestData.ExampleNode;
+        doc["settings"]!["executionTimeoutSec"] = timeoutSec;
+
+        var errors = await new WorkflowValidator().ValidateAsync(doc, new WorkflowValidationOptions { MaxExecutionTimeoutSec = max });
+
+        if (max is null)
+        {
+            Assert.Empty(errors);
+            return;
+        }
+
+        var error = Assert.Single(errors);
+        Assert.Equal(Codes.ExecutionTimeoutTooLarge, error.Code);
+        Assert.Equal("/settings/executionTimeoutSec", error.Path);
+        Assert.Null(error.NodeId);
+    }
+
+    [Fact]
+    public void WorkflowLimits_ParseAndEffectiveTimeout()
+    {
+        Assert.Equal(3600, WorkflowLimits.Parse(null).MaxExecutionTimeoutSec);
+        Assert.Equal(3600, WorkflowLimits.Parse(" ").MaxExecutionTimeoutSec);
+        var limits = WorkflowLimits.Parse("120");
+        Assert.Equal(120, limits.MaxExecutionTimeoutSec);
+        Assert.Equal(120, limits.EffectiveTimeoutSec(0));
+        Assert.Equal(30, limits.EffectiveTimeoutSec(30));
+        Assert.Equal(120, limits.EffectiveTimeoutSec(600));
+        Assert.Throws<ArgumentException>(() => WorkflowLimits.Parse("0"));
+        Assert.Throws<ArgumentException>(() => WorkflowLimits.Parse("година"));
+    }
+
     // ---------- Правило 1: схема ----------
 
     [Fact]

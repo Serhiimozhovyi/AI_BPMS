@@ -41,6 +41,7 @@ public sealed partial class ExecutionJobProcessor
     private readonly WorkerOptions _options;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
+    private readonly WorkflowLimits _limits;
 
     /// <summary>Створює обробник.</summary>
     /// <param name="contexts">Фабрика контекстів БД.</param>
@@ -53,6 +54,7 @@ public sealed partial class ExecutionJobProcessor
     /// <param name="options">Налаштування воркера.</param>
     /// <param name="logger">Системний лог.</param>
     /// <param name="time">Годинник; за замовчуванням системний.</param>
+    /// <param name="limits">Серверні межі виконання; за замовчуванням типові (<see cref="WorkflowLimits"/>).</param>
     public ExecutionJobProcessor(
         IDbContextFactory<OpenBpDbContext> contexts,
         JobQueue queue,
@@ -63,7 +65,8 @@ public sealed partial class ExecutionJobProcessor
         IBinaryStore? binary,
         WorkerOptions options,
         ILogger<ExecutionJobProcessor> logger,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        WorkflowLimits? limits = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -77,6 +80,7 @@ public sealed partial class ExecutionJobProcessor
         _options = options;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _time = time ?? TimeProvider.System;
+        _limits = limits ?? new WorkflowLimits();
     }
 
     private string WorkerId => _options.WorkerId;
@@ -169,6 +173,10 @@ public sealed partial class ExecutionJobProcessor
             await CompleteJobAsync(job).ConfigureAwait(false);
             return;
         }
+
+        // Воркер застосовує менший із таймауту сценарію і серверної межі (F4-05): так і старі версії,
+        // збережені до появи межі, і сценарії без таймауту не працюють довше за OPENBP_MAX_EXECUTION_TIMEOUT_SEC.
+        workflow.Settings.ExecutionTimeoutSec = _limits.EffectiveTimeoutSec(workflow.Settings.ExecutionTimeoutSec);
 
         var scrubber = new SecretScrubber();
         try

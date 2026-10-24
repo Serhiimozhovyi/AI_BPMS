@@ -28,7 +28,8 @@ public sealed class WorkflowService(
     ICurrentUser currentUser,
     INodeSchemaProvider schemaProvider,
     IScheduleRegistrar schedules,
-    TimeProvider time) : IWorkflowService
+    TimeProvider time,
+    WorkflowLimits? limits = null) : IWorkflowService
 {
     /// <summary>Код конфлікту: видалення активного сценарію.</summary>
     public const string WorkflowActiveCode = "WORKFLOW_ACTIVE";
@@ -321,7 +322,11 @@ public sealed class WorkflowService(
     /// </summary>
     private async Task<IReadOnlyList<WorkflowValidationError>> ValidateDocumentAsync(JsonObject document, bool asActive, CancellationToken ct)
     {
-        var errors = await _validator.ValidateAsync(document, new WorkflowValidationOptions { IsActive = asActive }, ct);
+        var errors = await _validator.ValidateAsync(document, new WorkflowValidationOptions
+        {
+            IsActive = asActive,
+            MaxExecutionTimeoutSec = (limits ?? new WorkflowLimits()).MaxExecutionTimeoutSec,
+        }, ct);
         if (errors.Count > 0)
         {
             return errors;

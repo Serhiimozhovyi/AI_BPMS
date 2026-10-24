@@ -10,6 +10,12 @@ public sealed record WorkflowValidationOptions
 {
     /// <summary>Сценарій активний (запускається тригерами) — тоді обов'язковий хоча б один тригер (правило 4).</summary>
     public bool IsActive { get; init; }
+
+    /// <summary>
+    /// Серверна межа <c>settings.executionTimeoutSec</c>, с (<see cref="WorkflowLimits"/>); більше значення — помилка
+    /// <see cref="WorkflowValidationCodes.ExecutionTimeoutTooLarge"/>. <c>null</c> — не перевіряється.
+    /// </summary>
+    public int? MaxExecutionTimeoutSec { get; init; }
 }
 
 /// <summary>
@@ -93,6 +99,13 @@ public sealed class WorkflowValidator
         if (options.IsActive)
         {
             ValidateTrigger(workflow, errors);
+        }
+
+        if (options.MaxExecutionTimeoutSec is { } max && workflow.Settings.ExecutionTimeoutSec > max)
+        {
+            errors.Add(new(WorkflowValidationCodes.ExecutionTimeoutTooLarge,
+                $"Таймаут виконання {workflow.Settings.ExecutionTimeoutSec} с більший за дозволений сервером ({max} с).",
+                Path: "/settings/executionTimeoutSec"));
         }
 
         // Правила 5–6.

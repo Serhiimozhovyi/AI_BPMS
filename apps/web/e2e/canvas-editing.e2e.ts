@@ -29,6 +29,7 @@ interface Definition {
 }
 
 const WORKFLOW_ID = '11111111-2222-3333-4444-555555555555';
+const ERROR_WORKFLOW_ID = '66666666-7777-8888-9999-000000000000';
 
 function descriptor(type: string, displayName: string, group: string, inputs: string[], outputs: string[]) {
   return { type, version: 1, displayName, group, inputs, outputs, parametersSchema: { type: 'object' }, isTrigger: inputs.length === 0 };
@@ -71,6 +72,10 @@ class FakeApi {
       if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u1', email: 'e2e@openbp.test', role: 'admin' } });
       if (path === '/api/v1/nodes') return route.fulfill({ json: DESCRIPTORS });
       if (path === '/api/v1/connectors') return route.fulfill({ json: { items: [], page: 1, pageSize: 200, total: 0 } });
+      if (path === '/api/v1/workflows') {
+        const items = [this.detail(), { id: ERROR_WORKFLOW_ID, name: 'Сповіщення про помилки', active: true, version: 2, updatedAt: '' }];
+        return route.fulfill({ json: { items, page: 1, pageSize: 200, total: items.length } });
+      }
       if (path === `/api/v1/workflows/${WORKFLOW_ID}`) {
         if (request.method() === 'GET') return route.fulfill({ json: this.detail() });
         if (request.method() === 'PUT') {
@@ -226,4 +231,29 @@ test('виділене ребро видаляється клавішею Delete
   await expect(page.locator('[data-node-id]')).toHaveCount(2);
   await waitSaved(page);
   expect(api.definition.connections).toEqual([]);
+});
+
+test('налаштування сценарію: зміни йдуть у settings збереженої версії, себе немає серед сценаріїв помилок', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
+
+  await page.getByTestId('settings').click();
+  const dialog = page.getByTestId('workflow-settings');
+  await expect(dialog.getByTestId('settings-timeout')).toHaveValue('300');
+  await dialog.getByTestId('settings-timeout').fill('1200');
+  await dialog.getByTestId('settings-error-workflow').click();
+  await expect(page.getByRole('option')).toHaveText(['Немає', 'Сповіщення про помилки']);
+  await page.getByRole('option', { name: 'Сповіщення про помилки' }).click();
+  await dialog.getByTestId('settings-save-successful').getByRole('switch').click();
+  await page.getByTestId('settings-apply').click();
+  await expect(dialog).toHaveCount(0);
+
+  await waitSaved(page);
+  expect(api.definition.settings).toEqual({ timezone: 'Europe/Kyiv', executionTimeoutSec: 1200, errorWorkflowId: ERROR_WORKFLOW_ID, saveSuccessfulData: false });
+
+  await page.getByTestId('undo').click();
+  await waitSaved(page);
+  expect(api.definition.settings['executionTimeoutSec']).toBe(300);
 });

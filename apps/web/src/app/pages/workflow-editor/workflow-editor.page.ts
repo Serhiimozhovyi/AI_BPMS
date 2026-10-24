@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
@@ -22,6 +23,8 @@ import { MCP_TOOL_TYPES, updateNode } from '../../node-form/node-form';
 import { NodePanelComponent } from '../../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { WorkflowSettingsDialogComponent, WorkflowSettingsDialogData } from '../../workflow-settings/workflow-settings-dialog.component';
+import { WorkflowSettings, settingsChanged } from '../../workflow-settings/workflow-settings';
 
 /** Що зберігає автозбереження: визначення разом з id сценарію, якому воно належить. */
 interface SaveRequest {
@@ -60,6 +63,7 @@ interface SaveRequest {
             <button mat-button type="button" data-testid="copy" [disabled]="!hasNodeSelection()" (click)="copy()" i18n-title="@@workfloweditor.copy.hint" title="Копіювати (Ctrl+C)" i18n="@@workfloweditor.copy">Копіювати</button>
             <button mat-button type="button" data-testid="paste" [disabled]="!canPaste()" (click)="paste()" i18n-title="@@workfloweditor.paste.hint" title="Вставити (Ctrl+V)" i18n="@@workfloweditor.paste">Вставити</button>
             <button mat-button type="button" data-testid="delete" [disabled]="!hasSelection()" (click)="deleteSelected()" i18n-title="@@workfloweditor.delete.hint" title="Видалити (Delete)" i18n="@@workfloweditor.delete">Видалити</button>
+            <button mat-button type="button" data-testid="settings" (click)="openSettings()" i18n-title="@@workfloweditor.settings.hint" title="Часовий пояс, таймаут, сценарій помилок" i18n="@@workfloweditor.settings">Налаштування</button>
             <a mat-button data-testid="executions-link" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" i18n="@@workfloweditor.executions">Журнал виконань</a>
             <button mat-flat-button type="button" data-testid="run" [disabled]="running() || def.nodes.length === 0" (click)="runWorkflow()" i18n-title="@@workfloweditor.run.hint" title="Зберегти і виконати з тестовими даними (pinData)">
               @if (running()) {
@@ -263,6 +267,7 @@ export class WorkflowEditorPage implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly clipboard = inject(CanvasClipboardService);
   private readonly executions = inject(ExecutionsApiService);
+  private readonly dialog = inject(MatDialog);
 
   protected readonly defaultTitle = $localize`:@@workfloweditor.title:Редактор сценарію`;
 
@@ -424,6 +429,24 @@ export class WorkflowEditorPage implements OnInit {
     if (definition === this.definition()) return;
     this.history.push(definition);
     this.apply(definition);
+  }
+
+  /** Діалог «Налаштування» (F4-05): нові `settings` — звичайна зміна з історією й автозбереженням. */
+  protected openSettings(): void {
+    const def = this.definition();
+    const id = this.workflow()?.id;
+    if (!def || !id) return;
+    this.dialog
+      .open<WorkflowSettingsDialogComponent, WorkflowSettingsDialogData, WorkflowSettings>(WorkflowSettingsDialogComponent, {
+        data: { workflowId: id, settings: def.settings, errors: this.validationErrors() },
+        width: '480px',
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((settings) => {
+        const current = this.definition();
+        if (settings && current && settingsChanged(current.settings, settings)) this.changed({ ...current, settings });
+      });
   }
 
   protected undo(): void {
