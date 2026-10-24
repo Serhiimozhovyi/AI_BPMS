@@ -66,6 +66,16 @@ docker compose -f docker-compose.prod.yml up -d --build --wait   # postgres → 
 docker build -f docker/api.Dockerfile -t openbp-api .
 ```
 
+### REST API і OpenAPI
+
+Опис REST — OpenAPI 3.1 за адресою `/openapi/v1.json` (відкритий без входу, лише схеми й описи українською);
+знімок — [docs/openapi.json](docs/openapi.json). Клієнт можна згенерувати будь-яким генератором OpenAPI.
+Після зміни маршрутів чи DTO оновіть знімок (тест `OpenApiTests` інакше впаде):
+
+```bash
+OPENBP_UPDATE_OPENAPI=1 dotnet test tests/OpenBP.Api.Tests --filter OpenApi
+```
+
 ### Запуск сценарію з CLI
 
 `openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.

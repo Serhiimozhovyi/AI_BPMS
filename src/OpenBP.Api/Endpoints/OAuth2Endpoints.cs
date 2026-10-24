@@ -1,3 +1,4 @@
+using OpenBP.Api.OpenApi;
 using OpenBP.Application.Credentials;
 
 namespace OpenBP.Api.Endpoints;
@@ -23,7 +24,9 @@ public static class OAuth2Endpoints
     public static IEndpointRouteBuilder MapOAuth2Endpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/v1/credentials/{id:guid}/oauth2/start", async (Guid id, HttpContext http, OAuth2Service service, IConfiguration config, CancellationToken ct) =>
-            new OAuth2StartResponse(await service.StartAsync(id, RedirectUri(http, config), ct)));
+            new OAuth2StartResponse(await service.StartAsync(id, RedirectUri(http, config), ct)))
+            .WithTags(OpenApiSetup.Tags.Credentials).WithSummary("Почати OAuth2-вхід для облікових даних")
+            .WithDescription("Повертає адресу провайдера (authorization code + PKCE), куди треба перейти браузером.");
 
         app.MapGet(CallbackPath, async (string? state, string? code, string? error, OAuth2Service service, CancellationToken ct) =>
         {
@@ -32,7 +35,10 @@ public static class OAuth2Endpoints
                 ? $"oauth=connected&credential={result.CredentialId}"
                 : $"oauth=error&code={Uri.EscapeDataString(result.Error)}" + (result.CredentialId is { } id ? $"&credential={id}" : "");
             return Results.Redirect($"/credentials?{query}");
-        });
+        })
+            .WithTags(OpenApiSetup.Tags.Credentials).WithSummary("Callback OAuth2-провайдера")
+            .WithDescription("Викликає провайдер, а не клієнт API: обмінює код на токени і перенаправляє на сторінку облікових даних UI.")
+            .Produces(StatusCodes.Status302Found);
 
         return app;
     }

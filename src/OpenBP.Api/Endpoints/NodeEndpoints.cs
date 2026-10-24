@@ -1,3 +1,4 @@
+using OpenBP.Api.OpenApi;
 using OpenBP.Application.Nodes;
 
 namespace OpenBP.Api.Endpoints;
@@ -9,7 +10,8 @@ public static class NodeEndpoints
     /// <param name="api">Група.</param>
     public static RouteGroupBuilder MapNodeEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/nodes", (INodeService service, CancellationToken ct) => service.ListAsync(ct));
+        api.MapGet("/nodes", (INodeService service, CancellationToken ct) => service.ListAsync(ct))
+            .WithTags(OpenApiSetup.Tags.Nodes).WithSummary("Дескриптори вузлів для палітри");
         return api;
     }
 }

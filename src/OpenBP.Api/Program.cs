@@ -8,6 +8,7 @@ using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Health;
 using OpenBP.Api.Nodes;
+using OpenBP.Api.OpenApi;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
 using OpenBP.Application.Executions;
@@ -82,6 +83,9 @@ builder.Services.AddOpenBpMcpServer();
 // Health-checks (F4-08): /health/live і /health/ready (БД і міграції).
 builder.Services.AddOpenBpHealthChecks();
 
+// Опис REST (F4-12): /openapi/v1.json, знімок — docs/openapi.json.
+builder.Services.AddOpenBpOpenApi();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -89,6 +93,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapOpenBpHealth();
+app.MapOpenBpOpenApi();
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
