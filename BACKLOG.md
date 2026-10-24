@@ -907,7 +907,7 @@
 - DoD: тести: каталог містить усі `connectors/*`; встановлення створює сервер і discovery проходить проти FakeServer; шаблон з відсутнім конектором → підказка; Vitest сторінки; `docs/connectors.md` §5 (маніфест) оновлено.
 
 ### F6-17 · Оцінки якості ШІ (evaluations)
-- model: `sonnet` · status: `ready` · depends: F6-12
+- model: `sonnet` · status: `review` · depends: F6-12
 - Що: таблиця `evaluations (workflow_id, node_id, name)` і `evaluation_cases (input items, expected, check: exact | jsonPath | expression | llm)`; `POST /api/v1/evaluations/{id}/run` виконує вузол `ai.llm`/`ai.agent` через механізм `test_node` на кожному кейсі й зберігає результат прогону (збіг/не збіг, фактичний output, тривалість, токени) з прив'язкою до версії сценарію; UI в панелі вузла: вкладка «Оцінки» — кейси, запуск, таблиця результатів, порівняння з попереднім прогоном; MCP `run_evaluation`.
 - DoD: тести: прогін з 3 кейсами проти фейкового HTTP моделі дає 2/3; `expression`-перевірка; результати зберігаються за версією; viewer не запускає; Vitest вкладки; `docs/mcp-server.md` оновлено.
 

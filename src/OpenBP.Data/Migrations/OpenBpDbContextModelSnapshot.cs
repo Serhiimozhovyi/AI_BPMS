@@ -268,6 +268,141 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("data_tables", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.EvaluationCaseEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Check")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("check");
+
+                    b.Property<string>("CheckConfig")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("check_config");
+
+                    b.Property<Guid>("EvaluationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evaluation_id");
+
+                    b.Property<string>("Expected")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("expected");
+
+                    b.Property<string>("Input")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvaluationId", "SortOrder");
+
+                    b.ToTable("evaluation_cases", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.EvaluationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NodeId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("node_id");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkflowId", "NodeId");
+
+                    b.ToTable("evaluations", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.EvaluationRunEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("EvaluationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evaluation_id");
+
+                    b.Property<DateTimeOffset>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("Passed")
+                        .HasColumnType("integer")
+                        .HasColumnName("passed");
+
+                    b.Property<string>("Results")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("results");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer")
+                        .HasColumnName("total");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("VersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VersionId");
+
+                    b.HasIndex("EvaluationId", "StartedAt");
+
+                    b.ToTable("evaluation_runs", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.ExecutionEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -997,6 +1132,39 @@ namespace OpenBP.Data.Migrations
                     b.HasOne("OpenBP.Data.DataTableEntity", null)
                         .WithMany()
                         .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.EvaluationCaseEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.EvaluationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("EvaluationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.EvaluationEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowEntity", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.EvaluationRunEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.EvaluationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("EvaluationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OpenBP.Data.WorkflowVersionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("VersionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

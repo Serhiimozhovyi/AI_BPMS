@@ -15,6 +15,7 @@ using OpenBP.Application.Audit;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
 using OpenBP.Application.DataTables;
+using OpenBP.Application.Evaluations;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Nodes;
 using OpenBP.Application.Notifications;
@@ -90,6 +91,9 @@ builder.Services.AddOpenBpCredentialServices();
 // Помічник у редакторі (F3-60): модель з «Налаштувань → Помічник»; credential моделі розшифровується в Api.
 builder.Services.AddOpenBpAssistantServices();
 
+// Оцінки якості вузлів ШІ (F6-17): кейси виконуються як «Виконати вузол», суддя llm — через той самий LlmChat.
+builder.Services.AddOpenBpEvaluationServices();
+
 // Конектори (F2-13): CRUD mcp_servers, discovery, тестові виклики; реєстр заповнюється при старті.
 builder.Services.AddOpenBpConnectorServices();
 builder.Services.AddHostedService<ConnectorRegistryLoader>();
@@ -127,7 +131,7 @@ app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
 app.MapOpenBpMetrics();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints().MapAssistantEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints().MapAssistantEndpoints().MapEvaluationEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

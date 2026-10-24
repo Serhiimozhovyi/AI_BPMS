@@ -194,12 +194,13 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>, IAsyncLif
 
     /// <summary>Зашифрований credential тим самим ключем, що й у хоста.</summary>
     /// <param name="data">Секретні дані.</param>
-    public Task<Guid> CreateCredentialAsync(JsonObject data)
+    /// <param name="type">Тип credential'а (напр. <c>openai-compatible</c> для моделі).</param>
+    public Task<Guid> CreateCredentialAsync(JsonObject data, string type = "httpHeaders")
     {
         var factory = new PooledDbContextFactory<OpenBpDbContext>(
             new DbContextOptionsBuilder<OpenBpDbContext>().UseNpgsql(_container.GetConnectionString()).Options);
         var store = new CredentialStore(factory, CredentialEncryptionKey.FromBase64(EncryptionKey));
-        return store.CreateAsync("mcp test", "httpHeaders", data, createdBy: null, CancellationToken.None);
+        return store.CreateAsync("mcp test", type, data, createdBy: null, CancellationToken.None);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>

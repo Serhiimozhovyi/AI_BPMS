@@ -204,6 +204,50 @@ public sealed class AppSettingEntity
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>Набір оцінок якості вузла <c>ai.llm</c>/<c>ai.agent</c> сценарію (F6-17).</summary>
+public sealed class EvaluationEntity
+{
+    public Guid Id { get; set; }
+    public Guid WorkflowId { get; set; }
+    public string NodeId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public Guid? CreatedBy { get; set; }
+}
+
+/// <summary>Кейс оцінки: вхідні items, очікуване і спосіб перевірки.</summary>
+public sealed class EvaluationCaseEntity
+{
+    public Guid Id { get; set; }
+    public Guid EvaluationId { get; set; }
+    public int SortOrder { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>jsonb: items на вході 0 вузла.</summary>
+    public string Input { get; set; } = "[]";
+    /// <summary>jsonb: очікуване значення; <c>null</c> — для перевірок, яким воно не потрібне.</summary>
+    public string? Expected { get; set; }
+    /// <summary><c>exact</c> | <c>jsonPath</c> | <c>expression</c> | <c>llm</c>.</summary>
+    public string Check { get; set; } = "exact";
+    /// <summary>jsonb: налаштування перевірки (<c>path</c>, <c>expression</c>, <c>credentialId</c>/<c>model</c>/<c>criteria</c>).</summary>
+    public string CheckConfig { get; set; } = "{}";
+}
+
+/// <summary>Прогін оцінки на версії сценарію з результатами кейсів.</summary>
+public sealed class EvaluationRunEntity
+{
+    public Guid Id { get; set; }
+    public Guid EvaluationId { get; set; }
+    public Guid VersionId { get; set; }
+    public int Version { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset FinishedAt { get; set; }
+    public int Passed { get; set; }
+    public int Total { get; set; }
+    /// <summary>jsonb: результати кейсів у порядку кейсів.</summary>
+    public string Results { get; set; } = "[]";
+    public Guid? CreatedBy { get; set; }
+}
+
 public sealed class VariableEntity
 {
     public string Key { get; set; } = "";
