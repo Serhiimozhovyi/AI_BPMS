@@ -45,6 +45,9 @@ export interface WorkflowConnection {
   [extra: string]: unknown;
 }
 
+/** Що робити із запуском понад ліміт: поставити в чергу чи відкинути. */
+export type LimitAction = 'queue' | 'drop';
+
 /**
  * Визначення сценарію (docs/workflow-format.md). Невідомі поля на будь-якому рівні дозволені —
  * клієнт не відкидає їх при збереженні.
@@ -57,6 +60,12 @@ export interface WorkflowDefinition {
     executionTimeoutSec: number;
     errorWorkflowId: string | null;
     saveSuccessfulData: boolean;
+    /** Ліміт одночасних виконань (F6-06). */
+    concurrency?: { max: number; onLimit?: LimitAction; [extra: string]: unknown };
+    /** Ліміт частоти запусків (F6-06). */
+    throttle?: { limit: number; periodSec: number; onLimit?: LimitAction; [extra: string]: unknown };
+    /** Скільки помилок тригера підряд вимикає сценарій (F6-06); 0 чи немає — не вимикати. */
+    disableAfterErrors?: number;
     [extra: string]: unknown;
   };
   nodes: WorkflowNode[];

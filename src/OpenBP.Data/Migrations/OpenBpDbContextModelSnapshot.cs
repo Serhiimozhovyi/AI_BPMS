@@ -115,6 +115,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("mode");
 
+                    b.Property<DateTimeOffset?>("ScheduledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scheduled_at");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -133,6 +137,9 @@ namespace OpenBP.Data.Migrations
                         .HasColumnName("workflow_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkflowId", "ScheduledAt")
+                        .HasFilter("scheduled_at IS NOT NULL");
 
                     b.HasIndex("WorkflowId", "StartedAt");
 
@@ -443,6 +450,10 @@ namespace OpenBP.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ActivatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("activated_at");
 
                     b.Property<bool>("Active")
                         .HasColumnType("boolean")

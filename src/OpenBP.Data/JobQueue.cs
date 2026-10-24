@@ -91,9 +91,21 @@ public sealed class JobQueue(IDbContextFactory<OpenBpDbContext> contexts, JobQue
         return id;
     }
 
+    /// <summary>Ключ payload з ідентифікатором групи паралельності (для виконань — id сценарію, F6-06).</summary>
+    public const string ConcurrencyKeyField = "concurrencyKey";
+
+    /// <summary>Ключ payload з лімітом одночасно взятих задач групи <see cref="ConcurrencyKeyField"/>.</summary>
+    public const string ConcurrencyMaxField = "concurrencyMax";
+
     /// <summary>
     /// Бере одну готову задачу (<c>run_at</c> не в майбутньому, без lock) одного з видів <paramref name="kinds"/>:
     /// найраніший <c>run_at</c>, далі порядок постановки. Не чекає: немає готових — повертає <c>null</c>.
+    /// <para>
+    /// Задача з <see cref="ConcurrencyKeyField"/> і <see cref="ConcurrencyMaxField"/> у payload (F6-06) береться, лише
+    /// коли задач тієї самої групи з lock'ом менше за ліміт і в групі немає раніших готових задач без lock'а — тож
+    /// група з лімітом 1 обробляється строго по черзі в порядку <c>run_at</c>, <c>id</c>. Рішення приймається під
+    /// <c>pg_advisory_xact_lock</c> групи, щоб два воркери не взяли понад ліміт одночасно.
+    /// </para>
     /// </summary>
     /// <param name="workerId">Ідентифікатор воркера; пишеться в <c>locked_by</c>.</param>
     /// <param name="kinds">Які види задач брати.</param>
@@ -111,35 +123,101 @@ public sealed class JobQueue(IDbContextFactory<OpenBpDbContext> contexts, JobQue
         var now = _time.GetUtcNow();
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         var connection = await OpenAsync(db, ct).ConfigureAwait(false);
-        await using var cmd = new NpgsqlCommand(
-            """
-            UPDATE jobs SET locked_by = @worker, locked_at = @now
-            WHERE id = (
-                SELECT id FROM jobs
-                WHERE locked_by IS NULL AND run_at <= @now AND kind = ANY(@kinds)
-                ORDER BY run_at, id
-                FOR UPDATE SKIP LOCKED
-                LIMIT 1)
-            RETURNING id, kind, payload::text, run_at, attempts
+        await using var tx = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        Guid id;
+        string? group;
+        await using (var select = new NpgsqlCommand(
+            $"""
+            SELECT j.id, j.payload->>'{ConcurrencyKeyField}'
+            FROM jobs j
+            WHERE j.locked_by IS NULL AND j.run_at <= @now AND j.kind = ANY(@kinds)
+              AND (j.payload->>'{ConcurrencyKeyField}' IS NULL OR j.payload->>'{ConcurrencyMaxField}' IS NULL OR ({GroupHasRoomSql}))
+            ORDER BY j.run_at, j.id
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
             """,
-            connection);
-        cmd.Parameters.AddWithValue("worker", workerId);
-        cmd.Parameters.AddWithValue("now", now);
-        cmd.Parameters.AddWithValue("kinds", kinds.ToArray());
-        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            connection,
+            tx))
         {
-            return null;
+            select.Parameters.AddWithValue("now", now);
+            select.Parameters.AddWithValue("kinds", kinds.ToArray());
+            await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                return null;
+            }
+
+            id = reader.GetGuid(0);
+            group = reader.IsDBNull(1) ? null : reader.GetString(1);
         }
 
-        return new ClaimedJob(
-            reader.GetGuid(0),
-            reader.GetString(1),
-            reader.GetString(2),
-            reader.GetFieldValue<DateTimeOffset>(3),
-            reader.GetInt32(4),
-            workerId);
+        if (group is not null)
+        {
+            // Повторна перевірка під замком групи: інший воркер міг узяти задачу групи між знімком вибірки і цим місцем.
+            await using (var advisory = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtextextended(@group, 0))", connection, tx))
+            {
+                advisory.Parameters.AddWithValue("group", group);
+                await advisory.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+
+            await using var recheck = new NpgsqlCommand(
+                $"""
+                SELECT ({GroupHasRoomSql}) FROM jobs j WHERE j.id = @id
+                """,
+                connection,
+                tx);
+            recheck.Parameters.AddWithValue("id", id);
+            recheck.Parameters.AddWithValue("now", now);
+            if (await recheck.ExecuteScalarAsync(ct).ConfigureAwait(false) is not true)
+            {
+                return null;
+            }
+        }
+
+        ClaimedJob claimed;
+        await using (var update = new NpgsqlCommand(
+            """
+            UPDATE jobs SET locked_by = @worker, locked_at = @now
+            WHERE id = @id
+            RETURNING id, kind, payload::text, run_at, attempts
+            """,
+            connection,
+            tx))
+        {
+            update.Parameters.AddWithValue("worker", workerId);
+            update.Parameters.AddWithValue("now", now);
+            update.Parameters.AddWithValue("id", id);
+            await using var reader = await update.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            await reader.ReadAsync(ct).ConfigureAwait(false);
+            claimed = new ClaimedJob(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetFieldValue<DateTimeOffset>(3),
+                reader.GetInt32(4),
+                workerId);
+        }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return claimed;
     }
+
+    /// <summary>
+    /// Умова над рядком <c>j</c>: у групі задачі менше взятих, ніж дозволяє її ліміт, і немає раніших готових задач без lock'а.
+    /// Параметр <c>@now</c>.
+    /// </summary>
+    private const string GroupHasRoomSql =
+        $"""
+        (SELECT count(*) FROM jobs r
+         WHERE r.locked_by IS NOT NULL AND r.payload->>'{ConcurrencyKeyField}' = j.payload->>'{ConcurrencyKeyField}')
+          < (j.payload->>'{ConcurrencyMaxField}')::int
+        AND NOT EXISTS (
+          SELECT 1 FROM jobs e
+          WHERE e.locked_by IS NULL AND e.run_at <= @now AND e.id <> j.id
+            AND e.payload->>'{ConcurrencyKeyField}' = j.payload->>'{ConcurrencyKeyField}'
+            AND (e.run_at, e.id) < (j.run_at, j.id))
+        """;
 
     /// <summary>Задача виконана: рядок видаляється.</summary>
     /// <param name="jobId">Id задачі.</param>

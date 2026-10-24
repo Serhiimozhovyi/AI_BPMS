@@ -329,6 +329,116 @@ public class JobQueueTests(PostgresFixture postgres)
         new JobQueueOptions().Validate();
     }
 
+    private static string Grouped(string group, int max, int n) =>
+        $$"""{"n":{{n}},"{{JobQueue.ConcurrencyKeyField}}":"{{group}}","{{JobQueue.ConcurrencyMaxField}}":{{max}}}""";
+
+    [Fact]
+    public async Task Claim_GroupWithMaxOne_TakesNextOnlyAfterCompleteInOrder()
+    {
+        var (queue, clock, _) = await QueueAsync();
+        var group = Guid.NewGuid().ToString();
+        List<Guid> ids = [];
+        for (var i = 0; i < 5; i++)
+        {
+            ids.Add(await queue.EnqueueAsync(_kind, Grouped(group, max: 1, n: i)));
+            clock.Now = clock.Now.AddMilliseconds(1);
+        }
+
+        List<Guid> order = [];
+        for (var i = 0; i < 5; i++)
+        {
+            var job = await queue.ClaimAsync("w1", [_kind]);
+            Assert.NotNull(job);
+            Assert.Null(await queue.ClaimAsync("w2", [_kind]));
+            order.Add(job.Id);
+            Assert.True(await queue.CompleteAsync(job.Id, "w1"));
+        }
+
+        Assert.Equal(ids, order);
+        Assert.Null(await queue.ClaimAsync("w1", [_kind]));
+    }
+
+    [Fact]
+    public async Task Claim_GroupLimitDoesNotBlockOtherJobs()
+    {
+        var (queue, _, _) = await QueueAsync();
+        var group = Guid.NewGuid().ToString();
+        var first = await queue.EnqueueAsync(_kind, Grouped(group, max: 1, n: 1));
+        await queue.EnqueueAsync(_kind, Grouped(group, max: 1, n: 2));
+        var other = await queue.EnqueueAsync(_kind, Grouped(Guid.NewGuid().ToString(), max: 1, n: 3));
+        var plain = await queue.EnqueueAsync(_kind, """{"n":4}""");
+
+        Assert.Equal(first, (await queue.ClaimAsync("w1", [_kind]))!.Id);
+        Assert.Equal(other, (await queue.ClaimAsync("w1", [_kind]))!.Id);
+        Assert.Equal(plain, (await queue.ClaimAsync("w1", [_kind]))!.Id);
+        Assert.Null(await queue.ClaimAsync("w1", [_kind]));
+    }
+
+    [Fact]
+    public async Task Claim_ParallelConsumers_NeverExceedGroupMax()
+    {
+        var (queue, _, cs) = await QueueAsync();
+        var group = Guid.NewGuid().ToString();
+        for (var i = 0; i < 40; i++)
+        {
+            await queue.EnqueueAsync(_kind, Grouped(group, max: 2, n: i));
+        }
+
+        var done = 0;
+        var peak = 0;
+        var held = 0;
+        var consumers = Enumerable.Range(0, 8).Select(w => Task.Run(async () =>
+        {
+            while (Volatile.Read(ref done) < 40)
+            {
+                var job = await queue.ClaimAsync($"w{w}", [_kind]);
+                if (job is null)
+                {
+                    await Task.Delay(5);
+                    continue;
+                }
+
+                var now = Interlocked.Increment(ref held);
+                InterlockedMax(ref peak, now);
+                await Task.Delay(10);
+                Interlocked.Decrement(ref held);
+                Assert.True(await queue.CompleteAsync(job.Id, $"w{w}"));
+                Interlocked.Increment(ref done);
+            }
+        })).ToArray();
+        await Task.WhenAll(consumers);
+
+        Assert.Equal(40, done);
+        Assert.InRange(peak, 1, 2);
+        await using var db = PostgresFixture.CreateContext(cs);
+        Assert.Equal(0, await db.Jobs.CountAsync(j => j.Kind == _kind));
+    }
+
+    [Fact]
+    public async Task Claim_FutureJobOfGroup_DoesNotBlockReadyOne()
+    {
+        var (queue, clock, _) = await QueueAsync();
+        var group = Guid.NewGuid().ToString();
+        await queue.EnqueueAsync(_kind, Grouped(group, max: 1, n: 1), clock.Now.AddMinutes(5));
+        var ready = await queue.EnqueueAsync(_kind, Grouped(group, max: 1, n: 2));
+
+        Assert.Equal(ready, (await queue.ClaimAsync("w1", [_kind]))!.Id);
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        int current;
+        do
+        {
+            current = Volatile.Read(ref target);
+            if (value <= current)
+            {
+                return;
+            }
+        }
+        while (Interlocked.CompareExchange(ref target, value, current) != current);
+    }
+
     private sealed class ManualClock(DateTimeOffset now) : TimeProvider
     {
         public DateTimeOffset Now { get; set; } = now;

@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { WorkflowSummary, WorkflowValidationError, WorkflowsApiService } from '../workflows/workflows-api.service';
-import { SettingsFormValue, WorkflowSettings, applySettings, settingsFormValue, timeoutError, timezones } from './workflow-settings';
+import { LimitField, SettingsFormValue, WorkflowSettings, applySettings, limitErrors, settingsFormValue, timeoutError, timezones } from './workflow-settings';
 
 export interface WorkflowSettingsDialogData {
   /** Сценарій, що редагується, — його немає у виборі сценарію помилок. */
@@ -19,7 +19,7 @@ export interface WorkflowSettingsDialogData {
 
 /**
  * Діалог «Налаштування» сценарію (F4-05): часовий пояс, таймаут виконання, сценарій помилок, збереження даних
- * успішних виконань. Закривається новими `settings` (редактор застосовує їх як звичайну зміну — з історією й
+ * успішних виконань, ліміти навантаження (F6-06). Закривається новими `settings` (редактор застосовує їх як звичайну зміну — з історією й
  * автозбереженням) або `undefined` при скасуванні. Межу таймауту перевіряє Api: її помилка приходить з `path`.
  */
 @Component({
@@ -75,11 +75,71 @@ export interface WorkflowSettingsDialogData {
           i18n="@@workflowsettings.saveSuccessfulData"
           >Зберігати дані успішних виконань</mat-slide-toggle
         >
+
+        <h3 class="settings__section" i18n="@@workflowsettings.limits">Навантаження</h3>
+        <p class="settings__note" i18n="@@workflowsettings.limits.note">
+          Ліміти діють на запуски тригерами, розкладом і через API; ручний запуск з редактора їх не враховує.
+        </p>
+
+        <div class="flex flex-wrap gap-2">
+          <mat-form-field appearance="outline" class="settings__number">
+            <mat-label i18n="@@workflowsettings.concurrency">Одночасних виконань, макс.</mat-label>
+            <input matInput inputmode="numeric" data-testid="settings-concurrency-max" [value]="value().concurrencyMax" (input)="patch({ concurrencyMax: text($event) })" />
+            @if (limitMessage('concurrencyMax'); as message) {
+              <mat-hint class="settings__error" data-testid="settings-concurrency-max-error">{{ message }}</mat-hint>
+            } @else {
+              <mat-hint i18n="@@workflowsettings.concurrency.hint">Порожньо — без ліміту</mat-hint>
+            }
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="settings__action">
+            <mat-label i18n="@@workflowsettings.onLimit">Понад ліміт</mat-label>
+            <mat-select data-testid="settings-concurrency-on-limit" [value]="value().concurrencyOnLimit" [disabled]="!value().concurrencyMax.trim()" (selectionChange)="patch({ concurrencyOnLimit: $event.value })">
+              <mat-option value="queue" i18n="@@workflowsettings.onLimit.queue">Чекати в черзі</mat-option>
+              <mat-option value="drop" i18n="@@workflowsettings.onLimit.drop">Відкинути</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <mat-form-field appearance="outline" class="settings__number">
+            <mat-label i18n="@@workflowsettings.throttle">Запусків за період, макс.</mat-label>
+            <input matInput inputmode="numeric" data-testid="settings-throttle-limit" [value]="value().throttleLimit" (input)="patch({ throttleLimit: text($event) })" />
+            @if (limitMessage('throttleLimit'); as message) {
+              <mat-hint class="settings__error" data-testid="settings-throttle-limit-error">{{ message }}</mat-hint>
+            } @else {
+              <mat-hint i18n="@@workflowsettings.throttle.hint">Порожньо — без ліміту</mat-hint>
+            }
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="settings__number">
+            <mat-label i18n="@@workflowsettings.throttlePeriod">Період, с</mat-label>
+            <input matInput inputmode="numeric" data-testid="settings-throttle-period" placeholder="60" [disabled]="!value().throttleLimit.trim()" [value]="value().throttlePeriodSec" (input)="patch({ throttlePeriodSec: text($event) })" />
+            @if (limitMessage('throttlePeriodSec'); as message) {
+              <mat-hint class="settings__error" data-testid="settings-throttle-period-error">{{ message }}</mat-hint>
+            }
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="settings__action">
+            <mat-label i18n="@@workflowsettings.onLimit">Понад ліміт</mat-label>
+            <mat-select data-testid="settings-throttle-on-limit" [value]="value().throttleOnLimit" [disabled]="!value().throttleLimit.trim()" (selectionChange)="patch({ throttleOnLimit: $event.value })">
+              <mat-option value="queue" i18n="@@workflowsettings.onLimit.queue">Чекати в черзі</mat-option>
+              <mat-option value="drop" i18n="@@workflowsettings.onLimit.drop">Відкинути</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline">
+            <mat-label i18n="@@workflowsettings.disableAfterErrors">Вимкнути після помилок поспіль</mat-label>
+            <input matInput inputmode="numeric" data-testid="settings-disable-after-errors" [value]="value().disableAfterErrors" (input)="patch({ disableAfterErrors: text($event) })" />
+            @if (limitMessage('disableAfterErrors'); as message) {
+              <mat-hint class="settings__error" data-testid="settings-disable-after-errors-error">{{ message }}</mat-hint>
+            } @else {
+              <mat-hint i18n="@@workflowsettings.disableAfterErrors.hint">Скільки помилкових запусків тригера поспіль деактивують сценарій; порожньо — ніколи</mat-hint>
+            }
+          </mat-form-field>
       </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button type="button" data-testid="settings-cancel" (click)="cancel()" i18n="@@workflowsettings.cancel">Скасувати</button>
-      <button mat-flat-button type="button" data-testid="settings-apply" [disabled]="!!localTimeoutError()" (click)="apply()" i18n="@@workflowsettings.apply">
+      <button mat-flat-button type="button" data-testid="settings-apply" [disabled]="invalid()" (click)="apply()" i18n="@@workflowsettings.apply">
         Застосувати
       </button>
     </mat-dialog-actions>
@@ -87,6 +147,21 @@ export interface WorkflowSettingsDialogData {
   styles: `
     .settings__error {
       color: var(--mat-sys-error);
+    }
+    .settings__section {
+      margin: 8px 0 0;
+      font: var(--mat-sys-title-small);
+    }
+    .settings__note {
+      margin: 0 0 4px;
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+    .settings__number {
+      flex: 1 1 10rem;
+    }
+    .settings__action {
+      flex: 1 1 12rem;
     }
   `,
 })
@@ -112,6 +187,14 @@ export class WorkflowSettingsDialogComponent implements OnInit {
   });
 
   protected readonly localTimeoutError = computed(() => timeoutError(this.value().executionTimeoutSec));
+  private readonly limitErrors = computed(() => limitErrors(this.value()));
+  protected readonly invalid = computed(() => !!this.localTimeoutError() || Object.keys(this.limitErrors()).length > 0);
+
+  /** Помилка поля ліміту: ціле число в межах схеми. */
+  protected limitMessage(field: LimitField): string | null {
+    const range = this.limitErrors()[field];
+    return range ? $localize`:@@workflowsettings.limits.range:Ціле число від ${range[0]}:min: до ${range[1]}:max:` : null;
+  }
 
   /** Локальна помилка поля або помилка Api для `/settings/executionTimeoutSec`, доки значення не змінили. */
   protected readonly timeoutMessage = computed(() => {
@@ -137,7 +220,7 @@ export class WorkflowSettingsDialogComponent implements OnInit {
   }
 
   protected apply(): void {
-    if (this.localTimeoutError()) return;
+    if (this.invalid()) return;
     this.dialogRef.close(applySettings(this.data.settings, this.value()));
   }
 

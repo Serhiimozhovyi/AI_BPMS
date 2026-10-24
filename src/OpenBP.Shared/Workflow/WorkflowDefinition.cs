@@ -41,6 +41,57 @@ public sealed class WorkflowSettings
 
     public bool SaveSuccessfulData { get; set; }
 
+    /// <summary>Ліміт одночасних виконань сценарію (F6-06); <c>null</c> — без ліміту. Ручні тестові запуски не враховуються.</summary>
+    public ConcurrencySettings? Concurrency { get; set; }
+
+    /// <summary>Ліміт кількості запусків за період (F6-06); <c>null</c> — без ліміту. Ручні тестові запуски не враховуються.</summary>
+    public ThrottleSettings? Throttle { get; set; }
+
+    /// <summary>
+    /// Запобіжник (F6-06): після стількох помилкових (<c>error</c>, <c>timed_out</c>) виконань тригера підряд сценарій
+    /// деактивується; <c>null</c> або <c>0</c> — вимкнено.
+    /// </summary>
+    public int? DisableAfterErrors { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
+/// <summary>Що робити з запуском, який не вміщується в ліміт (<see cref="ConcurrencySettings"/>, <see cref="ThrottleSettings"/>).</summary>
+public static class LimitActions
+{
+    /// <summary>Запуск чекає в черзі.</summary>
+    public const string Queue = "queue";
+
+    /// <summary>Запуск відкидається: виконання одразу <c>cancelled</c> з поясненням.</summary>
+    public const string Drop = "drop";
+}
+
+/// <summary>Ліміт одночасних виконань сценарію.</summary>
+public sealed class ConcurrencySettings
+{
+    /// <summary>Скільки виконань сценарію можуть іти одночасно; <c>1</c> — послідовно в порядку надходження.</summary>
+    public int Max { get; set; } = 1;
+
+    /// <summary><see cref="LimitActions.Queue"/> (типово) або <see cref="LimitActions.Drop"/>.</summary>
+    public string OnLimit { get; set; } = LimitActions.Queue;
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
+/// <summary>Ліміт кількості запусків сценарію у фіксованому вікні часу.</summary>
+public sealed class ThrottleSettings
+{
+    /// <summary>Скільки запусків дозволено в одному вікні.</summary>
+    public int Limit { get; set; } = 1;
+
+    /// <summary>Довжина вікна в секундах; вікна відраховуються від початку епохи Unix.</summary>
+    public int PeriodSec { get; set; } = 60;
+
+    /// <summary><see cref="LimitActions.Queue"/> (типово: запуск переноситься на наступне вільне вікно) або <see cref="LimitActions.Drop"/>.</summary>
+    public string OnLimit { get; set; } = LimitActions.Queue;
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
