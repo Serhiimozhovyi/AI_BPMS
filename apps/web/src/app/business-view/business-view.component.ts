@@ -6,6 +6,7 @@ import { WorkflowDefinition } from '../workflows/workflows-api.service';
 import { BusinessConnector, BusinessEdgeKind, BusinessStepKind, buildBusinessView } from './business-model';
 import { BusinessLayout, DIAMOND_OVERHANG, LANE_LABEL_WIDTH, PlacedStep, layoutBusinessView } from './business-layout';
 import { exportPng, exportSvg } from './business-export';
+import { BusinessRun, BusinessRunStatus, businessRunStatuses } from './business-run';
 
 /** Позначки кроку в лівому верхньому куті: тригер, очікування, цикл. */
 const KIND_MARKS: Partial<Record<BusinessStepKind, string>> = { trigger: '⚡', wait: '⏱', loop: '↻' };
@@ -81,8 +82,9 @@ interface LegendEntry {
           }
           @for (s of l.steps; track s.id) {
             <g
-              class="bv__step bv__step--{{ s.kind }}"
-              [class.bv__step--link]="!!s.nodeId"
+              class="bv__step"
+              [class]="stepClasses(s)"
+              [attr.data-status]="runStatus(s.id)"
               data-testid="business-step"
               [attr.data-step]="s.id"
               [attr.data-kind]="s.kind"
@@ -105,7 +107,7 @@ interface LegendEntry {
               @if (s.subtitle || s.badge) {
                 <text class="bv__sub" text-anchor="middle" [attr.x]="s.x + s.width / 2" [attr.y]="s.y + s.height - 8">{{ s.subtitle ?? s.badge }}</text>
               }
-              <title>{{ s.title }}</title>
+              <title>{{ tooltip(s) }}</title>
             </g>
           }
         </svg>
@@ -272,6 +274,53 @@ interface LegendEntry {
       fill: var(--ac-cool-grey-4);
     }
 
+    .bv__step--st-done .bv__shape {
+      fill: var(--ac-green-15);
+      stroke: var(--ac-green);
+    }
+
+    .bv__step--st-running .bv__shape,
+    .bv__step--st-waiting .bv__shape {
+      stroke: var(--ac-kit);
+      stroke-width: 3;
+    }
+
+    .bv__step--st-waiting .bv__shape {
+      stroke-dasharray: 6 3;
+    }
+
+    .bv__step--st-error .bv__shape {
+      fill: var(--ac-red-15);
+      stroke: var(--ac-red);
+      stroke-width: 2;
+    }
+
+    .bv__step--st-pending {
+      opacity: 0.5;
+    }
+
+    .bv__swatch--st-done {
+      background: var(--ac-green-15);
+      border-color: var(--ac-green);
+    }
+
+    .bv__swatch--st-running {
+      background: var(--ac-cool-grey-2);
+      border-color: var(--ac-kit);
+      border-width: 3px;
+    }
+
+    .bv__swatch--st-error {
+      background: var(--ac-red-15);
+      border-color: var(--ac-red);
+    }
+
+    .bv__swatch--st-pending {
+      background: var(--ac-cool-grey-2);
+      border-color: var(--ac-mid);
+      opacity: 0.5;
+    }
+
     .bv__edge {
       fill: none;
       stroke: var(--ac-vivid);
@@ -312,6 +361,8 @@ export class BusinessViewComponent {
   readonly connectors = input<readonly BusinessConnector[]>([]);
   /** Назва файлу експорту (без розширення). */
   readonly fileName = input('scenario');
+  /** Виконання, яке показати на схемі (F3-69); `null` — схема без виконання. */
+  readonly execution = input<BusinessRun | null>(null);
   /** Клік на крок вузла: id вузла. */
   readonly stepPick = output<string>();
 
@@ -319,9 +370,11 @@ export class BusinessViewComponent {
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly svg = viewChild<ElementRef<SVGSVGElement>>('svg');
 
-  protected readonly view = computed(() => {
-    const definition = this.definition();
-    return buildBusinessView(definition, toCanvasModel(definition, this.descriptors()), this.connectors());
+  private readonly model = computed(() => toCanvasModel(this.definition(), this.descriptors()));
+  protected readonly view = computed(() => buildBusinessView(this.definition(), this.model(), this.connectors()));
+  private readonly run = computed(() => {
+    const execution = this.execution();
+    return execution ? businessRunStatuses(this.view(), this.model(), execution) : null;
   });
   protected readonly layout = computed(() => layoutBusinessView(this.view()));
 
@@ -333,6 +386,13 @@ export class BusinessViewComponent {
     if (v.steps.some((s) => s.kind === 'decision')) entries.push({ id: 'decision', label: $localize`:@@business.legend.decision:рішення` });
     if (v.edges.some((e) => e.kind === 'read')) entries.push({ id: 'read', label: $localize`:@@business.legend.read:сценарій читає зі системи` });
     if (v.edges.some((e) => e.kind === 'alt')) entries.push({ id: 'alt', label: $localize`:@@business.legend.alt:таймаут або збій` });
+    const run = this.run();
+    if (run) {
+      const present = new Set([...run.values()].map((i) => i.status));
+      for (const status of ['done', 'running', 'waiting', 'error', 'pending'] as const) {
+        if (present.has(status)) entries.push({ id: `st-${status === 'waiting' ? 'running' : status}`, label: STATUS_LABELS[status]() });
+      }
+    }
     return entries;
   });
 
@@ -387,6 +447,24 @@ export class BusinessViewComponent {
     const block = count * 15;
     const area = s.subtitle || s.badge ? s.height - 14 : s.height;
     return s.y + (area - block) / 2 + 12 + index * 15;
+  }
+
+  protected runStatus(id: string): BusinessRunStatus | null {
+    return this.run()?.get(id)?.status ?? null;
+  }
+
+  protected stepClasses(s: PlacedStep): string {
+    const status = this.runStatus(s.id);
+    return [`bv__step--${s.kind}`, s.nodeId ? 'bv__step--link' : '', status ? `bv__step--st-${status}` : ''].filter(Boolean).join(' ');
+  }
+
+  protected tooltip(s: PlacedStep): string {
+    const info = this.run()?.get(s.id);
+    if (!info) return s.title;
+    const parts = [s.title, STATUS_LABELS[info.status]()];
+    if (info.startedAt) parts.push(new Date(info.startedAt).toLocaleString());
+    if (info.durationMs !== undefined) parts.push(formatDuration(info.durationMs));
+    return parts.join(' · ');
   }
 
   protected pick(s: PlacedStep): void {
@@ -473,6 +551,20 @@ export function wrapTitle(title: string, lineChars: number, maxLines: number): s
   const last = kept[maxLines - 1];
   kept[maxLines - 1] = `${last.length >= lineChars ? last.slice(0, lineChars - 1) : last}…`;
   return kept;
+}
+
+const STATUS_LABELS: Record<BusinessRunStatus, () => string> = {
+  done: () => $localize`:@@business.status.done:пройдено`,
+  running: () => $localize`:@@business.status.running:виконується`,
+  waiting: () => $localize`:@@business.status.waiting:чекає`,
+  error: () => $localize`:@@business.status.error:збій`,
+  pending: () => $localize`:@@business.status.pending:не дійшло`,
+};
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return $localize`:@@business.duration.ms:${ms}:ms: мс`;
+  if (ms < 60_000) return $localize`:@@business.duration.s:${(ms / 1000).toFixed(1)}:s: с`;
+  return $localize`:@@business.duration.min:${Math.round(ms / 60_000)}:min: хв`;
 }
 
 function clamp(value: number, min: number, max: number): number {
