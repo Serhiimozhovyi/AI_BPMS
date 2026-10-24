@@ -257,3 +257,85 @@ test('налаштування сценарію: зміни йдуть у settin
   await waitSaved(page);
   expect(api.definition.settings['executionTimeoutSec']).toBe(300);
 });
+
+test('F3-50: Tab → тригер, «+» біля порту → пошук → Enter — два з’єднані вузли', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
+
+  // Порожній сценарій: спливаюча палітра лише з тригерами.
+  await page.keyboard.press('Tab');
+  const popup = page.getByTestId('quick-add');
+  await expect(popup).toBeVisible();
+  await expect(popup.locator('[data-item]')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(popup).toHaveCount(0);
+  await expect(card(page, 'Ручний запуск')).toBeVisible();
+
+  // Новий вузол виділено — біля його виходу «+».
+  await page.getByTestId('port-add').click();
+  await expect(popup).toContainText('Наступний крок');
+  await expect(popup.locator('[data-item="core.manualTrigger"]')).toHaveCount(0);
+  await page.getByTestId('quick-add-search').fill('задати');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await waitSaved(page);
+  expect(graph(api.definition).edges).toEqual(['Ручний запуск#0->Задати поля#0']);
+
+  // Esc закриває без змін; «Останні» — першими.
+  await page.getByTestId('port-add').click();
+  await expect(popup.locator('.quick__heading').first()).toHaveText('Останні');
+  await page.keyboard.press('Escape');
+  await expect(popup).toHaveCount(0);
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+});
+
+test('F3-50: з’єднання, відпущене в порожньому місці, створює з’єднаний вузол', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.manualTrigger"]').click();
+  await expect(card(page, 'Ручний запуск')).toBeVisible();
+
+  const a = (await card(page, 'Ручний запуск').boundingBox())!;
+  await page.mouse.move(a.x + a.width, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width + 150, a.y + a.height / 2 + 40, { steps: 5 });
+  await page.mouse.move(a.x + a.width + 300, a.y + a.height / 2 + 80, { steps: 5 });
+  await page.mouse.up();
+
+  const popup = page.getByTestId('quick-add');
+  await expect(popup).toBeVisible();
+  await popup.locator('[data-item="core.code"]').click();
+
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await waitSaved(page);
+  expect(graph(api.definition).edges).toEqual(['Ручний запуск#0->Код (JavaScript)#0']);
+  // Вузол там, де відпустили, а не на типовому місці.
+  const b = (await card(page, 'Код (JavaScript)').boundingBox())!;
+  expect(b.x).toBeGreaterThan(a.x + a.width + 200);
+});
+
+test('F3-50: «+» на виділеному ребрі вставляє крок між вузлами', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.manualTrigger"]').click();
+  await page.locator('[data-item="core.set"]').click();
+  await connect(page, 'Ручний запуск', 'Задати поля');
+  await expect(page.locator('path.edge')).toHaveCount(1);
+
+  const a = (await card(page, 'Ручний запуск').boundingBox())!;
+  const b = (await card(page, 'Задати поля').boundingBox())!;
+  await page.mouse.click((a.x + a.width + b.x) / 2, a.y + a.height / 2);
+  await page.getByTestId('edge-add').click();
+  await expect(page.getByTestId('quick-add')).toContainText('Вставити крок');
+  await page.getByTestId('quick-add-search').fill('код');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 3 · ребер: 2');
+  await waitSaved(page);
+  expect(graph(api.definition).edges).toEqual(['Ручний запуск#0->Код (JavaScript)#0', 'Код (JavaScript)#0->Задати поля#0'].sort());
+});
