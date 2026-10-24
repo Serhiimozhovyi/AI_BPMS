@@ -37,12 +37,12 @@ const PORT_STEP = 16;
 
 /** Колір групи для картки вузла. */
 export const GROUP_COLORS: Record<CanvasNodeGroup, string> = {
-  trigger: '#2e7d32',
-  logic: '#ef6c00',
-  transform: '#00838f',
-  integration: '#1565c0',
-  ai: '#6a1b9a',
-  unknown: '#757575',
+  trigger: '#47cc8a',
+  logic: '#ff840a',
+  transform: '#27c7be',
+  integration: '#20aaea',
+  ai: '#b36bd4',
+  unknown: '#8d86a3',
 };
 
 /** Id порту ngx-vflow за індексом формату: `in-0`, `out-1`. Індекси, а не назви, — щоб ребра не залежали від підписів. */
@@ -74,7 +74,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       [nodes]="nodes()"
       [edges]="edges()"
       [optimization]="{ virtualization: virtualization() }"
-      background="#f4f6f8"
+      background="#f4f3f8"
       [snapGrid]="[10, 10]"
       [connection]="connectionSettings"
       (nodeDragEnd)="dragEnded()"
@@ -169,8 +169,8 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border-left-width: 6px;
       border-radius: 8px;
       background: #fff;
-      box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
-      font: 13px/1.3 Roboto, sans-serif;
+      box-shadow: 0 1px 4px rgb(38 31 75 / 0.12);
+      font: 13px/1.3 Ubuntu, sans-serif;
       user-select: none;
     }
 
@@ -179,18 +179,18 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node.invalid {
-      border-color: #c62828;
-      box-shadow: 0 0 0 2px rgb(198 40 40 / 0.35);
+      border-color: var(--ac-red);
+      box-shadow: 0 0 0 2px rgb(255 96 96 / 0.35);
     }
 
     .node.run-success {
-      border-color: #2e7d32;
-      background: #f1f8f1;
+      border-color: var(--ac-green);
+      background: var(--ac-green-15);
     }
 
     .node.run-error {
-      border-color: #c62828;
-      background: #fdf1f1;
+      border-color: var(--ac-red);
+      background: var(--ac-red-15);
     }
 
     .node.run-skipped {
@@ -213,11 +213,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__run--success {
-      color: #2e7d32;
+      color: var(--ac-green);
     }
 
     .node__run--error {
-      color: #c62828;
+      color: var(--ac-red);
     }
 
     .node.disabled {
@@ -234,7 +234,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .node__errors {
       padding: 0 6px;
       border-radius: 8px;
-      background: #c62828;
+      background: var(--ac-red);
       color: #fff;
       font-weight: 600;
       cursor: help;
@@ -261,14 +261,14 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__type {
       font-size: 11px;
-      color: #666;
+      color: var(--ac-cool-grey-4);
     }
 
     .node__port {
       position: absolute;
       transform: translateY(-50%);
       font-size: 10px;
-      color: #888;
+      color: var(--ac-cool-grey-4);
     }
 
     .node__port--out {
@@ -280,7 +280,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__port--error {
-      color: #c62828;
+      color: var(--ac-red);
     }
   `,
 })
