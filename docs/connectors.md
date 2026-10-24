@@ -157,8 +157,11 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 Наші конектори лежать у `connectors/<назва>`: це проєкти, створені з шаблону (`dotnet new openbp-connector`), з
 власними sln і `Directory.*.props`, поза `OpenBP.sln`; CI job «Конектори» збирає, форматує й тестує кожен.
 
-- `connectors/telegram` — Telegram Bot API (F3-13): `send_message`, `send_document` (URL або base64),
-  `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`), `get_chat`; токен — лише змінна
+- `connectors/telegram` — Telegram Bot API (F3-13, F3-27): `send_message` (з `reply_markup`: `inline_keyboard`,
+  `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_document` (URL або base64),
+  `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
+  повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
+  `get_chat`; токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
 - `connectors/msgraph` — Microsoft Graph, пошта (F3-15): `list_messages` (`{ result }`, для `mcp.poll` —
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),

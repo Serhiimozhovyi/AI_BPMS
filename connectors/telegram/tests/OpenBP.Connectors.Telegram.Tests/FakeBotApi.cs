@@ -101,6 +101,8 @@ public sealed class FakeBotApi : IAsyncDisposable
                 new { update_id = 9002, callback_query = new { id = "cb1", data = "ok" } },
             },
             "getChat" => new { id = 42, type = "private", first_name = "Олена", username = "olena" },
+            "editMessageText" => Message(json!.Value.GetProperty("chat_id"), text: json.Value.GetProperty("text").GetString()),
+            "answerCallbackQuery" or "setMyCommands" or "setWebhook" or "deleteWebhook" => true,
             _ => null,
         };
         if (result is null)
