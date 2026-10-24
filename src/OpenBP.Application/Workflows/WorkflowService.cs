@@ -158,7 +158,8 @@ public sealed class WorkflowService(
         db.Audit(currentUser, now, AuditActions.WorkflowSaved, AuditEntities.Workflow, id.ToString(),
             new JsonObject { ["name"] = workflow.Name, ["version"] = version.Version, ["active"] = workflow.Active });
         // Пояснення простими словами (F3-72) — у фоні після паузи, збереження його не чекає.
-        await WorkflowExplanationQueue.ScheduleAsync(db, id, version.Version, now, WorkflowExplanationQueue.Delay, force: false, ct);
+        await WorkflowExplanationQueue.ScheduleAsync(
+            db, id, version.Version, now, WorkflowExplanationQueue.Delay, force: false, ct, (version.Definition, workflow.Name));
         try
         {
             await db.SaveChangesAsync(ct);

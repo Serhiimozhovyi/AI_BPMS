@@ -312,6 +312,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
 | `GET /workflows/{id}/explanation` | viewer | пояснення сценарію (§10.8): `status` (`none`, `pending`, `ready`, `failed`, `not_configured`), `version`, `currentVersion`, `text`, `error`, `stale` |
 | `POST /workflows/{id}/explanation` | editor | пояснити поточну версію заново, одразу |
+| `PUT /workflows/{id}/explanation { text }` | editor | зберегти пояснення, написане ззовні (агент через `/mcp`, людина), F3-73 |
 | `GET /settings/assistant`, `PUT /settings/assistant { credentialId, model }` | editor / admin | налаштування помічника: credential `anthropic`/`openai`/`openai-compatible` (назва й тип, без значень) і модель; `credentialId: null` вимикає |
 | `GET /workflows/templates` | viewer | `[{ id, name, description, definition, connectors }]` — шаблони «Почати з прикладу» (F3-59): файли `examples/` з каталогу `examples/templates.json`, вбудовані в збірку Api; у `definition` немає `pinData` і `settings.errorWorkflowId`, `serverId`/`credentialId` порожні; `connectors` — id записів каталогу конекторів, потрібних шаблону (F6-16) |
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
@@ -572,3 +573,10 @@ credential ті самі, що в помічника; без інструмен�
 `failed` з текстом у `error`, job не повторюється. REST: `GET /workflows/{id}/explanation` (viewer) і
 `POST …/explanation` (editor, пояснити заново одразу). У редакторі — картка «Пояснення процесу» над розмовою в панелі
 «Помічник»; поки `pending`, вона перепитує Api кожні 5 с.
+
+**Пояснення від агента через `/mcp` (F3-73).** Модель у «Налаштуваннях → Помічник» не обов'язкова: Claude чи ChatGPT,
+підключений до OpenBP як до MCP-сервера, пише пояснення сам — `save_workflow_explanation` (або `PUT /workflows/{id}/explanation
+{ text }`, editor) зберігає його як `ready` для поточної версії з тим самим відбитком; `get_workflow_explanation` читає.
+Описи `create_workflow`/`update_workflow` підказують агенту оновлювати пояснення після збереження. Відбиток рахується
+від визначення з упорядкованими ключами (jsonb їх переставляє); збереження з тим самим відбитком (пересунули вузли)
+переводить готове пояснення на нову версію одразу, без job'а — і за наявності моделі, і без неї.

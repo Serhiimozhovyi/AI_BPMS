@@ -1110,6 +1110,64 @@
             "bearer": []
           }
         ]
+      },
+      "put": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Зберегти пояснення сценарію",
+        "description": "Пояснення поточної версії, написане ззовні — ШІ-агентом через `/mcp` (`save_workflow_explanation`) або людиною; модель помічника не потрібна. `text` — до 50 000 символів. Лише editor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowExplanationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/api/v1/workflows/{id}/evaluations": {
@@ -8184,6 +8242,20 @@
           },
           "stale": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkflowExplanationInput": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

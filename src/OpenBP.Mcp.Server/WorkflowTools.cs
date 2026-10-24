@@ -153,7 +153,8 @@ public sealed class WorkflowTools
     [McpServerTool(Name = "create_workflow", Title = "Create workflow", Destructive = false, UseStructuredContent = true)]
     [Description(
         "Creates an inactive workflow with version 1 from the definition (its `name` becomes the workflow name). " +
-        "Invalid definitions are rejected with code WORKFLOW_INVALID and `errors`; call validate_workflow first to check without saving.")]
+        "Invalid definitions are rejected with code WORKFLOW_INVALID and `errors`; call validate_workflow first to check without saving. " +
+        "Then write a plain-language explanation of the process with save_workflow_explanation.")]
     public static async Task<WorkflowView> CreateWorkflow(
         IWorkflowService workflows,
         [Description(DefinitionHint)] JsonElement definition,
@@ -170,7 +171,8 @@ public sealed class WorkflowTools
     [Description(
         "Saves the definition as a new draft version (the workflow name is kept; rename is not done here). " +
         "Unknown fields are preserved. Triggers keep running the published version until publish_workflow. " +
-        "Errors: WORKFLOW_INVALID with `errors`, NOT_FOUND, WORKFLOW_VERSION_CONFLICT when saved concurrently (get_workflow and retry).")]
+        "Errors: WORKFLOW_INVALID with `errors`, NOT_FOUND, WORKFLOW_VERSION_CONFLICT when saved concurrently (get_workflow and retry). " +
+        "After a change to steps or parameters, update the plain-language explanation with save_workflow_explanation.")]
     public static async Task<WorkflowView> UpdateWorkflow(
         IWorkflowService workflows,
         [Description("Workflow id.")] Guid id,

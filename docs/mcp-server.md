@@ -12,7 +12,7 @@ OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
   - `viewer` — читання (`describe_connectors`, `describe_nodes`, `list_*`, `get_*`, `validate_workflow`, resources);
-  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`;
+  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`, `save_workflow_explanation`;
   - `admin` — те саме (керування конекторами й користувачами в MCP не винесено).
 - Без ключа або з відкликаним ключем — HTTP 401 ще до MCP-обміну. Cookie-сесія UI для `/mcp` не діє.
 
@@ -82,6 +82,8 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }], warnings }` (`path` — JSON Pointer; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню); помилки сценарію не є помилкою tool'а |
 | `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |
 | `update_workflow` | editor | `id`, `definition` | нова версія-чернетка (назва не змінюється); тригери далі виконують опубліковану версію |
+| `get_workflow_explanation` | viewer | `id` | пояснення сценарію простими словами (F3-72/F3-73): `{ status, version, currentVersion, text, error, stale }` — той самий текст, що картка «Пояснення процесу» в редакторі |
+| `save_workflow_explanation` | editor | `id`, `text` (≤ 50 000) | агент сам пише пояснення поточної версії (модель у «Налаштуваннях → Помічник» не потрібна); опис tool'а задає структуру тексту. `create_workflow`/`update_workflow` підказують викликати його після збереження; пересування вузлів пояснення не старить |
 | `publish_workflow` | editor | `id` | чернетка перевірена як активна і стала опублікованою (F6-10): в активного сценарію webhook'и й розклади одразу перемикаються на неї; неактивний сценарій не вмикається; некоректна чернетка — `WORKFLOW_INVALID`, опублікована версія не змінюється |
 | `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount, role }] }` — видимі групи (проєкти) у порядку показу з моєю роллю (F3-63, F6-14) |
 | `create_workflow_group` | editor | `name` | створена група в кінці списку; назва унікальна без урахування регістру (`WORKFLOW_GROUP_NAME_TAKEN`) |

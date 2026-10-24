@@ -109,7 +109,7 @@ describe('ExplanationCardComponent', () => {
     http.expectOne(URL).flush(explanation({ status: 'not_configured' }));
     fixture.detectChanges();
 
-    expect(text(host, 'explanation-status')).toContain('Налаштуваннях → Помічник');
+    expect(text(host, 'explanation-status')).toContain('через MCP');
     expect(
       (host.querySelector('[data-testid="explanation-refresh"]') as HTMLButtonElement).disabled,
     ).toBe(true);
