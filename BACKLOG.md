@@ -794,7 +794,7 @@
 - DoD: тести: умова виконалась з N-ї перевірки, таймаут → вихід `timeout`, помилка tool'а за `continueOnFail`, скасування під час очікування; опис у `describe_nodes`.
 
 ### F5-04 · Ключ кореляції виконань
-- model: `sonnet` · status: `review` · depends: F5-01
+- model: `sonnet` · status: `done` · depends: F5-01
 - Що: необов'язковий `correlationKey` виконання (вираз у тригері `core.webhook`/`mcp.poll`/ручному і параметр REST/MCP-запуску), колонка й індекс у `executions`; фільтр у `/executions` (UI, REST, MCP `list_executions`); налаштування сценарію «не запускати нове, якщо є активне (`running`/`waiting`) з тим самим ключем».
 - DoD: тести: ключ зберігається з кожного тригера, фільтр, дубль пропускається і пишеться в журнал; міграція EF Core.
 
