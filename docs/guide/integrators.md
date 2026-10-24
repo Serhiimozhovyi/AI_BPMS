@@ -1,7 +1,7 @@
 # Посібник інтегратора
 
-Як працювати з OpenBP з інших систем: REST API, webhook-и, MCP для ШІ-агентів, вбудований редактор і власні
-конектори. Приклади нижче перевірено на продакшн-розгортанні з `docker-compose.prod.yml`.
+Як працювати з OpenBP з інших систем: REST API, webhook-и, MCP для ШІ-агентів, вбудований редактор, власні
+конектори і перенесення сценаріїв між середовищами (CI/CD). Приклади нижче перевірено на продакшн-розгортанні з `docker-compose.prod.yml`.
 
 ```bash
 export OPENBP_URL=https://openbp.example.com
@@ -185,3 +185,65 @@ curl -fsS -X POST "$OPENBP_URL/api/v1/connectors" \
 запустити конектор контейнером поруч з OpenBP — [docs/admin/README.md §7](../admin/README.md#7-конектори-й-облікові-дані).
 Повний шлях «від нуля за годину» — [tools/connector-template/README.md](../../tools/connector-template/README.md),
 контракт — [docs/connectors.md §5](../connectors.md#5-connector-kit-toolsconnector-template).
+
+## 7. Перенесення між середовищами і CI/CD
+
+Сценарії зберігаються в git як файли експорту і розкочуються з dev на prod командами CLI (F6-09). Файл містить
+визначення і маніфест залежностей — назви й типи конекторів і облікових даних, ключі змінних; секретів у ньому немає.
+У середовищі-приймачі конектори й облікові дані шукаються за назвою і типом, тож назвіть їх однаково в обох
+середовищах (або дайте файл відповідників `--map`). Формат і правила — [docs/workflow-format.md](../workflow-format.md#експорт-та-імпорт).
+
+```bash
+# CLI: dotnet run --project src/OpenBP.Cli -- <команда> або зібраний `openbp`
+# адреса й ключ — з OPENBP_URL / OPENBP_API_KEY (див. початок посібника), ключ ролі editor
+openbp export --all --out workflows/                 # кожен сценарій → workflows/<id>.json
+openbp export 01a1… --out workflows/
+openbp import workflows/01a1….json                   # → «Імпортовано: <новий id>  <назва>»
+openbp import workflows/01a1….json --map prod-map.json
+openbp activate <новий id>
+```
+
+`prod-map.json` — явні відповідники, коли назви різняться:
+
+```json
+{ "connectors": { "<id у dev>": "<id у prod>" }, "credentials": { "<id у dev>": "<id у prod>" } }
+```
+
+Коди виходу: 0 — успіх; 1 — імпорт без відповідників (CLI друкує, чого бракує: вид, id, назва, тип); 2 — помилка
+аргументів або відповідь OpenBP з помилкою (зокрема 422 `WORKFLOW_INVALID` зі списком помилок). Імпорт завжди створює
+новий неактивний сценарій; змінні (`$vars`), яких у приймачі немає, CLI перелічує окремо — додайте їх у
+Налаштуваннях.
+
+Приклад GitHub Actions: при зміні файлів у `workflows/` на гілці `main` імпортувати й активувати їх на prod.
+
+```yaml
+name: Розкотити сценарії OpenBP
+on:
+  push:
+    branches: [main]
+    paths: ['workflows/**.json']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production          # секрети середовища, ручне підтвердження за потреби
+    env:
+      OPENBP_URL: ${{ vars.OPENBP_URL }}
+      OPENBP_API_KEY: ${{ secrets.OPENBP_API_KEY }}   # ключ editor; не передавайте його через --api-key
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+      - name: Імпорт змінених сценаріїв
+        run: |
+          for file in $(git diff --name-only HEAD~1 HEAD -- 'workflows/*.json'); do
+            [ -f "$file" ] || continue
+            out=$(dotnet run --project src/OpenBP.Cli -- import "$file" --map deploy/prod-map.json)
+            echo "$out"
+            id=$(echo "$out" | sed -n 's/^Імпортовано: \([0-9a-f-]*\).*/\1/p')
+            dotnet run --project src/OpenBP.Cli -- activate "$id"
+          done
+```
+
+Старі версії на prod після цього деактивуйте або видаліть (UI чи `POST /api/v1/workflows/{id}/deactivate`): імпорт не
+замінює наявний сценарій, щоб розкатка не зламала те, що вже працює.

@@ -6,6 +6,7 @@ using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
 using OpenBP.Application.Schedules;
+using OpenBP.Application.Variables;
 using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Shared.Validation;
@@ -207,8 +208,9 @@ public sealed class WorkflowService(
     {
         ArgumentNullException.ThrowIfNull(definition);
         currentUser.Require(UserRole.Viewer);
-        var errors = await ValidateDocumentAsync(ToDocument(definition), asActive, ct);
-        return new WorkflowValidationResult(errors);
+        var document = ToDocument(definition);
+        var errors = await ValidateDocumentAsync(document, asActive, ct);
+        return new WorkflowValidationResult(errors) { Warnings = await VariableWarningsAsync(document, ct) };
     }
 
     /// <inheritdoc />
@@ -367,6 +369,26 @@ public sealed class WorkflowService(
 
         ScheduleParameters.Read(document, out var scheduleErrors);
         return scheduleErrors;
+    }
+
+    /// <summary>Попередження <c>VARIABLE_UNKNOWN</c> для кожного посилання <c>$vars.key</c> на відсутню змінну (F6-09).</summary>
+    private async Task<IReadOnlyList<WorkflowValidationError>> VariableWarningsAsync(JsonObject document, CancellationToken ct)
+    {
+        var references = VariableReferences.Find(document);
+        if (references.Count == 0)
+        {
+            return [];
+        }
+
+        var keys = references.Select(r => r.Key).Distinct(StringComparer.Ordinal).ToList();
+        var known = await db.Variables.AsNoTracking().Where(v => keys.Contains(v.Key)).Select(v => v.Key).ToListAsync(ct);
+        return [.. references
+            .Where(r => !known.Contains(r.Key, StringComparer.Ordinal))
+            .Select(r => new WorkflowValidationError(
+                WorkflowValidationCodes.VariableUnknown,
+                $"Змінної «{r.Key}» немає: $vars.{r.Key} дасть undefined, доки її не створено в налаштуваннях.",
+                r.NodeId,
+                r.Path))];
     }
 
     /// <summary>

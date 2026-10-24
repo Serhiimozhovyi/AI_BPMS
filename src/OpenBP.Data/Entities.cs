@@ -59,6 +59,15 @@ public sealed class WorkflowGroupEntity
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+/// <summary>Змінна інстансу (<c>$vars.key</c>, F6-09): не секрет — секрети лишаються в credentials.</summary>
+public sealed class VariableEntity
+{
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
+    public string? Description { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class WorkflowVersionEntity
 {
     public Guid Id { get; set; }

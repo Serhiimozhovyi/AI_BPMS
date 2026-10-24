@@ -75,7 +75,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `describe_nodes` | viewer | — | `{ nodes: [{ type, version, displayName, group, description, trigger, inputs, outputs, parametersSchema, credentials: [{ parameter, type, required }] }] }` — типи вузлів, які можна вписати в `type`/`typeVersion` |
 | `list_workflows` | viewer | `search?`, `active?`, `groupId?` (id групи або `"none"` — без групи), `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt`, `groupId` |
 | `get_workflow` | viewer | `id` | сценарій з `definition` поточної версії |
-| `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }] }` (`path` — JSON Pointer); помилки сценарію не є помилкою tool'а |
+| `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }], warnings }` (`path` — JSON Pointer; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню); помилки сценарію не є помилкою tool'а |
 | `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |
 | `update_workflow` | editor | `id`, `definition` | нова поточна версія (назва не змінюється) |
 | `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount }] }` — групи сценаріїв у порядку показу (F3-63) |

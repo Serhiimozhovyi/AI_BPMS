@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
@@ -13,13 +14,15 @@ import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-to
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, forkJoin } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ImportWorkflowDialog, ImportWorkflowDialogData } from '../../workflows/import-workflow-dialog.component';
 import { NO_GROUP, WorkflowSection, groupSections, readCollapsed, recount, reorder, writeCollapsed } from '../../workflows/workflow-groups';
-import { WorkflowDetail, WorkflowGroup, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
+import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
 
 /**
  * `/workflows`: список сценаріїв, створення, перейменування, активація, видалення, перехід у канвас (F2-15); групи
  * (F3-64): секції груп зі згортанням, фільтр-чіпи й пошук, створення/перейменування/видалення груп, порядок груп і
- * перенесення сценаріїв перетягуванням або з меню рядка. `?group=<id>` — відкрити з фільтром за групою.
+ * перенесення сценаріїв перетягуванням або з меню рядка. `?group=<id>` — відкрити з фільтром за групою. Експорт у файл
+ * і імпорт з файлу з перемапінгом конекторів і облікових даних (F6-09).
  */
 @Component({
   selector: 'app-workflows-page',
@@ -54,6 +57,7 @@ import { WorkflowDetail, WorkflowGroup, WorkflowSummary, WorkflowsApiService, to
             Нова група
           </button>
         }
+        <button mat-stroked-button type="button" data-testid="import-button" (click)="openImport()" i18n="@@workflows.import">Імпорт</button>
       </div>
 
       @if (creating()) {
@@ -251,6 +255,9 @@ import { WorkflowDetail, WorkflowGroup, WorkflowSummary, WorkflowsApiService, to
                               <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="noGroup" [disabled]="!w.groupId" (click)="move(w, null)" i18n="@@workflows.groups.none">Без групи</button>
                               <button mat-menu-item type="button" data-testid="move-to-new" (click)="startCreateGroup(w.id)" i18n="@@workflows.groups.newEllipsis">Нова група…</button>
                             </mat-menu>
+                            <button mat-button type="button" data-testid="export-button" [disabled]="busy()" (click)="exportWorkflow(w)" i18n="@@workflows.export">
+                              Експортувати
+                            </button>
                             <button
                               mat-button
                               type="button"
@@ -402,6 +409,7 @@ export class WorkflowsPage implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dialog = inject(MatDialog);
 
   readonly workflows = signal<WorkflowSummary[]>([]);
   readonly groups = signal<WorkflowGroup[]>([]);
@@ -638,6 +646,32 @@ export class WorkflowsPage implements OnInit {
     );
   }
 
+  /** Діалог імпорту; новий сценарій з'являється у списку (у групі вибраного фільтра, якщо вибрано одну групу). */
+  openImport(): void {
+    const chips = [...this.chips()];
+    const groupId = chips.length === 1 && chips[0] !== this.noGroup ? chips[0] : null;
+    this.dialog
+      .open<ImportWorkflowDialog, ImportWorkflowDialogData, WorkflowImportResult>(ImportWorkflowDialog, { data: { groupId }, width: '640px' })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => {
+        if (result) this.upsert(result.workflow);
+      });
+  }
+
+  /** Завантажує `<назва>.openbp.json` з визначенням і маніфестом залежностей. */
+  exportWorkflow(w: WorkflowSummary): void {
+    this.run(this.api.exportWorkflow(w.id), (exported) => {
+      const blob = new Blob([JSON.stringify(exported, null, 2) + '\n'], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${exportFileName(w.name)}.openbp.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
   startDelete(id: string): void {
     this.renamingId.set(null);
     this.deletingId.set(id);
@@ -681,4 +715,11 @@ export class WorkflowsPage implements OnInit {
     const list = this.workflows();
     this.setWorkflows(list.some((w) => w.id === summary.id) ? list.map((w) => (w.id === summary.id ? summary : w)) : [summary, ...list]);
   }
+}
+
+/** Назва файлу експорту з назви сценарію: без символів, недозволених у файлових системах. */
+export function exportFileName(name: string): string {
+  const printable = [...name].map((ch) => (ch.charCodeAt(0) < 32 ? ' ' : ch)).join('');
+  const cleaned = printable.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned || 'workflow';
 }

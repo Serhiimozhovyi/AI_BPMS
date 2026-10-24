@@ -87,4 +87,10 @@ public sealed record WorkflowValidationResult(IReadOnlyList<WorkflowValidationEr
 {
     /// <summary><c>true</c>, якщо помилок немає.</summary>
     public bool IsValid => Errors.Count == 0;
+
+    /// <summary>
+    /// Попередження, що не заважають збереженню й активації: <c>VARIABLE_UNKNOWN</c> — <c>$vars.key</c> без такої змінної
+    /// (F6-09; змінну можна створити пізніше, а до того вираз дає <c>undefined</c>).
+    /// </summary>
+    public IReadOnlyList<WorkflowValidationError> Warnings { get; init; } = [];
 }

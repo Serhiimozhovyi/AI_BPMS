@@ -297,7 +297,7 @@ public sealed class WorkflowExecutor
             IReadOnlyList<Item>[] attemptInputs = [.. inputs.Select(i => (IReadOnlyList<Item>)[.. i.Select(RunState.Clone)])];
             var ctx = new EngineNodeContext(
                 definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
-                run.NodeOutputsByName(), request.Env, request.Workflow.Settings.Timezone, startedAt, state);
+                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state);
 
             try
             {

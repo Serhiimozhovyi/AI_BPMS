@@ -35,6 +35,10 @@ public sealed class OpenBpExceptionHandler(IProblemDetailsService problems) : IE
         {
             problem.Extensions["errors"] = credential.Errors;
         }
+        else if (exception is ImportUnmappedException unmapped)
+        {
+            problem.Extensions["unmapped"] = unmapped.Unmapped;
+        }
 
         httpContext.Response.StatusCode = status;
         return await problems.TryWriteAsync(new ProblemDetailsContext

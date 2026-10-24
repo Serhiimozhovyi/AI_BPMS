@@ -914,6 +914,105 @@
         ]
       }
     },
+    "/api/v1/workflows/import": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Імпортувати сценарій з експорту",
+        "description": "Створює новий неактивний сценарій. `serverId`/`credentialId`/`settings.errorWorkflowId` перемаплюються: `mapping` → єдиний об'єкт з тією самою назвою і транспортом/типом із `manifest`. Незмаплене — 422 IMPORT_UNMAPPED з `unmapped[]`, нічого не створено. `missingVariables` — ключі `$vars`, яких тут немає.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowImportResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/{id}/export": {
+      "get": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Експортувати сценарій з маніфестом залежностей",
+        "description": "Визначення поточної версії і `manifest` (конектори, credentials, ключі змінних, сценарій помилок) з назвами й типами — без секретів і значень змінних. Тіло для `POST /workflows/import`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExport"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/{id}": {
       "get": {
         "tags": [
@@ -1553,6 +1652,147 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/variables": {
+      "get": {
+        "tags": [
+          "Змінні"
+        ],
+        "summary": "Змінні інстансу",
+        "description": "Усі змінні за ключем; доступно кожній ролі.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VariableDto"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/variables/{key}": {
+      "put": {
+        "tags": [
+          "Змінні"
+        ],
+        "summary": "Створити або змінити змінну",
+        "description": "Лише admin. Ключ: латиниця, цифри й `_`, не з цифри, до 64 символів; значення до 10 000 символів.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariableDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Змінні"
+        ],
+        "summary": "Видалити змінну",
+        "description": "Лише admin; `$vars.key` у сценаріях, що на неї посилаються, дасть `undefined`.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "4XX": {
             "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
@@ -3496,6 +3736,38 @@
           }
         }
       },
+      "ImportMapping": {
+        "type": "object",
+        "properties": {
+          "connectors": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "credentials": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "workflows": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "Item": {
         "type": "object",
         "properties": {
@@ -3540,6 +3812,59 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ManifestConnector": {
+        "required": [
+          "ref",
+          "name",
+          "transport"
+        ],
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string"
+          }
+        }
+      },
+      "ManifestCredential": {
+        "required": [
+          "ref",
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "ManifestWorkflow": {
+        "required": [
+          "ref",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -4068,6 +4393,54 @@
           }
         }
       },
+      "VariableDto": {
+        "required": [
+          "key",
+          "value",
+          "description",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "VariableRequest": {
+        "required": [
+          "value",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "WebhookAccepted": {
         "required": [
           "executionId"
@@ -4190,6 +4563,21 @@
           }
         }
       },
+      "WorkflowExport": {
+        "required": [
+          "definition",
+          "manifest"
+        ],
+        "type": "object",
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/WorkflowManifest"
+          }
+        }
+      },
       "WorkflowGroupOrderRequest": {
         "required": [
           "ids"
@@ -4253,6 +4641,110 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "WorkflowImportRequest": {
+        "required": [
+          "definition"
+        ],
+        "type": "object",
+        "properties": {
+          "definition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowDefinition"
+              }
+            ]
+          },
+          "manifest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowManifest"
+              }
+            ]
+          },
+          "mapping": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImportMapping"
+              }
+            ]
+          },
+          "groupId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "WorkflowImportResult": {
+        "required": [
+          "workflow",
+          "mapping",
+          "missingVariables"
+        ],
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "$ref": "#/components/schemas/WorkflowDetail"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ImportMapping"
+          },
+          "missingVariables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WorkflowManifest": {
+        "required": [
+          "connectors",
+          "credentials",
+          "variables"
+        ],
+        "type": "object",
+        "properties": {
+          "connectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestConnector"
+            }
+          },
+          "credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestCredential"
+            }
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workflows": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ManifestWorkflow"
+            }
           }
         }
       },
@@ -4338,6 +4830,12 @@
           },
           "isValid": {
             "type": "boolean"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowValidationError"
+            }
           }
         }
       },
@@ -4414,6 +4912,10 @@
     {
       "name": "Конектори",
       "description": "MCP-сервери: реєстрація, список tools, тестові виклики."
+    },
+    {
+      "name": "Змінні",
+      "description": "Змінні інстансу для `$vars.key` у виразах і core.code: читають усі, змінює admin. Не для секретів."
     },
     {
       "name": "Облікові дані",

@@ -195,6 +195,16 @@ export class WorkflowsApiService {
     return this.http.delete<void>(this.url(id));
   }
 
+  /** Поточна версія з маніфестом залежностей — файл для іншого середовища (F6-09). */
+  exportWorkflow(id: string): Observable<WorkflowExport> {
+    return this.http.get<WorkflowExport>(`${this.url(id)}/export`);
+  }
+
+  /** Новий неактивний сценарій з експорту; незмаплені посилання — 422 `IMPORT_UNMAPPED` ({@link unmappedOf}). */
+  importWorkflow(request: WorkflowImportRequest): Observable<WorkflowImportResult> {
+    return this.http.post<WorkflowImportResult>(`${this.base}/import`, request);
+  }
+
   private url(id: string): string {
     return `${this.base}/${encodeURIComponent(id)}`;
   }
@@ -203,4 +213,61 @@ export class WorkflowsApiService {
 /** Рядок списку з деталей (після створення, перейменування, зміни активності). */
 export function toSummary(detail: WorkflowDetail): WorkflowSummary {
   return { id: detail.id, name: detail.name, active: detail.active, version: detail.version, updatedAt: detail.updatedAt, groupId: detail.groupId ?? null };
+}
+
+/** Маніфест залежностей експорту (F6-09): id середовища-джерела з назвами й типами, без секретів. */
+export interface WorkflowManifest {
+  connectors: { ref: string; name: string; transport: string }[];
+  credentials: { ref: string; name: string; type: string }[];
+  variables: string[];
+  workflows?: { ref: string; name: string }[] | null;
+}
+
+/** `GET /workflows/{id}/export`. */
+export interface WorkflowExport {
+  definition: WorkflowDefinition;
+  manifest: WorkflowManifest;
+}
+
+/** Явні відповідники «ref джерела → id цього середовища». */
+export interface ImportMapping {
+  connectors?: Record<string, string> | null;
+  credentials?: Record<string, string> | null;
+  workflows?: Record<string, string> | null;
+}
+
+/** Тіло `POST /workflows/import`. */
+export interface WorkflowImportRequest {
+  definition: WorkflowDefinition;
+  manifest?: WorkflowManifest | null;
+  mapping?: ImportMapping | null;
+  groupId?: string | null;
+}
+
+/** Вид посилання в імпорті. */
+export type ReferenceKind = 'connector' | 'credential' | 'workflow';
+
+/** Посилання без відповідника: `not_found` · `ambiguous` · `invalid` (явний відповідник не існує). */
+export interface UnmappedReference {
+  kind: ReferenceKind;
+  ref: string;
+  name: string | null;
+  type: string | null;
+  reason: 'not_found' | 'ambiguous' | 'invalid';
+}
+
+/** Результат імпорту: новий сценарій, застосовані відповідники і відсутні змінні. */
+export interface WorkflowImportResult {
+  workflow: WorkflowDetail;
+  mapping: ImportMapping;
+  missingVariables: string[];
+}
+
+/** `unmapped[]` з відповіді 422 `IMPORT_UNMAPPED`; інша помилка — `null`. */
+export function unmappedOf(error: unknown): UnmappedReference[] | null {
+  if (error instanceof HttpErrorResponse && error.status === 422) {
+    const body = error.error as { code?: unknown; unmapped?: unknown } | null;
+    if (body?.code === 'IMPORT_UNMAPPED' && Array.isArray(body.unmapped)) return body.unmapped as UnmappedReference[];
+  }
+  return null;
 }

@@ -15,6 +15,7 @@ internal sealed class EngineNodeContext : INodeContext
     private readonly ICredentialProvider _credentials;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<Item>> _nodes;
     private readonly IReadOnlyDictionary<string, string> _env;
+    private readonly IReadOnlyDictionary<string, string> _vars;
     private readonly string _timezone;
     private readonly DateTimeOffset _now;
 
@@ -26,6 +27,7 @@ internal sealed class EngineNodeContext : INodeContext
         EngineServices services,
         IReadOnlyDictionary<string, IReadOnlyList<Item>> nodes,
         IReadOnlyDictionary<string, string> env,
+        IReadOnlyDictionary<string, string> vars,
         string timezone,
         DateTimeOffset now,
         JsonObject nodeState)
@@ -40,6 +42,7 @@ internal sealed class EngineNodeContext : INodeContext
         Binary = services.Binary;
         _nodes = nodes;
         _env = env;
+        _vars = vars;
         _timezone = timezone;
         _now = now;
         NodeState = nodeState;
@@ -50,6 +53,8 @@ internal sealed class EngineNodeContext : INodeContext
     public IReadOnlyDictionary<string, IReadOnlyList<Item>> NodeOutputs => _nodes;
 
     public string Timezone => _timezone;
+
+    public IReadOnlyDictionary<string, string> Vars => _vars;
 
     public Guid ExecutionId { get; }
 
@@ -120,6 +125,7 @@ internal sealed class EngineNodeContext : INodeContext
             Now = _now,
             Timezone = _timezone,
             Env = _env,
+            Vars = _vars,
             ExecutionId = ExecutionId,
         };
     }

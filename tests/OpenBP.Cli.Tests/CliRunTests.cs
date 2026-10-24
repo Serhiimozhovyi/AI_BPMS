@@ -140,7 +140,8 @@ public sealed class CliRunTests : IDisposable
         var (code, _, stderr) = await RunAsync(args);
 
         Assert.Equal(CliApp.UsageError, code);
-        Assert.Contains("Використання: openbp run", stderr, StringComparison.Ordinal);
+        Assert.Contains("Використання:", stderr, StringComparison.Ordinal);
+        Assert.Contains("openbp run <file.json>", stderr, StringComparison.Ordinal);
     }
 
     [Fact]

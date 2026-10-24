@@ -16,7 +16,7 @@ namespace OpenBP.Expressions;
 
 /// <summary>
 /// <see cref="IExpressionEvaluator"/> на Jint (docs/architecture.md §5): вирази <c>{{ &lt;js&gt; }}</c> у рядках,
-/// змінні <c>$json</c>, <c>$binary</c>, <c>$input</c>, <c>$node</c>, <c>$now</c>, <c>$env</c>, <c>$execution</c>.
+/// змінні <c>$json</c>, <c>$binary</c>, <c>$input</c>, <c>$node</c>, <c>$now</c>, <c>$env</c>, <c>$vars</c>, <c>$execution</c>.
 /// Пісочниця: ліміти часу, пам'яті і рекурсії з <see cref="JintExpressionOptions"/>; без CLR-interop,
 /// без <c>require</c>/модулів, без <c>eval</c> і <c>new Function</c> з рядка.
 /// Кожен виклик створює окремий рушій, тож обчислювач потокобезпечний і вирази не діляться станом.
@@ -114,6 +114,11 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
             if (expression.Contains("$env", StringComparison.Ordinal))
             {
                 engine.SetValue("$env", parser.Parse(JsonSerializer.Serialize(scope.Env)));
+            }
+
+            if (expression.Contains("$vars", StringComparison.Ordinal))
+            {
+                engine.SetValue("$vars", parser.Parse(JsonSerializer.Serialize(scope.Vars)));
             }
         }
         catch (Exception ex) when (ex is JintException or JavaScriptException or JsonException)
