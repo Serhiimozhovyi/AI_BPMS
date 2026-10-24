@@ -39,6 +39,9 @@ public sealed class WorkflowService(
 
     private const string Entity = "workflow";
 
+    /// <summary>Тип тригера сценарію помилок (<c>OpenBP.Nodes.Core.ErrorTriggerNode</c>).</summary>
+    private const string ErrorTriggerType = "core.errorTrigger";
+
     private readonly WorkflowValidator _validator = new(schemaProvider);
 
     /// <inheritdoc />
@@ -119,7 +122,7 @@ public sealed class WorkflowService(
         // workflows.name — джерело правди: name у визначенні перезаписується (§10.2).
         var document = ToDocument(definition);
         document["name"] = workflow.Name;
-        await ThrowIfInvalidAsync(document, workflow.Active, ct);
+        await ThrowIfInvalidAsync(document, workflow.Active, ct, id);
 
         var current = await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id)
@@ -196,7 +199,7 @@ public sealed class WorkflowService(
             return ToDetail(workflow, version);
         }
 
-        await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct);
+        await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct, workflow.Id);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
         workflow.Active = true;
@@ -307,9 +310,9 @@ public sealed class WorkflowService(
         CreatedAt = now,
     };
 
-    private async Task ThrowIfInvalidAsync(JsonObject document, bool asActive, CancellationToken ct)
+    private async Task ThrowIfInvalidAsync(JsonObject document, bool asActive, CancellationToken ct, Guid? workflowId = null)
     {
-        var errors = await ValidateDocumentAsync(document, asActive, ct);
+        var errors = await ValidateDocumentAsync(document, asActive, ct, workflowId);
         if (errors.Count > 0)
         {
             throw new WorkflowValidationException(errors);
@@ -320,7 +323,8 @@ public sealed class WorkflowService(
     /// Правила 1–6 (<see cref="WorkflowValidator"/>), а для структурно валідного сценарію — ще й розклади
     /// <c>core.schedule</c>: cron і часовий пояс схема перевірити не може.
     /// </summary>
-    private async Task<IReadOnlyList<WorkflowValidationError>> ValidateDocumentAsync(JsonObject document, bool asActive, CancellationToken ct)
+    private async Task<IReadOnlyList<WorkflowValidationError>> ValidateDocumentAsync(
+        JsonObject document, bool asActive, CancellationToken ct, Guid? workflowId = null)
     {
         var errors = await _validator.ValidateAsync(document, new WorkflowValidationOptions
         {
@@ -332,8 +336,50 @@ public sealed class WorkflowService(
             return errors;
         }
 
+        if (await ErrorWorkflowErrorAsync(document, workflowId, ct) is { } errorWorkflowError)
+        {
+            return [errorWorkflowError];
+        }
+
         ScheduleParameters.Read(document, out var scheduleErrors);
         return scheduleErrors;
+    }
+
+    /// <summary>
+    /// <c>settings.errorWorkflowId</c> (F4-06): інший існуючий сценарій, поточна версія якого має вузол
+    /// <c>core.errorTrigger</c> — інакше запускати нічого. Чи сценарій активний, тут не важливо: вимкнений сценарій
+    /// помилок воркер пропускає із записом у журнал.
+    /// </summary>
+    private async Task<WorkflowValidationError?> ErrorWorkflowErrorAsync(JsonObject document, Guid? workflowId, CancellationToken ct)
+    {
+        if (document["settings"]?["errorWorkflowId"] is not JsonValue value || !value.TryGetValue<string>(out var reference))
+        {
+            return null;
+        }
+
+        const string path = "/settings/errorWorkflowId";
+        if (!Guid.TryParse(reference, out var errorWorkflowId))
+        {
+            return new(WorkflowValidationCodes.ErrorWorkflowInvalid, $"«{reference}» — не id сценарію.", Path: path);
+        }
+
+        if (errorWorkflowId == workflowId)
+        {
+            return new(WorkflowValidationCodes.ErrorWorkflowInvalid, "Сценарій не може бути сценарієм помилок для самого себе.", Path: path);
+        }
+
+        var definition = await db.Workflows.AsNoTracking()
+            .Where(w => w.Id == errorWorkflowId)
+            .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => (Guid?)v.Id, (w, v) => v.Definition)
+            .SingleOrDefaultAsync(ct);
+        if (definition is null)
+        {
+            return new(WorkflowValidationCodes.ErrorWorkflowInvalid, $"Сценарію помилок «{reference}» немає.", Path: path);
+        }
+
+        return WorkflowJson.Deserialize(definition).Nodes.Any(n => n.Type == ErrorTriggerType)
+            ? null
+            : new(WorkflowValidationCodes.ErrorWorkflowInvalid, "Сценарій помилок має містити вузол «Помилка сценарію» (core.errorTrigger).", Path: path);
     }
 
     private async Task<WorkflowEntity> FindAsync(Guid id, CancellationToken ct) =>

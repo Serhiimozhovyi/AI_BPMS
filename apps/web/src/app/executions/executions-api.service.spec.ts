@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { EVENT_SOURCE_FACTORY, ExecutionEvent, ExecutionStep, ExecutionsApiService } from './executions-api.service';
+import { EVENT_SOURCE_FACTORY, ExecutionEvent, ExecutionStep, ExecutionsApiService, executionModeLabel } from './executions-api.service';
 import { FakeEventSource } from './fake-event-source';
 
 const step: ExecutionStep = {
@@ -102,5 +102,10 @@ describe('ExecutionsApiService', () => {
       .expectOne({ method: 'POST', url: '/api/v1/executions/e1/retry' })
       .flush({ id: 'e2', workflowId: 'w', versionId: 'v', mode: 'retry', state: 'queued', startedAt: null, finishedAt: null, error: null });
     expect(mode).toBe('retry');
+  });
+
+  it('режим error — запуск сценарію помилок (F4-06)', () => {
+    expect(executionModeLabel('error')).toBe('Сценарій помилок');
+    expect(executionModeLabel('retry')).toBe('Повтор');
   });
 });

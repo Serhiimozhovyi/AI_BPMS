@@ -212,12 +212,12 @@ internal sealed class WorkerHarness : IAsyncDisposable
     }
 
     /// <summary>Сценарій з однією версією; повертає (workflowId, versionId).</summary>
-    public async Task<(Guid WorkflowId, Guid VersionId)> SaveWorkflowAsync(WorkflowDefinition definition)
+    public async Task<(Guid WorkflowId, Guid VersionId)> SaveWorkflowAsync(WorkflowDefinition definition, bool active = false)
     {
         var workflowId = Guid.NewGuid();
         var versionId = Guid.NewGuid();
         await using var db = Db.CreateDbContext();
-        db.Workflows.Add(new WorkflowEntity { Id = workflowId, Name = definition.Name, CurrentVersionId = versionId, UpdatedAt = DateTimeOffset.UtcNow });
+        db.Workflows.Add(new WorkflowEntity { Id = workflowId, Name = definition.Name, Active = active, CurrentVersionId = versionId, UpdatedAt = DateTimeOffset.UtcNow });
         db.WorkflowVersions.Add(new WorkflowVersionEntity
         {
             Id = versionId,

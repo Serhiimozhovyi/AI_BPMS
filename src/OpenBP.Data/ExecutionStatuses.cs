@@ -46,6 +46,7 @@ public static class ExecutionModes
         ExecutionMode.Manual => "manual",
         ExecutionMode.Trigger => "trigger",
         ExecutionMode.Retry => "retry",
+        ExecutionMode.Error => "error",
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null),
     };
 
@@ -54,6 +55,7 @@ public static class ExecutionModes
         "manual" => ExecutionMode.Manual,
         "trigger" => ExecutionMode.Trigger,
         "retry" => ExecutionMode.Retry,
+        "error" => ExecutionMode.Error,
         _ => throw new InvalidOperationException($"Невідомий режим виконання «{mode}» у БД."),
     };
 }
