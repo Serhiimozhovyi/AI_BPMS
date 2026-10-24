@@ -593,7 +593,7 @@
 - DoD: CI smoke: створити сценарій → бекап → видалити → відновити → сценарій є, credential розшифровується; README/доки адміна оновлено.
 
 ### F4-12 · OpenAPI для REST
-- model: `sonnet` · status: `in-progress agent/F4-12-openapi` · depends: F2-09
+- model: `sonnet` · status: `review #100` · depends: F2-09
 - Що: `Microsoft.AspNetCore.OpenApi`: документ `/openapi/v1.json` (без авторизації або лише для входу — вирішити в PR, типово відкритий опис без даних), схеми безпеки cookie і `Bearer` (API-ключ), описи й приклади для сценаріїв, виконань, конекторів, credentials, ключів, webhook; помилки — ProblemDetails/`{ code, message, errors }`. Знімок `docs/openapi.json` у репо і тест, що він збігається з живим документом (оновлення — командою з README). Тексти описів — українською.
 - DoD: тест знімка; кожен ендпойнт `/api/v1/*` є в документі з тегом; `docs/` посилаються на файл.
 
