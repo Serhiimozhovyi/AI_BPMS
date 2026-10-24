@@ -173,7 +173,7 @@ public sealed class DomainTools(
     // ---------- Розклад і розсилки ----------
 
     [McpServerTool(Name = "due_notifications", Title = "Due notifications", ReadOnly = true, UseStructuredContent = true, OpenWorld = false)]
-    [Description("Reminders that are due (24 h / 1 h / 10 min before bookings, events and group sessions) plus unsent outbox messages: [{ id, chat_id, text, reply_markup }]. Send each with send_message, then call mark_notifications_sent with the ids.")]
+    [Description("Notifications that are due: reminders 24 h / 1 h / 10 min before bookings, events and group sessions; the \"how was the event?\" poll 1-24 h after an event; the 08:00-12:00 morning digest for each psychologist; a just-published material for every registered person; unsent outbox messages. Returns { items: [{ id, chat_id, text, reply_markup }] }. Send them (send_messages), then call mark_notifications_sent with the ids that were delivered.")]
     public async Task<ListResult<DueNotification>> DueNotifications(int limit = 100, CancellationToken ct = default) =>
         new(await notifications.DueAsync(Math.Clamp(limit, 1, 500), ct).ConfigureAwait(false));
 

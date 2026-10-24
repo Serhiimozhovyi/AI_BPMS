@@ -110,7 +110,13 @@ F3-34; що зміниться в такому разі, там теж запи�
 10. **Нагадування й черга сповіщень** (`due_notifications`): записи, події й БСТ, для яких `starts_at - offset_min` уже
     минуло, `starts_at` ще ні, а рядка в `reminders` немає, плюс не надіслані рядки `outbox` → список з `id` вигляду
     `r:<kind>:<target>:<offset>` або `o:<outbox id>`. Після надсилання `mark_notifications_sent { ids }` вставляє рядки
-    `reminders` і ставить `outbox.sent_at` (ідемпотентно).
+    `reminders` і ставить `outbox.sent_at` (ідемпотентно). У тому ж списку (F3-39, як у n8n-«Шедулері»):
+    - опитування «Як вам подія?» з кнопками 1–5 (`e:fb`) — з години до доби після початку події тим, хто був
+      зареєстрований і ще не оцінив (`r:feedback:<реєстрація>:0`);
+    - ранковий список психологу з 08:00 до 12:00, раз на день: свої консультації (імена без телефонів), свої сеанси БСТ
+      із заповненістю й чергою, усі сьогоднішні події; порожній день — без повідомлення (`r:digest:<психолог>:<yyyyMMdd>`);
+    - новий матеріал, опублікований не давніше доби, — кожній зареєстрованій людині один раз
+      (`r:material:<telegram_id>:<матеріал>`); старі матеріали (імпорт) не розсилаються.
 11. **Посилання «додати в календар»** (Outlook, Google) мають нейтральну назву «Особиста зустріч».
 
 ## 5. MCP-tools
@@ -211,8 +217,9 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
    в `TELEGRAM_BOT_TOKEN`.
 2. Замініть у сценарії `srv_telegram` на `srv_telegram_bot`.
 
-Окремий сценарій «Шедулер»: `core.schedule` (щохвилини) → `due_notifications` → цикл `send_message` →
-`mark_notifications_sent`; `core.schedule` (щоночі) → `generate_slots` і `anonymize_old_records`.
+Окремий сценарій «Шедулер» — `examples/psy-support-scheduler.json` (F3-38): `core.schedule` (кожні 5 хв) →
+`due_notifications` → `send_messages` конектора Telegram (без зупинки на помилці) → `mark_notifications_sent` для
+доставлених і остаточно відхилених; о 06:00 `generate_slots`, о 03:00 `anonymize_old_records`.
 
 ### 6.1. Коди кнопок
 
@@ -337,7 +344,4 @@ Telegram підтверджує `from.id`. Обліковий запис в ад
 
 ## 11. Чого цей документ не вирішує
 
-- «Шедулер» як сценарій OpenBP — окрема задача після F3-31. Tools для нього (`due_notifications`, `generate_slots`,
-  `anonymize_old_records`) входять в F3-34.
-- Сповіщення про збої (`errorWorkflow` n8n) — після перенесення, через `settings.errorWorkflowId` в OpenBP.
 - Публічна HTTPS-адреса для webhook (тунель або розгортання) — питання розгортання, а не цього застосунку.

@@ -202,6 +202,96 @@ public sealed class RulesTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Due_notifications_ask_for_event_feedback_once_within_a_day_after_the_event()
+    {
+        await using var app = await PsyApp.CreateAsync(pg);
+        await app.UserAsync(8101);
+        await app.UserAsync(8102);
+        var ev = await app.EventAsync(0, TimeSpan.FromMinutes(30));
+        await app.With<EventService, DomainResult>(e => e.RegisterAsync(8101, ev));
+        await app.With<EventService, DomainResult>(e => e.RegisterAsync(8102, ev));
+        var due = () => app.With<NotificationService, IReadOnlyList<DueNotification>>(n => n.DueAsync());
+        Assert.DoesNotContain(await due(), d => d.Id.StartsWith("r:feedback:", StringComparison.Ordinal));
+
+        app.Clock.Now += TimeSpan.FromHours(2);
+        await app.With<EventService, DomainResult>(e => e.RateAsync(8102, ev, 5));
+        var polls = (await due()).Where(d => d.Id.StartsWith("r:feedback:", StringComparison.Ordinal)).ToList();
+        var poll = Assert.Single(polls);
+        Assert.Equal(8101, poll.ChatId);
+        Assert.Contains("Як вам «Зустріч підтримки»?", poll.Text, StringComparison.Ordinal);
+        Assert.Contains($"e:fb:{ev}:5", poll.ReplyMarkup!.ToJsonString(), StringComparison.Ordinal);
+
+        await app.With<NotificationService, int>(n => n.MarkSentAsync([poll.Id]));
+        Assert.DoesNotContain(await due(), d => d.Id.StartsWith("r:feedback:", StringComparison.Ordinal));
+
+        await app.UserAsync(8103);
+        var later = await app.EventAsync(0, TimeSpan.FromMinutes(30));
+        await app.With<EventService, DomainResult>(e => e.RegisterAsync(8103, later));
+        app.Clock.Now += TimeSpan.FromDays(2);
+        Assert.DoesNotContain(await due(), d => d.Id.StartsWith("r:feedback:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Due_notifications_send_the_morning_digest_once_per_day_without_phones()
+    {
+        await using var app = await PsyApp.CreateAsync(pg); // 09:00 за Києвом
+        var me = await app.PsychologistAsync("Я", telegramId: 8201);
+        await app.PsychologistAsync("Вільна", phone: "380679999999", telegramId: 8202);
+        await app.UserAsync(8203, "Ірина", "380501110003");
+        var slot = await app.SlotAsync(me, TimeSpan.FromHours(3));
+        // Запис на сьогодні через бот уже неможливий (правило «не пізніше ніж за N год») — кладемо напряму.
+        await app.Db(async db =>
+        {
+            db.Bookings.Add(new BookingEntity { SlotId = slot, TelegramId = 8203, Status = BookingStatuses.Active, CreatedAt = app.Clock.Now });
+            await db.SaveChangesAsync();
+        });
+        var session = await app.SessionAsync(me, 4, TimeSpan.FromHours(5));
+        var digests = async () => (await app.With<NotificationService, IReadOnlyList<DueNotification>>(n => n.DueAsync()))
+            .Where(d => d.Id.StartsWith("r:digest:", StringComparison.Ordinal)).ToList();
+
+        var digest = Assert.Single(await digests());
+        Assert.Equal($"r:digest:{me}:20251112", digest.Id);
+        Assert.Equal(8201, digest.ChatId);
+        Assert.Contains("Сьогодні", digest.Text, StringComparison.Ordinal);
+        Assert.Contains("Ірина", digest.Text, StringComparison.Ordinal);
+        Assert.Contains("записано 0 з 4", digest.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("380501110003", digest.Text, StringComparison.Ordinal);
+        Assert.NotEqual(0, session);
+
+        await app.With<NotificationService, int>(n => n.MarkSentAsync([digest.Id]));
+        Assert.Empty(await digests());
+
+        app.Clock.Now += TimeSpan.FromDays(1) + TimeSpan.FromHours(4); // наступного дня о 13:00 — поза вікном
+        Assert.Empty(await digests());
+    }
+
+    [Fact]
+    public async Task Due_notifications_broadcast_a_just_published_material_to_everyone_once()
+    {
+        await using var app = await PsyApp.CreateAsync(pg);
+        await app.UserAsync(8301);
+        await app.UserAsync(8302);
+        await app.Db(async db =>
+        {
+            db.Materials.Add(new MaterialEntity { Title = "Старий", Status = MaterialStatuses.Published, PublishedAt = app.Clock.Now.AddDays(-3) });
+            db.Materials.Add(new MaterialEntity { Title = "Дихальна практика", Body = "Вдих   на чотири,\nвидих на шість.", Status = MaterialStatuses.Published, PublishedAt = app.Clock.Now });
+            db.Materials.Add(new MaterialEntity { Title = "Чернетка", Status = MaterialStatuses.Draft, PublishedAt = app.Clock.Now });
+            await db.SaveChangesAsync();
+        });
+        var materials = async () => (await app.With<NotificationService, IReadOnlyList<DueNotification>>(n => n.DueAsync()))
+            .Where(d => d.Id.StartsWith("r:material:", StringComparison.Ordinal)).ToList();
+
+        var due = await materials();
+        Assert.Equal([8301L, 8302L], due.Select(d => d.ChatId));
+        Assert.All(due, d => Assert.Contains("Дихальна практика", d.Text, StringComparison.Ordinal));
+        Assert.Contains("Вдих на чотири, видих на шість.", due[0].Text, StringComparison.Ordinal);
+        Assert.Contains("mt:r:", due[0].ReplyMarkup!.ToJsonString(), StringComparison.Ordinal);
+
+        await app.With<NotificationService, int>(n => n.MarkSentAsync([due[0].Id]));
+        Assert.Equal([8302L], (await materials()).Select(d => d.ChatId));
+    }
+
+    [Fact]
     public async Task Due_notifications_send_one_reminder_per_step_and_marking_is_idempotent()
     {
         await using var app = await PsyApp.CreateAsync(pg);
