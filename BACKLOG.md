@@ -451,7 +451,7 @@
 - DoD: тести: читання виходу попереднього вузла, неіснуючий вузол → помилка з назвою, `getHours()` у `Europe/Kyiv` узимку й улітку; `architecture.md` §5 і опис `describe_nodes` оновлено.
 
 ### F3-33 · Адмінка психологічної підтримки: проєкт
-- model: `fable` · status: `in-progress agent/F3-33-psy-support-design` · depends: —
+- model: `fable` · status: `review #80` · depends: —
 - Що: рішення власника 2026-10-24 — дані бота психологічної підтримки живуть не в Google Sheets, а в окремому застосунку з власним бекендом і сторінкою адміністрування, який підключається до OpenBP як MCP-конектор (правило 3; ядро OpenBP не змінюється). Документ `docs/psy-support.md`: розташування (`connectors/psy-support`, поза `OpenBP.sln`, на Connector Kit), стек (як OpenBP: .NET, EF Core + Postgres, Angular + AC-Kit), модель даних за листами n8n-бота (`settings`, `users`, `psychologists`, `slots`, `bookings`, `events`, `registrations`, `materials`, `bst_sessions`, `bst_bookings`, `waitlist`, `counters`, `log`), правила (ліміти консультацій, місткість, черга, «не пізніше ніж за N год»), список MCP-tools для бота (атомарні `book_slot`, `cancel_booking`, `move_booking`, `register_event`, `join_waitlist`… — кожен повертає готовий текст і кнопки екрана або дані для них), ролі й вхід психологів в адмінку, захист персональних даних (телефони, записи), імпорт поточних даних з таблиці.
 - DoD: `docs/psy-support.md` погоджено власником; задачі F3-34, F3-35 уточнено за ним.
 
