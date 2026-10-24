@@ -116,7 +116,7 @@ describe('Поле виразу і Monaco (F2-19)', () => {
 
     type(value, '{{ $');
     await render(fixture);
-    expect(options()).toEqual(['$json', '$input', '$node', '$now', '$env', '$execution']);
+    expect(options()).toEqual(['$json', '$binary', '$input', '$node', '$now', '$env', '$execution']);
 
     type(value, '{{ $node[');
     await render(fixture);

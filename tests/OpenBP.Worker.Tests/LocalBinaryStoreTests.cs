@@ -89,7 +89,7 @@ public sealed class LocalBinaryStoreTests : IDisposable
     }
 }
 
-/// <summary>Воркер зберігає файл, який повернув MCP-tool, у <see cref="LocalBinaryStore"/>.</summary>
+/// <summary>Воркер зберігає файл, який повернув MCP-tool, у <see cref="LocalBinaryStore"/>; наступний вузол бачить його через <c>$binary</c>.</summary>
 [Collection(PostgresCollection.Name)]
 public sealed class LocalBinaryStoreWorkerTests(PostgresFixture postgres) : IDisposable
 {
@@ -108,16 +108,21 @@ public sealed class LocalBinaryStoreWorkerTests(PostgresFixture postgres) : IDis
             await db.SaveChangesAsync();
         }
 
-        var (workflowId, versionId) = await worker.SaveWorkflowAsync(WorkflowJson.Deserialize($$"""
+        var (workflowId, versionId) = await worker.SaveWorkflowAsync(WorkflowJson.Deserialize($$$"""
             {
               "formatVersion": 1,
               "name": "Картинка",
               "nodes": [
                 { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
                 { "id": "n_pixel", "name": "Картинка", "type": "mcp.tool", "typeVersion": 1, "position": [200, 0],
-                  "parameters": { "serverId": "{{fake.Id}}", "toolName": "pixel", "arguments": {} } }
+                  "parameters": { "serverId": "{{{fake.Id}}}", "toolName": "pixel", "arguments": {} } },
+                { "id": "n_caption", "name": "Підпис", "type": "core.set", "typeVersion": 1, "position": [400, 0],
+                  "parameters": { "fields": [ { "name": "caption", "value": "{{ $binary.data.mimeType }}, {{ $binary.data.fileSize }} байт" } ] } }
               ],
-              "connections": [ { "from": { "node": "n_start" }, "to": { "node": "n_pixel" } } ]
+              "connections": [
+                { "from": { "node": "n_start" }, "to": { "node": "n_pixel" } },
+                { "from": { "node": "n_pixel" }, "to": { "node": "n_caption" } }
+              ]
             }
             """));
         var executionId = await worker.LaunchAsync(workflowId, versionId);
@@ -132,5 +137,9 @@ public sealed class LocalBinaryStoreWorkerTests(PostgresFixture postgres) : IDis
         Assert.Equal("image/png", (string?)reference["mimeType"]);
         var path = Path.Combine(_root, (string)reference["directory"]!, (string)reference["id"]!);
         Assert.Equal(FakeTools.PixelBytes, await File.ReadAllBytesAsync(path));
+
+        // F3-23: наступний вузол бачить файл через $binary.
+        var caption = JsonNode.Parse((await worker.StepsAsync(executionId)).Single(s => s.NodeId == "n_caption").Output!)![0]![0]!;
+        Assert.Equal($"image/png, {FakeTools.PixelBytes.Length} байт", (string?)caption["json"]!["caption"]);
     }
 }

@@ -16,7 +16,7 @@ namespace OpenBP.Expressions;
 
 /// <summary>
 /// <see cref="IExpressionEvaluator"/> на Jint (docs/architecture.md §5): вирази <c>{{ &lt;js&gt; }}</c> у рядках,
-/// змінні <c>$json</c>, <c>$input</c>, <c>$node</c>, <c>$now</c>, <c>$env</c>, <c>$execution</c>.
+/// змінні <c>$json</c>, <c>$binary</c>, <c>$input</c>, <c>$node</c>, <c>$now</c>, <c>$env</c>, <c>$execution</c>.
 /// Пісочниця: ліміти часу, пам'яті і рекурсії з <see cref="JintExpressionOptions"/>; без CLR-interop,
 /// без <c>require</c>/модулів, без <c>eval</c> і <c>new Function</c> з рядка.
 /// Кожен виклик створює окремий рушій, тож обчислювач потокобезпечний і вирази не діляться станом.
@@ -91,6 +91,14 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
             })));
 
             // Великі колекції серіалізуються лише тоді, коли вираз на них посилається.
+            // Посилання на файли поточного item'а (BinaryRef, без байтів); item без файлів — {}.
+            if (expression.Contains("$binary", StringComparison.Ordinal))
+            {
+                engine.SetValue("$binary", parser.Parse(scope.Item.Binary is { Count: > 0 } binary
+                    ? JsonSerializer.Serialize(binary, WorkflowJson.Options)
+                    : "{}"));
+            }
+
             if (expression.Contains("$input", StringComparison.Ordinal))
             {
                 var items = parser.Parse(SerializeItems(scope.Input));
