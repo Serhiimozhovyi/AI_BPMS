@@ -20,3 +20,5 @@ coverage/
 # backups / files (docker-compose.prod.yml)
 /backups/
 /data/
+# OIDC-провайдери з секретами (docs/admin/oidc.md)
+/oidc.env

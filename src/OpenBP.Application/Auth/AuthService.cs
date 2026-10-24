@@ -31,7 +31,8 @@ public sealed class AuthService(OpenBpDbContext db, ICurrentUser currentUser, Ti
 
         var normalized = NormalizeEmail(email);
         var user = await db.Users.SingleOrDefaultAsync(u => u.Email == normalized, ct);
-        if (user is null)
+        // Без пароля (лише OIDC, F4-14) — так само, як невідомий email.
+        if (user?.PasswordHash is null)
         {
             Hasher.VerifyHashedPassword(new UserEntity(), DummyHash, password);
             return null;

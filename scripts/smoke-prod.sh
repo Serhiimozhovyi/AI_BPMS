@@ -42,6 +42,11 @@ curl -fsS "$BASE/openapi/v1.json" | jq -e '.paths["/api/v1/workflows"]' >/dev/nu
 echo "ok: /openapi/v1.json"
 curl -fsS -o /dev/null "$BASE/element/openbp-canvas.js" || fail "/element/openbp-canvas.js"
 echo "ok: /element/openbp-canvas.js"
+# /signin-oidc/* має йти в Api (без провайдера — 404 від Api), а не в SPA (200 з index.html).
+oidc_status="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/signin-oidc/none")"
+[[ "$oidc_status" == "404" ]] || fail "/signin-oidc/* не проксується в Api (HTTP $oidc_status)"
+curl -fsS "$BASE/api/v1/auth/providers" | jq -e '.passwordLogin == true' >/dev/null || fail "/api/v1/auth/providers"
+echo "ok: /signin-oidc і /api/v1/auth/providers"
 
 curl -fsS -c "$COOKIES" -H 'content-type: application/json' \
   -d "{\"email\":\"${OPENBP_ADMIN_EMAIL}\",\"password\":\"${OPENBP_ADMIN_PASSWORD}\"}" \

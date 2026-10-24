@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "OpenBP REST API",
-    "description": "REST API OpenBP: сценарії, виконання, конектори, облікові дані.\n\n**Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login`; інтеграції — API-ключ\nу заголовку `Authorization: Bearer <ключ>` (створюється в `POST /api/v1/api-keys`). Ролі (viewer,\neditor, admin) перевіряються на кожному запиті: без входу — 401, без прав — 403.\n\n**Помилки.** `application/problem+json` (RFC 9457) з полями `code` (машинний код, напр. `NOT_FOUND`,\n`WORKFLOW_INVALID`) і `detail` (текст для людини); помилки перевірки — ще й `errors[]`\nз `{ code, message, path }`.\n\nЗначень секретів API не повертає ніколи.",
+    "description": "REST API OpenBP: сценарії, виконання, конектори, облікові дані.\n\n**Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login` або входу через\nOIDC-провайдера (`GET /api/v1/auth/oidc/{key}/login`); інтеграції — API-ключ у заголовку\n`Authorization: Bearer <ключ>` (створюється в `POST /api/v1/api-keys`) або access token налаштованого\nOIDC-провайдера. Ролі (viewer, editor, admin) перевіряються на кожному запиті: без входу — 401, без\nправ — 403.\n\n**Помилки.** `application/problem+json` (RFC 9457) з полями `code` (машинний код, напр. `NOT_FOUND`,\n`WORKFLOW_INVALID`) і `detail` (текст для людини); помилки перевірки — ще й `errors[]`\nз `{ code, message, path }`.\n\nЗначень секретів API не повертає ніколи.",
     "version": "v1"
   },
   "servers": [
@@ -311,7 +311,7 @@
           "Вхід"
         ],
         "summary": "Вхід email і паролем",
-        "description": "Ставить cookie сесії `openbp.auth`. Невірні дані — 401 з кодом UNAUTHENTICATED.",
+        "description": "Ставить cookie сесії `openbp.auth`. Невірні дані — 401 з кодом UNAUTHENTICATED; вхід паролем вимкнено (`OPENBP_PASSWORD_LOGIN=false`) — 403 PASSWORD_LOGIN_DISABLED.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -325,6 +325,78 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "4XX": {
+            "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "Вхід"
+        ],
+        "summary": "Способи входу для сторінки входу",
+        "description": "Доступно без входу. `passwordLogin: false` — форму пароля сховано (аварійний адміністратор входить через `/login?password`).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthProvidersResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{key}/login": {
+      "get": {
+        "tags": [
+          "Вхід"
+        ],
+        "summary": "Почати вхід через OIDC-провайдера",
+        "description": "Відкривається браузером: перенаправляє до провайдера (authorization code + PKCE). Після входу — cookie сесії і повернення на `returnUrl` (лише шлях усередині OpenBP); відмова — `/login?oidcError=<код>`.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnUrl",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -2365,6 +2437,43 @@
           }
         }
       },
+      "AuthProviderInfo": {
+        "required": [
+          "key",
+          "displayName",
+          "loginUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "loginUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthProvidersResponse": {
+        "required": [
+          "passwordLogin",
+          "providers"
+        ],
+        "type": "object",
+        "properties": {
+          "passwordLogin": {
+            "type": "boolean"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthProviderInfo"
+            }
+          }
+        }
+      },
       "BinaryRef": {
         "type": "object",
         "properties": {
@@ -3835,13 +3944,13 @@
     "securitySchemes": {
       "cookie": {
         "type": "apiKey",
-        "description": "Сесія UI: cookie після POST /api/v1/auth/login.",
+        "description": "Сесія UI: cookie після POST /api/v1/auth/login або входу через OIDC.",
         "name": "openbp.auth",
         "in": "cookie"
       },
       "bearer": {
         "type": "http",
-        "description": "API-ключ OpenBP (POST /api/v1/api-keys).",
+        "description": "API-ключ OpenBP (POST /api/v1/api-keys) або access token OIDC-провайдера з OpenBp:Oidc:Providers.",
         "scheme": "bearer"
       }
     }

@@ -90,8 +90,9 @@ export class WorkflowsModule {}
 ```
 
 `token` краще передавати властивістю (`[token]`), а не атрибутом: так його не видно в DOM. Якщо OpenBP і хост
-входять через той самий Keycloak (F4-14), передавайте access token хоста. Після F4-14 OpenBP приймає його як
-`Bearer`.
+входять через той самий Keycloak, передавайте access token хоста: OpenBP приймає його як `Bearer`, коли провайдер
+налаштовано з `AcceptBearer` і клієнт хоста (напр. `KitWeb`) є в `BearerAudiences` ([admin/oidc.md](admin/oidc.md)).
+Токен живе кілька хвилин, тож після оновлення токена в хості передайте новий: `[token]` робить це сам.
 
 ## Автентифікація і CORS
 

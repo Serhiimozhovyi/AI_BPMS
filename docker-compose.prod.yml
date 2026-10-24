@@ -57,6 +57,10 @@ services:
       dockerfile: docker/api.Dockerfile
     image: openbp/api:${OPENBP_VERSION:-local}
     restart: unless-stopped
+    # OIDC-провайдери (OpenBp__Oidc__Providers__<key>__…, docs/admin/oidc.md): окремий файл, бо ключі довільні і є секрети.
+    env_file:
+      - path: ./oidc.env
+        required: false
     environment:
       <<: *app-env
       OPENBP_ADMIN_EMAIL: ${OPENBP_ADMIN_EMAIL:-}
@@ -65,6 +69,8 @@ services:
       OPENBP_PUBLIC_URL: ${OPENBP_PUBLIC_URL:-}
       # Origin-и сторінок, що вбудовують редактор <openbp-canvas> (docs/embedding.md), через кому.
       OPENBP_CORS_ORIGINS: ${OPENBP_CORS_ORIGINS:-}
+      # false — вхід паролем лише для OPENBP_ADMIN_EMAIL, решта входить через OIDC (F4-14, docs/admin/oidc.md).
+      OPENBP_PASSWORD_LOGIN: ${OPENBP_PASSWORD_LOGIN:-true}
       OPENBP_EXECUTION_RETENTION_DAYS: ${OPENBP_EXECUTION_RETENTION_DAYS:-30}
       OPENBP_EXECUTION_RETENTION_CRON: ${OPENBP_EXECUTION_RETENTION_CRON:-0 0 3 * * ?}
     depends_on:

@@ -1,0 +1,166 @@
+{
+  "realm": "openbp-test",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 600,
+  "roles": {
+    "realm": [
+      {
+        "name": "openbp-editor"
+      }
+    ],
+    "client": {
+      "openbp": [
+        {
+          "name": "openbp-admin"
+        }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "openbp",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "openbp-test-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost/signin-oidc/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@openbp.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-alice",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "openbp-editor"
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@openbp.test",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-bob",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "clientRoles": {
+        "openbp": [
+          "openbp-admin"
+        ]
+      }
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "email": "carol@openbp.test",
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-carol",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "dave",
+      "enabled": true,
+      "email": "dave@evil.test",
+      "emailVerified": true,
+      "firstName": "Dave",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-dave",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "openbp-editor"
+      ]
+    },
+    {
+      "username": "erin",
+      "enabled": true,
+      "email": "erin@openbp.test",
+      "emailVerified": true,
+      "firstName": "Erin",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-erin",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "frank",
+      "enabled": true,
+      "email": "frank@openbp.test",
+      "emailVerified": false,
+      "firstName": "Frank",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-frank",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@openbp.test",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass-admin",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    }
+  ]
+}
