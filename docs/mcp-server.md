@@ -11,7 +11,7 @@ OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop
   автентифікується окремо, тож Api можна масштабувати).
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
-  - `viewer` — читання (`describe_connectors`, `list_*`, `get_*`, `validate_workflow`, resources);
+  - `viewer` — читання (`describe_connectors`, `describe_nodes`, `list_*`, `get_*`, `validate_workflow`, resources);
   - `editor` — ще `create_workflow`, `update_workflow`, `run_workflow`, `test_node`, `cancel_execution`;
   - `admin` — те саме (керування конекторами й користувачами в MCP не винесено).
 - Без ключа або з відкликаним ключем — HTTP 401 ще до MCP-обміну. Cookie-сесія UI для `/mcp` не діє.
@@ -72,6 +72,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | Tool | Роль | Аргументи | Що повертає |
 |---|---|---|---|
 | `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema }] }] }` |
+| `describe_nodes` | viewer | — | `{ nodes: [{ type, version, displayName, group, description, trigger, inputs, outputs, parametersSchema, credentials: [{ parameter, type, required }] }] }` — типи вузлів, які можна вписати в `type`/`typeVersion` |
 | `list_workflows` | viewer | `search?`, `active?`, `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt` |
 | `get_workflow` | viewer | `id` | сценарій з `definition` поточної версії |
 | `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }] }` (`path` — JSON Pointer); помилки сценарію не є помилкою tool'а |
@@ -84,7 +85,8 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
 
 `definition` — сценарій у форматі [workflow-format.md](workflow-format.md); схема — resource
-`openbp://schema/workflow-format`, `serverId`/`toolName` вузлів `mcp.*` — з `describe_connectors`.
+`openbp://schema/workflow-format`, типи вузлів і їхні `parameters` — з `describe_nodes`, `serverId`/`toolName` вузлів
+`mcp.*` — з `describe_connectors`.
 
 ### Приклади викликів
 
@@ -126,6 +128,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 |---|---|
 | `openbp://schema/workflow-format` | JSON Schema формату сценарію |
 | `openbp://connectors` | те саме, що `describe_connectors` |
+| `openbp://nodes` | те саме, що `describe_nodes` |
 | `openbp://workflows/{id}` | визначення поточної версії сценарію |
 | `openbp://executions/{id}` | знімок виконання з кроками, як `get_execution` |
 
@@ -136,7 +139,8 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 > **Користувач:** Зроби сценарій: коли на buh@firma.ua приходить лист з темою «Рахунок», збережи вкладення і напиши
 > мені в Telegram, чат 42.
 
-1. Агент читає `openbp://schema/workflow-format` і викликає `describe_connectors`: бачить пошту
+1. Агент читає `openbp://schema/workflow-format`, викликає `describe_nodes` (типи вузлів: `mcp.poll`, `mcp.tool`, їхні
+   параметри) і `describe_connectors`: бачить пошту
    (`list_messages`, `list_attachments`, `get_attachment`) і Telegram (`send_message`).
 2. Складає сценарій: `mcp.poll` над `list_messages` (`filter: contains(subject,'Рахунок')`, `itemsPath = result`,
    `keyField = id`) → `mcp.tool` `list_attachments` → `mcp.tool` `get_attachment` (файл стає binary item і зберігається

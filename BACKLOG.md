@@ -400,6 +400,21 @@
 - Що: tool надсилання повідомлення в канал Teams для конектора `connectors/msgraph` (або окремого конектора). Graph з application-дозволами (client credentials, як у F3-15) не дає застосунку постити в канали від свого імені, тому спершу власник обирає спосіб: (а) вхідний вебхук каналу через Power Automate Workflows, без Graph; (б) делегований вхід від імені службового користувача (device code, refresh token у credentials); (в) інше. Після рішення задачу уточнити (DoD, model) і зняти `blocked`.
 - DoD: визначається після рішення; мінімум — тести проти in-process фейку (успіх, помилка автентифікації → `isError`), секрети й токени не потрапляють у відповіді й помилки, README конектора оновлено.
 
+### F3-21 · Каталог типів вузлів для агента (`describe_nodes`)
+- model: `opus` · status: `review #70` · depends: F3-03
+- Що: MCP tool `describe_nodes` і resource `openbp://nodes` поверх `INodeService` (те саме, що REST `GET /nodes`): `type`, `version`, `displayName`, `group`, `description`, `trigger`, `inputs`, `outputs`, `parametersSchema`, `credentials`; в описі tool'а — як дані йдуть між вузлами (`$json`, `$node[…]`, `itemsPath`). Знайдено ручною перевіркою F3-17: живий агент підбирав типи вузлів навмання, бо дізнатися їх через `/mcp` було ніде.
+- DoD: тест — viewer отримує каталог (тригер `mcp.poll` без входів і з `keyField`, `core.if` з двома виходами, `mcp.tool` з `itemsPath`, `ai.llm` з credential'ом), склад збігається з REST `/nodes`, resource повертає те саме; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
+
+### F3-22 · `outputSchema` tools у `describe_connectors`
+- model: `sonnet` · status: `ready` · depends: F3-03
+- Що: `describe_connectors` і `openbp://connectors` віддають і `outputSchema` tool'а з кешу discovery (конектори на шаблоні її публікують), щоб агент знав форму відповіді (`{ result: [{ id, name }] }`) і писав правильні вирази в наступних вузлах. Знайдено ручною перевіркою F3-17: агент написав `{{ $json.attachmentId }}` замість `{{ $json.id }}` і дізнався про це лише під час запуску. Статично валідатор такого не зловить: вирази обчислюються під час виконання.
+- DoD: тест — tool з `outputSchema` у кеші віддає її, без неї — `null`; конфіг і credentials, як і раніше, не потрапляють у відповідь; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
+
+### F3-23 · `$binary` у виразах
+- model: `opus` · status: `ready` · depends: F2-07
+- Що: змінна `$binary` у `{{ }}` — посилання на файли поточного item'а (`BinaryRef` з `docs/workflow-format.md`: `fileName`, `mimeType`, `fileSize`…; байтів немає), і `$node["Назва"].binary` — файли відповідного item'а попереднього вузла. Знайдено ручною перевіркою F3-17: агент написав `{{ $binary.data.fileName }}` і отримав `$binary is not defined`.
+- DoD: тести обчислювача (`$binary.data.fileName`, item без файлів → `{}`, `$node[…].binary`); тест движка з вузлом, що повертає binary item; `architecture.md` (змінні виразів) і опис `describe_nodes` оновлено.
+
 ### F3-24 · Сторінка входу в UI
 - model: `sonnet` · status: `done` · depends: F2-05
 - Що: `/login` у SPA (email + пароль → `POST /auth/login`, cookie-сесія); решта маршрутів під guard'ом (`GET /auth/me`, без сесії — на `/login?returnUrl=…`, лише шлях усередині застосунку); 401 від Api посеред роботи — на `/login` з поверненням; у тулбарі email користувача і «Вийти» (`POST /auth/logout`); тексти через i18n. Знайдено під час локального розгортання: Api вимагає входу з F2-05, а в UI сторінки входу не було, тож зайти в UI було неможливо. Форма мінімальна на Material + Tailwind; стиль AC-Kit — окрема задача редизайну.
