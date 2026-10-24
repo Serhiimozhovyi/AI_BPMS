@@ -25,6 +25,16 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
+### Стан сервісів і журнали
+
+- Api: `GET /health/live` — процес живий; `GET /health/ready` — БД доступна і всі міграції застосовано (200 `Healthy`
+  або 503 `Unhealthy`). Обидва без автентифікації; решта Api — лише з входом або API-ключем.
+- Воркер слухає лише health-порт `OPENBP_WORKER_HEALTH_PORT` (типово 8089): `/health/live` і `/health/ready` — БД
+  готова і цикл опитування jobs обертався протягом останньої хвилини (`Worker__HealthMaxPollAge`).
+- `OPENBP_LOG_FORMAT=json` — журнали Api і воркера в JSON (одна подія на рядок, UTC-час) зі scope `executionId` і
+  `workflowId` для записів виконання; значення credentials у журнал не потрапляють. Рівні — як завжди,
+  `Logging__LogLevel__Default=Warning`, `Logging__LogLevel__OpenBP=Information` тощо.
+
 ### Запуск сценарію з CLI
 
 `openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.

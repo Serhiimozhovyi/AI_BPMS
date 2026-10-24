@@ -24,6 +24,11 @@ public sealed class WorkerOptions
     /// <summary>Пауза між спробами взяти job, коли черга порожня або сталася помилка БД. За замовчуванням 1 с.</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// <c>/health/ready</c> (F4-08) червоніє, якщо цикл опитування jobs не обертався довше за цей час. За замовчуванням 1 хв.
+    /// </summary>
+    public TimeSpan HealthMaxPollAge { get; set; } = TimeSpan.FromMinutes(1);
+
     /// <summary>Перевіряє узгодженість налаштувань.</summary>
     /// <exception cref="ArgumentException">Значення поза допустимими межами.</exception>
     public void Validate()
@@ -32,6 +37,7 @@ public sealed class WorkerOptions
         ArgumentOutOfRangeException.ThrowIfLessThan(MaxConcurrentExecutions, 1, nameof(MaxConcurrentExecutions));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(HeartbeatInterval, TimeSpan.Zero, nameof(HeartbeatInterval));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PollInterval, TimeSpan.Zero, nameof(PollInterval));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(HealthMaxPollAge, PollInterval, nameof(HealthMaxPollAge));
     }
 }
 
