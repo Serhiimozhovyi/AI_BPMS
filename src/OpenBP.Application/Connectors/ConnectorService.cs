@@ -7,6 +7,7 @@ using ModelContextProtocol.Protocol;
 using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
+using OpenBP.Application.Notifications;
 using OpenBP.Application.Paging;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
@@ -322,12 +323,22 @@ public sealed class ConnectorService(
         return null;
     }
 
+    /// <summary>
+    /// Зберігає статус; перехід у <see cref="ConnectorStatus.Error"/> дає подію сповіщення
+    /// <see cref="NotificationEvents.ConnectorUnavailable"/> (F6-07) — одну на перехід, а не на кожен невдалий виклик.
+    /// </summary>
     private async Task SetStatusAsync(McpServerEntity row, ConnectorStatus status, CancellationToken ct)
     {
         var value = ConnectorRegistration.StatusValue(status);
         if (row.Status != value)
         {
             row.Status = value;
+            if (status == ConnectorStatus.Error)
+            {
+                db.Notify(time.GetUtcNow(), NotificationEvents.ConnectorUnavailable, row.Id.ToString(), $"Конектор «{row.Name}» недоступний",
+                    new JsonObject { ["connector"] = row.Name, ["connectorId"] = row.Id.ToString(), ["transport"] = row.Transport });
+            }
+
             await db.SaveChangesAsync(ct);
         }
     }

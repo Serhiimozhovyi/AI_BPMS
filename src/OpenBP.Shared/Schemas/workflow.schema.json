@@ -24,7 +24,8 @@
         "type": "array",
         "items": { "$ref": "#/$defs/item" }
       }
-    }
+    },
+    "business": { "$ref": "#/$defs/business" }
   },
   "$defs": {
     "settings": {
@@ -80,7 +81,8 @@
         "retry": { "$ref": "#/$defs/retry" },
         "continueOnFail": { "type": "boolean" },
         "disabled": { "type": "boolean" },
-        "notes": { "type": "string" }
+        "notes": { "type": "string" },
+        "business": { "$ref": "#/$defs/nodeBusiness" }
       }
     },
     "retry": {
@@ -110,7 +112,73 @@
             "node": { "type": "string", "minLength": 1 },
             "input": { "type": "integer", "minimum": 0 }
           }
+        },
+        "business": {
+          "type": "object",
+          "description": "Бізнес-вигляд: підпис стрілки; без нього — назва виходу.",
+          "properties": {
+            "label": { "type": "string" }
+          }
         }
+      }
+    },
+    "business": {
+      "type": "object",
+      "description": "Бізнес-розмітка для бізнес-вигляду (docs/business-view.md): доріжки учасників і кроки людей у зовнішніх системах. Необов'язкова; рушій ігнорує. Валідатор перевіряє унікальність id і посилання lane/links[].node.",
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "description": "Доріжки (хто виконує) у порядку показу. Немає — доріжки за типом вузла.",
+          "items": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "description": "Підпис під назвою, напр. «люди у веб-формах»." }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "description": "Дії людей у зовнішніх системах, яких немає в графі; кожен крок має хоча б один зв'язок із вузлом.",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "lane", "links"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "subtitle": { "type": "string" },
+              "lane": { "type": "string", "minLength": 1, "description": "id доріжки з business.lanes." },
+              "links": {
+                "type": "array",
+                "description": "Стрілки між кроком і вузлами; потрібна хоча б одна.",
+                "items": {
+                  "type": "object",
+                  "required": ["node", "direction"],
+                  "properties": {
+                    "node": { "type": "string", "minLength": 1, "description": "id вузла сценарію." },
+                    "direction": {
+                      "enum": ["in", "out"],
+                      "description": "in — вузол читає результат кроку (пунктирна стрілка крок → вузол); out — вузол ставить людині задачу (суцільна стрілка вузол → крок)."
+                    },
+                    "label": { "type": "string", "description": "Підпис стрілки, напр. «читає статус»." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "nodeBusiness": {
+      "type": "object",
+      "description": "Як вузол показується в бізнес-вигляді. Без title — name вузла; без lane — доріжка за типом вузла.",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "lane": { "type": "string", "minLength": 1, "description": "id доріжки з business.lanes." },
+        "hidden": { "type": "boolean", "description": "true — не показувати вузол; false — показувати технічний вузол (core.set, core.code, core.merge), який інакше згорнувся б." }
       }
     },
     "item": {

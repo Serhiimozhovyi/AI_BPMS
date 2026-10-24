@@ -1,4 +1,10 @@
-import { WorkflowConnection, WorkflowDefinition, WorkflowNode } from '../workflows/workflows-api.service';
+import {
+  BusinessStep,
+  WorkflowBusiness,
+  WorkflowConnection,
+  WorkflowDefinition,
+  WorkflowNode,
+} from '../workflows/workflows-api.service';
 import { parsePosition } from './canvas-model';
 
 /**
@@ -54,8 +60,29 @@ export function connectNodes(definition: WorkflowDefinition, c: NewConnection): 
 }
 
 /**
- * Видаляє виділене: вузли разом з усіма їхніми ребрами і `pinData`, плюс виділені ребра.
- * Нічого не виділено — те саме визначення.
+ * Прибирає з `business.steps` зв'язки на вузли `nodeIds` (F3-67). Крок, що лишився без зв'язків, видаляється:
+ * на схемі він нічого не означає, а валідатор такий крок відхиляє. Нічого не змінилось — той самий об'єкт.
+ */
+export function detachBusinessSteps(business: WorkflowBusiness | undefined, nodeIds: Set<string>): WorkflowBusiness | undefined {
+  if (!business || !Array.isArray(business.steps)) return business;
+  let changed = false;
+  const steps: BusinessStep[] = [];
+  for (const step of business.steps) {
+    const links = Array.isArray(step?.links) ? step.links : [];
+    const kept = links.filter((l) => !nodeIds.has(l?.node));
+    if (kept.length === links.length) {
+      steps.push(step);
+      continue;
+    }
+    changed = true;
+    if (kept.length > 0) steps.push({ ...step, links: kept });
+  }
+  return changed ? { ...business, steps } : business;
+}
+
+/**
+ * Видаляє виділене: вузли разом з усіма їхніми ребрами, `pinData` і зв'язками зовнішніх кроків `business.steps`,
+ * плюс виділені ребра. Нічого не виділено — те саме визначення.
  */
 export function deleteSelection(definition: WorkflowDefinition, selection: CanvasSelection): WorkflowDefinition {
   const nodeIds = new Set(selection.nodes);
@@ -74,7 +101,10 @@ export function deleteSelection(definition: WorkflowDefinition, selection: Canva
   if (pinData && typeof pinData === 'object' && Object.keys(pinData).some((k) => nodeIds.has(k))) {
     pinData = Object.fromEntries(Object.entries(pinData).filter(([k]) => !nodeIds.has(k)));
   }
-  return { ...definition, nodes, connections, pinData };
+  const business = detachBusinessSteps(definition.business, nodeIds);
+  const next: WorkflowDefinition = { ...definition, nodes, connections, pinData };
+  if (business !== definition.business) next.business = business;
+  return next;
 }
 
 /** Копіює виділені вузли і ребра між ними. Нічого не виділено — `null`. */

@@ -13,6 +13,7 @@ public static class AuditEntities
     public const string ApiKey = "apiKey";
     public const string Variable = "variable";
     public const string DataTable = "dataTable";
+    public const string NotificationChannel = "notificationChannel";
 }
 
 /// <summary>Дії журналу аудиту (<c>audit_log.action</c>): <c>&lt;сутність&gt;.&lt;дія&gt;</c>.</summary>
@@ -38,6 +39,9 @@ public static class AuditActions
     public const string DataTableCreated = "dataTable.created";
     public const string DataTableUpdated = "dataTable.updated";
     public const string DataTableDeleted = "dataTable.deleted";
+    public const string NotificationChannelCreated = "notificationChannel.created";
+    public const string NotificationChannelUpdated = "notificationChannel.updated";
+    public const string NotificationChannelDeleted = "notificationChannel.deleted";
 }
 
 /// <summary>

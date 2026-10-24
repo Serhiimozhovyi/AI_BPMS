@@ -152,6 +152,60 @@ public class WorkflowTransferTests(ApiFactory api)
         }
     }
 
+    /// <summary>F3-67: бізнес-розмітка проходить create → get → export → import без втрат.</summary>
+    [Fact]
+    public async Task Business_fields_survive_create_get_export_and_import()
+    {
+        var editor = await LoginAsync(api, UserRole.Editor);
+        var business = JsonNode.Parse("""
+            {
+              "lanes": [ { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" }, { "id": "openbp", "name": "OpenBP" } ],
+              "steps": [ { "id": "s_create", "title": "Автор створює задачу", "lane": "kit",
+                           "links": [ { "node": "n_hook", "direction": "in", "label": "бачить за 1–5 хв" } ] } ]
+            }
+            """)!;
+        var definition = JsonNode.Parse(Definition($"Бізнес {Guid.NewGuid():N}", BusinessNodes, BusinessConnections))!.AsObject();
+        definition["business"] = business;
+
+        var created = await editor.PostAsync(Workflows, Json(definition.ToJsonString()));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await JsonAsync(created)).GetProperty("id").GetGuid();
+
+        var read = JsonNode.Parse(await editor.GetStringAsync($"{Workflows}/{id}"))!["definition"]!;
+        Assert.True(JsonNode.DeepEquals(definition["business"], read["business"]), read["business"]?.ToJsonString());
+        Assert.True(JsonNode.DeepEquals(definition["nodes"]![0]!["business"], read["nodes"]![0]!["business"]));
+        Assert.True(JsonNode.DeepEquals(definition["connections"]![0]!["business"], read["connections"]![0]!["business"]));
+
+        var export = JsonNode.Parse(await editor.GetStringAsync($"{Workflows}/{id}/export"))!.AsObject();
+        Assert.True(JsonNode.DeepEquals(business, export["definition"]!["business"]));
+
+        var imported = await editor.PostAsync($"{Workflows}/import", Json(export.ToJsonString()));
+        Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
+        var importedDefinition = (await JsonAsync(imported)).GetProperty("workflow").GetProperty("definition");
+        var importedNode = JsonNode.Parse(importedDefinition.GetRawText())!;
+        Assert.True(JsonNode.DeepEquals(business, importedNode["business"]));
+        Assert.Equal("Нова задача", importedNode["nodes"]![0]!["business"]!["title"]!.GetValue<string>());
+        Assert.Equal("далі", importedNode["connections"]![0]!["business"]!["label"]!.GetValue<string>());
+
+        // Зламане посилання на доріжку — 422 з кодом і шляхом, як інші помилки валідатора.
+        definition["business"]!["steps"]![0]!["lane"] = "nowhere";
+        var invalid = await editor.PostAsync(Workflows, Json(definition.ToJsonString()));
+        var problem = await AssertProblemAsync(invalid, HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        var error = Assert.Single(problem.GetProperty("errors").EnumerateArray());
+        Assert.Equal("BUSINESS_LANE_UNKNOWN", error.GetProperty("code").GetString());
+        Assert.Equal("/business/steps/0/lane", error.GetProperty("path").GetString());
+    }
+
+    private const string BusinessNodes = """
+        { "id": "n_hook", "name": "Хук", "type": "core.webhook", "typeVersion": 1, "position": [0, 0],
+          "parameters": { "method": "POST", "path": "business-hook" }, "business": { "title": "Нова задача", "lane": "openbp" } },
+        { "id": "n_set", "name": "Поля", "type": "core.set", "typeVersion": 1, "position": [200, 0],
+          "parameters": { "fields": [] }, "business": { "hidden": true } }
+        """;
+
+    private const string BusinessConnections =
+        """[{ "from": { "node": "n_hook", "output": 0 }, "to": { "node": "n_set", "input": 0 }, "business": { "label": "далі" } }]""";
+
     [Fact]
     public async Task Import_uses_explicit_mapping_and_rejects_mapping_to_missing_object()
     {

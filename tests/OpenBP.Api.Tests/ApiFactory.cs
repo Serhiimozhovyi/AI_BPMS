@@ -80,6 +80,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ConnectionStrings:Default", ConnectionString);
         builder.UseSetting("OPENBP_ADMIN_EMAIL", AdminEmail);
         builder.UseSetting("OPENBP_ADMIN_PASSWORD", AdminPassword);
+        // Розсилку сповіщень тести викликають самі (F6-07): фоновий job забирав би їхні події.
+        builder.UseSetting("OPENBP_NOTIFICATIONS_INTERVAL_SEC", "0");
     }
 }
 

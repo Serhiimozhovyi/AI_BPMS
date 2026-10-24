@@ -1,0 +1,221 @@
+{
+  "formatVersion": 1,
+  "name": "Погодження задачі в Кіт 2",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 0,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "business": {
+    "lanes": [
+      { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" },
+      { "id": "openbp", "name": "OpenBP", "description": "сценарій" },
+      { "id": "notify", "name": "Сповіщення", "description": "Telegram · пошта" }
+    ],
+    "steps": [
+      {
+        "id": "s_create",
+        "title": "Автор створює задачу",
+        "lane": "kit",
+        "links": [ { "node": "n_new_task", "direction": "in", "label": "бачить за 1–5 хв" } ]
+      },
+      {
+        "id": "s_approve",
+        "title": "Погоджувач тисне «Погодити» у формі",
+        "subtitle": "статус задачі",
+        "lane": "kit",
+        "links": [
+          { "node": "n_assign", "direction": "out", "label": "ставить задачу в Кіті" },
+          { "node": "n_read_decision", "direction": "in", "label": "читає статус" }
+        ]
+      },
+      {
+        "id": "s_execute",
+        "title": "Виконавець вносить дані, закриває",
+        "subtitle": "поля задачі/угоди",
+        "lane": "kit",
+        "links": [
+          { "node": "n_task_executor", "direction": "out", "label": "задача виконавцю" },
+          { "node": "n_read_fields", "direction": "in", "label": "читає поля" }
+        ]
+      },
+      {
+        "id": "s_stage",
+        "title": "Стадія угоди оновлена",
+        "lane": "kit",
+        "links": [ { "node": "n_update_stage", "direction": "out" } ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "n_new_task",
+      "name": "Нова задача в Кіті",
+      "type": "mcp.poll",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": { "serverId": "", "toolName": "list_tasks", "arguments": { "status": "new" }, "itemsPath": "value", "cron": "*/5 * * * *", "keyField": "Id" },
+      "business": { "title": "Тригер: нова задача", "subtitle": "kit-crm", "lane": "openbp" }
+    },
+    {
+      "id": "n_assign",
+      "name": "Призначити погоджувача",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": { "serverId": "", "toolName": "assign_approver", "arguments": { "taskId": "{{ $json.Id }}" } },
+      "business": { "subtitle": "kit-crm", "lane": "openbp" }
+    },
+    {
+      "id": "n_notify_approver",
+      "name": "Telegram погоджувачу",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": { "serverId": "srv_telegram", "toolName": "send_message", "arguments": { "chat_id": "{{ $json.approverChatId }}", "text": "Нова задача на погодження: {{ $json.Title }}" } },
+      "business": { "lane": "notify" }
+    },
+    {
+      "id": "n_wait_decision",
+      "name": "Пауза перед перевіркою",
+      "type": "core.wait",
+      "typeVersion": 1,
+      "position": [520, 200],
+      "parameters": { "amount": 5, "unit": "minutes" },
+      "business": { "title": "Чекати рішення", "subtitle": "кожні 5 хв, до 2 дн", "lane": "openbp" }
+    },
+    {
+      "id": "n_read_decision",
+      "name": "Прочитати статус задачі",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [780, 200],
+      "parameters": { "serverId": "", "toolName": "get_task", "arguments": { "taskId": "{{ $json.Id }}" } },
+      "business": { "title": "Прочитати рішення", "subtitle": "kit-crm", "lane": "openbp" }
+    },
+    {
+      "id": "n_decision",
+      "name": "Рішення погоджувача",
+      "type": "core.switch",
+      "typeVersion": 1,
+      "position": [1040, 200],
+      "parameters": {
+        "rules": [
+          { "conditions": [ { "left": "{{ $json.Status }}", "operator": "equals", "right": "approved" } ] },
+          { "conditions": [ { "left": "{{ $json.Status }}", "operator": "equals", "right": "rejected" } ] }
+        ]
+      },
+      "business": { "title": "Погоджено?", "subtitle": "так → виконавцю", "lane": "openbp" }
+    },
+    {
+      "id": "n_task_executor",
+      "name": "Задача виконавцю",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [1300, 100],
+      "parameters": { "serverId": "", "toolName": "create_task", "arguments": { "dealId": "{{ $json.DealId }}", "assignee": "{{ $json.ExecutorId }}" } },
+      "business": { "subtitle": "kit-crm", "lane": "openbp" }
+    },
+    {
+      "id": "n_mail_executor",
+      "name": "Лист виконавцю",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [1300, 400],
+      "parameters": { "serverId": "srv_msgraph", "toolName": "send_mail", "arguments": { "to": "{{ $json.ExecutorEmail }}", "subject": "Задача погоджена", "body": "Угода {{ $json.DealId }} погоджена, заповніть дані." } },
+      "business": { "lane": "notify" }
+    },
+    {
+      "id": "n_notify_author",
+      "name": "Telegram автору",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [1300, 520],
+      "parameters": { "serverId": "srv_telegram", "toolName": "send_message", "arguments": { "chat_id": "{{ $json.authorChatId }}", "text": "Задачу {{ $json.Title }} відхилено" } },
+      "business": { "title": "Ні → автору", "lane": "notify" }
+    },
+    {
+      "id": "n_mail_manager",
+      "name": "Лист керівнику",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [1040, 400],
+      "parameters": { "serverId": "srv_msgraph", "toolName": "send_mail", "arguments": { "to": "{{ $json.ManagerEmail }}", "subject": "Погодження без рішення", "body": "Задача {{ $json.Title }} два дні без рішення." } },
+      "business": { "title": "Таймаут → лист керівнику", "lane": "notify" }
+    },
+    {
+      "id": "n_wait_data",
+      "name": "Пауза перед читанням полів",
+      "type": "core.wait",
+      "typeVersion": 1,
+      "position": [1560, 100],
+      "parameters": { "amount": 5, "unit": "minutes" },
+      "business": { "title": "Чекати, поки дані заповнені", "lane": "openbp" }
+    },
+    {
+      "id": "n_read_fields",
+      "name": "Прочитати поля угоди",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [1820, 100],
+      "parameters": { "serverId": "", "toolName": "get_deal", "arguments": { "dealId": "{{ $json.DealId }}" } },
+      "business": { "subtitle": "kit-crm", "lane": "openbp" }
+    },
+    {
+      "id": "n_total",
+      "name": "Сума угоди",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [2080, 100],
+      "parameters": { "fields": [ { "name": "total", "value": "{{ $json.Amount }}" } ] },
+      "business": { "title": "Порахувати суму", "lane": "openbp" }
+    },
+    {
+      "id": "n_check",
+      "name": "Дані заповнені?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [2340, 100],
+      "parameters": { "conditions": [ { "left": "{{ $json.total }}", "operator": "isNotEmpty" } ] },
+      "business": { "title": "Умова за даними", "subtitle": "→ наступний крок", "lane": "openbp" }
+    },
+    {
+      "id": "n_update_stage",
+      "name": "Оновити стадію угоди",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [2600, 100],
+      "parameters": { "serverId": "", "toolName": "update_deal_stage", "arguments": { "dealId": "{{ $json.DealId }}", "stage": "approved" } },
+      "business": { "subtitle": "kit-crm", "lane": "openbp" }
+    },
+    {
+      "id": "n_notify_next",
+      "name": "Сповістити наступного",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [2600, 400],
+      "parameters": { "serverId": "srv_telegram", "toolName": "send_message", "arguments": { "chat_id": "{{ $json.nextChatId }}", "text": "Угода {{ $json.DealId }} перейшла далі" } },
+      "business": { "subtitle": "telegram / пошта", "lane": "notify" }
+    }
+  ],
+  "connections": [
+    { "from": { "node": "n_new_task", "output": 0 }, "to": { "node": "n_assign", "input": 0 } },
+    { "from": { "node": "n_assign", "output": 0 }, "to": { "node": "n_notify_approver", "input": 0 } },
+    { "from": { "node": "n_assign", "output": 0 }, "to": { "node": "n_wait_decision", "input": 0 } },
+    { "from": { "node": "n_wait_decision", "output": 0 }, "to": { "node": "n_read_decision", "input": 0 } },
+    { "from": { "node": "n_read_decision", "output": 0 }, "to": { "node": "n_decision", "input": 0 } },
+    { "from": { "node": "n_decision", "output": 0 }, "to": { "node": "n_task_executor", "input": 0 }, "business": { "label": "так" } },
+    { "from": { "node": "n_decision", "output": 0 }, "to": { "node": "n_mail_executor", "input": 0 }, "business": { "label": "так → лист виконавцю" } },
+    { "from": { "node": "n_decision", "output": 1 }, "to": { "node": "n_notify_author", "input": 0 }, "business": { "label": "ні" } },
+    { "from": { "node": "n_decision", "output": 2 }, "to": { "node": "n_mail_manager", "input": 0 }, "business": { "label": "2 дні без рішення" } },
+    { "from": { "node": "n_task_executor", "output": 0 }, "to": { "node": "n_wait_data", "input": 0 } },
+    { "from": { "node": "n_wait_data", "output": 0 }, "to": { "node": "n_read_fields", "input": 0 } },
+    { "from": { "node": "n_read_fields", "output": 0 }, "to": { "node": "n_total", "input": 0 } },
+    { "from": { "node": "n_total", "output": 0 }, "to": { "node": "n_check", "input": 0 } },
+    { "from": { "node": "n_check", "output": 0 }, "to": { "node": "n_update_stage", "input": 0 } },
+    { "from": { "node": "n_check", "output": 1 }, "to": { "node": "n_notify_author", "input": 0 }, "business": { "label": "дані не повні" } },
+    { "from": { "node": "n_update_stage", "output": 0 }, "to": { "node": "n_notify_next", "input": 0 } }
+  ],
+  "pinData": {}
+}

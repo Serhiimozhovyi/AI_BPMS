@@ -2,19 +2,21 @@ using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using OpenBP.Application.Overview;
 using OpenBP.Data;
 
 namespace OpenBP.Worker;
 
 /// <summary>
 /// Хост воркера (F4-08): <see cref="WorkerServiceCollectionExtensions.AddOpenBpWorker"/> плюс маленький Kestrel лише для
-/// <c>/health/live</c> і <c>/health/ready</c> на <c>OPENBP_WORKER_HEALTH_PORT</c> (типово 8089). <c>ready</c> — БД
-/// доступна, міграції застосовано і цикл опитування jobs обертався нещодавно (<c>Worker:HealthMaxPollAge</c>, типово 1 хв). Інших маршрутів немає.
+/// <c>/health/live</c>, <c>/health/ready</c> і <c>/metrics</c> (F6-07) на <c>OPENBP_WORKER_HEALTH_PORT</c> (типово 8089). <c>ready</c> — БД
+/// доступна, міграції застосовано і цикл опитування jobs обертався нещодавно (<c>Worker:HealthMaxPollAge</c>, типово 1 хв).
 /// </summary>
 public static class WorkerHost
 {
@@ -56,7 +58,31 @@ public static class WorkerHost
         var app = builder.Build();
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
         app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") });
+        app.MapGet("/metrics", MetricsAsync);
         return app;
+    }
+
+    /// <summary>
+    /// <c>GET /metrics</c> воркера (F6-07): лічильники цього процесу (<see cref="WorkerMetrics"/>). Без
+    /// <see cref="MetricsAccess.AllowAnonymousKey"/> — лише з API-ключем admin'а.
+    /// </summary>
+    private static async Task<IResult> MetricsAsync(
+        HttpContext http, WorkerMetrics metrics, WorkerOptions options, IConfiguration configuration,
+        IDbContextFactory<OpenBpDbContext> contexts, TimeProvider time, CancellationToken ct)
+    {
+        if (!MetricsAccess.AllowsAnonymous(configuration[MetricsAccess.AllowAnonymousKey]))
+        {
+            await using var db = await contexts.CreateDbContextAsync(ct);
+            switch (await MetricsAccess.CheckApiKeyAsync(db, http.Request.Headers.Authorization, time, ct))
+            {
+                case null:
+                    return Results.Unauthorized();
+                case false:
+                    return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+        }
+
+        return Results.Text(metrics.Render(options.WorkerId), PrometheusWriter.ContentType);
     }
 
     private sealed class DatabaseHealthCheck(IDbContextFactory<OpenBpDbContext> contexts) : IHealthCheck

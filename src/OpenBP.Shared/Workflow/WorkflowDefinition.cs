@@ -23,6 +23,9 @@ public sealed class WorkflowDefinition
     /// <summary>Закріплені дані для ручного тестового запуску: id вузла → items.</summary>
     public Dictionary<string, List<Item>> PinData { get; set; } = [];
 
+    /// <summary>Бізнес-розмітка для бізнес-вигляду (доріжки, кроки людей); <c>null</c> — немає. Рушій ігнорує.</summary>
+    public WorkflowBusiness? Business { get; set; }
+
     /// <summary>Невідомі поля зберігаються при (де)серіалізації.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
@@ -126,6 +129,9 @@ public sealed class NodeDefinition
 
     public string? Notes { get; set; }
 
+    /// <summary>Як вузол показується в бізнес-вигляді (назва, підрядок, доріжка, приховати); <c>null</c> — за замовчуванням.</summary>
+    public NodeBusiness? Business { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
@@ -147,6 +153,9 @@ public sealed class Connection
     public ConnectionEndpoint From { get; set; } = new();
 
     public ConnectionEndpoint To { get; set; } = new();
+
+    /// <summary>Підпис стрілки в бізнес-вигляді; <c>null</c> — назва виходу.</summary>
+    public ConnectionBusiness? Business { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }

@@ -22,7 +22,8 @@ public sealed record WorkflowValidationOptions
 /// Перевірка сценарію при збереженні — однакова для UI, REST і MCP <c>validate_workflow</c>
 /// (docs/workflow-format.md §«Валідація при збереженні»):
 /// 1) схема формату; 2) ребра посилаються на існуючі вузли й порти; 3) граф без циклів;
-/// 4) активний сценарій має ≥ 1 тригер; 5–6) через <see cref="INodeSchemaProvider"/>.
+/// 4) активний сценарій має ≥ 1 тригер; 5–6) через <see cref="INodeSchemaProvider"/>;
+/// бізнес-розмітка <c>business</c> — посилання на доріжки й вузли, унікальність id (docs/business-view.md).
 /// Результат детермінований: однаковий документ дає однаковий список помилок у тому ж порядку.
 /// </summary>
 public sealed class WorkflowValidator
@@ -96,6 +97,7 @@ public sealed class WorkflowValidator
 
         ValidateNodes(workflow, errors);
         ValidateConnections(workflow, graph, errors);
+        ValidateBusiness(workflow, graph, errors);
         ValidateAcyclic(workflow, graph, errors);
         if (options.IsActive)
         {
@@ -256,6 +258,73 @@ public sealed class WorkflowValidator
                         $"У вузла «{node.Name}» ({node.Type}) {inputs} вх., а ребро веде у вхід {input}.",
                         node.Id, $"/connections/{i}/to/input"));
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Бізнес-розмітка: id доріжок і кроків унікальні, <c>lane</c> вузла чи кроку є в <c>business.lanes</c>,
+    /// <c>links[].node</c> — існуючий вузол, у кроку є хоча б один зв'язок. Без <c>business.lanes</c> будь-яке
+    /// посилання на доріжку — помилка: доріжки за замовчуванням id не мають.
+    /// </summary>
+    private static void ValidateBusiness(WorkflowDefinition workflow, Graph graph, List<WorkflowValidationError> errors)
+    {
+        var business = workflow.Business;
+        var lanes = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < (business?.Lanes?.Count ?? 0); i++)
+        {
+            var lane = business!.Lanes![i];
+            if (!lanes.Add(lane.Id))
+            {
+                errors.Add(new(WorkflowValidationCodes.BusinessLaneIdDuplicate,
+                    $"Доріжка з id «{lane.Id}» уже є; id доріжки має бути унікальним.", Path: $"/business/lanes/{i}/id"));
+            }
+        }
+
+        var steps = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < (business?.Steps?.Count ?? 0); i++)
+        {
+            var step = business!.Steps![i];
+            if (!steps.Add(step.Id))
+            {
+                errors.Add(new(WorkflowValidationCodes.BusinessStepIdDuplicate,
+                    $"Зовнішній крок з id «{step.Id}» уже є; id кроку має бути унікальним.", Path: $"/business/steps/{i}/id"));
+            }
+
+            if (!lanes.Contains(step.Lane))
+            {
+                errors.Add(new(WorkflowValidationCodes.BusinessLaneUnknown,
+                    $"Крок «{step.Title}» стоїть у доріжці «{step.Lane}», якої немає в business.lanes.",
+                    Path: $"/business/steps/{i}/lane"));
+            }
+
+            if (step.Links.Count == 0)
+            {
+                errors.Add(new(WorkflowValidationCodes.BusinessStepLinksMissing,
+                    $"Крок «{step.Title}» не пов'язаний з жодним вузлом; додайте хоча б один зв'язок у links.",
+                    Path: $"/business/steps/{i}/links"));
+            }
+
+            for (var j = 0; j < step.Links.Count; j++)
+            {
+                var link = step.Links[j];
+                if (graph.IndexOf(link.Node) is null)
+                {
+                    errors.Add(new(WorkflowValidationCodes.BusinessLinkNodeUnknown,
+                        $"Крок «{step.Title}» пов'язаний з невідомим вузлом «{link.Node}».",
+                        link.Node, $"/business/steps/{i}/links/{j}/node"));
+                }
+            }
+        }
+
+        for (var i = 0; i < workflow.Nodes.Count; i++)
+        {
+            var node = workflow.Nodes[i];
+            if (node.Business?.Lane is { } lane && !lanes.Contains(lane))
+            {
+                errors.Add(new(WorkflowValidationCodes.BusinessLaneUnknown,
+                    $"Вузол «{node.Name}» стоїть у доріжці «{lane}», якої немає в business.lanes.",
+                    node.Id, $"/nodes/{i}/business/lane"));
             }
         }
     }

@@ -139,6 +139,21 @@ public sealed class ExecutionRetentionService(OpenBpDbContext db, ExecutionReten
     }
 
     /// <summary>
+    /// Видаляє розіслані сповіщення (F6-07), старші за <see cref="ExecutionRetentionOptions.Days"/> днів: черга
+    /// <c>notifications</c> лише росте, а історію подій і так видно в журналі виконань. Повертає кількість видалених.
+    /// </summary>
+    public async Task<int> PurgeNotificationsAsync(CancellationToken ct)
+    {
+        if (options.Days <= 0)
+        {
+            return 0;
+        }
+
+        var cutoff = time.GetUtcNow().AddDays(-options.Days);
+        return await db.Notifications.Where(n => n.ProcessedAt != null && n.CreatedAt < cutoff).ExecuteDeleteAsync(ct);
+    }
+
+    /// <summary>
     /// Видаляє записи журналу аудиту, старші за <see cref="ExecutionRetentionOptions.AuditDays"/> днів, пачками.
     /// Повертає кількість видалених записів.
     /// </summary>
@@ -189,6 +204,7 @@ public sealed partial class ExecutionRetentionJob(IServiceScopeFactory scopes, I
         var service = scope.ServiceProvider.GetRequiredService<ExecutionRetentionService>();
         var deleted = await service.PurgeAsync(cancellationToken);
         LogPurged(logger, deleted, options.Days);
+        await service.PurgeNotificationsAsync(cancellationToken);
         var audit = await service.PurgeAuditAsync(cancellationToken);
         LogAuditPurged(logger, audit, options.AuditDays);
     }

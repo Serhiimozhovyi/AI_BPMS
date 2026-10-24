@@ -112,14 +112,17 @@ describe('SettingsPage', () => {
     expect(copy).toHaveBeenCalledWith(expect.stringContaining('"mcpServers"'));
   });
 
-  it('журнал аудиту бачить лише admin', async () => {
+  it('журнал аудиту і сповіщення бачить лише admin', async () => {
     const editor = await setup([], 'editor');
     expect(editor.host.querySelector('[data-testid="audit-section"]')).toBeNull();
+    expect(editor.host.querySelector('[data-testid="notifications-section"]')).toBeNull();
     editor.http.match('/api/v1/variables');
     TestBed.resetTestingModule();
 
     const admin = await setup([], 'admin');
     expect(admin.host.querySelector('[data-testid="audit-section"]')).not.toBeNull();
     expect(admin.http.match((r) => r.url === '/api/v1/audit')).toHaveLength(1);
+    expect(admin.host.querySelector('[data-testid="notifications-section"]')).not.toBeNull();
+    expect(admin.http.match('/api/v1/notification-channels')).toHaveLength(1);
   });
 });
