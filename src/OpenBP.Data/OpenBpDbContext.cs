@@ -11,6 +11,9 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<ProjectMemberEntity> ProjectMembers => Set<ProjectMemberEntity>();
+    public DbSet<EvaluationEntity> Evaluations => Set<EvaluationEntity>();
+    public DbSet<EvaluationCaseEntity> EvaluationCases => Set<EvaluationCaseEntity>();
+    public DbSet<EvaluationRunEntity> EvaluationRuns => Set<EvaluationRunEntity>();
     public DbSet<VariableEntity> Variables => Set<VariableEntity>();
     public DbSet<AppSettingEntity> AppSettings => Set<AppSettingEntity>();
     public DbSet<DataTableEntity> DataTables => Set<DataTableEntity>();
@@ -116,6 +119,29 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.Data).HasColumnType("jsonb");
             e.HasIndex(x => new { x.TableId, x.CreatedAt });
             e.HasOne<DataTableEntity>().WithMany().HasForeignKey(x => x.TableId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<EvaluationEntity>(e =>
+        {
+            e.ToTable("evaluations");
+            e.HasIndex(x => new { x.WorkflowId, x.NodeId });
+            e.HasOne<WorkflowEntity>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<EvaluationCaseEntity>(e =>
+        {
+            e.ToTable("evaluation_cases");
+            e.Property(x => x.Input).HasColumnType("jsonb");
+            e.Property(x => x.Expected).HasColumnType("jsonb");
+            e.Property(x => x.CheckConfig).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.EvaluationId, x.SortOrder });
+            e.HasOne<EvaluationEntity>().WithMany().HasForeignKey(x => x.EvaluationId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<EvaluationRunEntity>(e =>
+        {
+            e.ToTable("evaluation_runs");
+            e.Property(x => x.Results).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.EvaluationId, x.StartedAt });
+            e.HasOne<EvaluationEntity>().WithMany().HasForeignKey(x => x.EvaluationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<WorkflowVersionEntity>().WithMany().HasForeignKey(x => x.VersionId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<AuditEntryEntity>(e =>
         {

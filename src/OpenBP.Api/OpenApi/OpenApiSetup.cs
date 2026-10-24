@@ -72,6 +72,9 @@ public static class OpenApiSetup
 
         /// <summary>Помічник у редакторі.</summary>
         public const string Assistant = "Помічник";
+
+        /// <summary>Оцінки якості вузлів ШІ.</summary>
+        public const string Evaluations = "Оцінки";
     }
 
     private static readonly (string Name, string Description)[] TagDescriptions =
@@ -90,6 +93,7 @@ public static class OpenApiSetup
         (Tags.Overview, "Підсумки виконань за 24 год / 7 / 30 днів і поточний стан черги."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
         (Tags.Assistant, "ШІ-помічник у редакторі: налаштування моделі (admin) і розмова над сценарієм (SSE). Модель не бачить значень credentials."),
+        (Tags.Evaluations, "Набори кейсів «вхід → очікуване» для вузлів ai.llm/ai.agent, прогін на поточній версії й історія результатів за версіями. Читає viewer, змінює й запускає editor."),
     ];
 
     /// <summary>Реєструє генерацію документа.</summary>

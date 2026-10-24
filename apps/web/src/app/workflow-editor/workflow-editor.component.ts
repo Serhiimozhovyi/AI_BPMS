@@ -6,6 +6,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
 import { BusinessNodeFieldsComponent } from '../business-view/business-node-fields.component';
+import { NodeEvaluationsComponent } from '../evaluations/node-evaluations.component';
 import { BusinessViewComponent } from '../business-view/business-view.component';
 import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
 import { BusinessRun } from '../business-view/business-run';
@@ -110,7 +111,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, PublishBarComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, PublishBarComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -377,6 +378,9 @@ export interface EditorErrorEvent {
                     }
                   </app-node-panel>
                   <app-business-node-fields [definition]="def" [nodeId]="node.id" [descriptors]="descriptors()" [connectors]="businessConnectors()" [readonly]="readonly()" (definitionChange)="changed($event)" />
+                  @if (evaluable(node.type)) {
+                    <app-node-evaluations [workflowId]="workflowId()" [nodeId]="node.id" [readonly]="readonly()" />
+                  }
                 </div>
                 <div class="editor__col editor__col--data" data-testid="node-run" [attr.data-status]="selectedStep()?.status ?? null" [hidden]="!wide() && panelTab() !== 'output'">
                   <app-node-data-view side="output" [title]="outputTitle" [ports]="outputPorts()">
@@ -1614,6 +1618,11 @@ export class WorkflowEditorComponent implements OnInit {
     const shared = canvas > 0 ? canvas + this.panelWidth() : window.innerWidth;
     this.panelWidth.set(Math.round(clamp(width, MIN_PANEL_WIDTH, shared - CANVAS_RESERVE)));
     if (save) writePanelWidth(this.panelWidth());
+  }
+
+  /** Оцінки якості (F6-17) — для вузлів ШІ. */
+  protected evaluable(type: string): boolean {
+    return type === 'ai.llm' || type === 'ai.agent';
   }
 
   protected stepStatusLabel(status: StepStatus): string {

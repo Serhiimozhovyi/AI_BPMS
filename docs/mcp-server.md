@@ -90,6 +90,9 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN` |
 | `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла; для `ai.agent` — ще `subSteps`, F6-12) |
 | `test_node` | editor | `workflowId`, `nodeId`, `items?`, `timeoutSec?` | вхід і вихід одного вузла; помилка вузла — `NODE_FAILED` |
+| `list_evaluations` | viewer | `workflowId`, `nodeId?` | `{ items: [{ id, workflowId, nodeId, name, caseCount, lastRun }] }` — оцінки вузлів ШІ (F6-17); `lastRun` — `{ passed, total, version, … }` без результатів кейсів |
+| `create_evaluation` | editor | `workflowId`, `nodeId`, `cases`, `name?` | оцінка з кейсами `{ name?, input: [{json}], expected?, check: exact \| jsonPath \| expression \| llm, config? }`; невідомий вузол чи бракує налаштувань перевірки — `EVALUATION_INVALID` |
+| `run_evaluation` | editor | `id` | прогін `{ passed, total, version, versionId, results: [{ caseId, name, passed, actual, reason, error, durationMs, tokens, executionId }] }`: кожен кейс виконується як `test_node` з `items` на поточній версії, прогін зберігається за версією |
 | `get_execution` | viewer | `id` | те саме, що `run_workflow` |
 | `list_executions` | viewer | `workflowId?`, `status?`, `page?` | сторінка виконань без кроків |
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
@@ -105,6 +108,19 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 сценарій для бізнес-вигляду; опис полів є в описі `describe_nodes` і в схемі формату. `validate_workflow` перевіряє
 посилання: `BUSINESS_LANE_UNKNOWN`, `BUSINESS_LINK_NODE_UNKNOWN`, `BUSINESS_STEP_LINKS_MISSING`,
 `BUSINESS_LANE_ID_DUPLICATE`, `BUSINESS_STEP_ID_DUPLICATE` — з `path` на поле.
+
+### Оцінки вузлів ШІ (F6-17)
+
+Оцінка — набір кейсів «вхід → очікуване» для одного вузла (зазвичай `ai.llm` чи `ai.agent`). `run_evaluation` виконує вузол на кожному кейсі по черзі тим самим механізмом, що `test_node` з `items`, на поточній (збереженій) версії і зберігає прогін з номером версії — так видно, чи зміна промпту покращила результат. Фактичне значення — `json` єдиного item'а виходу 0 (масив `json`-ів, якщо items кілька).
+
+| `check` | `config` | Пройшов, якщо |
+|---|---|---|
+| `exact` (типово) | — | фактичне структурно дорівнює `expected` |
+| `jsonPath` | `path`: `text`, `$.data.items[0].name` | значення за шляхом дорівнює `expected` |
+| `expression` | `expression`: `$json.text.includes($node["expected"].json.word)` | вираз (з `{{ }}` або без) дає `true`; `$json` — фактичне, `$node["expected"].json` — очікуване; не-об'єкти — у полі `value` |
+| `llm` | `credentialId`, `model`, `criteria?` | модель-суддя (credential типу `anthropic`/`openai`/`openai-compatible`, спільний або з проєкту сценарію) відповіла `PASS`; її пояснення — у `reason` |
+
+`tokens` — сума `usage` підкроків вузла (F6-12); для вузла без підкроків з `usage` — `null`. У UI — розділ «Оцінки» в панелі вузлів ШІ.
 
 ### Приклади викликів
 
