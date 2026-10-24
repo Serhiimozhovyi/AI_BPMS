@@ -553,7 +553,7 @@
 - DoD: Vitest на діалог; тести Api на межу і на `timedOut` наскрізь через воркер (Testcontainers); `docs/workflow-format.md` (межа) оновлено.
 
 ### F4-06 · Error-workflow (`core.errorTrigger`)
-- model: `sonnet` · status: `ready` · depends: F4-05
+- model: `sonnet` · status: `in-progress agent/F4-06-error-workflow` · depends: F4-05
 - Що: тригер `core.errorTrigger` (без параметрів, вихід `{ execution: { id, status, startedAt, finishedAt, mode }, workflow: { id, name }, error: { message, nodeId, nodeName } }`, без значень credentials). Коли виконання сценарію з `settings.errorWorkflowId` завершилось `error` або `timedOut`, воркер ставить job запуску сценарію помилок з цим входом (режим `error`). Захист від циклу: помилка самого сценарію помилок не запускає інший. `errorWorkflowId` на сценарій без `core.errorTrigger` — помилка валідатора.
 - DoD: тести: помилка → запуск сценарію помилок з правильним входом, `timedOut` теж, успіх — ні, цикл не виникає, вимкнений/видалений сценарій помилок → запис у журнал без падіння; вузол у `describe_nodes` і палітрі; `docs/workflow-format.md` оновлено.
 

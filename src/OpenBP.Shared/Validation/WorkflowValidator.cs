@@ -37,6 +37,7 @@ public sealed class WorkflowValidator
         "core.webhook",
         "core.schedule",
         "mcp.poll",
+        "core.errorTrigger",
     };
 
     /// <summary>Схема будується з власним реєстром, щоб не конфліктувати з глобальним за <c>$id</c>.</summary>

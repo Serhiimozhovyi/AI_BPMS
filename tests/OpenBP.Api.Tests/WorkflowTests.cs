@@ -171,6 +171,36 @@ public class WorkflowTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Error_workflow_must_exist_and_have_error_trigger()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        const string errorTrigger = """
+            [{ "id": "n_err", "name": "Помилка", "type": "core.errorTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} }]
+            """;
+        var handler = IdOf(await CreateAsync(editor, Definition(Unique("Помилки"), errorTrigger)));
+        var plain = IdOf(await CreateAsync(editor, Definition(Unique("Без тригера"))));
+
+        string WithErrorWorkflow(string reference) =>
+            Definition(Unique("Звіт")).Replace("\"errorWorkflowId\": null", $"\"errorWorkflowId\": \"{reference}\"");
+
+        foreach (var reference in new[] { plain.ToString(), Guid.NewGuid().ToString(), "не-id" })
+        {
+            var problem = await AssertProblemAsync(await editor.PostAsync(Base, Json(WithErrorWorkflow(reference))), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+            var error = Assert.Single(problem.GetProperty("errors").EnumerateArray());
+            Assert.Equal("ERROR_WORKFLOW_INVALID", error.GetProperty("code").GetString());
+            Assert.Equal("/settings/errorWorkflowId", error.GetProperty("path").GetString());
+        }
+
+        var created = await CreateAsync(editor, WithErrorWorkflow(handler.ToString()));
+        Assert.Equal(handler.ToString(), created.GetProperty("definition").GetProperty("settings").GetProperty("errorWorkflowId").GetString());
+
+        // Сам собі сценарієм помилок бути не може, навіть якщо має core.errorTrigger.
+        var self = Definition(Unique("Помилки"), errorTrigger).Replace("\"errorWorkflowId\": null", $"\"errorWorkflowId\": \"{handler}\"");
+        var selfProblem = await AssertProblemAsync(await editor.PutAsync($"{Base}/{handler}", Json(self)), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        Assert.Equal(["ERROR_WORKFLOW_INVALID"], ErrorCodes(selfProblem));
+    }
+
+    [Fact]
     public async Task Create_without_body_returns_400()
     {
         var editor = await LoginAsync(UserRole.Editor);

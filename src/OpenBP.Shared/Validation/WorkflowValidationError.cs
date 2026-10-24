@@ -51,4 +51,7 @@ public static class WorkflowValidationCodes
 
     /// <summary><c>settings.executionTimeoutSec</c> більший за серверну межу <c>OPENBP_MAX_EXECUTION_TIMEOUT_SEC</c>.</summary>
     public const string ExecutionTimeoutTooLarge = "EXECUTION_TIMEOUT_TOO_LARGE";
+
+    /// <summary><c>settings.errorWorkflowId</c>: не id, сам сценарій, сценарію немає або в ньому немає <c>core.errorTrigger</c>.</summary>
+    public const string ErrorWorkflowInvalid = "ERROR_WORKFLOW_INVALID";
 }

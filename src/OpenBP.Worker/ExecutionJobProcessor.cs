@@ -2,11 +2,15 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
+using OpenBP.Application.Errors;
+using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
+using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Worker;
@@ -186,6 +190,7 @@ public sealed partial class ExecutionJobProcessor
         catch (ConnectorConfigurationException ex)
         {
             await SetFinalAsync(executionId, ExecutionStatuses.Error, ex.Message).ConfigureAwait(false);
+            await LaunchErrorWorkflowAsync(payload, workflow, null).ConfigureAwait(false);
             await CompleteJobAsync(job).ConfigureAwait(false);
             return;
         }
@@ -263,7 +268,84 @@ public sealed partial class ExecutionJobProcessor
             await SaveNodeStatesAsync(payload.WorkflowId, loadedStates, result!.NodeStates).ConfigureAwait(false);
         }
 
+        await LaunchErrorWorkflowAsync(payload, workflow, result?.FailedNodeId).ConfigureAwait(false);
         await CompleteJobAsync(job).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Сценарій помилок (F4-06): виконання завершилось <c>error</c> чи <c>timed_out</c>, а в <c>settings.errorWorkflowId</c>
+    /// задано сценарій — ставимо його запуск (режим <see cref="ExecutionMode.Error"/>, старт з <c>core.errorTrigger</c>).
+    /// Помилка самого сценарію помилок інший не запускає (захист від циклу). Видалений, вимкнений чи без
+    /// <c>core.errorTrigger</c> сценарій — лише запис у журнал: виконання вже завершене, job має завершитись.
+    /// Повідомлення береться з рядка <c>executions</c>, тобто вже без значень секретів.
+    /// </summary>
+    private async Task LaunchErrorWorkflowAsync(ExecutionJobPayload payload, WorkflowDefinition workflow, string? failedNodeId)
+    {
+        if (payload.Mode == ExecutionMode.Error || string.IsNullOrWhiteSpace(workflow.Settings.ErrorWorkflowId))
+        {
+            return;
+        }
+
+        var executionId = payload.ExecutionId;
+        var errorWorkflowRef = workflow.Settings.ErrorWorkflowId;
+        try
+        {
+            await using var db = await _contexts.CreateDbContextAsync().ConfigureAwait(false);
+            var execution = await db.Executions.AsNoTracking().SingleAsync(e => e.Id == executionId).ConfigureAwait(false);
+            if (execution.Status is not (ExecutionStatuses.Error or ExecutionStatuses.TimedOut))
+            {
+                return;
+            }
+
+            if (!Guid.TryParse(errorWorkflowRef, out var errorWorkflowId))
+            {
+                LogErrorWorkflowSkipped(_logger, executionId, errorWorkflowRef, "некоректний id");
+                return;
+            }
+
+            var definition = await db.Workflows.AsNoTracking()
+                .Where(w => w.Id == errorWorkflowId)
+                .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => (Guid?)v.Id, (w, v) => v.Definition)
+                .SingleOrDefaultAsync()
+                .ConfigureAwait(false);
+            var trigger = definition is null
+                ? null
+                : WorkflowJson.Deserialize(definition).Nodes.FirstOrDefault(n => n.Type == ErrorTriggerNode.Type && n.Disabled != true);
+            if (trigger is null)
+            {
+                LogErrorWorkflowSkipped(_logger, executionId, errorWorkflowRef, definition is null ? "сценарію немає" : "немає увімкненого core.errorTrigger");
+                return;
+            }
+
+            var nodeName = failedNodeId is null ? null : workflow.Nodes.FirstOrDefault(n => n.Id == failedNodeId)?.Name;
+            var item = ErrorTriggerNode.CreateItem(
+                executionId,
+                execution.Status,
+                execution.StartedAt,
+                execution.FinishedAt,
+                execution.Mode,
+                payload.WorkflowId,
+                workflow.Name,
+                execution.Error,
+                failedNodeId,
+                nodeName);
+            var launched = await new ExecutionLauncher(db, _time)
+                .LaunchAsync(new ExecutionLaunch(errorWorkflowId, ExecutionMode.Error, trigger.Id, [item]), CancellationToken.None)
+                .ConfigureAwait(false);
+            LogErrorWorkflowLaunched(_logger, executionId, errorWorkflowId, launched.Id);
+        }
+        catch (ConflictException ex) when (ex.Code == ExecutionLauncher.WorkflowInactiveCode)
+        {
+            LogErrorWorkflowSkipped(_logger, executionId, errorWorkflowRef, "сценарій вимкнено");
+        }
+        catch (Exception ex) when (ex is NotFoundException or WorkflowValidationException)
+        {
+            LogErrorWorkflowSkipped(_logger, executionId, errorWorkflowRef, "сценарій видалено або змінено під час запуску");
+        }
+        catch (Exception ex) when (ex is DbUpdateException or NpgsqlException or InvalidOperationException)
+        {
+            LogErrorWorkflowFailure(_logger, ex, executionId, errorWorkflowRef);
+        }
     }
 
     private async Task HeartbeatAsync(
@@ -463,6 +545,15 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: heartbeat не вдався.")]
     private static partial void LogHeartbeatFailure(ILogger logger, Exception exception, Guid executionId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Виконання {ExecutionId}: запущено сценарій помилок {ErrorWorkflowId} (виконання {ErrorExecutionId}).")]
+    private static partial void LogErrorWorkflowLaunched(ILogger logger, Guid executionId, Guid errorWorkflowId, Guid errorExecutionId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: сценарій помилок {ErrorWorkflowId} не запущено — {Reason}.")]
+    private static partial void LogErrorWorkflowSkipped(ILogger logger, Guid executionId, string errorWorkflowId, string reason);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Виконання {ExecutionId}: не вдалося запустити сценарій помилок {ErrorWorkflowId}.")]
+    private static partial void LogErrorWorkflowFailure(ILogger logger, Exception exception, Guid executionId, string errorWorkflowId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Job {JobId}: lock уже не належить воркеру при завершенні.")]
     private static partial void LogJobLockLost(ILogger logger, Guid jobId);

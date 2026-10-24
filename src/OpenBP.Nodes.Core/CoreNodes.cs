@@ -15,6 +15,7 @@ public static class CoreNodes
         new ManualTriggerNode(),
         new WebhookNode(),
         new ScheduleNode(time),
+        new ErrorTriggerNode(),
         new SetNode(),
         new IfNode(),
         new SwitchNode(1),
