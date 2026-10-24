@@ -7,6 +7,7 @@ import { RouterLink } from '@angular/router';
 import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
 import { BusinessViewComponent } from '../business-view/business-view.component';
 import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
+import { BusinessRun } from '../business-view/business-run';
 import { Autosave } from '../canvas/autosave';
 import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
@@ -189,7 +190,7 @@ export interface EditorErrorEvent {
       }
       @if (definition(); as def) {
         @if (view() === 'business') {
-          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" (stepPick)="openStep($event)" />
+          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" (stepPick)="openStep($event)" />
         } @else {
         <div class="editor__body">
           @if (!readonly()) {
@@ -687,6 +688,12 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
   /** «Бізнес | Технічний» (F3-66): з `?view=` або останній вибраний. */
   protected readonly view = signal<EditorView>(readEditorView());
+  /** Тестовий запуск на бізнес-схемі (F3-69): лише кроки цього запуску, без кроків попереднього. */
+  protected readonly businessRun = computed((): BusinessRun | null => {
+    const run = this.testRun();
+    if (!run) return null;
+    return { state: run.state, steps: [...run.steps.values()].filter((s) => run.current.has(s.nodeId)) };
+  });
   protected readonly businessConnectors = computed(() => this.servers().map((s) => ({ id: s.id, name: s.name })));
   /** Останній тестовий запуск цього сценарію. */
   protected readonly testRun = signal<TestRun | null>(null);

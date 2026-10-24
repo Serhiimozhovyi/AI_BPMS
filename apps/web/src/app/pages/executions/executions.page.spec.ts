@@ -283,6 +283,34 @@ describe('ExecutionsPage', () => {
     await render(s.harness);
     expect(s.host.querySelector('[data-testid="action-error"]')?.textContent).toContain('прав');
   });
+
+  describe('«Бізнес | Технічний» (F3-69)', () => {
+    afterEach(() => localStorage.removeItem('openbp.editor.view'));
+
+    it('бізнес-вигляд показує виконання на схемі: пройдений крок і збій; клік на крок — його дані', async () => {
+      const ctx = await setup();
+      await openDetail(ctx, failedDetail);
+      const { harness, http, host } = ctx;
+      host.querySelector<HTMLButtonElement>('[data-testid="view-business"]')!.click();
+      http.expectOne('/api/v1/nodes').flush([]);
+      http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+      await render(harness);
+      const steps = [...host.querySelectorAll('[data-testid="business-step"]')].map((s) => [s.getAttribute('data-step'), s.getAttribute('data-status')]);
+      expect(steps).toEqual([
+        ['n_webhook', 'done'],
+        ['n_1c', 'error'],
+      ]);
+      expect(host.querySelector<HTMLElement>('[data-testid="steps"]')!.hidden).toBe(true);
+      host.querySelector('[data-step="n_webhook"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await render(harness);
+      expect(ctx.page.selectedStep()?.id).toBe('s1');
+
+      host.querySelector<HTMLButtonElement>('[data-testid="view-technical"]')!.click();
+      await render(harness);
+      expect(host.querySelector('app-business-view')).toBeNull();
+      expect(host.querySelector<HTMLElement>('[data-testid="steps"]')!.hidden).toBe(false);
+    });
+  });
 });
 
 describe('applyDetailEvent', () => {

@@ -50,6 +50,35 @@ const DEFINITION = {
   },
 };
 
+function step(nodeId: string, status: string, output: number[]) {
+  return {
+    id: `s_${nodeId}`,
+    nodeId,
+    runIndex: 0,
+    status,
+    input: [],
+    output: output.map((n) => Array.from({ length: n }, () => ({ json: {} }))),
+    error: status === 'error' ? { message: 'Кіт CRM відповів 500' } : null,
+    startedAt: '2026-10-24T10:00:00Z',
+    finishedAt: '2026-10-24T10:00:01Z',
+  };
+}
+
+/** Виконання гілкою «так»: задача виконавцю впала на згорнутому вузлі «Поля для Кіта». */
+const EXECUTION = {
+  summary: {
+    id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    workflowId: WORKFLOW_ID,
+    versionId: 'v1',
+    mode: 'trigger',
+    state: 'error',
+    startedAt: '2026-10-24T10:00:00Z',
+    finishedAt: '2026-10-24T10:00:03Z',
+    error: 'Вузол «Поля для Кіта» завершився помилкою.',
+  },
+  steps: [step('n_hook', 'success', [1]), step('n_if', 'success', [1, 0]), step('n_set', 'error', [])],
+};
+
 async function install(page: Page): Promise<void> {
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -64,6 +93,12 @@ async function install(page: Page): Promise<void> {
       return route.fulfill({ json: { summary, config: {}, credentialId: null, tools: [{ name: 'create_task', inputSchema: { type: 'object' } }] } });
     }
     if (path === '/api/v1/credentials/options') return route.fulfill({ json: [] });
+    if (path === '/api/v1/workflows') {
+      const item = { id: WORKFLOW_ID, name: 'Погодження задачі', active: true, version: 1, updatedAt: '' };
+      return route.fulfill({ json: { items: [item], page: 1, pageSize: 200, total: 1 } });
+    }
+    if (path === '/api/v1/executions') return route.fulfill({ json: { items: [EXECUTION.summary], page: 1, pageSize: 50, total: 1 } });
+    if (path === `/api/v1/executions/${EXECUTION.summary.id}`) return route.fulfill({ json: EXECUTION });
     if (path === `/api/v1/workflows/${WORKFLOW_ID}`) {
       return route.fulfill({
         json: { id: WORKFLOW_ID, name: 'Погодження задачі', active: false, version: 1, versionId: 'v1', definition: DEFINITION, updatedAt: '' },
@@ -114,3 +149,15 @@ test('?view=business після перезавантаження і експор
   expect(svg).not.toContain('class=');
 });
 
+test('виконання на бізнес-вигляді: пройдені кроки зелені, збій — червоний, непройдена гілка бліда', async ({ page }) => {
+  await page.goto('/executions');
+  await page.locator(`[data-execution="${EXECUTION.summary.id}"] button`).first().click();
+  await page.getByTestId('execution-detail').getByTestId('view-business').click();
+  const view = page.getByTestId('business-view');
+  await expect(view.locator('[data-step="n_hook"]')).toHaveAttribute('data-status', 'done');
+  // Збій згорнутого «Поля для Кіта» видно на рішенні перед ним.
+  await expect(view.locator('[data-step="n_if"]')).toHaveAttribute('data-status', 'error');
+  await expect(view.locator('[data-step="n_back"]')).toHaveAttribute('data-status', 'pending');
+  await expect(view.locator('[data-step="n_hook"] rect')).toHaveCSS('stroke', 'rgb(71, 204, 138)');
+  await expect(page.getByTestId('business-legend')).toContainText('збій');
+});
