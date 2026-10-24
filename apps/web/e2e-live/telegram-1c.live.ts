@@ -182,3 +182,56 @@ test('telegram-1c: клік по полю схеми входу вставляє
   // Лічильник items на ребрі з виходу 1С.
   await expect(page.locator('[data-testid="edge-count"]').first()).toHaveText('1 item');
 });
+
+test('IF з двома умовами OR, зібраний у конструкторі умов: items ідуть у правильні гілки (F3-53)', async ({ page }) => {
+  const api = page.request;
+  expect((await api.post('/api/v1/auth/login', { data: E2E_ADMIN })).status()).toBe(204);
+  const workflow = await json<{ id: string }>(
+    await api.post('/api/v1/workflows', {
+      data: {
+        schemaVersion: 1,
+        name: `Умова OR ${Date.now()}`,
+        nodes: [
+          { id: 'n_start', name: 'Старт', type: 'core.manualTrigger', typeVersion: 1, position: [100, 200], parameters: {} },
+          { id: 'n_if', name: 'Умова', type: 'core.if', typeVersion: 1, position: [360, 200], parameters: { conditions: [] } },
+        ],
+        connections: [{ from: { node: 'n_start', output: 0 }, to: { node: 'n_if', input: 0 } }],
+        pinData: { n_start: [{ json: { n: 5 } }, { json: { n: 50 } }, { json: { n: 7 } }] },
+      },
+    }),
+  );
+  await page.goto(`/workflows/${workflow.id}`);
+  await page.locator('[data-node-id="n_if"]').click();
+
+  // n > 10 АБО n = 5: 5 і 50 — у true, 7 — у false.
+  const conditions = page.getByTestId('condition');
+  for (const [i, operator, right] of [
+    [0, 'більше', '10'],
+    [1, 'дорівнює', '5'],
+  ] as const) {
+    await page.getByTestId('add-conditions').click();
+    const row = conditions.nth(i);
+    await row.getByTestId('field-left').fill('{{ $json.n }}');
+    // Порожній mat-select перекриває його ж плаваючий підпис — клік по самому полю.
+    await row.getByTestId('field-operator').click({ force: true });
+    await page.getByRole('option', { name: operator, exact: true }).click();
+    await row.getByTestId('field-right').fill(right);
+  }
+  await page.getByTestId('combine-or').click();
+  await expect(page.getByTestId('combine-or')).toHaveAttribute('aria-checked', 'true');
+
+  await runAndWait(page, 'run');
+  await page.getByTestId('panel-tab-output').click();
+  const ports = page.getByTestId('output-port');
+  await expect(ports.nth(0)).toContainText('true · 2 items');
+  await expect(ports.nth(1)).toContainText('false · 1 item');
+
+  const saved = await json<{ definition: { nodes: { id: string; parameters: unknown }[] } }>(await api.get(`/api/v1/workflows/${workflow.id}`));
+  expect(saved.definition.nodes.find((n) => n.id === 'n_if')?.parameters).toEqual({
+    conditions: [
+      { left: '{{ $json.n }}', operator: 'gt', right: 10 },
+      { left: '{{ $json.n }}', operator: 'equals', right: 5 },
+    ],
+    combine: 'or',
+  });
+});

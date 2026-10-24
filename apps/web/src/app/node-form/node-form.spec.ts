@@ -3,8 +3,8 @@ import { WorkflowDefinition, WorkflowNode, emptyWorkflowDefinition } from '../wo
 import { applyCommon, applyParameters, commonModel, credentialTypesFor, parameterFields, updateNode } from './node-form';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { formatValue, parseValue, valueError } from './node-value';
-import { ARRAY_FIELD, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
-import { FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_SCHEMA } from './test-schemas';
+import { ARRAY_FIELD, ASSIGNMENTS_FIELD, COMBINE_FIELD, CONDITION_FIELD, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
+import { FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_SCHEMA, SWITCH_SCHEMA } from './test-schemas';
 
 function node(extra: Partial<WorkflowNode> = {}): WorkflowNode {
   return { id: 'n1', name: 'Вузол', type: 'core.set', typeVersion: 1, position: [0, 0], parameters: {}, ...extra };
@@ -58,18 +58,22 @@ describe('node-value', () => {
 });
 
 describe('schemaFields', () => {
-  it('core.set: масив об’єктів з обов’язковими полями, довільне value — JSON, boolean', () => {
-    expect(summary(schemaFields(SET_SCHEMA))).toEqual([
+  it('core.set: таблиця присвоєнь (F3-53) — name з автодоповненням, довільне value — JSON в один рядок; boolean', () => {
+    const fields = schemaFields(SET_SCHEMA);
+    const parts = (fields[0].fieldArray as FormlyFieldConfig).fieldGroup ?? [];
+    expect(parts[0].props).toMatchObject({ suggestInputFields: true });
+    expect(parts[1].props).toMatchObject({ multiline: false });
+    expect(summary(fields)).toEqual([
       {
         key: 'fields',
-        type: ARRAY_FIELD,
+        type: ASSIGNMENTS_FIELD,
         wrappers: null,
         kind: null,
         required: true,
         item: {
           key: undefined,
           type: null,
-          wrappers: [SECTION_WRAPPER],
+          wrappers: null,
           kind: null,
           required: false,
           group: [
@@ -82,14 +86,33 @@ describe('schemaFields', () => {
     ]);
   });
 
-  it('core.if: $ref на $defs розкривається, enum — список; default — лише підказка', () => {
+  it('core.if: $ref на $defs розкривається; умова — рядок з операторами українською, combine — чіпи; default — лише підказка', () => {
     const fields = parameterFields('core.if', IF_DESCRIPTOR, null);
     const conditions = fields[0];
+    expect(conditions.type).toBe(ARRAY_FIELD);
+    expect(conditions.props).toMatchObject({ addLabel: 'Додати умову' });
     const item = conditions.fieldArray as FormlyFieldConfig;
+    expect(item.type).toBe(CONDITION_FIELD);
     expect(item.fieldGroup?.map((f) => f.key)).toEqual(['left', 'operator', 'right']);
+    expect(item.fieldGroup?.[0].props).toMatchObject({ multiline: false, label: 'Значення' });
     expect(item.fieldGroup?.[1].props?.['rules']).toMatchObject({ kind: 'enum' });
+    const rules = item.fieldGroup?.[1].props?.['rules'] as { options: string[]; labels: string[] };
+    expect(rules.labels[rules.options.indexOf('gte')]).toBe('більше або дорівнює');
+    expect(rules.labels[rules.options.indexOf('isEmpty')]).toBe('порожнє');
+    expect(fields[1].type).toBe(COMBINE_FIELD);
     expect(fields[1].props).toMatchObject({ rules: { kind: 'enum', options: ['and', 'or'] }, placeholder: 'and' });
     expect(fields[1].defaultValue).toBeUndefined();
+  });
+
+  it('core.switch: правила з портами, «Додати правило», межі minItems/maxItems; усередині — умови й combine', () => {
+    const fields = schemaFields(SWITCH_SCHEMA);
+    expect(fields[0]).toMatchObject({ key: 'rules', type: ARRAY_FIELD, props: { addLabel: 'Додати правило', rulePorts: true, minItems: 1, maxItems: 4 } });
+    const rule = fields[0].fieldArray as FormlyFieldConfig;
+    expect(rule.fieldGroup?.map((f) => [f.key, f.type])).toEqual([
+      ['conditions', ARRAY_FIELD],
+      ['combine', COMBINE_FIELD],
+    ]);
+    expect((rule.fieldGroup?.[0].fieldArray as FormlyFieldConfig).type).toBe(CONDITION_FIELD);
   });
 
   it('mcp.tool: arguments — з inputSchema tool’а, serverId/toolName не редагуються', () => {

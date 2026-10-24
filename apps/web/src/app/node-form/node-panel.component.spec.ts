@@ -3,7 +3,7 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
 import { NodePanelComponent } from './node-panel.component';
-import { FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_DESCRIPTOR } from './test-schemas';
+import { FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_DESCRIPTOR, SWITCH_DESCRIPTOR } from './test-schemas';
 
 describe('NodePanelComponent', () => {
   async function setup(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null = null) {
@@ -99,7 +99,8 @@ describe('NodePanelComponent', () => {
     const { fixture, host, last } = await setup(ifNode, IF_DESCRIPTOR);
     expect(el<HTMLTextAreaElement>(host, 'field-left').value).toBe('{{ $json.total }}');
     expect(el<HTMLTextAreaElement>(host, 'field-right').value).toBe('1000');
-    expect(host.querySelector('[data-testid="field-operator"]')?.textContent).toContain('gt');
+    // Оператори — українською (F3-53).
+    expect(host.querySelector('[data-testid="field-operator"]')?.textContent).toContain('більше');
 
     type(el<HTMLTextAreaElement>(host, 'field-right'), '5000');
     await render(fixture);
@@ -110,6 +111,105 @@ describe('NodePanelComponent', () => {
     type(el<HTMLInputElement>(host, 'field-combine'), '{{ $json.strict ? "and" : "or" }}');
     await render(fixture);
     expect(last().parameters['combine']).toBe('{{ $json.strict ? "and" : "or" }}');
+  });
+
+  describe('конструктор умов і присвоєнь (F3-53)', () => {
+    const ifNode: WorkflowNode = {
+      id: 'n_if',
+      name: 'Умова',
+      type: 'core.if',
+      typeVersion: 1,
+      position: [0, 0],
+      parameters: {
+        conditions: [
+          { left: '{{ $json.total }}', operator: 'isEmpty', right: 'лишається' },
+          { left: '{{ $json.city }}', operator: 'equals', right: 'Київ' },
+        ],
+        combine: 'and',
+        extra: { keep: 1 },
+      },
+    };
+
+    it('відкриття не змінює вузол; умови в ряд, праве поле сховане для «порожнє», значення лишається', async () => {
+      const { fixture, host, emitted, last } = await setup(ifNode, IF_DESCRIPTOR);
+      expect(emitted).toEqual([]);
+      const rows = host.querySelectorAll('[data-testid="condition"]');
+      expect(rows).toHaveLength(2);
+      expect(rows[0].querySelector('[data-testid="field-right"]')).toBeNull();
+      expect(rows[1].querySelector<HTMLInputElement>('[data-testid="field-right"]')?.value).toBe('Київ');
+
+      // Друга умова: зміна правого значення — решта (сховане праве першої, невідомі поля) без втрат.
+      type(rows[1].querySelector<HTMLInputElement>('[data-testid="field-right"]')!, 'Львів');
+      await render(fixture);
+      expect(last().parameters).toEqual({
+        conditions: [
+          { left: '{{ $json.total }}', operator: 'isEmpty', right: 'лишається' },
+          { left: '{{ $json.city }}', operator: 'equals', right: 'Львів' },
+        ],
+        combine: 'and',
+        extra: { keep: 1 },
+      });
+    });
+
+    it('«будь-яка (OR)» чіпом; «Додати умову» додає рядок', async () => {
+      const { fixture, host, last } = await setup(ifNode, IF_DESCRIPTOR);
+      expect(el(host, 'combine-and').getAttribute('aria-checked')).toBe('true');
+      el<HTMLButtonElement>(host, 'combine-or').click();
+      await render(fixture);
+      expect(last().parameters['combine']).toBe('or');
+      expect(el(host, 'combine-or').getAttribute('aria-checked')).toBe('true');
+
+      expect(el(host, 'add-conditions').textContent).toContain('Додати умову');
+      el<HTMLButtonElement>(host, 'add-conditions').click();
+      await render(fixture);
+      expect(host.querySelectorAll('[data-testid="condition"]')).toHaveLength(3);
+    });
+
+    it('core.switch: підпис порту над правилом, «Додати правило» до maxItems, останнє правило не видаляється', async () => {
+      const node: WorkflowNode = {
+        id: 'n_sw',
+        name: 'Перемикач',
+        type: 'core.switch',
+        typeVersion: 1,
+        position: [0, 0],
+        parameters: { rules: [{ conditions: [{ left: '{{ $json.x }}', operator: 'gt', right: 1 }] }] },
+      };
+      const { fixture, host } = await setup(node, SWITCH_DESCRIPTOR);
+      expect(el(host, 'rule-port').textContent).toContain('вихід rule0');
+      expect(host.querySelector('[data-testid="remove-rules-0"]')).toBeNull();
+      for (let i = 0; i < 3; i++) {
+        el<HTMLButtonElement>(host, 'add-rules').click();
+        await render(fixture);
+      }
+      expect(host.querySelectorAll('[data-testid="rule-port"]')).toHaveLength(4);
+      expect(el<HTMLButtonElement>(host, 'add-rules').disabled).toBe(true);
+    });
+
+    it('core.set: «Додати всі поля зі входу» — лише відсутні поля з виразами; назва підказує поля входу', async () => {
+      const { fixture, host, last } = await setup(setNode, SET_DESCRIPTOR);
+      fixture.componentRef.setInput('expressionContext', { nodes: [], input: { customer: 'X', total: 5, 'Місто': 'Київ' } });
+      // Форма не перебудовується від контексту — кнопка з'являється при наступній перевірці поля.
+      el<HTMLButtonElement>(host, 'add-fields').click();
+      await render(fixture);
+      expect(el(host, 'add-all-input').textContent).toContain('(2)');
+      el<HTMLButtonElement>(host, 'add-all-input').click();
+      await render(fixture);
+      expect(last().parameters['fields']).toEqual([
+        { name: 'customer', value: 'ТОВ Агро' },
+        // Порожній рядок, доданий «Додати поле» (незаданий item — як і раніше).
+        null,
+        { name: 'total', value: '{{ $json.total }}' },
+        { name: 'Місто', value: '{{ $json["Місто"] }}' },
+      ]);
+      expect(host.querySelector('[data-testid="add-all-input"]')).toBeNull();
+
+      const name = host.querySelectorAll<HTMLInputElement>('[data-testid="field-name"]')[1];
+      name.focus();
+      name.value = 't';
+      name.dispatchEvent(new Event('input'));
+      await render(fixture);
+      expect(document.querySelector('[data-testid="suggest-total"]')).not.toBeNull();
+    });
   });
 
   it('mcp.tool з FakeServer-схемою: аргументи за inputSchema, число і вираз; помилка типу', async () => {

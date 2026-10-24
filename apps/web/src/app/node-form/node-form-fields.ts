@@ -23,10 +23,11 @@ import { MatSelectModule } from '@angular/material/select';
 import { FieldArrayType, FieldType, FieldTypeConfig, FieldWrapper, FormlyField, FormlyFieldConfig, provideFormlyCore } from '@ngx-formly/core';
 import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext, Suggestion, applySuggestion, suggestExpression } from './expression-suggest';
 import { insertAt } from '../canvas/data-schema';
+import { Assignment, assignmentsFromInput, inputFieldNames, isUnary } from './conditions';
 import { ExpressionTarget, ExpressionTargetService } from './expression-target';
 import { CodeEditorHandle, MONACO_LOADER } from './monaco-loader';
 import { ValueRules, formatValue, isExpression, parseValue, valueError, valueErrorMessage } from './node-value';
-import { ARRAY_FIELD, CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
+import { ARRAY_FIELD, ASSIGNMENTS_FIELD, CODE_FIELD, COMBINE_FIELD, CONDITION_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
 
 /** Спільний стан форми вузла (`FormlyFormOptions.formState`): контекст підказок виразів. */
 export interface NodeFormState {
@@ -284,6 +285,11 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
     if (!this.canSuggest) return;
     const text = el.value;
     const result = suggestExpression(text, el.selectionStart ?? text.length, this.expressionContext);
+    if (!result && (this.props as NodeFieldProps).suggestInputFields) {
+      // Назва присвоєння (F3-53): імена полів входу.
+      this.suggestions.set(inputFieldNames(this.expressionContext.input, text).map((name) => ({ label: name, insert: name, kind: 'field', value: name, cursor: name.length })));
+      return;
+    }
     this.suggestions.set(
       result
         ? result.items.map((s) => {
@@ -474,7 +480,10 @@ export class NodeCodeFieldComponent extends FieldType<FieldTypeConfig> implement
   }
 }
 
-/** Масив: елементи за схемою `items`, кнопки «Додати» і «Видалити». */
+/**
+ * Масив: елементи за схемою `items`, кнопки «Додати» і «Видалити» в межах `minItems`/`maxItems`. Умови й правила
+ * (F3-53): «Додати умову», «Додати правило», над правилом `core.switch` — його вихідний порт.
+ */
 @Component({
   selector: 'app-node-array-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -487,11 +496,27 @@ export class NodeCodeFieldComponent extends FieldType<FieldTypeConfig> implement
       }
       @for (item of field.fieldGroup; track item.id; let i = $index) {
         <div class="array__item" [attr.data-testid]="'item-' + key + '-' + i">
-          <formly-field class="array__body" [field]="item" />
-          <button mat-button type="button" [attr.data-testid]="'remove-' + key + '-' + i" (click)="remove(i)" i18n="@@nodeform.array.remove">Видалити</button>
+          @if (fieldProps.rulePorts) {
+            <div class="array__port" data-testid="rule-port" i18n="@@nodeform.array.rulePort">Правило {{ i + 1 }} → вихід rule{{ i }}</div>
+          }
+          <div class="array__row">
+            <formly-field class="array__body" [field]="item" />
+            @if (canRemove()) {
+              @if (fieldProps.compact) {
+                <button mat-button type="button" class="array__remove" [attr.data-testid]="'remove-' + key + '-' + i" i18n-title="@@nodeform.array.remove" title="Видалити" (click)="remove(i)">✕</button>
+              } @else {
+                <button mat-button type="button" [attr.data-testid]="'remove-' + key + '-' + i" (click)="remove(i)" i18n="@@nodeform.array.remove">Видалити</button>
+              }
+            }
+          </div>
         </div>
       }
-      <button mat-stroked-button type="button" [attr.data-testid]="'add-' + key" (click)="add()" i18n="@@nodeform.array.add">Додати</button>
+      <button mat-stroked-button type="button" [attr.data-testid]="'add-' + key" [disabled]="!canAdd()" (click)="add()">
+        {{ fieldProps.addLabel ?? addLabel }}
+      </button>
+      @if (fieldProps.rulePorts) {
+        <p class="array__hint array__hint--after" i18n="@@nodeform.array.fallback">Жодне правило не виконалось — item іде на вихід fallback.</p>
+      }
     </fieldset>
   `,
   styles: `
@@ -513,13 +538,32 @@ export class NodeCodeFieldComponent extends FieldType<FieldTypeConfig> implement
       opacity: 0.7;
     }
 
+    .array__hint--after {
+      margin: 8px 0 0;
+    }
+
     .array__item {
-      display: flex;
-      align-items: flex-start;
-      gap: 4px;
       padding-bottom: 8px;
       border-bottom: 1px dashed var(--mat-sys-outline-variant);
       margin-bottom: 8px;
+    }
+
+    .array__row {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .array__remove {
+      min-width: 0;
+      margin-top: 8px;
+      padding: 0 8px;
+    }
+
+    .array__port {
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--ac-kit);
     }
 
     .array__body {
@@ -528,7 +572,295 @@ export class NodeCodeFieldComponent extends FieldType<FieldTypeConfig> implement
     }
   `,
 })
-export class NodeArrayFieldComponent extends FieldArrayType {}
+export class NodeArrayFieldComponent extends FieldArrayType {
+  protected readonly addLabel = $localize`:@@nodeform.array.add:Додати`;
+
+  protected get fieldProps(): NodeFieldProps {
+    return this.props as NodeFieldProps;
+  }
+
+  protected canAdd(): boolean {
+    const max = this.fieldProps.maxItems;
+    return max === undefined || (this.field.fieldGroup?.length ?? 0) < max;
+  }
+
+  protected canRemove(): boolean {
+    const min = this.fieldProps.minItems;
+    return min === undefined || (this.field.fieldGroup?.length ?? 0) > min;
+  }
+}
+
+/**
+ * Умова «значення · оператор · порівняти з» в один ряд (F3-53). Для операторів без правого значення (`isEmpty`…)
+ * поле «порівняти з» ховається, але значення в моделі лишається — відкриття чи перемикання оператора не губить даних.
+ */
+@Component({
+  selector: 'app-node-condition-field',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FormlyField],
+  template: `
+    <div class="cond" data-testid="condition" [attr.data-operator]="operator()">
+      @for (part of parts(); track part.key) {
+        @if (part.key !== 'right' || !unary()) {
+          <formly-field class="cond__part cond__part--{{ part.key }}" [field]="part" />
+        }
+      }
+    </div>
+  `,
+  styles: `
+    .cond {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 0 8px;
+    }
+
+    /* Вузька панель: «значення · оператор» у першому рядку, «порівняти з» — під ними; широка — усе в один ряд. */
+    .cond__part {
+      flex: 1 1 140px;
+      min-width: 0;
+    }
+
+    /* Оператор з перемикачем {{ }} поруч — ширше, щоб «більше або дорівнює» не обрізалось. */
+    .cond__part--operator {
+      flex: 0 1 220px;
+    }
+  `,
+})
+export class NodeConditionFieldComponent extends FieldType<FieldTypeConfig> implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly operator = signal<unknown>(undefined);
+  protected readonly unary = computed(() => isUnary(this.operator()));
+
+  protected parts(): FormlyFieldConfig[] {
+    return this.field.fieldGroup ?? [];
+  }
+
+  ngOnInit(): void {
+    const control = this.formControl as AbstractControl<Record<string, unknown> | null>;
+    this.operator.set((this.model as Record<string, unknown> | undefined)?.['operator']);
+    control.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((v) => this.operator.set(v?.['operator']));
+  }
+}
+
+/** «Усі умови (AND) / будь-яка (OR)» чіпами (F3-53); незадане значення показується як типове `and` і не пишеться. */
+@Component({
+  selector: 'app-node-combine-field',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="combine" role="radiogroup" [attr.aria-label]="label" [attr.data-field]="key">
+      <span class="combine__label">{{ label }}:</span>
+      @if (expression()) {
+        <input
+          class="combine__expr"
+          data-testid="field-combine"
+          [value]="value() ?? ''"
+          [placeholder]="expressionPlaceholder"
+          (input)="setExpression($any($event.target).value)"
+        />
+      } @else {
+        @for (o of choices; track o.value) {
+          <button
+            type="button"
+            role="radio"
+            class="combine__chip"
+            [class.combine__chip--on]="current() === o.value"
+            [attr.aria-checked]="current() === o.value"
+            [attr.data-testid]="'combine-' + o.value"
+            (click)="choose(o.value)"
+          >
+            {{ o.label }}
+          </button>
+        }
+      }
+      <button
+        type="button"
+        class="combine__chip combine__chip--expr"
+        [class.combine__chip--on]="expression()"
+        [attr.aria-pressed]="expression()"
+        data-testid="expr-combine"
+        i18n-title="@@nodeform.expression.hint"
+        title="Режим виразу"
+        (click)="toggleExpression()"
+      >{{ expressionLabel }}</button>
+    </div>
+  `,
+  styles: `
+    .combine {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 12px;
+    }
+
+    .combine__label {
+      align-self: center;
+      font-size: 13px;
+    }
+
+    .combine__chip {
+      padding: 4px 12px;
+      border: 1px solid var(--ac-line);
+      border-radius: 16px;
+      background: var(--ac-white);
+      color: var(--ac-vivid);
+      font: 400 13px/18px Ubuntu, sans-serif;
+      cursor: pointer;
+    }
+
+    .combine__chip--expr {
+      font-family: monospace;
+    }
+
+    .combine__expr {
+      flex: 1;
+      min-width: 160px;
+      min-height: 28px;
+      padding: 0 8px;
+      border: 1px solid var(--ac-line);
+      border-radius: var(--ac-radius-sm);
+      font: 400 13px/18px monospace;
+    }
+
+    .combine__chip--on {
+      border-color: var(--ac-kit);
+      background: var(--ac-button);
+      color: var(--ac-kit);
+    }
+  `,
+})
+export class NodeCombineFieldComponent extends FieldType<FieldTypeConfig> implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly value = signal<unknown>(undefined);
+  protected readonly current = computed(() => this.value() ?? 'and');
+  /** Значення — вираз `{{ }}` (формат дозволяє його в будь-якому полі): замість чіпів — текстове поле. */
+  protected readonly expression = signal(false);
+  protected readonly expressionLabel = '{{ }}';
+  protected readonly expressionPlaceholder = $localize`:@@cond.combine.expr:{{ вираз, що дає and або or }}`;
+  protected readonly choices = [
+    { value: 'and', label: $localize`:@@cond.combine.and:усі умови (AND)` },
+    { value: 'or', label: $localize`:@@cond.combine.or:будь-яка (OR)` },
+  ];
+
+  protected get label(): string {
+    return (this.props as NodeFieldProps).label ?? String(this.key ?? '');
+  }
+
+  ngOnInit(): void {
+    this.value.set(this.formControl.value);
+    this.expression.set(isExpression(this.formControl.value));
+    this.formControl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((v) => this.value.set(v));
+  }
+
+  protected choose(value: string): void {
+    if (value === this.current()) return;
+    this.formControl.setValue(value);
+    this.formControl.markAsDirty();
+  }
+
+  protected setExpression(text: string): void {
+    this.formControl.setValue(text === '' ? undefined : text);
+    this.formControl.markAsDirty();
+  }
+
+  /** Вихід з режиму виразу: вираз чіпами не показати — значення стає незаданим (типове `and`). */
+  protected toggleExpression(): void {
+    const on = !this.expression();
+    this.expression.set(on);
+    if (!on && isExpression(this.formControl.value)) this.setExpression('');
+  }
+}
+
+/**
+ * Таблиця присвоєнь `core.set` «поле = значення» (F3-53): назва з автодоповненням полями входу, значення приймає
+ * вирази (клік/перетягування з панелі входу); «Додати всі поля зі входу» — `поле = {{ $json.поле }}` для відсутніх.
+ */
+@Component({
+  selector: 'app-node-assignments-field',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FormlyField, MatButtonModule],
+  template: `
+    <fieldset class="set" [attr.data-field]="key">
+      <legend class="set__legend">{{ props.label }}@if (props.required) {<span aria-hidden="true"> *</span>}</legend>
+      @for (item of field.fieldGroup; track item.id; let i = $index) {
+        <div class="set__row" [attr.data-testid]="'item-' + key + '-' + i">
+          @for (part of item.fieldGroup ?? []; track part.key; let first = $first) {
+            @if (!first) {
+              <span class="set__eq" aria-hidden="true">=</span>
+            }
+            <formly-field class="set__cell" [field]="part" />
+          }
+          <button mat-button type="button" class="set__remove" [attr.data-testid]="'remove-' + key + '-' + i" (click)="remove(i)" i18n-title="@@set.remove" title="Видалити присвоєння">✕</button>
+        </div>
+      } @empty {
+        <p class="set__empty" i18n="@@set.empty">Ще немає полів.</p>
+      }
+      <div class="set__actions">
+        <button mat-stroked-button type="button" [attr.data-testid]="'add-' + key" (click)="add()" i18n="@@set.add">Додати поле</button>
+        @if (fromInput().length > 0) {
+          <button mat-button type="button" data-testid="add-all-input" (click)="addAllFromInput()" i18n="@@set.addAll">Додати всі поля зі входу ({{ fromInput().length }})</button>
+        }
+      </div>
+    </fieldset>
+  `,
+  styles: `
+    .set {
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--mat-sys-outline-variant);
+      border-radius: 8px;
+    }
+
+    .set__legend {
+      padding: 0 4px;
+      font-size: 13px;
+    }
+
+    .set__row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .set__cell {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .set__eq {
+      margin-top: 16px;
+      color: var(--ac-cool-grey-4);
+    }
+
+    .set__remove {
+      min-width: 0;
+      margin-top: 8px;
+    }
+
+    .set__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .set__empty {
+      margin: 0 0 8px;
+      font-size: 12px;
+      opacity: 0.6;
+    }
+  `,
+})
+export class NodeAssignmentsFieldComponent extends FieldArrayType {
+  /** Присвоєння з полів входу, яких ще немає; перераховується при кожній перевірці шаблону (вхід приходить ззовні). */
+  protected fromInput(): Assignment[] {
+    const input = (this.options?.formState as NodeFormState | undefined)?.expressionContext?.input;
+    return assignmentsFromInput(input, Array.isArray(this.model) ? this.model : []);
+  }
+
+  protected addAllFromInput(): void {
+    for (const assignment of this.fromInput()) this.add(undefined, assignment);
+  }
+}
 
 /** Вкладений об'єкт: рамка з назвою. */
 @Component({
@@ -574,6 +906,9 @@ export function provideNodeForm() {
       { name: VALUE_FIELD, component: NodeValueFieldComponent, defaultOptions: { validators: { validation: ['node-value'] } } },
       { name: ARRAY_FIELD, component: NodeArrayFieldComponent },
       { name: CODE_FIELD, component: NodeCodeFieldComponent },
+      { name: CONDITION_FIELD, component: NodeConditionFieldComponent },
+      { name: COMBINE_FIELD, component: NodeCombineFieldComponent },
+      { name: ASSIGNMENTS_FIELD, component: NodeAssignmentsFieldComponent },
     ],
     wrappers: [{ name: SECTION_WRAPPER, component: NodeSectionWrapperComponent }],
     validators: [{ name: 'node-value', validation: nodeValueValidator }],
