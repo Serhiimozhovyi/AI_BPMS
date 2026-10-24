@@ -22,6 +22,12 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
     public DbSet<AuditEntryEntity> AuditLog => Set<AuditEntryEntity>();
+    public DbSet<NotificationChannelEntity> NotificationChannels => Set<NotificationChannelEntity>();
+    public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
+    public DbSet<NotificationSendEntity> NotificationSends => Set<NotificationSendEntity>();
+    public DbSet<WorkerHeartbeatEntity> WorkerHeartbeats => Set<WorkerHeartbeatEntity>();
+    public DbSet<BackupRunEntity> BackupRuns => Set<BackupRunEntity>();
+    public DbSet<ExecutionStatEntity> ExecutionStats => Set<ExecutionStatEntity>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -92,9 +98,44 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.HasIndex(x => x.At);
             e.HasIndex(x => new { x.EntityType, x.EntityId });
         });
+        b.Entity<NotificationChannelEntity>(e =>
+        {
+            e.ToTable("notification_channels");
+            e.Property(x => x.Config).HasColumnType("jsonb");
+            e.Property(x => x.Events).HasColumnType("jsonb");
+        });
+        b.Entity<NotificationEntity>(e =>
+        {
+            e.ToTable("notifications");
+            e.Property(x => x.Details).HasColumnType("jsonb");
+            e.HasIndex(x => x.CreatedAt).HasFilter("processed_at IS NULL");
+        });
+        b.Entity<NotificationSendEntity>(e =>
+        {
+            e.ToTable("notification_sends");
+            e.HasKey(x => new { x.ChannelId, x.Key });
+            e.HasOne<NotificationChannelEntity>().WithMany().HasForeignKey(x => x.ChannelId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<WorkerHeartbeatEntity>(e =>
+        {
+            e.ToTable("worker_heartbeats");
+            e.HasKey(x => x.WorkerId);
+        });
+        b.Entity<BackupRunEntity>(e =>
+        {
+            e.ToTable("backup_runs");
+            e.Property(x => x.At).HasDefaultValueSql("now()");
+            e.HasIndex(x => x.At);
+        });
+        b.Entity<ExecutionStatEntity>(e =>
+        {
+            e.ToTable("execution_stats");
+            e.HasKey(x => new { x.Hour, x.WorkflowId });
+        });
         b.Entity<ExecutionEntity>(e =>
         {
             e.ToTable("executions");
+            e.HasIndex(x => x.FinishedAt);
             e.HasIndex(x => new { x.WorkflowId, x.StartedAt });
             e.HasIndex(x => new { x.WorkflowId, x.ScheduledAt }).HasFilter("scheduled_at IS NOT NULL");
         });

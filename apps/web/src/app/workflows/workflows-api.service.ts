@@ -22,6 +22,57 @@ export interface WorkflowGroup {
   workflowCount: number;
 }
 
+/** Доріжка бізнес-вигляду (F3-67, docs/business-view.md): хто виконує кроки. */
+export interface BusinessLane {
+  id: string;
+  name: string;
+  /** Підпис під назвою («люди у веб-формах»). */
+  description?: string;
+  [extra: string]: unknown;
+}
+
+/** Зв'язок зовнішнього кроку з вузлом: `in` — вузол читає результат кроку, `out` — вузол ставить людині задачу. */
+export interface BusinessLink {
+  node: string;
+  direction: 'in' | 'out';
+  label?: string;
+  [extra: string]: unknown;
+}
+
+/** Зовнішній крок: дія людини в іншій системі, якої немає в графі; має хоча б один зв'язок. */
+export interface BusinessStep {
+  id: string;
+  title: string;
+  subtitle?: string;
+  /** id доріжки з `business.lanes`. */
+  lane: string;
+  links: BusinessLink[];
+  [extra: string]: unknown;
+}
+
+/** Бізнес-розмітка сценарію (F3-67). Усе необов'язкове; рушій ці поля ігнорує. */
+export interface WorkflowBusiness {
+  lanes?: BusinessLane[];
+  steps?: BusinessStep[];
+  [extra: string]: unknown;
+}
+
+/** Як вузол показується в бізнес-вигляді; без `title` — `name`, без `lane` — доріжка за типом вузла. */
+export interface WorkflowNodeBusiness {
+  title?: string;
+  subtitle?: string;
+  lane?: string;
+  /** `true` — сховати; `false` — показати технічний вузол, який інакше згорнувся б. */
+  hidden?: boolean;
+  [extra: string]: unknown;
+}
+
+/** Бізнес-атрибути ребра: підпис стрілки; без нього — назва виходу. */
+export interface WorkflowConnectionBusiness {
+  label?: string;
+  [extra: string]: unknown;
+}
+
 /** Вузол сценарію (docs/workflow-format.md, «Обов'язкові поля»). Невідомі поля зберігаються як є. */
 export interface WorkflowNode {
   id: string;
@@ -35,6 +86,7 @@ export interface WorkflowNode {
   continueOnFail?: boolean;
   disabled?: boolean;
   notes?: string;
+  business?: WorkflowNodeBusiness;
   [extra: string]: unknown;
 }
 
@@ -42,6 +94,7 @@ export interface WorkflowNode {
 export interface WorkflowConnection {
   from: { node: string; output: number; [extra: string]: unknown };
   to: { node: string; input: number; [extra: string]: unknown };
+  business?: WorkflowConnectionBusiness;
   [extra: string]: unknown;
 }
 
@@ -71,6 +124,8 @@ export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   connections: WorkflowConnection[];
   pinData: Record<string, unknown[]>;
+  /** Бізнес-розмітка для бізнес-вигляду (F3-67); немає — правила за замовчуванням. */
+  business?: WorkflowBusiness;
   [extra: string]: unknown;
 }
 

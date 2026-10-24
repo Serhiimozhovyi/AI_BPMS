@@ -104,6 +104,55 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         Assert.Empty((await CallAsync(client, "list_workflows", new() { ["search"] = name, ["active"] = true }))["items"]!.AsArray());
     }
 
+    /// <summary>F3-67: бізнес-розмітка на трьох рівнях проходить create → update → get/resource без втрат; посилання перевіряються.</summary>
+    [Fact]
+    public async Task Business_fields_round_trip_and_references_are_validated()
+    {
+        await using var client = await mcp.ConnectAsync(UserRole.Editor);
+        var definition = Definition(Unique("Бізнес-розмітка"));
+        definition["business"] = JsonNode.Parse("""
+            {
+              "lanes": [ { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" }, { "id": "openbp", "name": "OpenBP" } ],
+              "steps": [ { "id": "s_go", "title": "Користувач тисне «Старт»", "subtitle": "кнопка", "lane": "kit",
+                           "links": [ { "node": "n_start", "direction": "in", "label": "запускає" } ] } ]
+            }
+            """);
+        definition["nodes"]![0]!["business"] = JsonNode.Parse("""{ "title": "Початок", "subtitle": "вручну", "lane": "openbp" }""");
+        definition["nodes"]!.AsArray().Add(JsonNode.Parse("""
+            { "id": "n_set", "name": "Поля", "type": "core.set", "typeVersion": 1, "position": [200, 0], "parameters": { "fields": [] }, "business": { "hidden": true } }
+            """));
+        definition["connections"]!.AsArray().Add(JsonNode.Parse("""
+            { "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_set", "input": 0 }, "business": { "label": "далі" } }
+            """));
+
+        var validation = await CallAsync(client, "validate_workflow", new() { ["definition"] = definition, ["active"] = true });
+        Assert.True((bool)validation["valid"]!, validation.ToJsonString());
+
+        var created = await CallAsync(client, "create_workflow", new() { ["definition"] = definition });
+        var id = (string)created["id"]!;
+        definition["business"]!["steps"]![0]!["links"]!.AsArray().Add(JsonNode.Parse("""{ "node": "n_set", "direction": "out" }"""));
+        await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+
+        var saved = (await CallAsync(client, "get_workflow", new() { ["id"] = id }))["definition"]!;
+        Assert.True(JsonNode.DeepEquals(definition["business"], saved["business"]), saved["business"]?.ToJsonString());
+        Assert.True(JsonNode.DeepEquals(definition["nodes"]![0]!["business"], saved["nodes"]![0]!["business"]));
+        Assert.True(JsonNode.DeepEquals(definition["nodes"]![1]!["business"], saved["nodes"]![1]!["business"]));
+        Assert.True(JsonNode.DeepEquals(definition["connections"]![0]!["business"], saved["connections"]![0]!["business"]));
+        var resource = await client.ReadResourceAsync($"openbp://workflows/{id}");
+        var text = Assert.IsType<TextResourceContents>(Assert.Single(resource.Contents));
+        Assert.True(JsonNode.DeepEquals(definition["business"], JsonNode.Parse(text.Text)!["business"]));
+
+        definition["business"]!["steps"]![0]!["links"]![0]!["node"] = "n_ghost";
+        definition["nodes"]![0]!["business"]!["lane"] = "nowhere";
+        var invalid = await CallAsync(client, "validate_workflow", new() { ["definition"] = definition });
+        Assert.False((bool)invalid["valid"]!);
+        var errors = invalid["errors"]!.AsArray();
+        Assert.Equal(["BUSINESS_LINK_NODE_UNKNOWN", "BUSINESS_LANE_UNKNOWN"], errors.Select(e => (string?)e!["code"]));
+        Assert.Equal(["/business/steps/0/links/0/node", "/nodes/0/business/lane"], errors.Select(e => (string?)e!["path"]));
+        var failed = await ErrorAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        Assert.Equal("WORKFLOW_INVALID", (string?)failed["code"]);
+    }
+
     [Fact]
     public async Task Invalid_definition_returns_isError_with_codes_and_validate_returns_errors_without_error()
     {

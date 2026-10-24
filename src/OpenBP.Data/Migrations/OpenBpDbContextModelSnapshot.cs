@@ -102,6 +102,36 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("audit_log", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.BackupRunEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("At")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<bool>("Ok")
+                        .HasColumnType("boolean")
+                        .HasColumnName("ok");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.ToTable("backup_runs", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.CredentialEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -257,12 +287,58 @@ namespace OpenBP.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FinishedAt");
+
                     b.HasIndex("WorkflowId", "ScheduledAt")
                         .HasFilter("scheduled_at IS NOT NULL");
 
                     b.HasIndex("WorkflowId", "StartedAt");
 
                     b.ToTable("executions", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.ExecutionStatEntity", b =>
+                {
+                    b.Property<DateTimeOffset>("Hour")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.Property<int>("Cancelled")
+                        .HasColumnType("integer")
+                        .HasColumnName("cancelled");
+
+                    b.PrimitiveCollection<int[]>("DurationBuckets")
+                        .IsRequired()
+                        .HasColumnType("integer[]")
+                        .HasColumnName("duration_buckets");
+
+                    b.Property<long>("DurationSumMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_sum_ms");
+
+                    b.Property<int>("Error")
+                        .HasColumnType("integer")
+                        .HasColumnName("error");
+
+                    b.Property<int>("Success")
+                        .HasColumnType("integer")
+                        .HasColumnName("success");
+
+                    b.Property<int>("TimedOut")
+                        .HasColumnType("integer")
+                        .HasColumnName("timed_out");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer")
+                        .HasColumnName("total");
+
+                    b.HasKey("Hour", "WorkflowId");
+
+                    b.ToTable("execution_stats", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.ExecutionStepEntity", b =>
@@ -420,6 +496,116 @@ namespace OpenBP.Data.Migrations
                     b.HasKey("WorkflowId", "NodeId");
 
                     b.ToTable("node_state", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.NotificationChannelEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Config")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("config");
+
+                    b.Property<int>("CooldownSec")
+                        .HasColumnType("integer")
+                        .HasColumnName("cooldown_sec");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Events")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("events");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("notification_channels", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.NotificationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("event");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasFilter("processed_at IS NULL");
+
+                    b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.NotificationSendEntity", b =>
+                {
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("channel_id");
+
+                    b.Property<string>("Key")
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.HasKey("ChannelId", "Key");
+
+                    b.ToTable("notification_sends", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.OAuthStateEntity", b =>
@@ -587,6 +773,25 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("webhooks", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.WorkerHeartbeatEntity", b =>
+                {
+                    b.Property<string>("WorkerId")
+                        .HasColumnType("text")
+                        .HasColumnName("worker_id");
+
+                    b.Property<DateTimeOffset>("SeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("seen_at");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.HasKey("WorkerId");
+
+                    b.ToTable("worker_heartbeats", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.WorkflowEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -704,6 +909,15 @@ namespace OpenBP.Data.Migrations
                     b.HasOne("OpenBP.Data.DataTableEntity", null)
                         .WithMany()
                         .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.NotificationSendEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.NotificationChannelEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

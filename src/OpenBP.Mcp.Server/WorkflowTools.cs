@@ -71,7 +71,9 @@ public sealed class WorkflowTools
 {
     private const string DefinitionHint =
         "Workflow definition as a JSON object in the OpenBP workflow format; read the resource openbp://schema/workflow-format " +
-        "for its JSON Schema and the tool describe_connectors for serverId/toolName of mcp.* nodes.";
+        "for its JSON Schema and the tool describe_connectors for serverId/toolName of mcp.* nodes. " +
+        "Optional `business` fields (workflow-level lanes and human steps in external systems, per-node title/subtitle/lane/hidden, " +
+        "per-connection label) describe the business view and are stored as given; the engine ignores them.";
 
     /// <summary><c>list_workflows</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>

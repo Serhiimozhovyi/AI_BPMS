@@ -99,6 +99,81 @@ public sealed class AuditEntryEntity
     public string Details { get; set; } = "{}";
 }
 
+/// <summary>
+/// Канал сповіщень адміністратору (F6-07): <c>email</c> і <c>telegram</c> — через tool конектора, <c>webhook</c> — POST на URL.
+/// <c>Config</c> — jsonb без секретів (заголовки webhook — у credential), <c>Events</c> — jsonb-масив назв подій.
+/// </summary>
+public sealed class NotificationChannelEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Config { get; set; } = "{}";
+    public string Events { get; set; } = "[]";
+    /// <summary>Не частіше одного повідомлення на ту саму подію й предмет (сценарій, конектор…) за стільки секунд.</summary>
+    public int CooldownSec { get; set; }
+    public bool Enabled { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Подія для сповіщення (outbox, F6-07): воркер і Api лише додають рядок, а розсилає job Api. <c>Subject</c> — ключ
+/// cooldown (id сценарію, конектора, воркера); <c>Details</c> — jsonb без секретів.
+/// </summary>
+public sealed class NotificationEntity
+{
+    public Guid Id { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public string Event { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Details { get; set; } = "{}";
+    public DateTimeOffset? ProcessedAt { get; set; }
+}
+
+/// <summary>Остання відправка каналу за ключем <c>подія:предмет</c> — для cooldown (F6-07).</summary>
+public sealed class NotificationSendEntity
+{
+    public Guid ChannelId { get; set; }
+    public string Key { get; set; } = "";
+    public DateTimeOffset SentAt { get; set; }
+}
+
+/// <summary>Живість екземпляра воркера (F6-07): цикл опитування оновлює <c>SeenAt</c>.</summary>
+public sealed class WorkerHeartbeatEntity
+{
+    public string WorkerId { get; set; } = "";
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset SeenAt { get; set; }
+}
+
+/// <summary>Результат запуску бекапу (F6-07): рядок додає скрипт сервісу backup через <c>psql</c>.</summary>
+public sealed class BackupRunEntity
+{
+    public long Id { get; set; }
+    public DateTimeOffset At { get; set; }
+    public bool Ok { get; set; }
+    public string? Message { get; set; }
+}
+
+/// <summary>
+/// Погодинний агрегат виконань сценарію (F6-07) за годиною завершення: лічильники за статусом і гістограма тривалості
+/// (<c>DurationBuckets</c> — кількість виконань у кошиках <c>ExecutionStatsBuckets.BoundsMs</c>, останній — понад межу).
+/// </summary>
+public sealed class ExecutionStatEntity
+{
+    public DateTimeOffset Hour { get; set; }
+    public Guid WorkflowId { get; set; }
+    public int Total { get; set; }
+    public int Success { get; set; }
+    public int Error { get; set; }
+    public int TimedOut { get; set; }
+    public int Cancelled { get; set; }
+    public long DurationSumMs { get; set; }
+    public int[] DurationBuckets { get; set; } = [];
+}
+
 /// <summary>Змінна інстансу (<c>$vars.key</c>, F6-09): не секрет — секрети лишаються в credentials.</summary>
 public sealed class VariableEntity
 {
