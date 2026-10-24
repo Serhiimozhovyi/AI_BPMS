@@ -276,9 +276,9 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
         </div>
       </ng-template>
       <ng-template edgeLabelHtml let-ctx>
-        <span class="edge__label">
+        <span class="flex flex-col items-center gap-0.5">
           @if (ctx.label.data.count !== undefined) {
-            <span class="edge__count" data-testid="edge-count" [attr.data-edge]="ctx.label.data.index">{{ itemsLabel(ctx.label.data.count) }}</span>
+            <span class="edge__count pointer-events-none block whitespace-nowrap rounded-md bg-[var(--ac-cool-grey)] px-[3px] text-[10px] leading-[14px] text-[var(--ac-cool-grey-4)]" data-testid="edge-count" [attr.data-edge]="ctx.label.data.index">{{ itemsLabel(ctx.label.data.count) }}</span>
           }
           @if (ctx.label.data.add) {
             <button
@@ -576,24 +576,6 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     /* Лічильник items після запуску (F3-52) — лише підпис: кліки проходять до ребра. */
     :host ::ng-deep foreignObject:has(.edge__count):not(:has(.edge__add)) {
-      pointer-events: none;
-    }
-
-    .edge__label {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-    }
-
-    .edge__count {
-      display: block;
-      padding: 0 3px;
-      border-radius: 6px;
-      background: var(--ac-cool-grey);
-      color: var(--ac-cool-grey-4);
-      font: 400 10px/14px Ubuntu, sans-serif;
-      white-space: nowrap;
       pointer-events: none;
     }
 
