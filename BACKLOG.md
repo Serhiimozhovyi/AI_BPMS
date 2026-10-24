@@ -490,7 +490,7 @@
 - DoD: `npm run lint`, `npm test`, `npm run build` зелені; e2e (Playwright) на вхід і обидві ролі: психолог не бачить сторінок координатора і чужих телефонів; скріншоти в PR; CI job збирає frontend.
 
 ### F3-31 · Приклад: бот психологічної підтримки (з n8n)
-- model: `opus` · status: `blocked чекає F3-27, F3-29, F3-30, F3-34` · depends: F3-27, F3-29, F3-30, F3-34
+- model: `opus` · status: `review #88` · depends: F3-27, F3-29, F3-30, F3-34
 - Що: `examples/psy-support-bot.json` за `docs/psy-support.md` §6:
   - `core.webhook` → `core.code` «Розбір» → `core.switch` v2 «Розділ» (7 гілок);
   - один з tools бота `bot_*` конектора `psy-support`;
