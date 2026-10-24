@@ -120,6 +120,37 @@ public class JintExpressionEvaluatorTests
     }
 
     [Fact]
+    public void Binary_ExposesCurrentItemFiles()
+    {
+        var scope = Scope();
+        scope.Item.Binary = new() { ["data"] = new BinaryRef { Id = "f-1", MimeType = "application/pdf", FileName = "рахунок.pdf", FileSize = 29 } };
+
+        var result = _evaluator.Evaluate("{{ [$binary.data.fileName, $binary.data.mimeType, $binary.data.fileSize] }}", scope);
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""["рахунок.pdf","application/pdf",29]"""), result), result?.ToJsonString());
+    }
+
+    [Fact]
+    public void Binary_OfItemWithoutFiles_IsEmptyObject()
+    {
+        var result = _evaluator.Evaluate("{{ [Object.keys($binary).length, $binary.data?.fileName ?? 'немає'] }}", Scope());
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""[0,"немає"]"""), result), result?.ToJsonString());
+    }
+
+    [Fact]
+    public void Node_ByName_ExposesBinaryRefs()
+    {
+        var invoice = NewItem("""{"name":"rakhunok-17.pdf"}""");
+        invoice.Binary = new() { ["data"] = new BinaryRef { Id = "f-17", MimeType = "application/pdf", FileName = "rakhunok-17.pdf" } };
+        var scope = Scope() with { Nodes = new Dictionary<string, IReadOnlyList<Item>> { ["Зберегти вкладення"] = [invoice] } };
+
+        var result = _evaluator.Evaluate("{{ $node[\"Зберегти вкладення\"].binary.data.fileName }}", scope);
+
+        Assert.Equal("rakhunok-17.pdf", result!.GetValue<string>());
+    }
+
+    [Fact]
     public void Node_ByName_UsesSameItemIndex()
     {
         var nodes = new Dictionary<string, IReadOnlyList<Item>>

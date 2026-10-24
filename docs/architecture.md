@@ -95,7 +95,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 
 ## 5. Вирази і Code-вузол
 
-- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$input`, `$node["Назва"].json`, `$now`, `$env` (лише дозволені), `$execution.id`.
+- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$execution.id`.
 - Обчислення — Jint з лімітами: 50 мс, 16 МБ, глибина рекурсії 64, без `require`, без доступу до CLR. Code-вузол: ті ж обмеження, ліміт 5 с.
 - Code-вузол (`core.code`, F3-30): `$json`, `$index` (eachItem) або `items` (allItems), а також `$node["Назва"].json` (як у
   виразах: item з тим самим індексом або перший) і `$node["Назва"].all` (усі items) — копії виходів, лише читання;

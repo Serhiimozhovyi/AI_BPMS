@@ -43,6 +43,17 @@ public sealed record TelegramDocument(
     [property: JsonPropertyName("mime_type")] string? MimeType = null,
     [property: JsonPropertyName("file_size")] long? FileSize = null);
 
+/// <summary>Результат методів Bot API, що повертають <c>true</c>.</summary>
+/// <param name="Ok">Завжди <c>true</c> (помилка — <c>isError</c>).</param>
+public sealed record OkResult([property: JsonPropertyName("ok")] bool Ok);
+
+/// <summary>Команда меню бота.</summary>
+/// <param name="Command">Команда без «/», 1–32 символи: малі латинські літери, цифри, «_».</param>
+/// <param name="Description">Опис, 1–256 символів.</param>
+public sealed record BotCommand(
+    [property: JsonPropertyName("command")] string Command,
+    [property: JsonPropertyName("description")] string Description);
+
 /// <summary>Колекція як <c>structuredContent</c>: <c>{ "result": [...] }</c> (у <c>mcp.poll</c> — <c>itemsPath = result</c>).</summary>
 /// <typeparam name="T">Тип елемента.</typeparam>
 /// <param name="Result">Елементи.</param>

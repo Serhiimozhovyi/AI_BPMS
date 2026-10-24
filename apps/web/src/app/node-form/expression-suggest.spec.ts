@@ -41,6 +41,7 @@ describe('suggestExpression', () => {
     expect(labels('{{ $| }}')).toEqual(ROOT_VARIABLES.map((v) => v.name));
     expect(labels('{{ $e| }}')).toEqual(['$env', '$execution']);
     expect(labels('{{ $j|')).toEqual(['$json']);
+    expect(labels('{{ $b| }}')).toEqual(['$binary']);
     expect(pick('{{ $j| }}', '$json')).toBe('{{ $json| }}');
   });
 

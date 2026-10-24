@@ -75,7 +75,8 @@ public sealed class NodeTools
         "Lists the node types OpenBP can run: `type` and `version` (use as `type`/`typeVersion`), whether it is a trigger, " +
         "input/output port names (connection indexes) and the JSON Schema of `parameters`. Any parameter value may be an " +
         "expression string `{{ … }}` instead: `$json` is the current input item from the previous node, " +
-        "`$node[\"Node name\"].json` the matching item of an earlier node. " +
+        "`$node[\"Node name\"].json` the matching item of an earlier node, `$binary` the current item's files " +
+        "(references with fileName, mimeType, fileSize; `{}` when there are none). " +
         "`mcp.tool` returns a tool's structured result as one item; set `itemsPath` to split an array into items. " +
         "Tools of connected systems are listed by describe_connectors. " +
         "In `core.code` JavaScript the same `$node[\"Node name\"].json` is available (plus `.all` with every item), " +
