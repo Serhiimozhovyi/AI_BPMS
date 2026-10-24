@@ -1,5 +1,5 @@
 import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { PASTE_OFFSET, connectNodes, copySelection, deleteSelection, pasteClipboard } from './canvas-edit';
+import { PASTE_OFFSET, connectNodes, copySelection, deleteSelection, detachBusinessSteps, pasteClipboard } from './canvas-edit';
 
 function demo(): WorkflowDefinition {
   return {
@@ -62,6 +62,49 @@ describe('deleteSelection', () => {
     expect(next.nodes).toBe(def.nodes);
     expect(next.connections).toEqual([def.connections[1]]);
     expect(next.connections[0]).toBe(def.connections[1]);
+  });
+
+  it('видалення вузла прибирає зв’язки зовнішніх кроків на нього; крок без зв’язків зникає (F3-67)', () => {
+    const def: WorkflowDefinition = {
+      ...demo(),
+      business: {
+        lanes: [{ id: 'kit', name: 'Кіт 2' }],
+        steps: [
+          { id: 's1', title: 'Автор створює', lane: 'kit', links: [{ node: 'a', direction: 'in' }, { node: 'b', direction: 'out', label: 'задача' }] },
+          { id: 's2', title: 'Тільки до b', lane: 'kit', links: [{ node: 'b', direction: 'in' }] },
+          { id: 's3', title: 'До c', lane: 'kit', links: [{ node: 'c', direction: 'in' }], extra: 1 },
+        ],
+        'x-note': 'зберегти',
+      },
+    };
+
+    const next = deleteSelection(def, { nodes: ['b'], edges: [] });
+
+    expect(next.business).toEqual({
+      lanes: [{ id: 'kit', name: 'Кіт 2' }],
+      steps: [
+        { id: 's1', title: 'Автор створює', lane: 'kit', links: [{ node: 'a', direction: 'in' }] },
+        { id: 's3', title: 'До c', lane: 'kit', links: [{ node: 'c', direction: 'in' }], extra: 1 },
+      ],
+      'x-note': 'зберегти',
+    });
+    expect(next.business!.lanes).toBe(def.business!.lanes);
+    expect(next.business!.steps![1]).toBe(def.business!.steps![2]);
+    expect(def.business!.steps).toHaveLength(3);
+
+    // Вузол без зв'язків — business той самий об'єкт; без business — поля не з'являється.
+    expect(deleteSelection(def, { nodes: ['c'], edges: [] }).business!.steps).toHaveLength(2);
+    const untouched = deleteSelection(def, { nodes: [], edges: [1] });
+    expect(untouched.business).toBe(def.business);
+    expect('business' in deleteSelection(demo(), { nodes: ['b'], edges: [] })).toBe(false);
+  });
+
+  it('detachBusinessSteps: без steps чи без збігів — той самий об’єкт', () => {
+    const lanesOnly = { lanes: [{ id: 'kit', name: 'Кіт 2' }] };
+    expect(detachBusinessSteps(lanesOnly, new Set(['a']))).toBe(lanesOnly);
+    expect(detachBusinessSteps(undefined, new Set(['a']))).toBeUndefined();
+    const steps = { steps: [{ id: 's', title: 'Крок', lane: 'kit', links: [{ node: 'z', direction: 'in' as const }] }] };
+    expect(detachBusinessSteps(steps, new Set(['a']))).toBe(steps);
   });
 
   it('нічого не виділено — те саме визначення', () => {
