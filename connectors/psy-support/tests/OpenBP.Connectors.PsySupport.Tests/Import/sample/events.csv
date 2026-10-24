@@ -1,0 +1,3 @@
+eid,title,description,date,time,format,host,contact,capacity,status,taken,notice,notice_sent_at
+e1,Зустріч підтримки,Опис,2026-11-25,18:00,онлайн,Олена,olena@example.com,10,відкрито,1,,
+e2,Чернетка,,26.11.2026,0.75,,,,0,чернетка,0,,
