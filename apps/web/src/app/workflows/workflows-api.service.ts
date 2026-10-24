@@ -139,6 +139,10 @@ export interface WorkflowDetail {
   definition: WorkflowDefinition;
   updatedAt: string;
   groupId?: string | null;
+  /** Опублікована версія (F6-10) — її виконують тригери; `null` — сценарій ще не публікувався. `version` — чернетка. */
+  publishedVersion?: number | null;
+  /** Чернетка відрізняється від опублікованої версії (або публікації ще не було). */
+  hasUnpublishedChanges?: boolean;
 }
 
 /** `WorkflowValidationError` — `{ code, message, nodeId?, path? }` (docs/workflow-format.md, «Валідація при збереженні»). */
@@ -288,6 +292,16 @@ export class WorkflowsApiService {
 
   activate(id: string): Observable<WorkflowDetail> {
     return this.http.post<WorkflowDetail>(`${this.url(id)}/activate`, null);
+  }
+
+  /** Публікує чернетку (F6-10): тригери почнуть виконувати її; неактивний сценарій не вмикається. */
+  publish(id: string): Observable<WorkflowDetail> {
+    return this.http.post<WorkflowDetail>(`${this.url(id)}/publish`, null);
+  }
+
+  /** «Скасувати зміни»: чернеткою знову стає опублікована версія. */
+  discardDraft(id: string): Observable<WorkflowDetail> {
+    return this.http.post<WorkflowDetail>(`${this.url(id)}/discard-draft`, null);
   }
 
   deactivate(id: string): Observable<WorkflowDetail> {

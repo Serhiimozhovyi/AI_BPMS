@@ -10,9 +10,10 @@ namespace OpenBP.Application.Workflows;
 /// <param name="Version">Номер поточної версії.</param>
 /// <param name="UpdatedAt">Останнє збереження, перейменування або зміна активності.</param>
 /// <param name="GroupId">Група сценарію (F3-63); <c>null</c> — без групи.</param>
-public sealed record WorkflowSummary(Guid Id, string Name, bool Active, int Version, DateTimeOffset UpdatedAt, Guid? GroupId = null);
+/// <param name="PublishedVersion">Номер опублікованої версії (F6-10); <c>null</c> — сценарій ще не публікувався.</param>
+public sealed record WorkflowSummary(Guid Id, string Name, bool Active, int Version, DateTimeOffset UpdatedAt, Guid? GroupId = null, int? PublishedVersion = null);
 
-/// <summary>Сценарій з визначенням поточної версії (<c>GET /workflows/{id}</c>).</summary>
+/// <summary>Сценарій з визначенням чернетки — поточної версії (<c>GET /workflows/{id}</c>).</summary>
 /// <param name="Id"><c>workflows.id</c>.</param>
 /// <param name="Name">Назва; <see cref="WorkflowDefinition.Name"/> у <paramref name="Definition"/> завжди дорівнює їй.</param>
 /// <param name="Active">Чи активний.</param>
@@ -21,6 +22,10 @@ public sealed record WorkflowSummary(Guid Id, string Name, bool Active, int Vers
 /// <param name="Definition">Визначення поточної версії (невідомі поля збережені — round-trip).</param>
 /// <param name="UpdatedAt">Останнє збереження, перейменування або зміна активності.</param>
 /// <param name="GroupId">Група сценарію (F3-63); <c>null</c> — без групи.</param>
+/// <param name="PublishedVersion">
+/// Номер опублікованої версії (F6-10) — її виконують тригери; <c>null</c> — сценарій ще не публікувався.
+/// <see cref="Version"/> — чернетка, яку редагують і запускають тестово.
+/// </param>
 public sealed record WorkflowDetail(
     Guid Id,
     string Name,
@@ -29,7 +34,12 @@ public sealed record WorkflowDetail(
     Guid VersionId,
     WorkflowDefinition Definition,
     DateTimeOffset UpdatedAt,
-    Guid? GroupId = null);
+    Guid? GroupId = null,
+    int? PublishedVersion = null)
+{
+    /// <summary>Чернетка відрізняється від опублікованої версії (або публікації ще не було).</summary>
+    public bool HasUnpublishedChanges => PublishedVersion != Version;
+}
 
 /// <summary>Версія в історії (<c>GET /workflows/{id}/versions</c>).</summary>
 /// <param name="Id"><c>workflow_versions.id</c>.</param>

@@ -26,6 +26,7 @@ import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickA
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EmptyStartComponent } from '../canvas/empty-start.component';
 import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
+import { PublishBarComponent } from '../workflows/publish-bar.component';
 import { VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore } from '../workflows/version-history-dialog.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
@@ -109,7 +110,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, PublishBarComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -184,6 +185,9 @@ export interface EditorErrorEvent {
           @case ('saved') {
             <span class="editor__saved" data-testid="saved" i18n="@@workfloweditor.saved">Збережено · версія {{ workflow()?.version }}</span>
           }
+        }
+        @if (!version()) {
+          <app-publish-bar [workflow]="workflow()" [draft]="definition()" [saving]="saveStatus() === 'pending' || saveStatus() === 'saving'" [readonly]="readonly()" (published)="published($event)" (discarded)="draftDiscarded($event)" />
         }
       </header>
       @if (runError(); as message) {
@@ -1389,6 +1393,23 @@ export class WorkflowEditorComponent implements OnInit {
         this.changed({ ...restore.definition, name: def.name });
         this.showNotice($localize`:@@workfloweditor.history.restored:Відновлено версію ${restore.version}:version: — збережеться як нова версія.`);
       });
+  }
+
+  /** «Опублікувати» (F6-10): визначення в редакторі — те саме, оновлюються лише метадані. */
+  protected published(detail: WorkflowDetail): void {
+    const def = this.definition();
+    this.workflow.set({ ...detail, definition: def ?? detail.definition });
+    this.showNotice($localize`:@@workfloweditor.published:Опубліковано версію ${detail.publishedVersion}:version: — тригери виконують її.`);
+  }
+
+  /** «Скасувати зміни» (F6-10): чернетка — опублікована версія; без автозбереження, бо нічого не змінено. */
+  protected draftDiscarded(detail: WorkflowDetail): void {
+    this.autosave.reset();
+    this.selection.set(EMPTY_SELECTION);
+    this.workflow.set(detail);
+    this.definition.set(detail.definition);
+    this.history.reset(detail.definition);
+    this.showNotice($localize`:@@workfloweditor.discarded:Чернетку повернуто до опублікованої версії ${detail.publishedVersion}:version:.`);
   }
 
   /** Діалог «Налаштування» (F4-05): нові `settings` — звичайна зміна з історією й автозбереженням. */

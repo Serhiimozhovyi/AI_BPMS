@@ -42,8 +42,9 @@ public interface IWorkflowService
     Task<WorkflowDetail> CreateAsync(WorkflowDefinition definition, Guid? groupId, CancellationToken ct);
 
     /// <summary>
-    /// Зберігає визначення як нову версію і робить її поточною. Для активного сценарію валідація з
-    /// <c>IsActive = true</c> (правило 4) і перереєстрація тригерів; помилка валідації — версія не створюється.
+    /// Зберігає визначення як нову версію і робить її чернеткою (поточною, F6-10). Тригери активного сценарію не
+    /// змінюються — вони виконують опубліковану версію (<see cref="PublishAsync"/>); чернетку перевіряють як неактивну.
+    /// Помилка валідації — версія не створюється.
     /// </summary>
     /// <param name="id"><c>workflows.id</c>.</param>
     /// <param name="definition">Визначення; його <c>name</c> ігнорується.</param>
@@ -51,6 +52,24 @@ public interface IWorkflowService
     /// <exception cref="NotFoundException">Сценарію немає.</exception>
     /// <exception cref="WorkflowValidationException">Визначення некоректне; нічого не збережено.</exception>
     Task<WorkflowDetail> SaveAsync(Guid id, WorkflowDefinition definition, CancellationToken ct);
+
+    /// <summary>
+    /// Публікує чернетку (F6-10): перевіряє її з <c>IsActive = true</c> і робить опублікованою; в активного сценарію
+    /// тригери (<c>webhooks</c>, Quartz) перереєструються з неї в тій самій транзакції. Неактивний сценарій не вмикає.
+    /// Виконання, що вже йдуть або чекають, довиконуються на своїй версії. Ідемпотентно.
+    /// </summary>
+    /// <param name="id"><c>workflows.id</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Сценарію немає.</exception>
+    /// <exception cref="WorkflowValidationException">Чернетка не може працювати; опублікована версія і тригери не змінені.</exception>
+    Task<WorkflowDetail> PublishAsync(Guid id, CancellationToken ct);
+
+    /// <summary>«Скасувати зміни» (F6-10): чернеткою знову стає опублікована версія; історія версій не змінюється.</summary>
+    /// <param name="id"><c>workflows.id</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Сценарію немає.</exception>
+    /// <exception cref="ConflictException">Сценарій ще не публікувався (код <c>WORKFLOW_NOT_PUBLISHED</c>).</exception>
+    Task<WorkflowDetail> DiscardDraftAsync(Guid id, CancellationToken ct);
 
     /// <summary>Перейменовує сценарій без нової версії.</summary>
     /// <param name="id"><c>workflows.id</c>.</param>
@@ -72,7 +91,10 @@ public interface IWorkflowService
     /// <param name="ct">Скасування.</param>
     Task<WorkflowValidationResult> ValidateAsync(WorkflowDefinition definition, bool asActive, CancellationToken ct);
 
-    /// <summary>Активує сценарій: валідація поточної версії з <c>IsActive = true</c>, реєстрація тригерів (<c>webhooks</c>, Quartz). Ідемпотентно.</summary>
+    /// <summary>
+    /// Активує сценарій: валідація опублікованої версії з <c>IsActive = true</c>, реєстрація її тригерів (<c>webhooks</c>, Quartz).
+    /// Сценарій, що ще не публікувався, публікує чернетку. Ідемпотентно.
+    /// </summary>
     /// <param name="id"><c>workflows.id</c>.</param>
     /// <param name="ct">Скасування.</param>
     /// <exception cref="NotFoundException">Сценарію немає.</exception>

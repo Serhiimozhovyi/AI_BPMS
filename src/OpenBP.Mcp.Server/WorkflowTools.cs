@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
+using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
 using OpenBP.Application.Workflows;
 using OpenBP.Shared.Validation;
@@ -9,7 +10,7 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Mcp.Server;
 
-/// <summary>Сценарій з визначенням поточної версії (як <c>GET /workflows/{id}</c>).</summary>
+/// <summary>Сценарій з визначенням чернетки або опублікованої версії (як <c>GET /workflows/{id}</c>).</summary>
 /// <param name="Id"><c>workflows.id</c>.</param>
 /// <param name="Name">Назва.</param>
 /// <param name="Active">Чи активний.</param>
@@ -18,14 +19,29 @@ namespace OpenBP.Mcp.Server;
 /// <param name="UpdatedAt">Останнє збереження.</param>
 /// <param name="Definition">Визначення у форматі <c>workflow-format.md</c> (невідомі поля збережені).</param>
 /// <param name="GroupId">Група сценарію (F3-63); <c>null</c> — без групи.</param>
-public sealed record WorkflowView(Guid Id, string Name, bool Active, int Version, Guid VersionId, DateTimeOffset UpdatedAt, JsonObject Definition, Guid? GroupId = null)
+/// <param name="PublishedVersion">Номер опублікованої версії (F6-10); <c>null</c> — не публікувався.</param>
+/// <param name="HasUnpublishedChanges">Чернетка відрізняється від опублікованої версії.</param>
+/// <param name="DefinitionVersion">Номер версії, чиє визначення в <paramref name="Definition"/>.</param>
+public sealed record WorkflowView(
+    Guid Id,
+    string Name,
+    bool Active,
+    int Version,
+    Guid VersionId,
+    DateTimeOffset UpdatedAt,
+    JsonObject Definition,
+    Guid? GroupId = null,
+    int? PublishedVersion = null,
+    bool HasUnpublishedChanges = false,
+    int? DefinitionVersion = null)
 {
-    /// <summary>Подання <see cref="WorkflowDetail"/>.</summary>
+    /// <summary>Подання <see cref="WorkflowDetail"/> з визначенням чернетки.</summary>
     /// <param name="detail">Сценарій.</param>
     public static WorkflowView From(WorkflowDetail detail)
     {
         ArgumentNullException.ThrowIfNull(detail);
-        return new(detail.Id, detail.Name, detail.Active, detail.Version, detail.VersionId, detail.UpdatedAt, WorkflowDefinitions.ToJson(detail.Definition), detail.GroupId);
+        return new(detail.Id, detail.Name, detail.Active, detail.Version, detail.VersionId, detail.UpdatedAt, WorkflowDefinitions.ToJson(detail.Definition),
+            detail.GroupId, detail.PublishedVersion, detail.HasUnpublishedChanges, detail.Version);
     }
 }
 
@@ -97,13 +113,37 @@ public sealed class WorkflowTools
     /// <param name="workflows">Сервіс сценаріїв.</param>
     /// <param name="id">Id сценарію.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="version"><c>draft</c> (типово) або <c>published</c>.</param>
     [McpServerTool(Name = "get_workflow", Title = "Get workflow", ReadOnly = true, UseStructuredContent = true)]
-    [Description("Returns a workflow with the definition of its current version (same as the resource openbp://workflows/{id}).")]
+    [Description(
+        "Returns a workflow with the definition of its draft (default; same as the resource openbp://workflows/{id}) or of its published version. " +
+        "Triggers run the published version; `version`/`publishedVersion`/`hasUnpublishedChanges` tell them apart. " +
+        "version=published on a never-published workflow fails with WORKFLOW_NOT_PUBLISHED.")]
     public static async Task<WorkflowView> GetWorkflow(
         IWorkflowService workflows,
         [Description("Workflow id.")] Guid id,
-        CancellationToken ct = default) =>
-        WorkflowView.From(await workflows.GetAsync(id, ct).ConfigureAwait(false));
+        [Description("\"draft\" (default) — the version being edited and test-run; \"published\" — the version triggers run.")] string version = "draft",
+        CancellationToken ct = default)
+    {
+        var detail = await workflows.GetAsync(id, ct).ConfigureAwait(false);
+        var view = WorkflowView.From(detail);
+        switch (version)
+        {
+            case "draft":
+                return view;
+            case "published":
+                if (detail.PublishedVersion is not { } published)
+                {
+                    throw new ConflictException(WorkflowService.NotPublishedCode, $"Workflow «{detail.Name}» has not been published yet.");
+                }
+
+                var definition = await workflows.GetVersionAsync(id, published, ct).ConfigureAwait(false);
+                definition.Name = detail.Name;
+                return view with { Definition = WorkflowDefinitions.ToJson(definition), DefinitionVersion = published };
+            default:
+                throw new ArgumentException("`version` must be \"draft\" or \"published\".", nameof(version));
+        }
+    }
 
     /// <summary><c>create_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
@@ -128,8 +168,8 @@ public sealed class WorkflowTools
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "update_workflow", Title = "Update workflow", Destructive = false, Idempotent = false, UseStructuredContent = true)]
     [Description(
-        "Saves the definition as a new version and makes it current (the workflow name is kept; rename is not done here). " +
-        "Unknown fields are preserved. Active workflows are validated as active and their triggers are re-registered. " +
+        "Saves the definition as a new draft version (the workflow name is kept; rename is not done here). " +
+        "Unknown fields are preserved. Triggers keep running the published version until publish_workflow. " +
         "Errors: WORKFLOW_INVALID with `errors`, NOT_FOUND, WORKFLOW_VERSION_CONFLICT when saved concurrently (get_workflow and retry).")]
     public static async Task<WorkflowView> UpdateWorkflow(
         IWorkflowService workflows,
@@ -137,6 +177,21 @@ public sealed class WorkflowTools
         [Description(DefinitionHint)] JsonElement definition,
         CancellationToken ct = default) =>
         WorkflowView.From(await workflows.SaveAsync(id, WorkflowDefinitions.FromJson(definition), ct).ConfigureAwait(false));
+
+    /// <summary><c>publish_workflow</c>.</summary>
+    /// <param name="workflows">Сервіс сценаріїв.</param>
+    /// <param name="id">Id сценарію.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "publish_workflow", Title = "Publish workflow", Destructive = false, Idempotent = true, UseStructuredContent = true)]
+    [Description(
+        "Publishes the draft: validates it as an active workflow and makes it the version triggers run (an active workflow's webhooks " +
+        "and schedules switch to it at once). Does not activate an inactive workflow. Running and waiting executions finish on their version. " +
+        "Errors: WORKFLOW_INVALID with `errors` (the published version stays unchanged), NOT_FOUND.")]
+    public static async Task<WorkflowView> PublishWorkflow(
+        IWorkflowService workflows,
+        [Description("Workflow id.")] Guid id,
+        CancellationToken ct = default) =>
+        WorkflowView.From(await workflows.PublishAsync(id, ct).ConfigureAwait(false));
 
     /// <summary><c>validate_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>

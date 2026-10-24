@@ -77,3 +77,18 @@ function stable(value: unknown): string {
   }
   return JSON.stringify(value) ?? 'null';
 }
+
+/** Короткий опис змін для людини (F3-61, F6-10); `null` — перша версія. */
+export function describeDiff(diff: VersionDiff | null): string {
+  if (!diff) return $localize`:@@versions.diff.first:Перша версія.`;
+  if (isEmptyDiff(diff)) return $localize`:@@versions.diff.none:Без змін у вузлах і з'єднаннях.`;
+  const parts: string[] = [];
+  if (diff.addedNodes.length) parts.push($localize`:@@versions.diff.added:додано: ${diff.addedNodes.join(', ')}:names:`);
+  if (diff.removedNodes.length) parts.push($localize`:@@versions.diff.removed:видалено: ${diff.removedNodes.join(', ')}:names:`);
+  if (diff.changedNodes.length) parts.push($localize`:@@versions.diff.changed:змінено: ${diff.changedNodes.join(', ')}:names:`);
+  if (diff.movedNodes.length) parts.push($localize`:@@versions.diff.moved:переміщено: ${diff.movedNodes.length}:count:`);
+  const edges = diff.addedEdges.length + diff.removedEdges.length;
+  if (edges) parts.push($localize`:@@versions.diff.edges:з'єднань +${diff.addedEdges.length}:added: / −${diff.removedEdges.length}:removed:`);
+  if (diff.otherChanged) parts.push($localize`:@@versions.diff.other:налаштування чи дані`);
+  return parts.join('; ');
+}

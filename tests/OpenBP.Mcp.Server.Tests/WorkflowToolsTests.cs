@@ -51,7 +51,7 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         await using var client = await mcp.ConnectAsync(UserRole.Viewer);
         var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name);
 
-        foreach (var name in new[] { "list_workflows", "get_workflow", "create_workflow", "update_workflow", "validate_workflow" })
+        foreach (var name in new[] { "list_workflows", "get_workflow", "create_workflow", "update_workflow", "publish_workflow", "validate_workflow" })
         {
             Assert.True(tools.ContainsKey(name), name);
         }
@@ -102,6 +102,38 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         Assert.Equal(id, (string?)list["items"]!.AsArray().Single()!["id"]);
         Assert.Equal(1, (int)list["total"]!);
         Assert.Empty((await CallAsync(client, "list_workflows", new() { ["search"] = name, ["active"] = true }))["items"]!.AsArray());
+    }
+
+    /// <summary>F6-10: update_workflow пише чернетку, publish_workflow її публікує, get_workflow читає обидві.</summary>
+    [Fact]
+    public async Task Update_writes_draft_and_publish_switches_published_version()
+    {
+        await using var client = await mcp.ConnectAsync(UserRole.Editor);
+        var definition = Definition(Unique("Чернетка"));
+        var id = (string)(await CallAsync(client, "create_workflow", new() { ["definition"] = definition }))["id"]!;
+        var notPublished = await ErrorAsync(client, "get_workflow", new() { ["id"] = id, ["version"] = "published" });
+        Assert.Equal(WorkflowService.NotPublishedCode, (string?)notPublished["code"]);
+
+        var published = await CallAsync(client, "publish_workflow", new() { ["id"] = id });
+        Assert.Equal(1, (int)published["publishedVersion"]!);
+        Assert.False((bool)published["active"]!);
+        Assert.False((bool)published["hasUnpublishedChanges"]!);
+
+        definition["nodes"]![0]!["name"] = "Нова назва";
+        var draft = await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        Assert.Equal(2, (int)draft["version"]!);
+        Assert.Equal(1, (int)draft["publishedVersion"]!);
+        Assert.True((bool)draft["hasUnpublishedChanges"]!);
+
+        var readDraft = await CallAsync(client, "get_workflow", new() { ["id"] = id });
+        Assert.Equal("Нова назва", (string?)readDraft["definition"]!["nodes"]![0]!["name"]);
+        var readPublished = await CallAsync(client, "get_workflow", new() { ["id"] = id, ["version"] = "published" });
+        Assert.Equal("Старт", (string?)readPublished["definition"]!["nodes"]![0]!["name"]);
+        Assert.Equal(1, (int)readPublished["definitionVersion"]!);
+        Assert.Equal("#ff0000", (string?)readPublished["definition"]!["nodes"]![0]!["x-color"]);
+
+        Assert.Equal(2, (int)(await CallAsync(client, "publish_workflow", new() { ["id"] = id }))["publishedVersion"]!);
+        Assert.Equal("Нова назва", (string?)(await CallAsync(client, "get_workflow", new() { ["id"] = id, ["version"] = "published" }))["definition"]!["nodes"]![0]!["name"]);
     }
 
     /// <summary>F3-67: бізнес-розмітка на трьох рівнях проходить create → update → get/resource без втрат; посилання перевіряються.</summary>

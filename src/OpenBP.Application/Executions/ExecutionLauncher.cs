@@ -45,7 +45,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
 
         var workflow = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == launch.WorkflowId)
-            .Select(w => new { w.Active, w.CurrentVersionId })
+            .Select(w => new { w.Active, w.CurrentVersionId, w.PublishedVersionId })
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("workflow", launch.WorkflowId);
         // Сценарій помилок (F4-06) теж запускається лише активним: вимкнений — як тригер неактивного сценарію.
@@ -54,7 +54,9 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             throw new ConflictException(WorkflowInactiveCode, $"Сценарій «{launch.WorkflowId}» неактивний; тригери його не запускають.");
         }
 
+        // Тригери і сценарій помилок виконують опубліковану версію, тестовий запуск з канвасу — чернетку (F6-10).
         var versionId = launch.VersionId
+                        ?? (launch.Mode is ExecutionMode.Trigger or ExecutionMode.Error ? workflow.PublishedVersionId : null)
                         ?? workflow.CurrentVersionId
                         ?? throw new InvalidOperationException($"Сценарій «{launch.WorkflowId}» без поточної версії.");
         // Ліміти сценарію (F6-06) діють на все, крім ручного тестового запуску з канвасу.

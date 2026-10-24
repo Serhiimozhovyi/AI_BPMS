@@ -18,8 +18,9 @@ namespace OpenBP.Application.Workflows;
 /// <summary>
 /// Реалізація <see cref="IWorkflowService"/> над <c>workflows</c>/<c>workflow_versions</c> (docs/architecture.md §10.2).
 /// Валідація — <see cref="WorkflowValidator"/> з провайдером із контейнера (ланцюжок
-/// <c>NodeRegistrySchemaProvider</c> → <c>McpNodeSchemaProvider</c>). Активація, збереження активного сценарію і
-/// деактивація в одній транзакції з прапорцем <c>active</c> перереєстровують тригери: <c>webhooks</c> (F2-10) і
+/// <c>NodeRegistrySchemaProvider</c> → <c>McpNodeSchemaProvider</c>). Збереження пише чернетку і тригерів не чіпає
+/// (F6-10). Активація, публікація активного сценарію і деактивація в одній транзакції з прапорцем <c>active</c> чи
+/// <c>published_version_id</c> перереєстровують тригери опублікованої версії: <c>webhooks</c> (F2-10) і
 /// розклади <c>core.schedule</c> і <c>mcp.poll</c> у Quartz (F2-11, F2-12, <see cref="IScheduleRegistrar"/>). Quartz живе у власних таблицях,
 /// тож розклади замінюються перед комітом (збій Quartz відкочує транзакцію), а знімаються після нього; розклад,
 /// що пережив невдалий коміт, при спрацюванні нічого не запускає (<see cref="ScheduleFireService"/>).
@@ -38,6 +39,9 @@ public sealed class WorkflowService(
 
     /// <summary>Код конфлікту: паралельне збереження вже створило цю версію.</summary>
     public const string VersionConflictCode = "WORKFLOW_VERSION_CONFLICT";
+
+    /// <summary>Код конфлікту: скасувати зміни нема до чого — сценарій ще не публікувався (F6-10).</summary>
+    public const string NotPublishedCode = "WORKFLOW_NOT_PUBLISHED";
 
     private const string Entity = "workflow";
 
@@ -76,7 +80,8 @@ public sealed class WorkflowService(
             .OrderByDescending(w => w.UpdatedAt).ThenByDescending(w => w.Id)
             .Skip(page.Skip).Take(page.PageSize)
             .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => v.Id,
-                (w, v) => new WorkflowSummary(w.Id, w.Name, w.Active, v.Version, w.UpdatedAt, w.GroupId))
+                (w, v) => new WorkflowSummary(w.Id, w.Name, w.Active, v.Version, w.UpdatedAt, w.GroupId,
+                    db.WorkflowVersions.Where(p => p.Id == w.PublishedVersionId).Select(p => (int?)p.Version).FirstOrDefault()))
             .ToListAsync(ct);
         return new PageResult<WorkflowSummary>(items, page.Page, page.PageSize, total);
     }
@@ -120,7 +125,7 @@ public sealed class WorkflowService(
         db.Audit(currentUser, now, AuditActions.WorkflowCreated, AuditEntities.Workflow, workflow.Id.ToString(),
             new JsonObject { ["name"] = name, ["version"] = 1 });
         await db.SaveChangesAsync(ct);
-        return ToDetail(workflow, version);
+        return ToDetail(workflow, version, publishedVersion: null);
     }
 
     /// <inheritdoc />
@@ -130,10 +135,11 @@ public sealed class WorkflowService(
         currentUser.Require(UserRole.Editor);
         var workflow = await FindAsync(id, ct);
 
-        // workflows.name — джерело правди: name у визначенні перезаписується (§10.2).
+        // workflows.name — джерело правди: name у визначенні перезаписується (§10.2). Збереження пише чернетку (F6-10):
+        // тригери виконують опубліковану версію, тож чернетку перевіряють як неактивну — «як активну» її перевіряє публікація.
         var document = ToDocument(definition);
         document["name"] = workflow.Name;
-        await ThrowIfInvalidAsync(document, workflow.Active, ct, id);
+        await ThrowIfInvalidAsync(document, asActive: false, ct, id);
 
         var current = await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id)
@@ -145,14 +151,44 @@ public sealed class WorkflowService(
         db.WorkflowVersions.Add(version);
         db.Audit(currentUser, now, AuditActions.WorkflowSaved, AuditEntities.Workflow, id.ToString(),
             new JsonObject { ["name"] = workflow.Name, ["version"] = version.Version, ["active"] = workflow.Active });
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            throw new ConflictException(VersionConflictCode,
+                $"Сценарій «{id}» щойно збережено іншим запитом; оновіть його і збережіть ще раз.");
+        }
 
+        return ToDetail(workflow, version, await PublishedNumberAsync(workflow, ct));
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowDetail> PublishAsync(Guid id, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        var workflow = await FindAsync(id, ct);
+        var version = await CurrentVersionAsync(workflow, ct);
+        if (workflow.PublishedVersionId == version.Id)
+        {
+            return ToDetail(workflow, version, version.Version);
+        }
+
+        // Публікують лише те, що може працювати: чернетку перевіряють як активну — і для неактивного сценарію,
+        // бо перемикач «Активний» вмикає саме опубліковану версію.
+        var document = JsonNode.Parse(version.Definition)!.AsObject();
+        await ThrowIfInvalidAsync(document, asActive: true, ct, id);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         if (workflow.Active)
         {
-            // Активний сценарій виконує поточну версію — її тригери замінюють попередні.
             await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
         }
 
+        workflow.PublishedVersionId = version.Id;
+        workflow.UpdatedAt = time.GetUtcNow();
+        db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowPublished, AuditEntities.Workflow, id.ToString(),
+            new JsonObject { ["name"] = workflow.Name, ["version"] = version.Version, ["active"] = workflow.Active });
         try
         {
             await db.SaveChangesAsync(ct);
@@ -161,11 +197,6 @@ public sealed class WorkflowService(
         {
             throw WebhookRegistrar.PathConflictRace();
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
-        {
-            throw new ConflictException(VersionConflictCode,
-                $"Сценарій «{id}» щойно збережено іншим запитом; оновіть його і збережіть ще раз.");
-        }
 
         if (workflow.Active)
         {
@@ -173,7 +204,32 @@ public sealed class WorkflowService(
         }
 
         await tx.CommitAsync(ct);
-        return ToDetail(workflow, version);
+        return ToDetail(workflow, version, version.Version);
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowDetail> DiscardDraftAsync(Guid id, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        var workflow = await FindAsync(id, ct);
+        if (workflow.PublishedVersionId is not { } publishedId)
+        {
+            throw new ConflictException(NotPublishedCode,
+                $"Сценарій «{workflow.Name}» ще не публікувався — повертати чернетку нема до чого.");
+        }
+
+        if (workflow.CurrentVersionId != publishedId)
+        {
+            // Історію не переписуємо: чернеткою знову стає опублікована версія, наступне збереження — нова версія.
+            workflow.CurrentVersionId = publishedId;
+            workflow.UpdatedAt = time.GetUtcNow();
+            var number = await PublishedNumberAsync(workflow, ct);
+            db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowDraftDiscarded, AuditEntities.Workflow, id.ToString(),
+                new JsonObject { ["name"] = workflow.Name, ["version"] = number });
+            await db.SaveChangesAsync(ct);
+        }
+
+        return await DetailAsync(workflow, ct);
     }
 
     /// <inheritdoc />
@@ -230,15 +286,19 @@ public sealed class WorkflowService(
     {
         currentUser.Require(UserRole.Editor);
         var workflow = await FindAsync(id, ct);
-        var version = await CurrentVersionAsync(workflow, ct);
         if (workflow.Active)
         {
-            return ToDetail(workflow, version);
+            return await DetailAsync(workflow, ct);
         }
 
+        // Вмикається опублікована версія (F6-10); сценарій, що ще не публікувався, при першій активації публікує чернетку.
+        var version = await db.WorkflowVersions.AsNoTracking()
+                          .SingleOrDefaultAsync(v => v.Id == (workflow.PublishedVersionId ?? workflow.CurrentVersionId), ct)
+                      ?? throw new InvalidOperationException($"Сценарій «{workflow.Id}» без поточної версії.");
         await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct, workflow.Id);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
+        workflow.PublishedVersionId = version.Id;
         workflow.Active = true;
         workflow.UpdatedAt = time.GetUtcNow();
         workflow.ActivatedAt = workflow.UpdatedAt;
@@ -255,7 +315,7 @@ public sealed class WorkflowService(
 
         await schedules.ReplaceAsync(id, ScheduleParameters.Read(JsonNode.Parse(version.Definition)!.AsObject(), out _), ct);
         await tx.CommitAsync(ct);
-        return ToDetail(workflow, version);
+        return await DetailAsync(workflow, ct);
     }
 
     /// <inheritdoc />
@@ -344,11 +404,12 @@ public sealed class WorkflowService(
     private static JsonObject ToDocument(WorkflowDefinition definition) =>
         JsonSerializer.SerializeToNode(definition, WorkflowJson.Options)!.AsObject();
 
-    private static WorkflowDetail ToDetail(WorkflowEntity workflow, WorkflowVersionEntity version)
+    private static WorkflowDetail ToDetail(WorkflowEntity workflow, WorkflowVersionEntity version, int? publishedVersion)
     {
         var definition = WorkflowJson.Deserialize(version.Definition);
         definition.Name = workflow.Name;
-        return new WorkflowDetail(workflow.Id, workflow.Name, workflow.Active, version.Version, version.Id, definition, workflow.UpdatedAt, workflow.GroupId);
+        return new WorkflowDetail(
+            workflow.Id, workflow.Name, workflow.Active, version.Version, version.Id, definition, workflow.UpdatedAt, workflow.GroupId, publishedVersion);
     }
 
     private WorkflowVersionEntity NewVersion(WorkflowEntity workflow, int number, JsonObject document, DateTimeOffset now) => new()
@@ -417,7 +478,7 @@ public sealed class WorkflowService(
     }
 
     /// <summary>
-    /// <c>settings.errorWorkflowId</c> (F4-06): інший існуючий сценарій, поточна версія якого має вузол
+    /// <c>settings.errorWorkflowId</c> (F4-06): інший існуючий сценарій, опублікована (або, без публікації, поточна) версія якого має вузол
     /// <c>core.errorTrigger</c> — інакше запускати нічого. Чи сценарій активний, тут не важливо: вимкнений сценарій
     /// помилок воркер пропускає із записом у журнал.
     /// </summary>
@@ -441,7 +502,7 @@ public sealed class WorkflowService(
 
         var definition = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == errorWorkflowId)
-            .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => (Guid?)v.Id, (w, v) => v.Definition)
+            .Join(db.WorkflowVersions, w => w.PublishedVersionId ?? w.CurrentVersionId, v => (Guid?)v.Id, (w, v) => v.Definition)
             .SingleOrDefaultAsync(ct);
         if (definition is null)
         {
@@ -476,6 +537,11 @@ public sealed class WorkflowService(
         await db.WorkflowVersions.AsNoTracking().SingleOrDefaultAsync(v => v.Id == workflow.CurrentVersionId, ct)
         ?? throw new InvalidOperationException($"Сценарій «{workflow.Id}» без поточної версії.");
 
+    private async Task<int?> PublishedNumberAsync(WorkflowEntity workflow, CancellationToken ct) =>
+        workflow.PublishedVersionId is { } publishedId
+            ? await db.WorkflowVersions.AsNoTracking().Where(v => v.Id == publishedId).Select(v => (int?)v.Version).SingleOrDefaultAsync(ct)
+            : null;
+
     private async Task<WorkflowDetail> DetailAsync(WorkflowEntity workflow, CancellationToken ct) =>
-        ToDetail(workflow, await CurrentVersionAsync(workflow, ct));
+        ToDetail(workflow, await CurrentVersionAsync(workflow, ct), await PublishedNumberAsync(workflow, ct));
 }

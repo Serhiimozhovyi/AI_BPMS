@@ -92,7 +92,18 @@ public static class WorkflowEndpoints
 
         workflows.MapPost("/{id:guid}/activate", (Guid id, IWorkflowService service, CancellationToken ct) =>
             service.ActivateAsync(id, ct))
-            .WithSummary("Активувати: увімкнути тригери (webhook, розклад, poll)");
+            .WithSummary("Активувати: увімкнути тригери (webhook, розклад, poll) опублікованої версії");
+
+        workflows.MapPost("/{id:guid}/publish", (Guid id, IWorkflowService service, CancellationToken ct) =>
+            service.PublishAsync(id, ct))
+            .WithSummary("Опублікувати чернетку")
+            .WithDescription("Чернетка перевіряється як активна і стає версією, яку виконують тригери; неактивний сценарій не вмикається. " +
+                             "Некоректна чернетка — 400, опублікована версія не змінюється.");
+
+        workflows.MapPost("/{id:guid}/discard-draft", (Guid id, IWorkflowService service, CancellationToken ct) =>
+            service.DiscardDraftAsync(id, ct))
+            .WithSummary("Скасувати зміни: повернути чернетку до опублікованої версії")
+            .WithDescription("Сценарій, що ще не публікувався, — 409 WORKFLOW_NOT_PUBLISHED.");
 
         workflows.MapPost("/{id:guid}/deactivate", (Guid id, IWorkflowService service, CancellationToken ct) =>
             service.DeactivateAsync(id, ct))

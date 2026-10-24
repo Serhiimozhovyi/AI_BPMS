@@ -107,21 +107,25 @@ public class ScheduleTests(ApiFactory api)
     }
 
     [Fact]
-    public async Task Saving_active_workflow_replaces_schedule_and_removing_node_drops_it()
+    public async Task Publishing_active_workflow_replaces_schedule_and_removing_node_drops_it()
     {
         var editor = await LoginAsync(api);
         var id = await CreateAsync(editor, ScheduleNode("0 7 * * *"));
         await ActivateAsync(editor, id);
+        var before = Assert.IsAssignableFrom<ICronTrigger>(await TriggerAsync(api, id)).CronExpressionString;
 
-        var saved = await editor.PutAsync($"{Base}/{id}", Json(ScheduleNode("0 0 9 ? * SAT")));
+        // Збереження пише чернетку (F6-10): розклад змінюється лише публікацією.
+        Assert.Equal(HttpStatusCode.OK, (await editor.PutAsync($"{Base}/{id}", Json(ScheduleNode("0 0 9 ? * SAT")))).StatusCode);
+        Assert.Equal(before, Assert.IsAssignableFrom<ICronTrigger>(await TriggerAsync(api, id)).CronExpressionString);
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Base}/{id}/publish", null)).StatusCode);
 
-        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         var trigger = Assert.IsAssignableFrom<ICronTrigger>(await TriggerAsync(api, id));
         Assert.Equal("0 0 9 ? * SAT", trigger.CronExpressionString);
         Assert.Equal("Europe/Kyiv", trigger.TimeZone.Id);
 
         var manual = Definition("""[{ "id": "n_manual", "name": "Ручний", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} }]""");
         Assert.Equal(HttpStatusCode.OK, (await editor.PutAsync($"{Base}/{id}", Json(manual))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Base}/{id}/publish", null)).StatusCode);
 
         Assert.False(await (await SchedulerAsync(api)).Exists(QuartzScheduleRegistrar.JobKeyOf(id)));
         await DeactivateAsync(editor, id);

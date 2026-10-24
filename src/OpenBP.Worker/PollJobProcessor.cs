@@ -147,7 +147,7 @@ public sealed partial class PollJobProcessor
         return result;
     }
 
-    /// <summary>Опитує вузол <c>mcp.poll</c> поточної версії активного сценарію і за нових записів ставить виконання.</summary>
+    /// <summary>Опитує вузол <c>mcp.poll</c> опублікованої версії (F6-10) активного сценарію і за нових записів ставить виконання.</summary>
     /// <param name="payload">Який вузол опитати.</param>
     /// <param name="ct">Скасування.</param>
     public async Task<PollResult> PollAsync(PollJobPayload payload, CancellationToken ct)
@@ -251,7 +251,7 @@ public sealed partial class PollJobProcessor
         }
         catch (Exception ex) when (ex is NotFoundException or WorkflowValidationException)
         {
-            // Сценарій видалено або вузол зник із поточної версії між читанням і запуском.
+            // Сценарій видалено або вузол зник із опублікованої версії між читанням і запуском.
             return new(PollOutcome.Skipped);
         }
         catch (DbUpdateException ex) when (stateRow is null && ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
@@ -265,7 +265,7 @@ public sealed partial class PollJobProcessor
     }
 
     /// <summary>
-    /// Сценарій з одним вузлом <c>mcp.poll</c> поточної версії (налаштування — сценарію); <c>null</c> — опитувати нічого:
+    /// Сценарій з одним вузлом <c>mcp.poll</c> опублікованої версії (налаштування — сценарію); <c>null</c> — опитувати нічого:
     /// сценарію немає, він неактивний або вузла немає / він вимкнений.
     /// </summary>
     private async Task<WorkflowDefinition?> LoadPollWorkflowAsync(PollJobPayload payload, CancellationToken ct)
@@ -273,7 +273,7 @@ public sealed partial class PollJobProcessor
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         var definition = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == payload.WorkflowId && w.Active)
-            .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => v.Id, (w, v) => v.Definition)
+            .Join(db.WorkflowVersions, w => w.PublishedVersionId ?? w.CurrentVersionId, v => v.Id, (w, v) => v.Definition)
             .SingleOrDefaultAsync(ct)
             .ConfigureAwait(false);
         if (definition is null)
