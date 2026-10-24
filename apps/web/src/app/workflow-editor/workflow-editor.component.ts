@@ -5,6 +5,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
+import { BusinessViewComponent } from '../business-view/business-view.component';
+import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
 import { Autosave } from '../canvas/autosave';
 import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
@@ -95,7 +97,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -116,6 +118,12 @@ export interface EditorErrorEvent {
         @if (definition(); as def) {
           <span class="editor__count" data-testid="counts" i18n="@@workfloweditor.counts">
             вузлів: {{ def.nodes.length }} · ребер: {{ def.connections.length }}
+          </span>
+        }
+        @if (definition()) {
+          <span class="editor__views" role="radiogroup" i18n-aria-label="@@workfloweditor.view" aria-label="Вигляд сценарію">
+            <button type="button" role="radio" class="editor__view" data-testid="view-business" [class.editor__view--on]="view() === 'business'" [attr.aria-checked]="view() === 'business'" (click)="setView('business')" i18n-title="@@workfloweditor.view.business.hint" title="Хто що робить і в якому порядку — без технічних деталей" i18n="@@workfloweditor.view.business">Бізнес</button>
+            <button type="button" role="radio" class="editor__view" data-testid="view-technical" [class.editor__view--on]="view() === 'technical'" [attr.aria-checked]="view() === 'technical'" (click)="setView('technical')" i18n-title="@@workfloweditor.view.technical.hint" title="Вузли, порти й параметри" i18n="@@workfloweditor.view.technical">Технічний</button>
           </span>
         }
         @if (readonly()) {
@@ -180,6 +188,9 @@ export interface EditorErrorEvent {
         <p role="alert" class="m-4 text-red-700" data-testid="page-error">{{ error() }}</p>
       }
       @if (definition(); as def) {
+        @if (view() === 'business') {
+          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" (stepPick)="openStep($event)" />
+        } @else {
         <div class="editor__body">
           @if (!readonly()) {
             <aside class="editor__palette">
@@ -322,6 +333,7 @@ export interface EditorErrorEvent {
             </aside>
           }
         </div>
+        }
       }
     </section>
   `,
@@ -409,6 +421,36 @@ export interface EditorErrorEvent {
       background: var(--ac-button);
       font-size: 12px;
       text-decoration: none;
+    }
+
+    .editor__views {
+      display: inline-flex;
+      flex-shrink: 0;
+      border: 1px solid var(--ac-line);
+      border-radius: var(--ac-radius-sm);
+      overflow: hidden;
+    }
+
+    .editor__view {
+      padding: 4px 12px;
+      white-space: nowrap;
+      border: 0;
+      font: inherit;
+      font-size: 13px;
+      color: var(--ac-vivid);
+      background: var(--ac-white);
+      cursor: pointer;
+    }
+
+    .editor__view--on {
+      color: var(--ac-kit);
+      background: var(--ac-button);
+      font-weight: 500;
+    }
+
+    .editor__business {
+      flex: 1;
+      min-height: 0;
     }
 
     .editor__count {
@@ -643,6 +685,9 @@ export class WorkflowEditorComponent implements OnInit {
   /** Облікові дані для вибору у вузлах (F4-03); `null` — недоступні (немає прав або помилка), поля лишаються текстовими. */
   protected readonly credentialOptions = signal<CredentialOption[] | null>(null);
   protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
+  /** «Бізнес | Технічний» (F3-66): з `?view=` або останній вибраний. */
+  protected readonly view = signal<EditorView>(readEditorView());
+  protected readonly businessConnectors = computed(() => this.servers().map((s) => ({ id: s.id, name: s.name })));
   /** Останній тестовий запуск цього сценарію. */
   protected readonly testRun = signal<TestRun | null>(null);
   /** Запуск не вдалося почати (сценарій не збережено, помилка Api). */
@@ -1206,9 +1251,22 @@ export class WorkflowEditorComponent implements OnInit {
   }
 
   /** Гарячі клавіші редактора; у полях введення не перехоплюються. */
+  protected setView(view: EditorView): void {
+    this.view.set(view);
+    writeEditorView(view, !this.embedded());
+    if (view === 'business') this.quickAdd.set(null);
+  }
+
+  /** Клік на крок бізнес-вигляду: технічний вигляд з цим вузлом виділеним і відкритою панеллю. */
+  protected openStep(nodeId: string): void {
+    this.setView('technical');
+    this.selection.set({ nodes: [nodeId], edges: [] });
+  }
+
   protected keydown(event: KeyboardEvent): void {
     // У Shadow DOM (`<openbp-canvas>`) `event.target` — сам елемент; справжня ціль — перша в composedPath.
-    if (!this.definition() || this.readonly() || isEditable(event.composedPath()[0] ?? event.target)) return;
+    // У бізнес-вигляді структура не змінюється — клавіші редагування канвасу не діють.
+    if (!this.definition() || this.readonly() || this.view() === 'business' || isEditable(event.composedPath()[0] ?? event.target)) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     // Перехоплюємо лише доступну дію — інакше працює стандартна поведінка браузера (копіювання тексту тощо).
