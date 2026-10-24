@@ -486,7 +486,7 @@ test('F3-59: порожній сценарій — «Почати з прикл�
   await expect(page.getByTestId('first-step-hint')).toHaveCount(0);
 });
 
-test('F3-60: «Описати процес» → помічник будує сценарій з тригером і Set; Ctrl+Z скасовує відповідь', async ({ page }) => {
+test('F3-60: «Описати процес» → помічник будує сценарій з тригером і Set; «Скасувати» прибирає відповідь', async ({ page }) => {
   const api = new FakeApi();
   await api.install(page);
   await page.goto(`/workflows/${WORKFLOW_ID}`);
@@ -506,7 +506,8 @@ test('F3-60: «Описати процес» → помічник будує с�
   expect(graph(api.definition).nodes).toEqual(['Привітання:core.set', 'Старт:core.manualTrigger']);
   expect(api.assistantRequests).toEqual([expect.objectContaining({ message: 'зроби сценарій з тригером і Set', history: [] })]);
 
+  // Відповідь помічника — одна правка в історії: «Скасувати» повертає порожній сценарій.
   await page.getByTestId('assistant-close').click();
-  await page.keyboard.press('Control+z');
+  await page.getByTestId('undo').click();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
 });
