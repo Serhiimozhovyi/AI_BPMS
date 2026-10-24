@@ -61,6 +61,13 @@ builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<I
 builder.Services.AddOpenBpWorkflowServices();
 // «Почати з прикладу» (F3-59): examples/templates.json і файли прикладів вбудовані в збірку Api.
 builder.Services.AddSingleton(WorkflowTemplateCatalog.FromResources(typeof(Program).Assembly, "examples/"));
+// Каталог конекторів (F6-16): маніфести connectors/*/connector.json у ресурсах Api і зовнішній OPENBP_CONNECTOR_CATALOG_URL.
+builder.Services.AddSingleton(sp => new ConnectorCatalog(
+    ConnectorCatalog.FromResources(typeof(Program).Assembly, "connectors/"),
+    sp.GetRequiredService<IConfiguration>()[ConnectorCatalog.ExternalUrlKey],
+    new HttpClient { Timeout = TimeSpan.FromSeconds(10) },
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<ConnectorCatalog>>()));
 builder.Services.AddOpenBpDataTableServices();
 // Журнал аудиту (F6-15): записи пишуть сервіси змін, читає admin.
 builder.Services.AddScoped<IAuditService, AuditService>();

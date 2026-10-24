@@ -31,6 +31,33 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public string ConnectionString => _container.GetConnectionString();
 
+    /// <summary>
+    /// Зовнішній каталог конекторів (F6-16, <c>OPENBP_CONNECTOR_CATALOG_URL</c>): запис <c>fake</c> запускає FakeServer
+    /// через stdio, щоб встановлення з каталогу проходило discovery.
+    /// </summary>
+    public static string ExternalCatalogPath { get; } = WriteExternalCatalog();
+
+    private static string WriteExternalCatalog()
+    {
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } h && File.Exists(h) ? h : "dotnet";
+        var path = Path.Combine(Path.GetTempPath(), $"openbp-catalog-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            connectors = new[]
+            {
+                new
+                {
+                    id = "fake",
+                    name = "FakeServer",
+                    description = "Мок-сервер тестів.",
+                    transport = "stdio",
+                    stdio = new { command = host, arguments = new[] { Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll") } },
+                },
+            },
+        }));
+        return path;
+    }
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
@@ -82,6 +109,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("OPENBP_ADMIN_PASSWORD", AdminPassword);
         // Розсилку сповіщень тести викликають самі (F6-07): фоновий job забирав би їхні події.
         builder.UseSetting("OPENBP_NOTIFICATIONS_INTERVAL_SEC", "0");
+        builder.UseSetting("OPENBP_CONNECTOR_CATALOG_URL", ExternalCatalogPath);
     }
 }
 

@@ -236,6 +236,17 @@ docker compose -f docker-compose.prod.yml -f docker-compose.connectors.yml up -d
 Сервіс у тій самій мережі Compose, тож в OpenBP: «Конектори» → «Додати MCP-сервер» → транспорт `http`, URL
 `http://telegram:8080/mcp` → «Оновити tools». Стан має стати «Підключено». Назовні порт конектора не відкривається.
 
+### Каталог конекторів
+
+«Конектори» → «Каталог» показує конектори з `connectors/*/connector.json` (і зовнішній каталог, якщо задано
+`OPENBP_CONNECTOR_CATALOG_URL` — http(s)-адреса чи шлях до JSON `{ "connectors": [...] }`). «Встановити» створює
+конектор з типовими налаштуваннями маніфесту й відкриває форму облікових даних з потрібними назвами змінних.
+
+- Транспорт `http` (як у прикладі вище): сервіс Compose з іменем `<id>` на порту 8080 (`psy-support` — 8090).
+- Транспорт `stdio`: OpenBP запускає `dotnet /opt/openbp/connectors/<id>/<збірка>.dll` в контейнерах `api` і `worker`,
+  тож змонтуйте туди результат `dotnet publish`, напр. `./connectors/telegram/out:/opt/openbp/connectors/telegram:ro`
+  у обох сервісах (образам потрібен .NET runtime — він уже є в образах `api` і `worker`).
+
 ### Облікові дані
 
 - «Облікові дані» → «Додати»: тип («Конектор HTTP: заголовки», «Конектор stdio: змінні середовища», LLM-провайдери, OAuth2, секрети webhook-ів

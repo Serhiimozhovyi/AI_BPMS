@@ -13,7 +13,8 @@ public static class ConnectorServiceCollectionExtensions
     /// <summary>
     /// Додає <see cref="IConnectorService"/> (scoped) і <see cref="ConnectorService"/>. Хост реєструє
     /// <c>OpenBpDbContext</c>, <see cref="ICurrentUser"/>, <see cref="IMcpServerRegistry"/> і
-    /// <see cref="ICredentialProvider"/> (береться лише для конекторів із credential'ом).
+    /// <see cref="ICredentialProvider"/> (береться лише для конекторів із credential'ом), а для
+    /// <see cref="IConnectorCatalogService"/> — <see cref="ConnectorCatalog"/>.
     /// </summary>
     /// <param name="services">Контейнер.</param>
     public static IServiceCollection AddOpenBpConnectorServices(this IServiceCollection services)
@@ -26,6 +27,7 @@ public static class ConnectorServiceCollectionExtensions
             () => sp.GetRequiredService<ICredentialProvider>(),
             sp.GetRequiredService<TimeProvider>()));
         services.AddScoped<IConnectorService>(sp => sp.GetRequiredService<ConnectorService>());
+        services.AddScoped<IConnectorCatalogService, ConnectorCatalogService>();
         return services;
     }
 }

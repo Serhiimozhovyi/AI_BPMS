@@ -161,6 +161,10 @@ export class CredentialFormComponent implements OnInit {
   readonly allowedTypes = input<string[] | null>(null);
   /** Проєкт, заданий батьківською формою (конектор, F6-14): вибору немає; `undefined` — вибирає користувач. */
   readonly fixedProjectId = input<string | null | undefined>(undefined);
+  /** Назва нового credential'а за замовчуванням (каталог конекторів, F6-16). */
+  readonly presetName = input('');
+  /** Ключі першої мапи нового credential'а (змінні чи заголовки з маніфесту конектора, F6-16). */
+  readonly presetKeys = input<string[]>([]);
 
   readonly saved = output<CredentialSummary>();
   readonly cancelled = output<void>();
@@ -196,6 +200,15 @@ export class CredentialFormComponent implements OnInit {
     } else if (this.availableTypes().length === 1 || (this.allowedTypes() && this.availableTypes().length > 0)) {
       this.selectType(this.availableTypes()[0].type);
     }
+    if (!existing) this.applyPreset();
+  }
+
+  private applyPreset(): void {
+    if (this.presetName()) this.name.set(this.presetName());
+    const map = this.fields().find((f) => f.kind === 'secretMap');
+    const keys = this.presetKeys();
+    if (!map || keys.length === 0) return;
+    this.value.update((s) => ({ ...s, maps: { ...s.maps, [map.name]: keys.map((key) => ({ ...emptyPair(), key })) } }));
   }
 
   selectType(typeName: string): void {

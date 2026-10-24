@@ -27,6 +27,7 @@ public enum ConnectorStatus
 /// <param name="ToolCount">Кількість tools у кеші.</param>
 /// <param name="ToolsCachedAt">Час останнього discovery.</param>
 /// <param name="ProjectId">Проєкт (F6-14); <c>null</c> — спільний конектор.</param>
+/// <param name="CatalogId">Запис каталогу, з якого встановлено (F6-16); <c>null</c> — додано вручну.</param>
 public sealed record ConnectorSummary(
     Guid Id,
     string Name,
@@ -34,7 +35,8 @@ public sealed record ConnectorSummary(
     ConnectorStatus Status,
     int ToolCount,
     DateTimeOffset? ToolsCachedAt,
-    Guid? ProjectId = null);
+    Guid? ProjectId = null,
+    string? CatalogId = null);
 
 /// <summary>Конектор з налаштуваннями і кешем tools (<c>GET /connectors/{id}</c>). Секретів немає.</summary>
 /// <param name="Summary">Заголовок.</param>
@@ -73,6 +75,9 @@ public sealed record ConnectorConfig
 
     /// <summary>http: несекретні заголовки.</summary>
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
+
+    /// <summary>Запис каталогу, з якого встановлено конектор (F6-16); <c>null</c> — додано вручну.</summary>
+    public string? Catalog { get; init; }
 }
 
 /// <summary>Тіло <c>POST/PUT /connectors</c>.</summary>

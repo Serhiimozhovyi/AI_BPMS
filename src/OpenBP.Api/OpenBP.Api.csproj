@@ -19,6 +19,8 @@
   <ItemGroup>
     <!-- Шаблони «Почати з прикладу» (F3-59): каталог і приклади з examples/. -->
     <EmbeddedResource Include="../../examples/*.json" Exclude="../../examples/servers.json;../../examples/credentials.*.json" LogicalName="examples/%(Filename)%(Extension)" />
+    <!-- Каталог конекторів (F6-16): маніфести connectors/<id>/connector.json. -->
+    <EmbeddedResource Include="../../connectors/**/connector.json" Exclude="../../connectors/*/*/**" LogicalName="connectors/%(RecursiveDir)connector.json" />
   </ItemGroup>
 
 </Project>

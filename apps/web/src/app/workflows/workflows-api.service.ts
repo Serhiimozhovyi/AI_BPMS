@@ -226,6 +226,8 @@ export interface WorkflowTemplate {
   name: string;
   description: string;
   definition: WorkflowDefinition;
+  /** Залежності (F6-16): id записів каталогу конекторів. */
+  connectors?: string[];
 }
 
 /** Клієнт `/api/v1/workflows` (docs/architecture.md §10.3). */

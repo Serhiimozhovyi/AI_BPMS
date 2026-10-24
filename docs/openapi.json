@@ -3729,6 +3729,113 @@
         ]
       }
     },
+    "/api/v1/connectors/catalog": {
+      "get": {
+        "tags": [
+          "Конектори"
+        ],
+        "summary": "Каталог конекторів",
+        "description": "Маніфести `connectors/*/connector.json` і зовнішнього каталогу `OPENBP_CONNECTOR_CATALOG_URL` з уже встановленими конекторами (F6-16).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorCatalogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/connectors/catalog/{catalogId}/install": {
+      "post": {
+        "tags": [
+          "Конектори"
+        ],
+        "summary": "Встановити конектор з каталогу",
+        "description": "Створює MCP-сервер з типовими налаштуваннями запису і одразу читає tools; облікові дані додаються окремо.",
+        "parameters": [
+          {
+            "name": "catalogId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConnectorInstallRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/connectors/{id}": {
       "get": {
         "tags": [
@@ -4750,6 +4857,28 @@
           }
         }
       },
+      "ConnectorCatalogEntry": {
+        "required": [
+          "manifest",
+          "source",
+          "installed"
+        ],
+        "type": "object",
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/ConnectorManifest"
+          },
+          "source": {
+            "type": "string"
+          },
+          "installed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorSummary"
+            }
+          }
+        }
+      },
       "ConnectorConfig": {
         "type": "object",
         "properties": {
@@ -4798,6 +4927,12 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "catalog": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -4874,6 +5009,212 @@
           }
         }
       },
+      "ConnectorInstallRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "transport": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpTransportKind"
+              }
+            ]
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ConnectorManifest": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "icon",
+          "transport",
+          "stdio",
+          "http",
+          "credential",
+          "triggers"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "transport": {
+            "$ref": "#/components/schemas/McpTransportKind"
+          },
+          "stdio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConnectorManifestStdio"
+              }
+            ]
+          },
+          "http": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConnectorManifestHttp"
+              }
+            ]
+          },
+          "credential": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConnectorManifestCredential"
+              }
+            ]
+          },
+          "triggers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonArray"
+              }
+            ]
+          }
+        }
+      },
+      "ConnectorManifestCredential": {
+        "type": "object",
+        "properties": {
+          "env": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConnectorManifestKey"
+            }
+          },
+          "headers": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConnectorManifestKey"
+            }
+          }
+        }
+      },
+      "ConnectorManifestHttp": {
+        "required": [
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "headers": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ConnectorManifestKey": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "secret": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ConnectorManifestStdio": {
+        "required": [
+          "command"
+        ],
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "environment": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "workingDirectory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ConnectorStatus": {
         "enum": [
           "new",
@@ -4926,6 +5267,12 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "catalogId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -5718,6 +6065,9 @@
             }
           }
         }
+      },
+      "JsonArray": {
+        "type": "array"
       },
       "JsonNode": {},
       "JsonObject": {
@@ -7222,7 +7572,8 @@
           "id",
           "name",
           "description",
-          "definition"
+          "definition",
+          "connectors"
         ],
         "type": "object",
         "properties": {
@@ -7237,6 +7588,12 @@
           },
           "definition": {
             "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

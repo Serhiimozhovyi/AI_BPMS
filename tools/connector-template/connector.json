@@ -1,0 +1,35 @@
+{
+  "$schema": "schemas/connector.schema.json",
+  "id": "connector.template",
+  "name": "Connector.Template",
+  "description": "MCP-конектор над REST API, створений з Connector Kit.",
+  "icon": "🔌",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/connector.template/Connector.Template.dll"
+    ]
+  },
+  "http": {
+    "url": "http://connector.template:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "Connector__BaseUrl",
+        "title": "Адреса REST API",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "CONNECTOR_TOKEN",
+        "title": "Токен (для Connector:Auth:Type = bearer)",
+        "required": false,
+        "secret": true
+      }
+    ],
+    "headers": []
+  },
+  "triggers": []
+}

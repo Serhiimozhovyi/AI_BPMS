@@ -2,7 +2,10 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { ActivatedRoute, Router } from '@angular/router';
+import { ConnectorCatalogComponent } from '../../connectors/connector-catalog.component';
 import { ConnectorFormComponent } from '../../connectors/connector-form.component';
 import { statusLabel } from '../../connectors/connector-input';
 import { ConnectorToolsComponent } from '../../connectors/connector-tools.component';
@@ -14,21 +17,32 @@ import {
   apiErrorMessage,
 } from '../../connectors/connectors-api.service';
 
-/** `/connectors`: MCP-сервери зі статусом, додавання, discovery tools і тестовий виклик (F2-14). */
+/**
+ * `/connectors`: MCP-сервери зі статусом, додавання, discovery tools і тестовий виклик (F2-14); вкладка «Каталог»
+ * (F6-16, `?catalog=<id>` відкриває її з підсвіченим записом).
+ */
 @Component({
   selector: 'app-connectors-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatProgressBarModule, ConnectorFormComponent, ConnectorToolsComponent],
+  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent],
   template: `
     <section class="p-6">
       <div class="mb-4 flex items-center gap-4">
         <h1 class="mat-font-headline-sm" i18n="@@connectors.title">Конектори</h1>
-        @if (!adding()) {
+        <mat-button-toggle-group [value]="view()" (change)="showView($event.value)" data-testid="connectors-view">
+          <mat-button-toggle value="installed" data-testid="view-installed" i18n="@@connectors.view.installed">Встановлені</mat-button-toggle>
+          <mat-button-toggle value="catalog" data-testid="view-catalog" i18n="@@connectors.view.catalog">Каталог</mat-button-toggle>
+        </mat-button-toggle-group>
+        @if (!adding() && view() === 'installed') {
           <button mat-flat-button type="button" data-testid="add-button" (click)="adding.set(true)" i18n="@@connectors.add">
             Додати MCP-сервер
           </button>
         }
       </div>
+
+      @if (view() === 'catalog') {
+        <app-connector-catalog [highlight]="highlight()" (installed)="onInstalled($event)" />
+      } @else {
 
       @if (adding()) {
         <div class="mb-6 max-w-2xl">
@@ -106,13 +120,20 @@ import {
           <app-connector-tools [connectorId]="d.summary.id" [tools]="d.tools" />
         </article>
       }
+      }
     </section>
   `,
 })
 export class ConnectorsPage implements OnInit {
   private readonly api = inject(ConnectorsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
+  /** Вкладка: встановлені конектори або каталог (F6-16). */
+  readonly view = signal<'installed' | 'catalog'>('installed');
+  /** Запис каталогу з `?catalog=`. */
+  readonly highlight = signal<string | null>(null);
   readonly connectors = signal<ConnectorSummary[]>([]);
   readonly selected = signal<ConnectorDetail | null>(null);
   readonly loading = signal(false);
@@ -124,7 +145,23 @@ export class ConnectorsPage implements OnInit {
   readonly statusLabel = statusLabel;
 
   ngOnInit(): void {
+    const catalog = this.route.snapshot.queryParamMap.get('catalog');
+    if (catalog !== null) {
+      this.view.set('catalog');
+      this.highlight.set(catalog || null);
+    }
     this.load();
+  }
+
+  showView(view: 'installed' | 'catalog'): void {
+    this.view.set(view);
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { catalog: view === 'catalog' ? (this.highlight() ?? '') : null }, replaceUrl: true });
+  }
+
+  /** Конектор з каталогу готовий: показати його у списку встановлених. */
+  onInstalled(detail: ConnectorDetail): void {
+    this.showView('installed');
+    this.onCreated(detail);
   }
 
   load(): void {

@@ -1,0 +1,29 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "telegram",
+  "name": "Telegram Bot API",
+  "description": "Повідомлення, кнопки, документи й оновлення бота Telegram (send_message, get_updates…).",
+  "icon": "✈️",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/telegram/OpenBP.Connectors.Telegram.dll"
+    ]
+  },
+  "http": {
+    "url": "http://telegram:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "TELEGRAM_BOT_TOKEN",
+        "title": "Токен бота від @BotFather",
+        "required": true,
+        "secret": true
+      }
+    ],
+    "headers": []
+  },
+  "triggers": []
+}

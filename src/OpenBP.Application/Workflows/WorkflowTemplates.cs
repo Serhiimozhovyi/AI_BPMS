@@ -11,7 +11,8 @@ namespace OpenBP.Application.Workflows;
 /// <param name="Name">Назва сценарію-прикладу.</param>
 /// <param name="Description">Що робить приклад.</param>
 /// <param name="Definition">Визначення без <c>pinData</c>, з порожніми <c>serverId</c>/<c>credentialId</c> і без сценарію помилок.</param>
-public sealed record WorkflowTemplate(string Id, string Name, string Description, WorkflowDefinition Definition);
+/// <param name="Connectors">Залежності (F6-16): id записів каталогу конекторів, без яких шаблон не запрацює.</param>
+public sealed record WorkflowTemplate(string Id, string Name, string Description, WorkflowDefinition Definition, IReadOnlyList<string> Connectors);
 
 /// <summary>Шаблони сценаріїв з прикладів репозиторію. Читає будь-який автентифікований користувач.</summary>
 public interface IWorkflowTemplateService
@@ -22,7 +23,7 @@ public interface IWorkflowTemplateService
 }
 
 /// <summary>
-/// Сирі шаблони: каталог <c>examples/templates.json</c> (<c>{ templates: [{ file, description }] }</c>) і файли, на які він
+/// Сирі шаблони: каталог <c>examples/templates.json</c> (<c>{ templates: [{ file, description, connectors? }] }</c>) і файли, на які він
 /// посилається. Хост завантажує їх зі своїх вбудованих ресурсів (<see cref="FromResources"/>).
 /// </summary>
 public sealed class WorkflowTemplateCatalog
@@ -51,7 +52,8 @@ public sealed class WorkflowTemplateCatalog
                 Path.GetFileNameWithoutExtension(file),
                 definition.Name,
                 entry["description"]?.GetValue<string>() ?? "",
-                Sanitize(definition)));
+                Sanitize(definition),
+                [.. (entry["connectors"] as JsonArray ?? []).Select(c => c?.GetValue<string>()).OfType<string>()]));
         }
 
         templates = list;

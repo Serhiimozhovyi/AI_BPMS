@@ -1,0 +1,36 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "psy-support",
+  "name": "Психологічна підтримка",
+  "description": "Бот і доменні tools застосунку психологічної підтримки з власною БД і адмінкою.",
+  "icon": "💬",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/psy-support/OpenBP.Connectors.PsySupport.dll"
+    ]
+  },
+  "http": {
+    "url": "http://psy-support:8090/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "ConnectionStrings__PsySupport",
+        "title": "Рядок підключення до бази psy_support",
+        "required": true,
+        "secret": true
+      }
+    ],
+    "headers": [
+      {
+        "name": "Authorization",
+        "title": "Bearer <PSY_MCP_TOKEN> (для http)",
+        "required": true,
+        "secret": true
+      }
+    ]
+  },
+  "triggers": []
+}
