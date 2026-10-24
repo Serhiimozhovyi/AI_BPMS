@@ -403,25 +403,54 @@ public class WorkflowTests(ApiFactory api)
     }
 
     [Fact]
-    public async Task Saving_active_workflow_without_trigger_is_rejected_entirely()
+    public async Task Broken_draft_of_active_workflow_is_saved_but_not_published()
     {
         var editor = await LoginAsync(UserRole.Editor);
         var id = IdOf(await CreateAsync(editor, Definition(Unique("Активний"))));
-        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Base}/{id}/activate", null)).StatusCode);
+        var activated = await JsonAsync(await editor.PostAsync($"{Base}/{id}/activate", null));
+        Assert.Equal(1, activated.GetProperty("publishedVersion").GetInt32());
+        Assert.False(activated.GetProperty("hasUnpublishedChanges").GetBoolean());
 
-        var response = await editor.PutAsync($"{Base}/{id}", Json(Definition("x", SetOnlyNode)));
-
-        var problem = await AssertProblemAsync(response, HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
-        Assert.Contains("TRIGGER_MISSING", ErrorCodes(problem));
-        var current = await JsonAsync(await editor.GetAsync($"{Base}/{id}"));
-        Assert.Equal(1, current.GetProperty("version").GetInt32());
-        Assert.True(current.GetProperty("active").GetBoolean());
-
-        // Неактивний той самий визначення приймає.
-        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Base}/{id}/deactivate", null)).StatusCode);
+        // Чернетка без тригера зберігається (F6-10): тригери далі виконують опубліковану версію.
         var saved = await editor.PutAsync($"{Base}/{id}", Json(Definition("x", SetOnlyNode)));
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        Assert.Equal(2, (await JsonAsync(saved)).GetProperty("version").GetInt32());
+        var draft = await JsonAsync(saved);
+        Assert.Equal(2, draft.GetProperty("version").GetInt32());
+        Assert.Equal(1, draft.GetProperty("publishedVersion").GetInt32());
+        Assert.True(draft.GetProperty("hasUnpublishedChanges").GetBoolean());
+
+        var problem = await AssertProblemAsync(await editor.PostAsync($"{Base}/{id}/publish", null), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        Assert.Contains("TRIGGER_MISSING", ErrorCodes(problem));
+        var current = await JsonAsync(await editor.GetAsync($"{Base}/{id}"));
+        Assert.Equal(1, current.GetProperty("publishedVersion").GetInt32());
+        Assert.True(current.GetProperty("active").GetBoolean());
+
+        // «Скасувати зміни» повертає чернетку до опублікованої версії, історію не переписує.
+        var discarded = await JsonAsync(await editor.PostAsync($"{Base}/{id}/discard-draft", null));
+        Assert.Equal(1, discarded.GetProperty("version").GetInt32());
+        Assert.False(discarded.GetProperty("hasUnpublishedChanges").GetBoolean());
+        Assert.Equal(2, (await JsonAsync(await editor.GetAsync($"{Base}/{id}/versions"))).GetArrayLength());
+        var next = await JsonAsync(await editor.PutAsync($"{Base}/{id}", Json(Definition("x"))));
+        Assert.Equal(3, next.GetProperty("version").GetInt32());
+    }
+
+    [Fact]
+    public async Task Publish_does_not_activate_and_discard_requires_publication()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var id = IdOf(await CreateAsync(editor, Definition(Unique("Неактивний"))));
+        await AssertProblemAsync(await editor.PostAsync($"{Base}/{id}/discard-draft", null), HttpStatusCode.Conflict, "WORKFLOW_NOT_PUBLISHED");
+
+        var published = await JsonAsync(await editor.PostAsync($"{Base}/{id}/publish", null));
+        Assert.False(published.GetProperty("active").GetBoolean());
+        Assert.Equal(1, published.GetProperty("publishedVersion").GetInt32());
+        var list = await JsonAsync(await editor.GetAsync($"{Base}?search={Uri.EscapeDataString(published.GetProperty("name").GetString()!)}"));
+        Assert.Equal(1, list.GetProperty("items")[0].GetProperty("publishedVersion").GetInt32());
+
+        // Повторна публікація без змін — без нової версії й без помилки.
+        Assert.Equal(1, (await JsonAsync(await editor.PostAsync($"{Base}/{id}/publish", null))).GetProperty("publishedVersion").GetInt32());
+        var viewer = await LoginAsync(UserRole.Viewer);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsync($"{Base}/{id}/publish", null)).StatusCode);
     }
 
     // ---------- перевірка без збереження ----------

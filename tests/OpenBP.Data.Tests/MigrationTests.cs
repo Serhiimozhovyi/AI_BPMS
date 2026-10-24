@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace OpenBP.Data.Tests;
@@ -31,6 +33,25 @@ public class MigrationTests(PostgresFixture postgres)
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         // Модель не змінилась після міграції `Initial` — нової міграції генерувати не треба.
         Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
+    public async Task DraftPublish_publishes_current_version_of_active_workflows_only()
+    {
+        await using var db = Create(await NewDatabaseAsync());
+        var migrator = db.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261024095347_AppSettings");
+        Guid active = Guid.NewGuid(), inactive = Guid.NewGuid(), activeVersion = Guid.NewGuid(), inactiveVersion = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO workflows (id, name, active, current_version_id, updated_at)
+            VALUES ({active}, 'a', TRUE, {activeVersion}, {Now}), ({inactive}, 'i', FALSE, {inactiveVersion}, {Now})
+            """);
+
+        await migrator.MigrateAsync();
+
+        var published = await db.Workflows.AsNoTracking().ToDictionaryAsync(w => w.Id, w => w.PublishedVersionId);
+        Assert.Equal(activeVersion, published[active]);
+        Assert.Null(published[inactive]);
     }
 
     [Fact]

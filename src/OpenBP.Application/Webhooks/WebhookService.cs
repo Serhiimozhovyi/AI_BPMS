@@ -43,7 +43,7 @@ public sealed class WebhookService(
 
         var definition = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == hook.WorkflowId && w.Active)
-            .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => v.Id, (w, v) => v.Definition)
+            .Join(db.WorkflowVersions, w => w.PublishedVersionId ?? w.CurrentVersionId, v => v.Id, (w, v) => v.Definition)
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException(Entity, path);
         var node = WorkflowJson.Deserialize(definition).Nodes.SingleOrDefault(n => n.Id == hook.NodeId)

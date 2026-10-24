@@ -268,11 +268,22 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 - Кожне збереження (`SaveAsync`) — новий рядок `workflow_versions` (`version` = попередній + 1),
   `workflows.current_version_id` → нова версія. Два паралельні збереження з тим самим номером — друге отримує 409 `WORKFLOW_VERSION_CONFLICT`. Версії незмінні; «відкотитись» = зберегти старе визначення як нову версію.
 - Валідація при збереженні — `WorkflowValidator` з ланцюжком `NodeRegistrySchemaProvider` → `McpNodeSchemaProvider`
-  (правила 1–6 `workflow-format.md`). Для **активного** сценарію — з `IsActive = true` (правило 4); збереження, що
-  ламає активний сценарій, відхиляється цілком (`WorkflowValidationException`, 422), версія не створюється.
-- Активний сценарій завжди виконує **поточну** версію. Активація = валідація з `IsActive` + реєстрація тригерів
-  (`webhooks`, Quartz); збереження активного сценарію перереєстровує тригери; деактивація знімає їх.
-  Конфлікт `webhooks.path` — помилка валідації з кодом `WEBHOOK_PATH_CONFLICT` (F2-10 додає код у `WorkflowValidationCodes`).
+  (правила 1–6 `workflow-format.md`), завжди з `IsActive = false`: збереження пише **чернетку** і тригерів не чіпає (F6-10).
+- **Чернетка і публікація (F6-10).** `workflows.current_version_id` — чернетка: її редагують, автозбереження пише
+  нову версію, тестовий запуск з канвасу (`mode = manual`) і `test_node` виконують її. `workflows.published_version_id` —
+  опублікована версія: її виконують тригери (`webhooks`, розклади Quartz, `mcp.poll`) і сценарій помилок
+  (`mode = trigger | error`); `null` — сценарій ще не публікувався (тоді ці шляхи беруть `current_version_id`).
+  - `POST /workflows/{id}/publish` валідує чернетку з `IsActive = true` і переносить вказівник; в активного сценарію
+    тригери перереєструються з неї в тій самій транзакції. Некоректна чернетка — 422, опублікована версія й тригери
+    не змінюються. Публікація **не вмикає** неактивний сценарій (рішення власника).
+  - Активація реєструє тригери опублікованої версії; сценарій, що ще не публікувався, при першій активації публікує
+    чернетку. Деактивація знімає тригери, `published_version_id` лишається.
+  - `POST /workflows/{id}/discard-draft` («Скасувати зміни»): `current_version_id` = `published_version_id`, нових
+    версій не створює; не публікувався — 409 `WORKFLOW_NOT_PUBLISHED`.
+  - Виконання, що вже йдуть або чекають (`waiting`), довиконуються на своєму `version_id`.
+  - `WorkflowDetail`/`WorkflowSummary` мають `publishedVersion`, деталь — ще `hasUnpublishedChanges`. Міграція
+    `DraftPublish`: наявні активні сценарії отримали `published = current`.
+  Конфлікт `webhooks.path` — помилка валідації з кодом `WEBHOOK_PATH_CONFLICT` при публікації чи активації.
 - Видалення — тільки неактивного сценарію (інакше 409); видаляє версії, `webhooks`, `node_state`, виконання і кроки.
 - Виконання завжди прив'язане до `version_id`, тож журнал показує саме те визначення, що виконувалось.
 
@@ -295,6 +306,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання видимих), editor (створення), admin або editor проєкту (зміни) — §10.6 | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount, role }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії переходять у спільний простір; з credentials чи конекторами — 409 `PROJECT_NOT_EMPTY`) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
 | `GET /workflow-groups/{id}/members` · `PUT /workflow-groups/{id}/members { email, role }` · `DELETE /workflow-groups/{id}/members/{userId}` | учасник (читання), admin або editor проєкту | `ProjectMember[]` (`{ userId, email, role, globalRole }`) · `ProjectMember` · 204 (F6-14) |
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
+| `POST /workflows/{id}/publish` · `/discard-draft` | editor | `WorkflowDetail`; публікація чернетки й «Скасувати зміни» (F6-10, §10.2) |
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
 | `GET /settings/assistant`, `PUT /settings/assistant { credentialId, model }` | editor / admin | налаштування помічника: credential `anthropic`/`openai`/`openai-compatible` (назва й тип, без значень) і модель; `credentialId: null` вимикає |
 | `GET /workflows/templates` | viewer | `[{ id, name, description, definition }]` — шаблони «Почати з прикладу» (F3-59): файли `examples/` з каталогу `examples/templates.json`, вбудовані в збірку Api; у `definition` немає `pinData` і `settings.errorWorkflowId`, `serverId`/`credentialId` порожні |

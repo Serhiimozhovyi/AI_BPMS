@@ -892,6 +892,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("PublishedVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_version_id");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");

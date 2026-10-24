@@ -23,6 +23,8 @@ public static class AuditActions
     public const string WorkflowCreated = "workflow.created";
     public const string WorkflowSaved = "workflow.saved";
     public const string WorkflowRenamed = "workflow.renamed";
+    public const string WorkflowPublished = "workflow.published";
+    public const string WorkflowDraftDiscarded = "workflow.draftDiscarded";
     public const string WorkflowActivated = "workflow.activated";
     public const string WorkflowDeactivated = "workflow.deactivated";
     public const string WorkflowDeleted = "workflow.deleted";

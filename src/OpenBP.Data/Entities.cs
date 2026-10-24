@@ -41,7 +41,13 @@ public sealed class WorkflowEntity
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
     public bool Active { get; set; }
+    /// <summary>Чернетка (F6-10): версія, яку редагують, зберігають і запускають тестово з канвасу.</summary>
     public Guid? CurrentVersionId { get; set; }
+    /// <summary>
+    /// Опублікована версія (F6-10): її виконують тригери (webhook, розклад, опитування) і сценарій помилок;
+    /// <c>null</c> — сценарій ще не публікувався (тоді тригери беруть <see cref="CurrentVersionId"/>).
+    /// </summary>
+    public Guid? PublishedVersionId { get; set; }
     public Guid? CreatedBy { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     /// <summary>Група сценарію (<c>workflow_groups.id</c>); <c>null</c> — без групи.</summary>

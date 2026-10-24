@@ -205,7 +205,7 @@ public class WebhookTests(ApiFactory api)
     }
 
     [Fact]
-    public async Task Saving_active_workflow_reregisters_path_and_rejects_conflicting_one()
+    public async Task Saving_active_workflow_keeps_published_path_until_publish()
     {
         var editor = await LoginAsync();
         var oldPath = UniquePath();
@@ -216,16 +216,52 @@ public class WebhookTests(ApiFactory api)
         await ActivateAsync(editor, id);
         var client = api.CreateClient();
 
+        // Збереження пише чернетку (F6-10): webhook і далі виконує опубліковану версію.
         Assert.Equal(HttpStatusCode.OK, (await editor.PutAsync($"{Base}/{id}", Json(WebhookNode(newPath)))).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync($"/webhook/{oldPath}", null)).StatusCode);
+        await AssertProblemAsync(await client.PostAsync($"/webhook/{newPath}", null), HttpStatusCode.NotFound, "NOT_FOUND");
 
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Base}/{id}/publish", null)).StatusCode);
         await AssertProblemAsync(await client.PostAsync($"/webhook/{oldPath}", null), HttpStatusCode.NotFound, "NOT_FOUND");
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync($"/webhook/{newPath}", null)).StatusCode);
 
-        var problem = await AssertProblemAsync(await editor.PutAsync($"{Base}/{id}", Json(WebhookNode(otherPath))), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        // Шлях іншого сценарію: чернетку зберегти можна, опублікувати — ні; продакшн не зачеплено.
+        Assert.Equal(HttpStatusCode.OK, (await editor.PutAsync($"{Base}/{id}", Json(WebhookNode(otherPath)))).StatusCode);
+        var problem = await AssertProblemAsync(await editor.PostAsync($"{Base}/{id}/publish", null), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
         Assert.Equal("WEBHOOK_PATH_CONFLICT", Assert.Single(problem.GetProperty("errors").EnumerateArray()).GetProperty("code").GetString());
         var current = await JsonAsync(await editor.GetAsync($"{Base}/{id}"));
-        Assert.Equal(2, current.GetProperty("version").GetInt32());
+        Assert.Equal(3, current.GetProperty("version").GetInt32());
+        Assert.Equal(2, current.GetProperty("publishedVersion").GetInt32());
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync($"/webhook/{newPath}", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_runs_published_version_and_test_run_runs_draft()
+    {
+        var editor = await LoginAsync();
+        var path = UniquePath();
+        var id = await CreateAsync(editor, WebhookNode(path));
+        var published = await JsonAsync(await editor.PostAsync($"{Base}/{id}/activate", null));
+        var publishedVersionId = published.GetProperty("versionId").GetGuid();
+        var draft = await JsonAsync(await editor.PutAsync($"{Base}/{id}", Json(WebhookNode(path, auth: null))));
+        var draftVersionId = draft.GetProperty("versionId").GetGuid();
+        Assert.NotEqual(publishedVersionId, draftVersionId);
+        var client = api.CreateClient();
+
+        async Task<Guid> VersionOfAsync(HttpResponseMessage response)
+        {
+            Assert.True(response.IsSuccessStatusCode, response.StatusCode.ToString());
+            var json = await JsonAsync(response);
+            var executionId = json.TryGetProperty("executionId", out var e) ? e.GetGuid() : json.GetProperty("id").GetGuid();
+            await using var db = api.CreateDbContext();
+            return (await db.Executions.SingleAsync(x => x.Id == executionId)).VersionId;
+        }
+
+        Assert.Equal(publishedVersionId, await VersionOfAsync(await client.PostAsync($"/webhook/{path}", null)));
+        Assert.Equal(draftVersionId, await VersionOfAsync(await editor.PostAsync($"{Base}/{id}/executions", null)));
+
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Base}/{id}/publish", null)).StatusCode);
+        Assert.Equal(draftVersionId, await VersionOfAsync(await client.PostAsync($"/webhook/{path}", null)));
     }
 
     [Fact]

@@ -1568,7 +1568,107 @@
         "tags": [
           "Сценарії"
         ],
-        "summary": "Активувати: увімкнути тригери (webhook, розклад, poll)",
+        "summary": "Активувати: увімкнути тригери (webhook, розклад, poll) опублікованої версії",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/{id}/publish": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Опублікувати чернетку",
+        "description": "Чернетка перевіряється як активна і стає версією, яку виконують тригери; неактивний сценарій не вмикається. Некоректна чернетка — 400, опублікована версія не змінюється.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/{id}/discard-draft": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Скасувати зміни: повернути чернетку до опублікованої версії",
+        "description": "Сценарій, що ще не публікувався, — 409 WORKFLOW_NOT_PUBLISHED.",
         "parameters": [
           {
             "name": "id",
@@ -6857,6 +6957,18 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "publishedVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasUnpublishedChanges": {
+            "type": "boolean"
           }
         }
       },
@@ -7093,6 +7205,15 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "publishedVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

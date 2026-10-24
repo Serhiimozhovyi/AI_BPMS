@@ -12,7 +12,7 @@ OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
   - `viewer` — читання (`describe_connectors`, `describe_nodes`, `list_*`, `get_*`, `validate_workflow`, resources);
-  - `editor` — ще `create_workflow`, `update_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`;
+  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`;
   - `admin` — те саме (керування конекторами й користувачами в MCP не винесено).
 - Без ключа або з відкликаним ключем — HTTP 401 ще до MCP-обміну. Cookie-сесія UI для `/mcp` не діє.
 
@@ -77,11 +77,12 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 |---|---|---|---|
 | `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }`; `outputSchema` — форма `json` item'а на виході `mcp.tool` (`null`, якщо сервер її не оголосив) |
 | `describe_nodes` | viewer | — | `{ nodes: [{ type, version, displayName, group, description, trigger, inputs, outputs, parametersSchema, credentials: [{ parameter, type, required }] }] }` — типи вузлів, які можна вписати в `type`/`typeVersion` |
-| `list_workflows` | viewer | `search?`, `active?`, `groupId?` (id групи або `"none"` — без групи), `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt`, `groupId` |
-| `get_workflow` | viewer | `id` | сценарій з `definition` поточної версії |
+| `list_workflows` | viewer | `search?`, `active?`, `groupId?` (id групи або `"none"` — без групи), `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt`, `groupId`, `publishedVersion` |
+| `get_workflow` | viewer | `id`, `version?` (`draft` — типово, або `published`) | сценарій з `definition` чернетки чи опублікованої версії (F6-10): `version` — чернетка, `publishedVersion` — що виконують тригери, `hasUnpublishedChanges`, `definitionVersion` — чиє визначення віддано; `published` до першої публікації — `WORKFLOW_NOT_PUBLISHED` |
 | `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }], warnings }` (`path` — JSON Pointer; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню); помилки сценарію не є помилкою tool'а |
 | `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |
-| `update_workflow` | editor | `id`, `definition` | нова поточна версія (назва не змінюється) |
+| `update_workflow` | editor | `id`, `definition` | нова версія-чернетка (назва не змінюється); тригери далі виконують опубліковану версію |
+| `publish_workflow` | editor | `id` | чернетка перевірена як активна і стала опублікованою (F6-10): в активного сценарію webhook'и й розклади одразу перемикаються на неї; неактивний сценарій не вмикається; некоректна чернетка — `WORKFLOW_INVALID`, опублікована версія не змінюється |
 | `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount, role }] }` — видимі групи (проєкти) у порядку показу з моєю роллю (F3-63, F6-14) |
 | `create_workflow_group` | editor | `name` | створена група в кінці списку; назва унікальна без урахування регістру (`WORKFLOW_GROUP_NAME_TAKEN`) |
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
@@ -136,7 +137,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 Помилка application-шару — результат з `isError: true` і `structuredContent = { code, message, errors? }`, коди ті
 самі, що в REST: `BAD_REQUEST` (аргументи), `FORBIDDEN` (роль), `NOT_FOUND`, `WORKFLOW_INVALID` (з `errors`, як у
 `validate_workflow`), `WORKFLOW_VERSION_CONFLICT` (збережено паралельно: `get_workflow` і повторити),
-`WORKFLOW_GROUP_NAME_TAKEN` (група з такою назвою вже є),
+`WORKFLOW_GROUP_NAME_TAKEN` (група з такою назвою вже є), `WORKFLOW_NOT_PUBLISHED` (`get_workflow` з `version: published` до першої публікації),
 `START_NODE_UNKNOWN`, `NODE_FAILED` (`test_node`). Коди валідації: `SCHEMA_VIOLATION`, `CONNECTION_*`, `GRAPH_CYCLE`,
 `TRIGGER_MISSING`, `NODE_TYPE_UNKNOWN`, `PARAMETER_INVALID`, `MCP_TOOL_UNKNOWN`, `WEBHOOK_PATH_CONFLICT`.
 

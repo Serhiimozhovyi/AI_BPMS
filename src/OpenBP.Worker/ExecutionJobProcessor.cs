@@ -433,7 +433,7 @@ public sealed partial class ExecutionJobProcessor
 
             var definition = await db.Workflows.AsNoTracking()
                 .Where(w => w.Id == errorWorkflowId)
-                .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => (Guid?)v.Id, (w, v) => v.Definition)
+                .Join(db.WorkflowVersions, w => w.PublishedVersionId ?? w.CurrentVersionId, v => (Guid?)v.Id, (w, v) => v.Definition)
                 .SingleOrDefaultAsync()
                 .ConfigureAwait(false);
             var trigger = definition is null

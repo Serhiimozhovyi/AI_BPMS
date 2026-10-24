@@ -57,7 +57,7 @@ public sealed class ScheduleFireService(OpenBpDbContext db, IExecutionLauncher l
     {
         var workflow = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == workflowId)
-            .Select(w => new { w.Active, w.CurrentVersionId })
+            .Select(w => new { w.Active, VersionId = w.PublishedVersionId ?? w.CurrentVersionId })
             .SingleOrDefaultAsync(ct);
         if (workflow is null)
         {
@@ -70,7 +70,7 @@ public sealed class ScheduleFireService(OpenBpDbContext db, IExecutionLauncher l
         }
 
         var definition = await db.WorkflowVersions.AsNoTracking()
-            .Where(v => v.Id == workflow.CurrentVersionId)
+            .Where(v => v.Id == workflow.VersionId)
             .Select(v => v.Definition)
             .SingleAsync(ct);
         var document = JsonNode.Parse(definition)!.AsObject();
