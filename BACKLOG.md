@@ -518,6 +518,102 @@
 
 ## Фаза 4 — Продуктова готовність
 
+Критерій фази (`docs/roadmap.md`): інсталяція у клієнта за документацією без нашої участі.
+Нарізано 2026-10-24 (F4-01…F4-17); напрями F4-A…F4-F — у списку-огляді наприкінці розділу.
+
+Рішення для фази:
+- Нові пакети лише з екосистеми, що вже є в стеку (ADR-001): `Microsoft.AspNetCore.Authentication.OpenIdConnect`, `Microsoft.AspNetCore.OpenApi`, `Microsoft.Extensions.Diagnostics.HealthChecks` (+ `AspNetCore.HealthChecks.NpgSql` або власна перевірка), `@angular/elements`. Інші бібліотеки — лише з записом у PR, чому.
+- Credentials і далі розшифровуються лише у воркері (і в Api лише для реєстрації конекторів, як зараз); REST/UI ніколи не віддають значень секретів — лише назви полів і ознаку «заповнено».
+- Продакшн — один `docker-compose.prod.yml` (`postgres`, `migrate`, `api`, `worker`, `web`, `backup`); образи збирає CI, публікація в реєстр — рішення власника, не в цій фазі.
+- Вхід через OIDC — ще одна cookie-схема поруч із паролем; таблиця `users` лишається джерелом ролей. У Keycloak «Кіт 2» (realm `astarta`) нічого не змінюємо самі: клієнт для OpenBP реєструє власник; тести — проти Keycloak у Testcontainers.
+
+### F4-01 · Api: credentials (CRUD і типи)
+- model: `sonnet` · status: `ready` · depends: F2-04
+- Що: `ICredentialService` в application-шарі і REST `/api/v1/credentials` (лише `admin`): список `{ id, name, type, fields: { <поле>: "set" }, createdBy, usedBy: { connectors[], workflows[] } }`, отримати, створити, перейменувати, замінити дані (часткова заміна: поле, якого немає в запиті, лишається), видалити (`409 credential_in_use`, якщо на нього посилається конектор або поточна версія сценарію). Каталог типів `GET /api/v1/credentials/types`: `mcp.http` (`headers`), `mcp.stdio` (`env`), `openai-compatible` (`baseUrl`, `apiKey`), `anthropic` (`apiKey`), `openai` (`apiKey`), `generic` (довільні пари) — кожен із JSON Schema полів і позначкою секретних. Значення секретів не повертаються ніколи.
+- DoD: тести сервісу й REST (Testcontainers): ролі (editor/viewer → 403), відповідь не містить жодного значення з даних, часткова заміна, `credential_in_use`, невідомий тип → 400 з `errors`; `architecture.md` §8/§10 оновлено.
+
+### F4-02 · UI: сторінка «Облікові дані»
+- model: `sonnet` · status: `ready` · depends: F4-01, F3-26
+- Що: `/credentials` замість заглушки: таблиця (назва, тип, де використовується), створення — вибір типу → форма з його JSON Schema (ngx-formly, секретні поля `type=password`, «заповнено» замість значення при редагуванні, «замінити» окремою дією), перейменування, видалення з підтвердженням і зрозумілим повідомленням для `credential_in_use`. Дизайн — AC-Kit (Figma лише читаємо): таблиця, кнопки, поля як у F3-25/F3-26; тексти через i18n.
+- DoD: `npm run lint`/`test`/`build` зелені; Vitest на форму за типом і обробку 409; Playwright: створити → бачити «заповнено», значення не з'являється в DOM; скріншот у PR.
+
+### F4-03 · UI: вибір credential'а в конекторі і вузлі
+- model: `sonnet` · status: `ready` · depends: F4-02
+- Що: у формі конектора поле «ID облікових даних» → випадний список credentials типу `mcp.http`/`mcp.stdio` (за транспортом) з кнопкою «Створити» (діалог форми з F4-02); у панелі вузла для кожного `CredentialRequirement` дескриптора — список credentials потрібного типу, значення пишеться в параметр `parameter`; невідомий/видалений id показується як помилка поля.
+- DoD: Vitest на фільтр за типом і запис у параметр; Playwright: створити credential з діалогу конектора і зберегти конектор.
+
+### F4-04 · OAuth2 authorization code для credentials
+- model: `opus` · status: `ready` · depends: F4-01, F4-02
+- Що: тип `oauth2` (`authorizationUrl`, `tokenUrl`, `clientId`, `clientSecret`, `scopes`, `audience?`, `extraAuthParams?`): кнопка «Підключити» на сторінці credentials → `GET /api/v1/credentials/{id}/oauth2/start` (state + PKCE S256, одноразовий, 10 хв, прив'язаний до користувача) → провайдер → `GET /api/v1/oauth2/callback` обмінює код, шифрує `accessToken`/`refreshToken`/`expiresAt` у тих самих даних credential'а, повертає на сторінку зі статусом. Воркер (і реєстрація конектора) перед використанням оновлює токен, якщо до `expiresAt` < 60 с (refresh, з блокуванням рядка, щоб два воркери не оновлювали разом); для конектора `mcp.http` з credential'ом `oauth2` додається `Authorization: Bearer`. Статус credential'а: `connected`/`expired`/`error` без деталей секретів.
+- DoD: тести проти фейкового OAuth-сервера (успіх, хибний/прострочений state, відмова користувача, refresh, refresh із помилкою → `expired`, паралельний refresh), секрети й коди не потрапляють у журнали; `docs/connectors.md` (як підключити Microsoft/Google OAuth) оновлено.
+
+### F4-05 · UI: налаштування сценарію і межа таймауту
+- model: `sonnet` · status: `ready` · depends: F3-26
+- Що: діалог «Налаштування» в редакторі для `settings` сценарію: `timezone` (список IANA), `executionTimeoutSec`, `errorWorkflowId` (вибір серед сценаріїв, крім себе), `saveSuccessfulData`. Серверна межа `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (типово 3600): валідатор і Api відхиляють більше значення з помилкою поля; воркер застосовує меншу з двох. Виконання, що перевищило час, отримує статус `timedOut` у REST/SSE/MCP/UI (уже є в движку — перевірити наскрізь).
+- DoD: Vitest на діалог; тести Api на межу і на `timedOut` наскрізь через воркер (Testcontainers); `docs/workflow-format.md` (межа) оновлено.
+
+### F4-06 · Error-workflow (`core.errorTrigger`)
+- model: `sonnet` · status: `ready` · depends: F4-05
+- Що: тригер `core.errorTrigger` (без параметрів, вихід `{ execution: { id, status, startedAt, finishedAt, mode }, workflow: { id, name }, error: { message, nodeId, nodeName } }`, без значень credentials). Коли виконання сценарію з `settings.errorWorkflowId` завершилось `error` або `timedOut`, воркер ставить job запуску сценарію помилок з цим входом (режим `error`). Захист від циклу: помилка самого сценарію помилок не запускає інший. `errorWorkflowId` на сценарій без `core.errorTrigger` — помилка валідатора.
+- DoD: тести: помилка → запуск сценарію помилок з правильним входом, `timedOut` теж, успіх — ні, цикл не виникає, вимкнений/видалений сценарій помилок → запис у журнал без падіння; вузол у `describe_nodes` і палітрі; `docs/workflow-format.md` оновлено.
+
+### F4-07 · Очищення історії виконань
+- model: `sonnet` · status: `ready` · depends: F2-02, F2-11
+- Що: `settings.saveSuccessfulData = false` → для успішного виконання `execution_steps` зберігаються без `input`/`output` (лише статус і час); помилкові — повністю. Quartz-задача в Api раз на добу (час — `OPENBP_EXECUTION_RETENTION_CRON`, типово 03:00 сервера) видаляє завершені виконання старші за `OPENBP_EXECUTION_RETENTION_DAYS` (типово 30; `0` — не видаляти) пачками, щоб не тримати довгих блокувань; активні (`queued`/`running`) не чіпає. Кількість видаленого — у журнал.
+- DoD: тести (Testcontainers): `saveSuccessfulData` для успіху й помилки, видалення за віком, активні лишаються, пачки; `architecture.md` і `.env.example`/README оновлено.
+
+### F4-08 · Health-checks і структуровані журнали
+- model: `sonnet` · status: `ready` · depends: F2-07
+- Що: Api — `/health/live` (процес живий) і `/health/ready` (БД доступна, міграції застосовані); воркер — той самий `ready` через маленький Kestrel-ендпойнт на окремому порту (`OPENBP_WORKER_HEALTH_PORT`, типово 8089) і перевірку «цикл опитування jobs живий» (останнє опитування < 1 хв). Журнали: `OPENBP_LOG_FORMAT=json` → JSON-консоль (`AddJsonConsole`) з `executionId`/`workflowId` у scope; рівні через `Logging__LogLevel__*`. Без анонімного доступу до чогось, крім `/health/*`.
+- DoD: тести: `ready` червоний без БД і зелений з нею, воркер `ready` червоніє, коли цикл зупинено; у JSON-журналі є scope виконання і немає значень credentials; README оновлено.
+
+### F4-09 · Docker-образи api, worker, web
+- model: `sonnet` · status: `ready` · depends: F4-08
+- Що: багатоетапні `Dockerfile` для `OpenBP.Api`, `OpenBP.Worker` (runtime `aspnet:10`, не root, `HEALTHCHECK` на F4-08) і `apps/web` (збірка Angular → `nginx` з проксі `/api`, `/mcp`, `/webhook` на api, SPA-fallback, gzip, кеш статики); `.dockerignore`. Окремий образ `migrate` (EF Core bundle) для застосування міграцій. CI-джоб збирає всі образи (без публікації).
+- DoD: CI-джоб зелений; локальний `docker build` кожного образу; розміри образів — у PR.
+
+### F4-10 · Продакшн Compose
+- model: `sonnet` · status: `ready` · depends: F4-09
+- Що: `docker-compose.prod.yml`: `postgres` (том, healthcheck), `migrate` (один раз, `depends_on: service_completed_successfully` для api/worker), `api`, `worker` (кількість через `--scale`), `web` (єдиний відкритий порт, `OPENBP_HTTP_PORT`), `restart: unless-stopped`, ліміти журналів Docker. `.env.example` з усіма змінними (ключ шифрування, адмін, пароль БД, публічна адреса для webhook/OAuth, ретеншн, OIDC) і коментарями; скрипт `scripts/gen-env.sh` генерує випадкові секрети. Перевірка в CI: `docker compose -f docker-compose.prod.yml up` → `/health/ready` зелений → вхід адміном → запуск прикладу `examples/` з `core.manual` → `success`.
+- DoD: CI smoke-джоб зелений; `docker-compose.yml` для розробки не зламано.
+
+### F4-11 · Бекапи і відновлення
+- model: `sonnet` · status: `ready` · depends: F4-10
+- Що: сервіс `backup` у prod Compose: `pg_dump -Fc` за розкладом (`OPENBP_BACKUP_CRON`, типово 02:00) у том/теку `./backups`, ротація (`OPENBP_BACKUP_KEEP_DAYS`, типово 14), запис результату в журнал; `scripts/backup.sh` (разовий) і `scripts/restore.sh <файл>` (зупиняє api/worker, відновлює, запускає `migrate`, піднімає назад). Нагадування в документації: ключ `OPENBP_ENCRYPTION_KEY` бекапиться окремо, без нього credentials не розшифруються.
+- DoD: CI smoke: створити сценарій → бекап → видалити → відновити → сценарій є, credential розшифровується; README/доки адміна оновлено.
+
+### F4-12 · OpenAPI для REST
+- model: `sonnet` · status: `ready` · depends: F2-09
+- Що: `Microsoft.AspNetCore.OpenApi`: документ `/openapi/v1.json` (без авторизації або лише для входу — вирішити в PR, типово відкритий опис без даних), схеми безпеки cookie і `Bearer` (API-ключ), описи й приклади для сценаріїв, виконань, конекторів, credentials, ключів, webhook; помилки — ProblemDetails/`{ code, message, errors }`. Знімок `docs/openapi.json` у репо і тест, що він збігається з живим документом (оновлення — командою з README). Тексти описів — українською.
+- DoD: тест знімка; кожен ендпойнт `/api/v1/*` є в документі з тегом; `docs/` посилаються на файл.
+
+### F4-13 · Web-component `<openbp-canvas>`
+- model: `opus` · status: `ready` · depends: F4-12
+- Що: окремий build-target `apps/web` (`npm run build:element`) на `@angular/elements`: один JS-файл (+ CSS у Shadow DOM), що реєструє `<openbp-canvas>` з власним Angular (хост може бути на іншій версії Angular, напр. 16 у «Кіт 2», або не на Angular). Атрибути/властивості: `api-base`, `workflow-id`, `readonly`, `locale`; автентифікація — `token` (API-ключ або OIDC access token, коли F4-14 дозволить Bearer від OIDC) або cookie того самого домену. Події: `openbp-saved { workflowId, version }`, `openbp-run { executionId }`, `openbp-error { code, message }`. Канвас, палітра, панель вузла, тестовий запуск — ті самі компоненти, що в SPA, без роутера й shell. Демо `apps/web/element-demo/index.html` і `docs/embedding.md` (підключення в Angular 16 через `CUSTOM_ELEMENTS_SCHEMA`, у чистий HTML, CORS/`OPENBP_CORS_ORIGINS`).
+- DoD: Playwright на демо: завантажити сценарій, змінити, зберегти → подія `openbp-saved`; `readonly` не дає редагувати; стилі хоста не ламають канвас і навпаки; розмір бандла — у PR; SPA-збірка не змінилась.
+
+### F4-14 · Вхід через OIDC: Entra ID і Keycloak
+- model: `opus` · status: `ready` · depends: F3-24
+- Що: провайдери з конфігурації `OpenBp:Oidc:Providers:<key>` (`DisplayName`, `Authority`, `ClientId`, `ClientSecret`, `Scopes`, `RoleClaim` — для Keycloak `realm_access.roles`/`resource_access.<client>.roles`, для Entra `roles`, `RoleMap { admin: [...], editor: [...] }`, `AutoProvision`, `AllowedEmailDomains`). Authorization code + PKCE, cookie-сесія та сама, що в паролю; користувач шукається за `(provider, sub)`, далі за підтвердженою поштою, створюється (якщо `AutoProvision`) з роллю з `RoleMap`, інакше `viewer`; роль оновлюється при кожному вході. Міграція: `users.password_hash` nullable, таблиця `user_logins (user_id, provider, subject)`. `GET /api/v1/auth/providers` для сторінки входу (кнопки «Увійти через …» у стилі AC-Kit); `OPENBP_PASSWORD_LOGIN=false` ховає й вимикає вхід паролем (крім аварійного адміна з env). Keycloak «Кіт 2» (realm `astarta`): документуємо, який клієнт має створити власник (confidential, redirect `https://<openbp>/signin-oidc/<key>`), у Кіті нічого не змінюємо.
+- DoD: тести проти Keycloak у Testcontainers (імпорт тестового realm: вхід, авто-створення, мапінг ролей з realm і client roles, заборонений домен); юніт-тести мапінгу claims Entra; logout; Playwright на кнопки входу (з фейковим провайдером); `architecture.md` §10.6 і доки адміна оновлено.
+
+### F4-15 · Документація адміністратора
+- model: `haiku` · status: `ready` · depends: F4-10, F4-11, F4-14
+- Що: `docs/admin/`: вимоги до сервера, інсталяція з нуля за `docker-compose.prod.yml` (крок за кроком, з `scripts/gen-env.sh`), HTTPS (reverse proxy: Caddy/nginx — приклад), перший вхід, користувачі й ролі, OIDC (Entra ID і Keycloak — з прикладами реєстрації клієнта), конектори і credentials, бекап/відновлення, оновлення версії, журнали і health-checks, усі змінні середовища таблицею, типові проблеми.
+- DoD: кожна змінна з `.env.example` описана; посилання з README; перевірено, що команди в доках збігаються зі скриптами.
+
+### F4-16 · Документація авторів сценаріїв та інтеграторів
+- model: `haiku` · status: `ready` · depends: F4-06, F4-13
+- Що: `docs/guide/authors.md` — перший сценарій, тригери, вирази, Code, AI, помилки й error-workflow, тестовий запуск і pinned data, журнал виконань (зі скріншотами); `docs/guide/integrators.md` — REST за OpenAPI (ключі, приклади curl), webhook, `/mcp` для агентів (Claude Desktop), вбудовування `<openbp-canvas>`, свій конектор на Connector Kit.
+- DoD: кожен приклад curl/конфіг перевірено на локальному стенді; посилання з README.
+
+### F4-17 · Критерій фази: інсталяція за документацією
+- model: `sonnet` · status: `ready` · depends: F4-15, F4-16
+- Що: на чистій машині/контейнері (без репо-скриптів розробки) пройти `docs/admin/` дослівно: інсталяція, вхід, конектор з credential'ом, сценарій з прикладу, бекап і відновлення, оновлення образів. Кожен розрив між доками й поведінкою — виправити в доках або коді в цьому ж PR (дрібне) чи окремою задачею.
+- DoD: протокол проходження в `docs/admin/install-check.md` (дата, версія, кроки, що виправлено); фазу 4 позначено виконаною в `docs/roadmap.md`, крім пунктів, що чекають власника.
+
+Огляд напрямів (з roadmap):
+
 - F4-A Credentials UI + OAuth2 authorization code — `sonnet`
 - F4-B error-workflow, таймаути, очищення історії — `sonnet`
 - F4-C Web-component `<openbp-canvas>`, OpenAPI — `opus`
