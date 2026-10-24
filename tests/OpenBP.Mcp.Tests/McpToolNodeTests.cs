@@ -35,7 +35,7 @@ public sealed class McpToolNodeTests : IAsyncLifetime
         Assert.Equal(["main"], tool.Outputs);
         Assert.Equal(("mcp.poll", 1, true), (poll.Type, poll.Version, poll.IsTrigger));
         Assert.Equal(["serverId", "toolName", "cron", "keyField"], poll.ParametersSchema["required"]!.AsArray().Select(n => n!.GetValue<string>()));
-        Assert.Equal(["mcp.tool", "mcp.poll"], McpNodes.All(_registry).Select(n => n.Descriptor.Type));
+        Assert.Equal(["mcp.tool", "mcp.poll", "mcp.waitFor"], McpNodes.All(_registry).Select(n => n.Descriptor.Type));
     }
 
     [Fact]

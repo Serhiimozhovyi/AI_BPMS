@@ -12,7 +12,7 @@ import { CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields 
  */
 
 /** Типи, чиї `arguments` описує `inputSchema` tool'а з `tools_cache` (docs/connectors.md). */
-export const MCP_TOOL_TYPES: readonly string[] = ['mcp.tool', 'mcp.poll'];
+export const MCP_TOOL_TYPES: readonly string[] = ['mcp.tool', 'mcp.poll', 'mcp.waitFor'];
 
 /** Тип вузла, чий параметр `code` редагується в Monaco (F2-19). */
 export const CODE_NODE_TYPE = 'core.code';

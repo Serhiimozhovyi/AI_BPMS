@@ -151,6 +151,28 @@ workflow не змінюється. Список вантажиться чере
 
 Розклад (F2-12): активний сценарій отримує Quartz-тригер за `cron` вузла (формат і перевірка — як у `core.schedule`, §6; часовий пояс — `settings.timezone`). Спрацювання ставить job `poll`; воркер виконує лише цей вузол зі станом з `node_state`. Нових записів немає — виконання не створюється; є — новий стан і виконання (`trigger`, `startItems` = нові записи) комітяться однією транзакцією. Помилка вузла не змінює стан, повтор — наступним спрацюванням.
 
+### 3.1. `mcp.waitFor` — чекати умову (F5-03)
+
+«Чекати, доки умова виконається» в зовнішній системі (задача закрита в Кіті, оплата надійшла). Параметри: `serverId`,
+`toolName`, `arguments` (як у `mcp.tool`, вирази — над вхідним item'ом), `conditions` — `[{ field, operator, right? }]`,
+де `field` — шлях через крапку в першому item'і відповіді tool'а (`status`, `task.statusId`), оператори й `right` — як у
+`core.if` (`right` може бути виразом над вхідним item'ом), `combine` (`and`/`or`), `intervalMinutes` (1…1440, типово 15),
+`timeoutHours` (до 2160 = 90 днів, типово 72).
+
+Перша перевірка — одразу. Умова не виконалась — виконання переходить у `waiting` до наступної перевірки (механізм
+`core.wait` v2, docs/architecture.md §10.4), воркер вільний; остання перевірка — рівно в мить таймауту. Кожен item
+чекає окремо: для items, де умова вже виконалась, tool більше не викликається. Коли умова виконалась для всіх items або
+минув таймаут — виходи: `done` (0) — остання відповідь tool'а для кожного item'а з виконаною умовою, `timeout` (1) —
+вхідні items, для яких не дочекались (дані вхідного item'а в гілці `done` — через `$node["Назва"].json`). Помилка
+tool'а — помилка вузла (з `continueOnFail` — item помилки на окремому виході). Скасування `waiting` — як у `core.wait`.
+
+```json
+{ "id": "n_closed", "name": "Задача закрита", "type": "mcp.waitFor", "typeVersion": 1, "position": [600, 0],
+  "parameters": { "serverId": "srv_kit", "toolName": "get_task", "arguments": { "id": "{{ $json.taskId }}" },
+    "conditions": [ { "field": "status", "operator": "equals", "right": "Виконано" } ],
+    "intervalMinutes": 30, "timeoutHours": 48 } }
+```
+
 ## 4. `ai.llm`
 
 Параметри: `provider` (`anthropic` | `openai` | `openai-compatible`), `model`, `credentialId`, `system`, `prompt` (з `{{ }}`), `outputSchema` (JSON Schema, опційно), `temperature`, `maxTokens`.
