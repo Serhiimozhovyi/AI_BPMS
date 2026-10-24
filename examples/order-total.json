@@ -1,0 +1,206 @@
+{
+  "formatVersion": 1,
+  "name": "Підсумок замовлення (вирази і Code)",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 60,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_start",
+      "name": "Старт",
+      "type": "core.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "n_order",
+      "name": "Замовлення",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [
+        250,
+        0
+      ],
+      "parameters": {
+        "fields": [
+          {
+            "name": "customer",
+            "value": "петренко"
+          },
+          {
+            "name": "lines",
+            "value": [
+              {
+                "sku": "A1",
+                "qty": 2,
+                "price": 150
+              },
+              {
+                "sku": "B7",
+                "qty": 1,
+                "price": 900
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_lines",
+      "name": "Рядки",
+      "type": "core.loop",
+      "typeVersion": 1,
+      "position": [
+        500,
+        0
+      ],
+      "parameters": {
+        "list": "{{ $json.lines }}"
+      }
+    },
+    {
+      "id": "n_sum",
+      "name": "Сума рядка",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        750,
+        0
+      ],
+      "parameters": {
+        "mode": "eachItem",
+        "code": "return { ...$json, total: $json.qty * $json.price };"
+      }
+    },
+    {
+      "id": "n_all",
+      "name": "Разом",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "mode": "allItems",
+        "code": "const total = items.reduce((sum, line) => sum + line.total, 0);\nreturn [{ customer: $node[\"Замовлення\"].json.customer, total, lines: items.length }];"
+      }
+    },
+    {
+      "id": "n_fmt",
+      "name": "Підсумок",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        0
+      ],
+      "parameters": {
+        "keepOnlySet": true,
+        "fields": [
+          {
+            "name": "text",
+            "value": "{{ $json.customer.toUpperCase() }}: {{ $json.lines }} рядки на {{ $json.total }} грн"
+          },
+          {
+            "name": "at",
+            "value": "{{ $now }}"
+          },
+          {
+            "name": "execution",
+            "value": "{{ $execution.id }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_big",
+      "name": "Велике замовлення?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $node[\"Разом\"].json.total }}",
+            "operator": "gte",
+            "right": 1000
+          }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_start",
+        "output": 0
+      },
+      "to": {
+        "node": "n_order",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_order",
+        "output": 0
+      },
+      "to": {
+        "node": "n_lines",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_lines",
+        "output": 0
+      },
+      "to": {
+        "node": "n_sum",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_sum",
+        "output": 0
+      },
+      "to": {
+        "node": "n_all",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_all",
+        "output": 0
+      },
+      "to": {
+        "node": "n_fmt",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_fmt",
+        "output": 0
+      },
+      "to": {
+        "node": "n_big",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {}
+}
