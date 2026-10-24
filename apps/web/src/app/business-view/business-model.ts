@@ -36,6 +36,8 @@ export interface BusinessEdge {
   to: string;
   kind: BusinessEdgeKind;
   label?: string;
+  /** Гілка «так»/«ні» рішення — підпис зелений чи червоний, як True/False на схемі AC-Kit. */
+  branch?: 'yes' | 'no';
   /** Звідки стрілка у визначенні — щоб змінити її підпис: перше ребро ланцюжка або зв'язок зовнішнього кроку. */
   origin: { connection: number } | { step: string; link: number };
 }
@@ -211,7 +213,8 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
         const key = `${node.id}->${target}:${label ?? ''}`;
         if (keys.has(key)) continue;
         keys.add(key);
-        result.push({ id: `f:${key}`, from: node.id, to: target, kind, ...(label ? { label } : {}), origin: { connection: index } });
+        const branch = output === 'true' ? 'yes' : output === 'false' ? 'no' : undefined;
+        result.push({ id: `f:${key}`, from: node.id, to: target, kind, ...(label ? { label } : {}), ...(branch ? { branch } : {}), origin: { connection: index } });
       }
     }
   }
