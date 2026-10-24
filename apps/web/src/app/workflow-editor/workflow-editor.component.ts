@@ -89,6 +89,13 @@ export interface EditorErrorEvent {
         <h1 class="mat-font-title-md m-0" data-testid="workflow-name">
           {{ workflow()?.name ?? defaultTitle }}
         </h1>
+        @if (groupName(); as group) {
+          @if (embedded()) {
+            <span class="editor__group" data-testid="workflow-group">{{ group }}</span>
+          } @else {
+            <a class="editor__group" data-testid="workflow-group" [routerLink]="['/workflows']" [queryParams]="{ group: workflow()?.groupId }" i18n-title="@@workfloweditor.group.hint" title="Сценарії цієї групи">{{ group }}</a>
+          }
+        }
         @if (definition(); as def) {
           <span class="editor__count" data-testid="counts" i18n="@@workfloweditor.counts">
             вузлів: {{ def.nodes.length }} · ребер: {{ def.connections.length }}
@@ -304,6 +311,14 @@ export interface EditorErrorEvent {
       background: var(--ac-red);
     }
 
+    .editor__group {
+      padding: 2px 10px;
+      border-radius: 12px;
+      background: var(--ac-button);
+      font-size: 12px;
+      text-decoration: none;
+    }
+
     .editor__count {
       font-size: 13px;
       opacity: 0.6;
@@ -406,6 +421,8 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly workflow = signal<WorkflowDetail | null>(null);
   protected readonly definition = signal<WorkflowDefinition | null>(null);
   protected readonly descriptors = signal<NodeTypeInfo[]>([]);
+  /** Назва групи сценарію (F3-64); без групи — `null`. */
+  protected readonly groupName = signal<string | null>(null);
   private readonly servers = signal<PaletteServer[]>([]);
   /** Облікові дані для вибору у вузлах (F4-03); `null` — недоступні (немає прав або помилка), поля лишаються текстовими. */
   protected readonly credentialOptions = signal<CredentialOption[] | null>(null);
@@ -519,6 +536,7 @@ export class WorkflowEditorComponent implements OnInit {
           this.loading.set(true);
           this.error.set(null);
           this.workflow.set(null);
+          this.groupName.set(null);
           this.definition.set(null);
           this.history.reset(null);
           this.selection.set(EMPTY_SELECTION);
@@ -544,6 +562,7 @@ export class WorkflowEditorComponent implements OnInit {
           this.definition.set(loaded.workflow.definition);
           this.history.reset(loaded.workflow.definition);
           this.descriptors.set(loaded.descriptors);
+          this.loadGroupName(loaded.workflow);
         }
         this.loading.set(false);
       });
@@ -841,6 +860,21 @@ export class WorkflowEditorComponent implements OnInit {
     }
     const id = this.workflow()?.id;
     if (id) this.autosave.schedule({ id, definition });
+  }
+
+  /** Назва групи — з `GET /workflow-groups`; помилка не заважає редактору (назва просто не показується). */
+  private loadGroupName(workflow: WorkflowDetail): void {
+    const groupId = workflow.groupId;
+    if (!groupId) return;
+    this.workflows
+      .listGroups()
+      .pipe(
+        catchError(() => of([])),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((groups) => {
+        if (this.workflow()?.id === workflow.id) this.groupName.set(groups.find((g) => g.id === groupId)?.name ?? null);
+      });
   }
 
   /** Конектори з закешованими tools; помилка не ламає редактор — палітра лишається з `core.*`. */
