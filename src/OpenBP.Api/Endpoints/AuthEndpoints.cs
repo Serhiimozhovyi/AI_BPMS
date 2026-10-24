@@ -25,7 +25,8 @@ public sealed record AuthProvidersResponse(bool PasswordLogin, IReadOnlyList<Aut
 
 /// <summary>Тіло <c>POST /api-keys</c>.</summary>
 /// <param name="Name">Назва ключа.</param>
-public sealed record CreateApiKeyRequest(string? Name);
+/// <param name="ProjectId">Проєкт, до якого обмежити ключ (F6-14); <c>null</c> — весь інстанс.</param>
+public sealed record CreateApiKeyRequest(string? Name, Guid? ProjectId = null);
 
 /// <summary>Маршрути <c>/auth/*</c> і <c>/api-keys</c> (docs/architecture.md §10.3).</summary>
 public static class AuthEndpoints
@@ -83,7 +84,7 @@ public static class AuthEndpoints
             .WithTags(OpenApiSetup.Tags.ApiKeys).WithSummary("Мої API-ключі (без значень)");
 
         api.MapPost("/api-keys", (CreateApiKeyRequest body, IApiKeyService keys, CancellationToken ct) =>
-            keys.CreateAsync(body.Name ?? "", ct))
+            keys.CreateAsync(body.Name ?? "", ct, body.ProjectId))
             .WithTags(OpenApiSetup.Tags.ApiKeys).WithSummary("Створити API-ключ")
             .WithDescription("Значення ключа повертається лише в цій відповіді; далі зберігається тільки хеш.");
 

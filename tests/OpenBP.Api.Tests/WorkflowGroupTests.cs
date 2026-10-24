@@ -153,7 +153,9 @@ public class WorkflowGroupTests(ApiFactory api)
         var reversed = ids.Reverse().ToArray();
         var result = await JsonAsync(await client.PutAsJsonAsync($"{Groups}/order", new { ids = reversed }));
         Assert.Equal(reversed, result.EnumerateArray().Select(IdOf).ToArray());
-        Assert.Equal(Enumerable.Range(0, ids.Length).ToArray(), result.EnumerateArray().Select(g => g.GetProperty("sortOrder").GetInt32()).ToArray());
+        // Editor бачить лише свої проєкти (F6-14): вони міняються місцями між своїми позиціями, а ті йдуть за зростанням.
+        var orders = result.EnumerateArray().Select(g => g.GetProperty("sortOrder").GetInt32()).ToArray();
+        Assert.Equal(orders.Order().ToArray(), orders);
         Assert.Equal(reversed, (await ListGroupsAsync(client)).Select(IdOf).ToArray());
 
         await AssertProblemAsync(await client.PutAsJsonAsync($"{Groups}/order", new { ids = reversed.Skip(1) }), HttpStatusCode.BadRequest, "BAD_REQUEST");
@@ -171,6 +173,12 @@ public class WorkflowGroupTests(ApiFactory api)
         var viewer = await LoginAsync(UserRole.Viewer);
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetAsync(Groups)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync(Groups, new { name = Unique("x") })).StatusCode);
+        // Проєкт, де viewer не учасник, для нього не існує (F6-14).
+        Assert.Equal(HttpStatusCode.NotFound, (await viewer.PatchAsJsonAsync($"{Groups}/{IdOf(group)}", new { name = Unique("x") })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await viewer.DeleteAsync($"{Groups}/{IdOf(group)}")).StatusCode);
+        var me = await JsonAsync(await viewer.GetAsync("/api/v1/auth/me"));
+        Assert.Equal(HttpStatusCode.OK, (await editor.PutAsJsonAsync($"{Groups}/{IdOf(group)}/members",
+            new { email = me.GetProperty("email").GetString(), role = "viewer" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PatchAsJsonAsync($"{Groups}/{IdOf(group)}", new { name = Unique("x") })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.DeleteAsync($"{Groups}/{IdOf(group)}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync($"{Groups}/order", new { ids = Array.Empty<Guid>() })).StatusCode);

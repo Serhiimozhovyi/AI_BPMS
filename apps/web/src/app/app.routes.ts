@@ -31,6 +31,12 @@ export const routes: Routes = [
           import('./pages/workflow-editor/workflow-editor.page').then((m) => m.WorkflowEditorPage),
       },
       {
+        // Проєкт і його учасники (F6-14).
+        path: 'projects/:id',
+        title: $localize`:@@project.title:Проєкт`,
+        loadComponent: () => import('./pages/project/project.page').then((m) => m.ProjectPage),
+      },
+      {
         path: 'executions',
         title: $localize`:@@executions.title:Виконання`,
         loadComponent: () => import('./pages/executions/executions.page').then((m) => m.ExecutionsPage),

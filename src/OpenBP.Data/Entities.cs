@@ -32,6 +32,8 @@ public sealed class ApiKeyEntity
     public string Hash { get; set; } = "";
     public string Name { get; set; } = "";
     public DateTimeOffset? LastUsedAt { get; set; }
+    /// <summary>Проєкт (F6-14), до якого обмежено ключ; <c>null</c> — ключ діє на весь інстанс у межах прав власника.</summary>
+    public Guid? ProjectId { get; set; }
 }
 
 public sealed class WorkflowEntity
@@ -48,7 +50,10 @@ public sealed class WorkflowEntity
     public DateTimeOffset? ActivatedAt { get; set; }
 }
 
-/// <summary>Група сценаріїв (F3-63): плоский список поза визначенням сценарію.</summary>
+/// <summary>
+/// Група сценаріїв (F3-63), вона ж проєкт (F6-14): плоский список поза визначенням сценарію; доступ не-адмінів —
+/// через <see cref="ProjectMemberEntity"/>.
+/// </summary>
 public sealed class WorkflowGroupEntity
 {
     public Guid Id { get; set; }
@@ -56,6 +61,15 @@ public sealed class WorkflowGroupEntity
     /// <summary>Назва у верхньому регістрі (інваріантна культура) — унікальність без урахування регістру.</summary>
     public string NormalizedName { get; set; } = "";
     public int SortOrder { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>Учасник проєкту (F6-14): роль <c>editor</c> або <c>viewer</c> у межах проєкту.</summary>
+public sealed class ProjectMemberEntity
+{
+    public Guid ProjectId { get; set; }
+    public Guid UserId { get; set; }
+    public string Role { get; set; } = "viewer";
     public DateTimeOffset CreatedAt { get; set; }
 }
 
@@ -211,6 +225,8 @@ public sealed class CredentialEntity
     public byte[] DataEncrypted { get; set; } = [];
     public byte[] Nonce { get; set; } = [];
     public Guid? CreatedBy { get; set; }
+    /// <summary>Проєкт (F6-14); <c>null</c> — спільний credential, змінює лише admin.</summary>
+    public Guid? ProjectId { get; set; }
 }
 
 public sealed class McpServerEntity
@@ -225,6 +241,8 @@ public sealed class McpServerEntity
     /// <summary>jsonb.</summary>
     public string? ToolsCache { get; set; }
     public DateTimeOffset? ToolsCachedAt { get; set; }
+    /// <summary>Проєкт (F6-14); <c>null</c> — спільний конектор, змінює лише admin.</summary>
+    public Guid? ProjectId { get; set; }
 }
 
 public sealed class ExecutionEntity

@@ -1,6 +1,6 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -14,6 +14,7 @@ import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-to
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, forkJoin } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ProjectContextService } from '../../projects/project-context.service';
 import { ImportWorkflowDialog, ImportWorkflowDialogData } from '../../workflows/import-workflow-dialog.component';
 import { NO_GROUP, WorkflowSection, groupSections, readCollapsed, recount, reorder, writeCollapsed } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
@@ -22,7 +23,8 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
  * `/workflows`: список сценаріїв, створення, перейменування, активація, видалення, перехід у канвас (F2-15); групи
  * (F3-64): секції груп зі згортанням, фільтр-чіпи й пошук, створення/перейменування/видалення груп, порядок груп і
  * перенесення сценаріїв перетягуванням або з меню рядка. `?group=<id>` — відкрити з фільтром за групою. Експорт у файл
- * і імпорт з файлу з перемапінгом конекторів і облікових даних (F6-09).
+ * і імпорт з файлу з перемапінгом конекторів і облікових даних (F6-09). Групи — це проєкти (F6-14): вибраний у шапці
+ * проєкт стає фільтром, «Створити» створює сценарій у ньому, меню групи веде до її учасників.
  */
 @Component({
   selector: 'app-workflows-page',
@@ -48,7 +50,7 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
       <div class="mb-4 flex flex-wrap items-center gap-4">
         <h1 class="mat-font-headline-sm" i18n="@@workflows.title">Сценарії</h1>
         @if (!creating()) {
-          <button mat-flat-button type="button" data-testid="create-button" (click)="startCreate(null)" i18n="@@workflows.create">
+          <button mat-flat-button type="button" data-testid="create-button" (click)="startCreate()" i18n="@@workflows.create">
             Створити сценарій
           </button>
         }
@@ -171,6 +173,7 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                           <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
                         </button>
                         <mat-menu #groupMenu="matMenu">
+                          <a mat-menu-item data-testid="group-members" [routerLink]="['/projects', s.id]" i18n="@@workflows.groups.members">Учасники</a>
                           <button mat-menu-item type="button" data-testid="group-rename" (click)="startGroupRename(s.group)" i18n="@@workflows.rename">Перейменувати</button>
                           <button mat-menu-item type="button" data-testid="group-delete" (click)="deletingGroupId.set(s.id)" i18n="@@workflows.delete">Видалити</button>
                         </mat-menu>
@@ -448,6 +451,7 @@ export class WorkflowsPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialog = inject(MatDialog);
+  private readonly context = inject(ProjectContextService);
 
   readonly workflows = signal<WorkflowSummary[]>([]);
   readonly groups = signal<WorkflowGroup[]>([]);
@@ -497,6 +501,20 @@ export class WorkflowsPage implements OnInit {
   readonly canReorder = computed(() => this.chips().size === 0 && this.search().trim() === '');
   readonly createGroupName = computed(() => this.groups().find((g) => g.id === this.createIn())?.name ?? null);
 
+  constructor() {
+    // Проєкт у шапці (F6-14) — фільтр списку; `?group=` при відкритті сторінки має пріоритет над збереженим вибором.
+    let first = true;
+    effect(() => {
+      const current = this.context.current();
+      if (first && this.route.snapshot.queryParamMap.get('group')) {
+        first = false;
+        return;
+      }
+      first = false;
+      this.chips.set(current === null ? new Set() : new Set([current]));
+    });
+  }
+
   ngOnInit(): void {
     const group = this.route.snapshot.queryParamMap.get('group');
     if (group) this.chips.set(new Set([group]));
@@ -538,9 +556,10 @@ export class WorkflowsPage implements OnInit {
     this.chips.set(next);
   }
 
-  startCreate(groupId: string | null = null): void {
+  /** Без аргументу — у проєкті, вибраному в шапці (F6-14); `null` — без групи. */
+  startCreate(groupId?: string | null): void {
     this.newName.reset('');
-    this.createIn.set(groupId);
+    this.createIn.set(groupId === undefined ? this.context.defaultProjectId() : groupId);
     this.creating.set(true);
   }
 
@@ -584,6 +603,7 @@ export class WorkflowsPage implements OnInit {
     this.run(this.api.createGroup(name), (group) => {
       this.creatingGroup.set(false);
       this.groups.update((list) => [...list, group]);
+      this.context.projects.update((list) => [...list, group]);
       const workflow = this.workflows().find((w) => w.id === this.moveAfterCreate());
       this.moveAfterCreate.set(null);
       if (workflow) this.move(workflow, group.id);
@@ -614,6 +634,7 @@ export class WorkflowsPage implements OnInit {
     this.run(this.api.deleteGroup(id), () => {
       this.deletingGroupId.set(null);
       this.groups.update((list) => list.filter((g) => g.id !== id));
+      this.context.projects.update((list) => list.filter((g) => g.id !== id));
       this.workflows.update((list) => list.map((w) => (w.groupId === id ? { ...w, groupId: null } : w)));
       this.chip(id, false);
     });

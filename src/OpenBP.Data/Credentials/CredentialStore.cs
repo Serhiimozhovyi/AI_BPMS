@@ -45,7 +45,8 @@ public sealed class CredentialStore(
     /// <param name="data">Відкриті дані, напр. <c>{ "apiKey": "…" }</c>.</param>
     /// <param name="createdBy">Користувач, що створив; <c>null</c> — системний.</param>
     /// <param name="ct">Скасування.</param>
-    public async Task<Guid> CreateAsync(string name, string type, JsonObject data, Guid? createdBy, CancellationToken ct)
+    /// <param name="projectId">Проєкт (F6-14); <c>null</c> — спільний.</param>
+    public async Task<Guid> CreateAsync(string name, string type, JsonObject data, Guid? createdBy, CancellationToken ct, Guid? projectId = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(type);
@@ -62,6 +63,7 @@ public sealed class CredentialStore(
             DataEncrypted = cipher,
             Nonce = nonce,
             CreatedBy = createdBy,
+            ProjectId = projectId,
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return id;

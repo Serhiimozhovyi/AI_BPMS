@@ -3,7 +3,7 @@ using OpenBP.Application.Credentials;
 
 namespace OpenBP.Api.Endpoints;
 
-/// <summary>Маршрути <c>/credentials</c> (F4-01, F4-03). Ролі перевіряє <see cref="ICredentialService"/> (admin; <c>/options</c> — editor).</summary>
+/// <summary>Маршрути <c>/credentials</c> (F4-01, F4-03). Ролі перевіряє <see cref="ICredentialService"/> (спільні — admin, проєктні — editor проєкту; <c>/options</c> — editor).</summary>
 public static class CredentialEndpoints
 {
     /// <summary>Додає маршрути до групи <c>/api/v1</c>.</summary>
@@ -15,7 +15,7 @@ public static class CredentialEndpoints
         credentials.MapGet("/types", (ICredentialService service) => service.Types())
             .WithSummary("Типи облікових даних і їхні поля");
 
-        credentials.MapGet("/options", (ICredentialService service, CancellationToken ct, string? type) => service.OptionsAsync(type, ct))
+        credentials.MapGet("/options", (ICredentialService service, CancellationToken ct, string? type, Guid? projectId) => service.OptionsAsync(type, ct, projectId))
             .WithSummary("Вибір облікових даних у вузлі (id і назва; для editor)");
 
         credentials.MapGet("/", (ICredentialService service, CancellationToken ct) => service.ListAsync(ct))

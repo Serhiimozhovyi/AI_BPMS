@@ -45,6 +45,7 @@ public sealed class WorkflowService(
     private const string ErrorTriggerType = "core.errorTrigger";
 
     private readonly WorkflowValidator _validator = new(schemaProvider);
+    private readonly ProjectAccess _access = new(db, currentUser);
 
     /// <inheritdoc />
     public async Task<PageResult<WorkflowSummary>> ListAsync(WorkflowFilter filter, PageRequest page, CancellationToken ct)
@@ -54,7 +55,7 @@ public sealed class WorkflowService(
         currentUser.Require(UserRole.Viewer);
         page = page.Normalized();
 
-        var query = db.Workflows.AsNoTracking();
+        var query = await _access.VisibleWorkflowsAsync(db.Workflows.AsNoTracking(), ct);
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var pattern = "%" + EscapeLike(filter.Search.Trim()) + "%";
@@ -87,6 +88,7 @@ public sealed class WorkflowService(
         currentUser.Require(UserRole.Viewer);
         var workflow = await db.Workflows.AsNoTracking().SingleOrDefaultAsync(w => w.Id == id, ct)
                        ?? throw new NotFoundException(Entity, id);
+        await _access.RequireAsync(workflow.GroupId, UserRole.Viewer, Entity, id, ct);
         return await DetailAsync(workflow, ct);
     }
 
@@ -94,13 +96,16 @@ public sealed class WorkflowService(
     public async Task<WorkflowDetail> CreateAsync(WorkflowDefinition definition, Guid? groupId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
+        // Ключ проєкту без явної групи створює сценарій у своєму проєкті.
+        groupId ??= currentUser.ApiKeyProjectId;
         await EnsureGroupExistsAsync(groupId, ct);
+        await _access.RequireAsync(groupId, UserRole.Editor, WorkflowGroupService.Entity, groupId?.ToString() ?? "none", ct);
 
         var name = definition.Name?.Trim() ?? "";
         var document = ToDocument(definition);
         document["name"] = name;
-        await ThrowIfInvalidAsync(document, asActive: false, ct);
+        await ThrowIfInvalidAsync(document, asActive: false, ct, project: new(groupId));
 
         var now = time.GetUtcNow();
         var workflow = new WorkflowEntity
@@ -127,13 +132,12 @@ public sealed class WorkflowService(
     public async Task<WorkflowDetail> SaveAsync(Guid id, WorkflowDefinition definition, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        currentUser.Require(UserRole.Editor);
-        var workflow = await FindAsync(id, ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
 
         // workflows.name — джерело правди: name у визначенні перезаписується (§10.2).
         var document = ToDocument(definition);
         document["name"] = workflow.Name;
-        await ThrowIfInvalidAsync(document, workflow.Active, ct, id);
+        await ThrowIfInvalidAsync(document, workflow.Active, ct, id, new(workflow.GroupId));
 
         var current = await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id)
@@ -179,13 +183,13 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task<WorkflowDetail> RenameAsync(Guid id, string name, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Назва сценарію не може бути порожньою.", nameof(name));
         }
 
-        var workflow = await FindAsync(id, ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
         var previous = workflow.Name;
         workflow.Name = name.Trim();
         workflow.UpdatedAt = time.GetUtcNow();
@@ -202,11 +206,19 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task<WorkflowDetail> MoveAsync(Guid id, Guid? groupId, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var workflow = await FindAsync(id, ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
         await EnsureGroupExistsAsync(groupId, ct);
         if (workflow.GroupId != groupId)
         {
+            // Переносити можна лише туди, де теж є права editor, і лише якщо посилання сценарію там доступні.
+            await _access.RequireAsync(groupId, UserRole.Editor, WorkflowGroupService.Entity, groupId?.ToString() ?? "none", ct);
+            var current = await CurrentVersionAsync(workflow, ct);
+            var referenceErrors = await ProjectReferences.ValidateAsync(db, JsonNode.Parse(current.Definition)!.AsObject(), groupId, ct);
+            if (referenceErrors.Count > 0)
+            {
+                throw new WorkflowValidationException(referenceErrors);
+            }
+
             // Група — не зміст сценарію: версії не додаємо і updated_at не чіпаємо (порядок списку не стрибає).
             workflow.GroupId = groupId;
             await db.SaveChangesAsync(ct);
@@ -228,15 +240,14 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task<WorkflowDetail> ActivateAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var workflow = await FindAsync(id, ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
         var version = await CurrentVersionAsync(workflow, ct);
         if (workflow.Active)
         {
             return ToDetail(workflow, version);
         }
 
-        await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct, workflow.Id);
+        await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct, workflow.Id, new(workflow.GroupId));
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
         workflow.Active = true;
@@ -261,8 +272,7 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task<WorkflowDetail> DeactivateAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var workflow = await FindAsync(id, ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
         if (workflow.Active)
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -282,8 +292,7 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var workflow = await FindAsync(id, ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
         if (workflow.Active)
         {
             throw new ConflictException(WorkflowActiveCode,
@@ -308,7 +317,6 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task<IReadOnlyList<WorkflowVersionSummary>> ListVersionsAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Viewer);
         await EnsureExistsAsync(id, ct);
         return await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id)
@@ -325,7 +333,6 @@ public sealed class WorkflowService(
     /// <inheritdoc />
     public async Task<WorkflowDefinition> GetVersionAsync(Guid id, int version, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Viewer);
         await EnsureExistsAsync(id, ct);
         var definition = await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id && v.Version == version)
@@ -361,9 +368,10 @@ public sealed class WorkflowService(
         CreatedAt = now,
     };
 
-    private async Task ThrowIfInvalidAsync(JsonObject document, bool asActive, CancellationToken ct, Guid? workflowId = null)
+    private async Task ThrowIfInvalidAsync(
+        JsonObject document, bool asActive, CancellationToken ct, Guid? workflowId = null, ProjectTarget? project = null)
     {
-        var errors = await ValidateDocumentAsync(document, asActive, ct, workflowId);
+        var errors = await ValidateDocumentAsync(document, asActive, ct, workflowId, project);
         if (errors.Count > 0)
         {
             throw new WorkflowValidationException(errors);
@@ -372,10 +380,11 @@ public sealed class WorkflowService(
 
     /// <summary>
     /// Правила 1–6 (<see cref="WorkflowValidator"/>), а для структурно валідного сценарію — ще й розклади
-    /// <c>core.schedule</c>: cron і часовий пояс схема перевірити не може.
+    /// <c>core.schedule</c>: cron і часовий пояс схема перевірити не може. Якщо відомий проєкт сценарію
+    /// (<paramref name="project"/>), посилання на конектори й credentials інших проєктів — помилка (F6-14).
     /// </summary>
     private async Task<IReadOnlyList<WorkflowValidationError>> ValidateDocumentAsync(
-        JsonObject document, bool asActive, CancellationToken ct, Guid? workflowId = null)
+        JsonObject document, bool asActive, CancellationToken ct, Guid? workflowId = null, ProjectTarget? project = null)
     {
         var errors = await _validator.ValidateAsync(document, new WorkflowValidationOptions
         {
@@ -385,6 +394,15 @@ public sealed class WorkflowService(
         if (errors.Count > 0)
         {
             return errors;
+        }
+
+        if (project is not null)
+        {
+            var referenceErrors = await ProjectReferences.ValidateAsync(db, document, project.ProjectId, ct);
+            if (referenceErrors.Count > 0)
+            {
+                return referenceErrors;
+            }
         }
 
         if (await ErrorWorkflowErrorAsync(document, workflowId, ct) is { } errorWorkflowError)
@@ -453,8 +471,14 @@ public sealed class WorkflowService(
             : new(WorkflowValidationCodes.ErrorWorkflowInvalid, "Сценарій помилок має містити вузол «Помилка сценарію» (core.errorTrigger).", Path: path);
     }
 
-    private async Task<WorkflowEntity> FindAsync(Guid id, CancellationToken ct) =>
-        await db.Workflows.SingleOrDefaultAsync(w => w.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+    /// <summary>Сценарій для зміни: чужий проєкт — 404, бракує ролі в проєкті — 403.</summary>
+    private async Task<WorkflowEntity> FindAsync(Guid id, UserRole minimum, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Viewer);
+        var workflow = await db.Workflows.SingleOrDefaultAsync(w => w.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await _access.RequireAsync(workflow.GroupId, minimum, Entity, id, ct);
+        return workflow;
+    }
 
     private async Task EnsureGroupExistsAsync(Guid? groupId, CancellationToken ct)
     {
@@ -466,11 +490,14 @@ public sealed class WorkflowService(
 
     private async Task EnsureExistsAsync(Guid id, CancellationToken ct)
     {
-        if (!await db.Workflows.AnyAsync(w => w.Id == id, ct))
-        {
-            throw new NotFoundException(Entity, id);
-        }
+        currentUser.Require(UserRole.Viewer);
+        var workflow = await db.Workflows.AsNoTracking().Where(w => w.Id == id).Select(w => new { w.GroupId }).SingleOrDefaultAsync(ct)
+                       ?? throw new NotFoundException(Entity, id);
+        await _access.RequireAsync(workflow.GroupId, UserRole.Viewer, Entity, id, ct);
     }
+
+    /// <summary>Проєкт, у якому валідується сценарій (<c>null</c> — спільний простір).</summary>
+    private sealed record ProjectTarget(Guid? ProjectId);
 
     private async Task<WorkflowVersionEntity> CurrentVersionAsync(WorkflowEntity workflow, CancellationToken ct) =>
         await db.WorkflowVersions.AsNoTracking().SingleOrDefaultAsync(v => v.Id == workflow.CurrentVersionId, ct)

@@ -27,7 +27,10 @@ public sealed class ExpressionPreviewService(
     public async Task<ExpressionPreviewResult> EvaluateAsync(Guid workflowId, EvaluateExpressionRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
+        var groupId = await db.Workflows.AsNoTracking().Where(w => w.Id == workflowId).Select(w => new { w.GroupId }).SingleOrDefaultAsync(ct)
+                      ?? throw new NotFoundException("workflow", workflowId);
+        await new ProjectAccess(db, currentUser).RequireAsync(groupId.GroupId, UserRole.Editor, "workflow", workflowId, ct);
         var json = await db.Workflows.AsNoTracking()
                        .Where(w => w.Id == workflowId)
                        .Select(w => db.WorkflowVersions.Where(v => v.Id == w.CurrentVersionId).Select(v => v.Definition).FirstOrDefault())

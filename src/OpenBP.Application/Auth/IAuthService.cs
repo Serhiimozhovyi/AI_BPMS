@@ -45,9 +45,15 @@ public interface IApiKeyService
     /// <summary>Створює ключ поточного користувача; сам ключ повертається один раз.</summary>
     /// <param name="name">Назва ключа (непорожня).</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="projectId">
+    /// Проєкт (F6-14), до якого обмежити ключ: користувач має бути його учасником (admin — будь-який). <c>null</c> — весь
+    /// інстанс; ключ, сам обмежений проєктом, створює лише ключі цього ж проєкту.
+    /// </param>
     /// <exception cref="UnauthenticatedException">Запит не автентифіковано.</exception>
     /// <exception cref="ArgumentException">Порожня назва.</exception>
-    Task<ApiKeyCreated> CreateAsync(string name, CancellationToken ct);
+    /// <exception cref="NotFoundException">Проєкту немає або користувач не його учасник.</exception>
+    /// <exception cref="ForbiddenException">Ключ проєкту намагається створити ключ ширшої дії.</exception>
+    Task<ApiKeyCreated> CreateAsync(string name, CancellationToken ct, Guid? projectId = null);
 
     /// <summary>Відкликає (видаляє) ключ; після цього запити з ним отримують 401.</summary>
     /// <param name="id"><c>api_keys.id</c>.</param>

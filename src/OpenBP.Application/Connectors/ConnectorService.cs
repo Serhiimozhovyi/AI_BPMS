@@ -34,6 +34,8 @@ public sealed class ConnectorService(
 
     private const string Entity = "connector";
 
+    private readonly ProjectAccess _access = new(db, currentUser);
+
     /// <inheritdoc />
     public async Task<PageResult<ConnectorSummary>> ListAsync(PageRequest page, CancellationToken ct)
     {
@@ -42,6 +44,11 @@ public sealed class ConnectorService(
         page = page.Normalized();
 
         var query = db.McpServers.AsNoTracking();
+        if (await _access.VisibleProjectsAsync(ct) is { } visible)
+        {
+            query = query.Where(s => s.ProjectId == null || visible.Contains(s.ProjectId.Value));
+        }
+
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(s => s.Name).ThenBy(s => s.Id).Skip(page.Skip).Take(page.PageSize).ToListAsync(ct);
         return new PageResult<ConnectorSummary>([.. rows.Select(r => Summary(r, ConnectorRegistration.ReadTools(r)))], page.Page, page.PageSize, total);
@@ -53,13 +60,17 @@ public sealed class ConnectorService(
         currentUser.Require(UserRole.Viewer);
         var row = await db.McpServers.AsNoTracking().SingleOrDefaultAsync(s => s.Id == id, ct)
                   ?? throw new NotFoundException(Entity, id);
+        await RequireVisibleAsync(row, ct);
         return Detail(row);
     }
 
     /// <inheritdoc />
     public async Task<ConnectorDetail> CreateAsync(ConnectorInput input, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
+        ArgumentNullException.ThrowIfNull(input);
+        await RequireProjectAsync(input.ProjectId, ct);
+        await _access.RequireManageAsync(input.ProjectId, "workflow-group", input.ProjectId?.ToString() ?? "none", ct);
         var (name, config) = await ValidateAsync(input, ct);
         var row = new McpServerEntity
         {
@@ -69,6 +80,7 @@ public sealed class ConnectorService(
             Config = JsonSerializer.Serialize(config, ConnectorRegistration.Json),
             CredentialId = input.CredentialId,
             Status = ConnectorRegistration.StatusValue(ConnectorStatus.New),
+            ProjectId = input.ProjectId,
         };
         db.McpServers.Add(row);
         db.Audit(currentUser, time.GetUtcNow(), AuditActions.ConnectorCreated, AuditEntities.Connector, row.Id.ToString(), AuditDetails(row));
@@ -82,9 +94,17 @@ public sealed class ConnectorService(
     /// <inheritdoc />
     public async Task<ConnectorDetail> UpdateAsync(Guid id, ConnectorInput input, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
-        var row = await db.McpServers.SingleOrDefaultAsync(s => s.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        currentUser.Require(UserRole.Viewer);
+        ArgumentNullException.ThrowIfNull(input);
+        var row = await FindManagedAsync(id, ct);
+        if (input.ProjectId != row.ProjectId)
+        {
+            await RequireProjectAsync(input.ProjectId, ct);
+            await _access.RequireManageAsync(input.ProjectId, "workflow-group", input.ProjectId?.ToString() ?? "none", ct);
+        }
+
         var (name, config) = await ValidateAsync(input, ct);
+        row.ProjectId = input.ProjectId;
         row.Name = name;
         row.Transport = ConnectorRegistration.TransportValue(input.Transport);
         row.Config = JsonSerializer.Serialize(config, ConnectorRegistration.Json);
@@ -102,8 +122,8 @@ public sealed class ConnectorService(
     /// <inheritdoc />
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
-        var row = await db.McpServers.SingleOrDefaultAsync(s => s.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        currentUser.Require(UserRole.Viewer);
+        var row = await FindManagedAsync(id, ct);
 
         var definitions = await db.Workflows.AsNoTracking().Where(w => w.Active)
             .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => v.Id, (w, v) => new { w.Name, v.Definition })
@@ -134,8 +154,8 @@ public sealed class ConnectorService(
     /// <inheritdoc />
     public async Task<ConnectorDetail> RefreshToolsAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
-        var row = await db.McpServers.SingleOrDefaultAsync(s => s.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        currentUser.Require(UserRole.Viewer);
+        var row = await FindManagedAsync(id, ct);
         var error = await DiscoverAsync(row, ct);
         if (error is not null)
         {
@@ -148,9 +168,19 @@ public sealed class ConnectorService(
     /// <inheritdoc />
     public async Task<ToolCallResult> CallToolAsync(Guid id, string toolName, JsonObject arguments, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
         var row = await db.McpServers.SingleOrDefaultAsync(s => s.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await RequireVisibleAsync(row, ct);
+        var scope = await _access.ScopeAsync(ct);
+        var canCall = row.ProjectId is null
+            ? scope.All || scope.SharedRole >= UserRole.Editor || scope.Projects.Values.Any(r => r >= UserRole.Editor)
+            : scope.RoleIn(row.ProjectId) >= UserRole.Editor;
+        if (!canCall)
+        {
+            throw new ForbiddenException(UserRole.Editor);
+        }
+
         if (!ConnectorRegistration.ReadTools(row).Any(t => string.Equals(t.Name, toolName, StringComparison.Ordinal)))
         {
             throw new NotFoundException("tool", toolName);
@@ -251,8 +281,10 @@ public sealed class ConnectorService(
         }
 
         var config = ConnectorRegistration.Normalize(input.Transport, input.Config);
-        if (input.CredentialId is { } credentialId && !await db.Credentials.AnyAsync(c => c.Id == credentialId, ct))
+        if (input.CredentialId is { } credentialId
+            && !await db.Credentials.AnyAsync(c => c.Id == credentialId && (c.ProjectId == null || c.ProjectId == input.ProjectId), ct))
         {
+            // Credential іншого проєкту для цього конектора — те саме, що його немає (F6-14).
             throw new NotFoundException("credential", credentialId);
         }
 
@@ -390,7 +422,33 @@ public sealed class ConnectorService(
         ConnectorRegistration.ParseTransport(row.Transport),
         ConnectorRegistration.ParseStatus(row.Status),
         tools.Count,
-        row.ToolsCachedAt);
+        row.ToolsCachedAt,
+        row.ProjectId);
+
+    /// <summary>Конектор чужого проєкту виглядає як відсутній (F6-14).</summary>
+    private async Task RequireVisibleAsync(McpServerEntity row, CancellationToken ct)
+    {
+        if (row.ProjectId is not null && await _access.RoleInAsync(row.ProjectId, ct) is null)
+        {
+            throw new NotFoundException(Entity, row.Id);
+        }
+    }
+
+    /// <summary>Конектор для зміни: спільний — лише admin, проєктний — editor проєкту (F6-14).</summary>
+    private async Task<McpServerEntity> FindManagedAsync(Guid id, CancellationToken ct)
+    {
+        var row = await db.McpServers.SingleOrDefaultAsync(s => s.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await _access.RequireManageAsync(row.ProjectId, Entity, id, ct);
+        return row;
+    }
+
+    private async Task RequireProjectAsync(Guid? projectId, CancellationToken ct)
+    {
+        if (projectId is { } id && !await db.WorkflowGroups.AnyAsync(g => g.Id == id, ct))
+        {
+            throw new NotFoundException("workflow-group", id);
+        }
+    }
 
     private static ConnectorDetail Detail(McpServerEntity row)
     {

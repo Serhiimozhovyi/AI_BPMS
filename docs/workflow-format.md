@@ -277,7 +277,9 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 3. Граф без циклів.
 4. Активний сценарій має ≥ 1 тригер.
 5. Параметри кожного вузла відповідають його схемі (рядок `{{ }}` допустимий замість будь-якого типу). Для `mcp.tool` схема — `inputSchema` tool'а з кешу; якщо сервер невідомий або tool не знайдено — помилка з кодом `MCP_TOOL_UNKNOWN`.
-6. `serverId`/`credentialId` існують і доступні користувачу.
+6. `serverId`/`credentialId` існують і доступні користувачу; у сценарії проєкту — лише спільні або цього проєкту
+   (`PROJECT_REFERENCE_FORBIDDEN`, F6-14; перевіряється при створенні, збереженні, активації й перенесенні, не в
+   `validate_workflow` без сценарію).
 7. `settings.executionTimeoutSec` не більший за серверну межу `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (`EXECUTION_TIMEOUT_TOO_LARGE`).
 8. `settings.errorWorkflowId` — інший існуючий сценарій з `core.errorTrigger` (`ERROR_WORKFLOW_INVALID`).
 9. Бізнес-атрибути: `BUSINESS_LANE_ID_DUPLICATE` (`/business/lanes/{i}/id`), `BUSINESS_STEP_ID_DUPLICATE`

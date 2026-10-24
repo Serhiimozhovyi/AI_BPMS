@@ -28,6 +28,7 @@ public sealed record CredentialUsage(IReadOnlyList<CredentialReference> Connecto
 /// <param name="UsedBy">Де використовується.</param>
 /// <param name="Error">Дані не розшифровуються (інший ключ шифрування): пояснення; інакше <c>null</c>.</param>
 /// <param name="OAuth">Для типу <c>oauth2</c> — стан підключення; інакше <c>null</c>.</param>
+/// <param name="ProjectId">Проєкт (F6-14); <c>null</c> — спільний credential.</param>
 public sealed record CredentialSummary(
     Guid Id,
     string Name,
@@ -36,7 +37,8 @@ public sealed record CredentialSummary(
     Guid? CreatedBy,
     CredentialUsage UsedBy,
     string? Error,
-    [property: JsonPropertyName("oauth")] CredentialOAuthStatus? OAuth = null);
+    [property: JsonPropertyName("oauth")] CredentialOAuthStatus? OAuth = null,
+    Guid? ProjectId = null);
 
 /// <summary>Стан oauth2-credential'а (без токенів).</summary>
 /// <param name="Status"><c>notConnected</c> — токена ще немає; <c>connected</c>; <c>expired</c> — токен сплив і не оновлюється; <c>error</c> — останнє оновлення не вдалося.</param>
@@ -48,13 +50,15 @@ public sealed record CredentialOAuthStatus(string Status, DateTimeOffset? Expire
 /// <param name="Id">Id.</param>
 /// <param name="Name">Назва.</param>
 /// <param name="Type">Тип.</param>
-public sealed record CredentialOption(Guid Id, string Name, string Type);
+/// <param name="ProjectId">Проєкт (F6-14); <c>null</c> — спільний.</param>
+public sealed record CredentialOption(Guid Id, string Name, string Type, Guid? ProjectId = null);
 
 /// <summary>Тіло <c>POST /credentials</c>.</summary>
 /// <param name="Name">Назва, непорожня.</param>
 /// <param name="Type">Тип з каталогу.</param>
 /// <param name="Data">Дані за схемою типу.</param>
-public sealed record CredentialCreateInput(string Name, string Type, JsonObject Data);
+/// <param name="ProjectId">Проєкт (F6-14): створює editor проєкту; <c>null</c> — спільний, лише admin.</param>
+public sealed record CredentialCreateInput(string Name, string Type, JsonObject Data, Guid? ProjectId = null);
 
 /// <summary>Тіло <c>PATCH /credentials/{id}</c>: що не вказано — не змінюється.</summary>
 /// <param name="Name">Нова назва.</param>
@@ -62,8 +66,9 @@ public sealed record CredentialCreateInput(string Name, string Type, JsonObject 
 public sealed record CredentialUpdateInput(string? Name = null, JsonObject? Data = null);
 
 /// <summary>
-/// Credentials (docs/architecture.md §8, §10): REST <c>/credentials</c> і сторінка UI. Лише <see cref="UserRole.Admin"/>,
-/// крім <see cref="OptionsAsync"/> (<see cref="UserRole.Editor"/>: автор сценарію обирає credential у вузлі).
+/// Credentials (docs/architecture.md §8, §10): REST <c>/credentials</c> і сторінка UI. Спільні (<c>project_id = null</c>)
+/// бачить і змінює лише <see cref="UserRole.Admin"/>, проєктні — editor проєкту (F6-14, <see cref="ProjectAccess"/>);
+/// <see cref="OptionsAsync"/> — будь-хто з роллю editor (автор сценарію обирає credential у вузлі).
 /// Значення секретів назовні не віддаються ніколи — лише назви заповнених полів.
 /// </summary>
 public interface ICredentialService
@@ -75,10 +80,11 @@ public interface ICredentialService
     /// <param name="ct">Скасування.</param>
     Task<IReadOnlyList<CredentialSummary>> ListAsync(CancellationToken ct);
 
-    /// <summary>Список для вибору (id, назва, тип) без даних і використання.</summary>
+    /// <summary>Список для вибору (id, назва, тип) без даних і використання: спільні й ті, що доступні в проєкті.</summary>
     /// <param name="type">Лише цього типу; <c>null</c> — усі.</param>
     /// <param name="ct">Скасування.</param>
-    Task<IReadOnlyList<CredentialOption>> OptionsAsync(string? type, CancellationToken ct);
+    /// <param name="projectId">Проєкт сценарію: спільні + його; <c>null</c> — спільні + усіх видимих проєктів.</param>
+    Task<IReadOnlyList<CredentialOption>> OptionsAsync(string? type, CancellationToken ct, Guid? projectId = null);
 
     /// <summary>Один credential.</summary>
     /// <param name="id">Id.</param>

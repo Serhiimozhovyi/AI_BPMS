@@ -1,3 +1,4 @@
+using OpenBP.Application.Auth;
 using OpenBP.Shared.Validation;
 using OpenBP.Shared.Workflow;
 
@@ -80,7 +81,15 @@ public sealed record WorkflowGroupFilter(Guid? GroupId)
 /// <param name="Name">Назва, унікальна без урахування регістру.</param>
 /// <param name="SortOrder">Позиція в списку груп, з 0.</param>
 /// <param name="WorkflowCount">Скільки сценаріїв у групі.</param>
-public sealed record WorkflowGroupSummary(Guid Id, string Name, int SortOrder, int WorkflowCount);
+/// <param name="Role">Роль поточного користувача в проєкті (F6-14): <c>admin</c> — адміністратор інстансу.</param>
+public sealed record WorkflowGroupSummary(Guid Id, string Name, int SortOrder, int WorkflowCount, UserRole? Role = null);
+
+/// <summary>Учасник проєкту (<c>GET /workflow-groups/{id}/members</c>, F6-14).</summary>
+/// <param name="UserId"><c>users.id</c>.</param>
+/// <param name="Email">Email користувача.</param>
+/// <param name="Role"><see cref="UserRole.Editor"/> або <see cref="UserRole.Viewer"/> у межах проєкту.</param>
+/// <param name="GlobalRole">Глобальна роль користувача (для довідки в UI).</param>
+public sealed record ProjectMember(Guid UserId, string Email, UserRole Role, UserRole? GlobalRole);
 
 /// <summary>Результат <c>POST /workflows/validate</c>.</summary>
 /// <param name="Errors">Помилки; порожній список — сценарій коректний.</param>
