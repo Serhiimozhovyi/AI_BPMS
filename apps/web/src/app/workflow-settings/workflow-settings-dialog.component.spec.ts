@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { WorkflowValidationError } from '../workflows/workflows-api.service';
 import { WorkflowSettingsDialogComponent } from './workflow-settings-dialog.component';
-import { WorkflowSettings, applySettings, settingsChanged, settingsFormValue, timeoutError, timezones } from './workflow-settings';
+import { WorkflowSettings, applySettings, limitErrors, settingsChanged, settingsFormValue, timeoutError, timezones } from './workflow-settings';
 
 const settings: WorkflowSettings = { timezone: 'Europe/Kyiv', executionTimeoutSec: 300, errorWorkflowId: null, saveSuccessfulData: false, extra: 1 };
 
@@ -25,6 +25,33 @@ describe('workflow-settings', () => {
     expect(next).toEqual({ ...settings, executionTimeoutSec: 0 });
     expect(settingsChanged(settings, next)).toBe(true);
     expect(settingsChanged(settings, { ...settings })).toBe(false);
+  });
+
+  it('ліміти: порожні поля прибирають ліміт, значення — в межах схеми, невідомі поля ліміту зберігаються', () => {
+    const limited: WorkflowSettings = {
+      ...settings,
+      concurrency: { max: 2, onLimit: 'drop', note: 'x' },
+      throttle: { limit: 5, periodSec: 10, onLimit: 'queue' },
+      disableAfterErrors: 3,
+    };
+    const form = settingsFormValue(limited);
+    expect(form).toMatchObject({ concurrencyMax: '2', concurrencyOnLimit: 'drop', throttleLimit: '5', throttlePeriodSec: '10', disableAfterErrors: '3' });
+    expect(applySettings(limited, form)).toEqual(limited);
+    expect(settingsChanged(limited, applySettings(limited, form))).toBe(false);
+
+    const cleared = applySettings(limited, { ...form, concurrencyMax: '', throttleLimit: ' ', disableAfterErrors: '0' });
+    expect(cleared).toEqual(settings);
+    expect(settingsChanged(limited, cleared)).toBe(true);
+
+    const added = applySettings(settings, { ...settingsFormValue(settings), throttleLimit: '2', throttleOnLimit: 'drop' });
+    expect(added.throttle).toEqual({ limit: 2, periodSec: 60, onLimit: 'drop' });
+
+    expect(limitErrors({ ...form, concurrencyMax: '0', throttlePeriodSec: '90000', disableAfterErrors: '1.5' })).toEqual({
+      concurrencyMax: [1, 1000],
+      throttlePeriodSec: [1, 86400],
+      disableAfterErrors: [0, 1000],
+    });
+    expect(limitErrors({ ...form, throttleLimit: '', throttlePeriodSec: 'abc' })).toEqual({});
   });
 });
 
@@ -99,6 +126,32 @@ describe('WorkflowSettingsDialogComponent', () => {
 
     host.querySelector<HTMLButtonElement>('[data-testid="settings-cancel"]')!.click();
     expect(close).toHaveBeenCalledWith(undefined);
+  });
+
+  it('розділ «Навантаження»: ліміти потрапляють у settings, значення поза межами вимикає кнопку', async () => {
+    const { fixture, close, host } = await setup();
+    const type = (testId: string, text: string) => {
+      const input = host.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)!;
+      input.value = text;
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+    type('settings-concurrency-max', '1');
+    await choose(fixture, host, 'settings-concurrency-on-limit', 'Відкинути');
+    type('settings-throttle-limit', '2');
+    type('settings-throttle-period', '10');
+    type('settings-disable-after-errors', '5000');
+    expect(host.querySelector('[data-testid="settings-disable-after-errors-error"]')?.textContent).toContain('від 0 до 1000');
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="settings-apply"]')!.disabled).toBe(true);
+
+    type('settings-disable-after-errors', '3');
+    host.querySelector<HTMLButtonElement>('[data-testid="settings-apply"]')!.click();
+    expect(close).toHaveBeenCalledWith({
+      ...settings,
+      concurrency: { max: 1, onLimit: 'drop' },
+      throttle: { limit: 2, periodSec: 10, onLimit: 'queue' },
+      disableAfterErrors: 3,
+    });
   });
 
   it('помилка межі з Api показується біля поля; видалений сценарій помилок — з позначкою', async () => {

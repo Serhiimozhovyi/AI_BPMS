@@ -66,6 +66,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("executions");
             e.HasIndex(x => new { x.WorkflowId, x.StartedAt });
+            e.HasIndex(x => new { x.WorkflowId, x.ScheduledAt }).HasFilter("scheduled_at IS NOT NULL");
         });
         b.Entity<ExecutionStepEntity>(e =>
         {

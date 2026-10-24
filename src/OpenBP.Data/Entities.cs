@@ -44,6 +44,8 @@ public sealed class WorkflowEntity
     public DateTimeOffset UpdatedAt { get; set; }
     /// <summary>Група сценарію (<c>workflow_groups.id</c>); <c>null</c> — без групи.</summary>
     public Guid? GroupId { get; set; }
+    /// <summary>Коли сценарій востаннє активовано; запобіжник (F6-06) рахує помилки підряд лише після цього.</summary>
+    public DateTimeOffset? ActivatedAt { get; set; }
 }
 
 /// <summary>Група сценаріїв (F3-63): плоский список поза визначенням сценарію.</summary>
@@ -103,6 +105,11 @@ public sealed class ExecutionEntity
     public DateTimeOffset? FinishedAt { get; set; }
     public DateTimeOffset? HeartbeatAt { get; set; }
     public string? Error { get; set; }
+    /// <summary>
+    /// Запланований час старту з урахуванням ліміту частоти (F6-06); заповнюється лише для запусків, на які діє
+    /// <c>settings.throttle</c>, і за ним рахуються вікна.
+    /// </summary>
+    public DateTimeOffset? ScheduledAt { get; set; }
 }
 
 public sealed class ExecutionStepEntity

@@ -44,6 +44,15 @@ public sealed record ExecutionJobPayload
 
     /// <summary>Виходи вузлів попереднього тестового запуску (<see cref="ExecutionRequest.RunData"/>).</summary>
     public IReadOnlyDictionary<string, Item[][]>? RunData { get; init; }
+
+    /// <summary>
+    /// Група паралельності (<c>JobQueue.ConcurrencyKeyField</c>): id сценарію, якщо на запуск діє
+    /// <c>settings.concurrency</c> з <c>onLimit: queue</c> (F6-06); інакше <c>null</c>.
+    /// </summary>
+    public string? ConcurrencyKey { get; init; }
+
+    /// <summary>Ліміт одночасних виконань групи <see cref="ConcurrencyKey"/> (<c>JobQueue.ConcurrencyMaxField</c>).</summary>
+    public int? ConcurrencyMax { get; init; }
 }
 
 /// <summary>Payload job <see cref="JobKinds.Poll"/>: який вузол опитати. Стан вузла воркер читає з <c>node_state</c>.</summary>

@@ -6,6 +6,7 @@ using Npgsql;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
+using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
@@ -197,6 +198,7 @@ public sealed partial class ExecutionJobProcessor
         {
             await SetFinalAsync(executionId, ExecutionStatuses.Error, ex.Message).ConfigureAwait(false);
             await LaunchErrorWorkflowAsync(payload, workflow, null).ConfigureAwait(false);
+            await TripCircuitBreakerAsync(payload, workflow).ConfigureAwait(false);
             await CompleteJobAsync(job).ConfigureAwait(false);
             return;
         }
@@ -279,7 +281,34 @@ public sealed partial class ExecutionJobProcessor
         }
 
         await LaunchErrorWorkflowAsync(payload, workflow, result?.FailedNodeId).ConfigureAwait(false);
+        await TripCircuitBreakerAsync(payload, workflow).ConfigureAwait(false);
         await CompleteJobAsync(job).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Запобіжник <c>settings.disableAfterErrors</c> (F6-06, <see cref="WorkflowCircuitBreaker"/>): після виконання
+    /// тригера перевіряє серію помилок і за потреби деактивує сценарій. Збій перевірки лише пишеться в журнал —
+    /// виконання вже завершене.
+    /// </summary>
+    private async Task TripCircuitBreakerAsync(ExecutionJobPayload payload, WorkflowDefinition workflow)
+    {
+        if (payload.Mode != ExecutionMode.Trigger || workflow.Settings.DisableAfterErrors is not (> 0 and var threshold))
+        {
+            return;
+        }
+
+        try
+        {
+            await using var db = await _contexts.CreateDbContextAsync().ConfigureAwait(false);
+            if (await WorkflowCircuitBreaker.TripIfNeededAsync(db, payload.WorkflowId, threshold, _time, CancellationToken.None).ConfigureAwait(false))
+            {
+                LogWorkflowDisabled(_logger, payload.WorkflowId, threshold, payload.ExecutionId);
+            }
+        }
+        catch (Exception ex) when (ex is DbUpdateException or NpgsqlException or InvalidOperationException)
+        {
+            LogCircuitBreakerFailure(_logger, ex, payload.WorkflowId);
+        }
     }
 
     /// <summary>
@@ -555,6 +584,12 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: heartbeat не вдався.")]
     private static partial void LogHeartbeatFailure(ILogger logger, Exception exception, Guid executionId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Сценарій {WorkflowId} деактивовано запобіжником: {Threshold} помилкових виконань тригера підряд (останнє — {ExecutionId}).")]
+    private static partial void LogWorkflowDisabled(ILogger logger, Guid workflowId, int threshold, Guid executionId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Сценарій {WorkflowId}: не вдалося перевірити запобіжник disableAfterErrors.")]
+    private static partial void LogCircuitBreakerFailure(ILogger logger, Exception exception, Guid workflowId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Виконання {ExecutionId}: запущено сценарій помилок {ErrorWorkflowId} (виконання {ErrorExecutionId}).")]
     private static partial void LogErrorWorkflowLaunched(ILogger logger, Guid executionId, Guid errorWorkflowId, Guid errorExecutionId);

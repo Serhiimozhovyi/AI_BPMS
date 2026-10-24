@@ -258,7 +258,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 | `kind` | payload | Хто ставить | Що робить воркер |
 |---|---|---|---|
-| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData? }` (останні два — лише `manual`) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
+| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію») | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
 | `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
 
 Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;
@@ -280,6 +280,25 @@ Quartz тримає власні таблиці для розкладів. Бі�
 виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)
 отримує статус `error`. Паралельність воркера — `MaxConcurrentExecutions` (50 за замовчуванням, PRD §7):
 job береться лише за вільного слота.
+
+Ліміти сценарію (F6-06, docs/workflow-format.md «Ліміти навантаження»); не діють на `manual`:
+- **Рішення при запуску.** `ExecutionLauncher` бере `pg_advisory_xact_lock(hashtextextended('launch:' + workflowId, 0))`
+  у транзакції викликача (`mcp.poll`) або у власній, тож паралельні запуски одного сценарію бачать один одного.
+  `concurrency.onLimit = drop`: незавершених не-`manual` виконань ≥ `max` → рядок `executions` одразу `cancelled`
+  з `error`, без job. `throttle`: вікна `floor(epoch / periodSec)` рахуються за `executions.scheduled_at` (індекс
+  `(workflow_id, scheduled_at)`); місце є — `scheduled_at = now`; ні — `queue` ставить job з `run_at` = початок
+  найближчого вікна з місцем (і `scheduled_at` = той самий час), `drop` — `cancelled` без job.
+- **Черга з `concurrency.onLimit = queue`.** У payload пишуться `concurrencyKey` (= `workflowId`) і `concurrencyMax`.
+  `JobQueue.ClaimAsync` бере job групи, лише коли заблокованих job'ів цієї групи менше за `concurrencyMax` і в групі
+  немає раніше готового (`run_at`, `id`) незаблокованого job'а — порядок надходження зберігається. Після вибору
+  кандидата (`FOR UPDATE SKIP LOCKED`) умова перевіряється ще раз під `pg_advisory_xact_lock(group)`, тож
+  паралельні воркери не перевищать ліміт. Job'и без ключа й інших груп беруться як завжди. Протухлий lock
+  (`ReleaseStaleLocksAsync`) звільняє місце групи.
+- **Запобіжник `disableAfterErrors`.** Після кожного виконання `trigger` воркер (`WorkflowCircuitBreaker`) бере
+  останні N завершених `trigger`-виконань (`success`/`error`/`timed_out`) з `finished_at >= workflows.activated_at`;
+  усі N — помилки → в одній транзакції видаляє `webhooks` сценарію і ставить `active = false` (у журнал воркера —
+  попередження). Тригери Quartz лишаються в Api, але `ScheduleFireService` неактивний сценарій не запускає, а
+  наступна активація перереєстровує розклад і оновлює `activated_at`, тож серія починається заново.
 
 Скасування (`IExecutionService.CancelAsync`): `queued` → одразу `cancelled`; `running` → `cancelling`,
 далі — крок 3; воркер завершує виконання зі статусом `cancelled`. Затримка ≤ `HeartbeatInterval`.

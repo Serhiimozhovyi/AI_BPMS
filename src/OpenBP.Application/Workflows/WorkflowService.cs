@@ -227,6 +227,7 @@ public sealed class WorkflowService(
         await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
         workflow.Active = true;
         workflow.UpdatedAt = time.GetUtcNow();
+        workflow.ActivatedAt = workflow.UpdatedAt;
         try
         {
             await db.SaveChangesAsync(ct);
