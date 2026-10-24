@@ -1,5 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using OpenBP.Connectors.Telegram.Tools;
 
 namespace OpenBP.Connectors.Telegram;
@@ -19,6 +22,7 @@ public static class ConnectorHost
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         AddConnector(builder.Services, builder.Configuration);
         builder.Services.AddMcpServer(Configure).WithStdioServerTransport().WithTools<TelegramTools>();
+        builder.Services.PostConfigure<McpServerOptions>(AnnotateChatIds);
         return builder.Build();
     }
 
@@ -32,6 +36,7 @@ public static class ConnectorHost
         builder.WebHost.UseUrls(url);
         AddConnector(builder.Services, builder.Configuration, environment);
         builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<TelegramTools>();
+        builder.Services.PostConfigure<McpServerOptions>(AnnotateChatIds);
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;
@@ -58,6 +63,34 @@ public static class ConnectorHost
         });
     }
 
-    private static void Configure(ModelContextProtocol.Server.McpServerOptions options) =>
+    private static void Configure(McpServerOptions options) =>
         options.ServerInfo = new Implementation { Name = ServerName, Version = "1.0.0" };
+
+    /// <summary>
+    /// <c>chat_id</c> усіх tools — з анотацією <c>x-openbp-options</c> (docs/connectors.md §2): у формі OpenBP чат обирається
+    /// з чатів останніх оновлень <c>get_updates</c>; ввести id чи вираз можна, як і раніше.
+    /// </summary>
+    /// <param name="options">Налаштування MCP-сервера з уже зареєстрованими tools.</param>
+    internal static void AnnotateChatIds(McpServerOptions options)
+    {
+        foreach (var tool in options.ToolCollection ?? [])
+        {
+            var protocol = tool.ProtocolTool;
+            if (protocol.Name == "get_updates" || JsonNode.Parse(protocol.InputSchema.GetRawText()) is not JsonObject schema
+                || schema["properties"]?["chat_id"] is not JsonObject chatId)
+            {
+                continue;
+            }
+
+            chatId["x-openbp-options"] = new JsonObject
+            {
+                ["tool"] = "get_updates",
+                ["arguments"] = new JsonObject { ["limit"] = 100 },
+                ["itemsPath"] = "result",
+                ["valuePath"] = "message.chat.id",
+                ["labelPath"] = new JsonArray("message.chat.title", "message.chat.username", "message.chat.first_name"),
+            };
+            protocol.InputSchema = JsonSerializer.SerializeToElement(schema);
+        }
+    }
 }

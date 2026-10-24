@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -58,6 +59,11 @@ public static class FakeServerApp
         foreach (var type in tools)
         {
             server.WithTools([type]);
+        }
+
+        if (tools.Contains(typeof(MockTelegramTools)))
+        {
+            builder.Services.PostConfigure<McpServerOptions>(MockTelegramTools.AnnotateChatIds);
         }
 
         await builder.Build().RunAsync();
@@ -239,6 +245,51 @@ public static class MockTelegramTools
     public static AnsweredCallback AnswerCallbackQuery(
         [Description("callback_query.id")] string callback_query_id,
         [Description("Сповіщення")] string? text = null) => new(true, callback_query_id);
+
+    /// <summary>Останні «оновлення»: повідомлення з двох чатів (для списку чатів у формі, F3-54).</summary>
+    [McpServerTool(Name = "get_updates", Title = "Оновлення", ReadOnly = true, UseStructuredContent = true)]
+    [Description("Повертає вхідні оновлення як { result: Update[] }.")]
+    public static JsonObject GetUpdates([Description("Скільки оновлень")] int? limit = null) => new()
+    {
+        ["result"] = new JsonArray(
+            Update(1, 1001, "Олена", "Привіт"),
+            Update(2, 2002, "Петро", "Хочу записатися"),
+            Update(3, 1001, "Олена", "Дякую")),
+    };
+
+    /// <summary>
+    /// <c>chat_id</c> — з анотацією <c>x-openbp-options</c> на <c>get_updates</c>, як у <c>connectors/telegram</c>
+    /// (docs/connectors.md §2).
+    /// </summary>
+    public static void AnnotateChatIds(McpServerOptions options)
+    {
+        foreach (var tool in options.ToolCollection ?? [])
+        {
+            var protocol = tool.ProtocolTool;
+            if (JsonNode.Parse(protocol.InputSchema.GetRawText()) is JsonObject schema && schema["properties"]?["chat_id"] is JsonObject chatId)
+            {
+                chatId["x-openbp-options"] = new JsonObject
+                {
+                    ["tool"] = "get_updates",
+                    ["itemsPath"] = "result",
+                    ["valuePath"] = "message.chat.id",
+                    ["labelPath"] = new JsonArray("message.chat.title", "message.chat.first_name"),
+                };
+                protocol.InputSchema = JsonSerializer.SerializeToElement(schema);
+            }
+        }
+    }
+
+    private static JsonObject Update(long id, long chat, string name, string text) => new()
+    {
+        ["update_id"] = id,
+        ["message"] = new JsonObject
+        {
+            ["message_id"] = id,
+            ["chat"] = new JsonObject { ["id"] = chat, ["type"] = "private", ["first_name"] = name },
+            ["text"] = text,
+        },
+    };
 
     /// <summary>Задає меню команд.</summary>
     [McpServerTool(Name = "set_my_commands", Title = "Команди бота", UseStructuredContent = true)]

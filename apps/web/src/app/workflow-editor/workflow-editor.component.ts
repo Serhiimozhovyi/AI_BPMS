@@ -278,7 +278,7 @@ export interface EditorErrorEvent {
                   </app-node-data-view>
                 </div>
                 <div class="editor__col editor__col--params" data-testid="panel-params" [hidden]="!wide() && panelTab() !== 'params'">
-                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)">
+                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)">
                     @if (!readonly()) {
                       <div panelActions class="editor__node-actions" data-testid="node-actions">
                         <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
@@ -686,6 +686,12 @@ export class WorkflowEditorComponent implements OnInit {
     if (!node || !MCP_TOOL_TYPES.includes(node.type)) return null;
     const { serverId, toolName } = node.parameters ?? {};
     return this.servers().find((s) => s.id === serverId)?.tools.find((t) => t.name === toolName) ?? null;
+  });
+  /** Усі tools конектора виділеного `mcp.*` — для списків `x-openbp-options` (F3-54); конектора немає — `null`. */
+  protected readonly selectedServerTools = computed<readonly McpToolInfo[] | null>(() => {
+    const node = this.selectedNode();
+    if (!node || !MCP_TOOL_TYPES.includes(node.type)) return null;
+    return this.servers().find((s) => s.id === node.parameters?.['serverId'])?.tools ?? null;
   });
   /** Підказки виразів для виділеного вузла (F2-19): output останнього тестового запуску, де його немає — `pinData`. */
   protected readonly selectedExpressionContext = computed(() => {

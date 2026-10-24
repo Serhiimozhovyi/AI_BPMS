@@ -10,12 +10,23 @@ namespace OpenBP.Connectors.OneC.OData;
 /// Tools на кожен entity set OData: <c>list_&lt;set&gt;</c> (<c>$filter</c>, <c>$select</c>, <c>$expand</c>,
 /// <c>$orderby</c>, <c>$top</c>, <c>$skip</c>; відповідь <c>value</c> → <c>{ "result": [...] }</c>), <c>get_&lt;set&gt;</c>
 /// (за ключем, зокрема складеним), <c>create_&lt;set&gt;</c> (POST) і <c>update_&lt;set&gt;</c> (PATCH). <c>inputSchema</c>
-/// — з типів CSDL (Edm.* → JSON Schema, складні типи й перелічення розгортаються).
+/// — з типів CSDL (Edm.* → JSON Schema, складні типи й перелічення розгортаються). Посилання на довідник
+/// (<c>&lt;Name&gt;_Key</c> з навігацією <c>&lt;Name&gt;</c> на entity set, для якого є <c>list_*</c>) отримують анотацію
+/// <c>x-openbp-options</c> — у формі OpenBP значення обирається зі списку (docs/connectors.md §2).
 /// </summary>
 public static class ODataToolFactory
 {
     /// <summary>Аргумент із тілом сутності для create/update.</summary>
     public const string BodyArgument = "body";
+
+    /// <summary>Анотація властивості <c>inputSchema</c>: звідки форма OpenBP бере список значень (docs/connectors.md §2).</summary>
+    public const string OptionsAnnotation = "x-openbp-options";
+
+    /// <summary>Суфікс властивості-посилання 1С (<c>Контрагент_Key</c> ↔ навігація <c>Контрагент</c>).</summary>
+    private const string KeySuffix = "_Key";
+
+    /// <summary>Властивість з назвою елемента довідника 1С — підпис у списку.</summary>
+    private const string LabelProperty = "Description";
 
     private const int MaxDepth = 4;
 
@@ -30,6 +41,9 @@ public static class ODataToolFactory
         var names = new HashSet<string>(StringComparer.Ordinal);
         var tools = new List<RestTool>();
 
+        // Спершу назви tools усіх entity sets (у тому самому порядку, що й раніше): посилання на довідник має знати
+        // назву list_* цільового set'а, навіть якщо той іде далі в $metadata.
+        var plans = new List<SetPlan>();
         foreach (var set in model.EntitySets)
         {
             if ((include.Count > 0 && !include.Any(p => p.IsMatch(set.Name))) || exclude.Any(p => p.IsMatch(set.Name)))
@@ -37,16 +51,26 @@ public static class ODataToolFactory
                 continue;
             }
 
-            if (model.FindType(set.EntityType) is not { } type)
+            if (model.FindType(set.EntityType) is not { } planType)
             {
                 continue;
             }
 
+            var slugName = ToolNaming.ToolName(set.Name) ?? "set";
+            var hasKeys = model.KeysOf(planType).Count > 0;
+            var list = ToolNaming.Unique($"list_{slugName}", names);
+            var get = hasKeys ? ToolNaming.Unique($"get_{slugName}", names) : null;
+            var create = ToolNaming.Unique($"create_{slugName}", names);
+            var update = hasKeys ? ToolNaming.Unique($"update_{slugName}", names) : null;
+            plans.Add(new SetPlan(set, planType, list, get, create, update));
+        }
+
+        foreach (var (set, type, listName, getName, createName, updateName) in plans)
+        {
             var keys = model.KeysOf(type);
             var properties = model.PropertiesOf(type);
             var navigations = model.NavigationsOf(type).Select(n => n.Name).ToList();
-            var slug = ToolNaming.ToolName(set.Name) ?? "set";
-            var entity = EntitySchema(model, properties);
+            var entity = EntitySchema(model, type, properties, plans);
             var keyProperties = new JsonObject();
             foreach (var key in keys)
             {
@@ -83,12 +107,12 @@ public static class ODataToolFactory
             }
 
             tools.Add(new ODataTool(
-                Tool(ToolNaming.Unique($"list_{slug}", names), $"List {set.Name}",
+                Tool(listName, $"List {set.Name}",
                     $"Lists entities of the OData entity set {set.Name}. Returns {{ result: {Short(set.EntityType)}[] }}.",
                     Schema(listProperties, []), readOnly: true),
                 ODataOperation.List, binding, rest));
 
-            if (keys.Count > 0)
+            if (getName is not null)
             {
                 var getProperties = (JsonObject)keyProperties.DeepClone();
                 getProperties["select"] = select.DeepClone();
@@ -98,26 +122,26 @@ public static class ODataToolFactory
                 }
 
                 tools.Add(new ODataTool(
-                    Tool(ToolNaming.Unique($"get_{slug}", names), $"Get {set.Name}",
+                    Tool(getName, $"Get {set.Name}",
                         $"Returns one entity of {set.Name} by key ({string.Join(", ", keyNames)}).",
                         Schema(getProperties, keyNames), readOnly: true),
                     ODataOperation.Get, binding, rest));
             }
 
             tools.Add(new ODataTool(
-                Tool(ToolNaming.Unique($"create_{slug}", names), $"Create {set.Name}",
+                Tool(createName, $"Create {set.Name}",
                     $"Creates an entity in {set.Name} (POST). Returns the created entity.",
                     Schema(new JsonObject { [BodyArgument] = entity.DeepClone() }, [BodyArgument]), readOnly: false),
                 ODataOperation.Create, binding, rest));
 
-            if (keys.Count > 0)
+            if (updateName is not null)
             {
                 var updateProperties = (JsonObject)keyProperties.DeepClone();
                 var patch = (JsonObject)entity.DeepClone();
                 patch["description"] = "Properties to change (PATCH); omitted properties stay as they are.";
                 updateProperties[BodyArgument] = patch;
                 tools.Add(new ODataTool(
-                    Tool(ToolNaming.Unique($"update_{slug}", names), $"Update {set.Name}",
+                    Tool(updateName, $"Update {set.Name}",
                         $"Updates an entity of {set.Name} by key ({string.Join(", ", keyNames)}) with PATCH.",
                         Schema(updateProperties, [.. keyNames, BodyArgument]), readOnly: false),
                     ODataOperation.Update, binding, rest));
@@ -127,16 +151,58 @@ public static class ODataToolFactory
         return tools;
     }
 
-    /// <summary>JSON Schema сутності: об'єкт з усіма структурними властивостями.</summary>
-    private static JsonObject EntitySchema(CsdlModel model, IReadOnlyList<CsdlProperty> properties)
+    /// <summary>JSON Schema сутності: об'єкт з усіма структурними властивостями; посилання на довідники — з анотацією списку.</summary>
+    private static JsonObject EntitySchema(CsdlModel model, CsdlType owner, IReadOnlyList<CsdlProperty> properties, IReadOnlyList<SetPlan> plans)
     {
         var props = new JsonObject();
         foreach (var property in properties)
         {
-            props[property.Name] = EdmSchema(model, property.Type, property.MaxLength, 1);
+            var schema = EdmSchema(model, property.Type, property.MaxLength, 1);
+            if (ReferenceOptions(model, owner, property, plans) is { } options)
+            {
+                schema[OptionsAnnotation] = options;
+            }
+
+            props[property.Name] = schema;
         }
 
         return new JsonObject { ["type"] = "object", ["properties"] = props };
+    }
+
+    /// <summary>
+    /// <c>x-openbp-options</c> для <c>&lt;Name&gt;_Key</c>: навігація <c>&lt;Name&gt;</c> веде на один об'єкт типу, для якого є
+    /// entity set з <c>list_*</c> і простим ключем; значення — ключ, підпис — <c>Description</c> (якщо є).
+    /// </summary>
+    internal static JsonObject? ReferenceOptions(CsdlModel model, CsdlType owner, CsdlProperty property, IReadOnlyList<SetPlan> plans)
+    {
+        if (!property.Name.EndsWith(KeySuffix, StringComparison.Ordinal) || property.Name.Length == KeySuffix.Length)
+        {
+            return null;
+        }
+
+        var navigationName = property.Name[..^KeySuffix.Length];
+        var navigation = model.NavigationsOf(owner).FirstOrDefault(n => n.Name == navigationName);
+        if (navigation?.Type is not { } targetName || targetName.StartsWith("Collection(", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var target = model.FindType(targetName);
+        var plan = target is null ? null : plans.FirstOrDefault(p => ReferenceEquals(p.Type, target));
+        if (plan is null || model.KeysOf(plan.Type) is not [var key])
+        {
+            return null;
+        }
+
+        var label = model.PropertiesOf(plan.Type).Any(p => p.Name == LabelProperty) ? LabelProperty : key.Name;
+        return new JsonObject
+        {
+            ["tool"] = plan.List,
+            ["arguments"] = new JsonObject { ["select"] = Strings(new[] { key.Name, label }.Distinct()) },
+            ["itemsPath"] = "result",
+            ["valuePath"] = key.Name,
+            ["labelPath"] = label,
+        };
     }
 
     /// <summary>Тип CSDL → JSON Schema.</summary>
@@ -190,6 +256,9 @@ public static class ODataToolFactory
         // Невідомий тип (напр. геопросторовий) чи надто глибока вкладеність — будь-яке значення.
         return new JsonObject { ["description"] = type };
     }
+
+    /// <summary>Entity set з назвами його tools (<c>null</c> — tool не створюється: немає ключа).</summary>
+    internal sealed record SetPlan(CsdlEntitySet Set, CsdlType Type, string List, string? Get, string Create, string? Update);
 
     private static JsonObject Schema(JsonObject properties, string[] required)
     {

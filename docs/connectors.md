@@ -91,6 +91,47 @@ public sealed class IfNode : INode
 - Необов'язковий `itemsPath` (шлях через крапку у `structuredContent`, напр. `result` або `data.orders`) розгортає масив у item на елемент: об'єкт → `json` як є, інше → `{ "value": … }`. Якщо `structuredContent` не об'єкт (tool повернув колекцію), OpenBP загортає його у `{ "result": [ … ] }`, тож для списку `itemsPath` = `result`. Якщо `structuredContent` немає або за шляхом не масив — помилка вузла.
 - У палітрі tool показується як «<Назва сервера>: <title або name tool'а>», група — назва сервера.
 
+### Списки значень з конектора: `x-openbp-options` (F3-54)
+
+Властивість `inputSchema` може мати необов'язкову анотацію: значення обирається зі списку, який повертає інший tool
+того самого MCP-сервера. Схема анотації — `tools/connector-template/schemas/x-openbp-options.schema.json`.
+
+```json
+"Контрагент_Key": {
+  "type": "string",
+  "format": "uuid",
+  "x-openbp-options": {
+    "tool": "list_catalog_kontragenty",
+    "arguments": { "select": ["Ref_Key", "Description"] },
+    "itemsPath": "result",
+    "valuePath": "Ref_Key",
+    "labelPath": "Description",
+    "dependsOn": []
+  }
+}
+```
+
+- `tool` (обов'язково) — tool списку, зазвичай `readOnly`; `arguments` — його аргументи, рядки можуть містити
+  `{{ $params.<param> }}` — значення інших аргументів вузла (рядок цілком з одного посилання → значення як є, частина
+  рядка → текстом). Параметр не задано або він сам є виразом — список не вантажиться, форма просить спершу задати його.
+- `itemsPath` — шлях до масиву у `structuredContent` (крапки, числа — індекси); без нього — сам `structuredContent`,
+  якщо це масив, інакше `result`.
+- `valuePath` (обов'язково) — шлях до значення в елементі; саме воно записується в параметр (рядок чи число як є).
+  Елементи без значення пропускаються, однакові значення показуються раз.
+- `labelPath` — шлях до підпису або масив шляхів (береться перший непорожній); без нього підпис — значення.
+- `dependsOn` — аргументи вузла, при зміні яких список перезавантажується (посилання з `arguments` додаються самі).
+- Не більше 500 варіантів; якщо їх більше і tool списку має аргумент `query`, текст у полі шукає на сервері
+  (`query` додається до `arguments`), інакше — уточнити пошук у завантаженому або ввести значення.
+
+У формі вузла таке поле має перемикач «Зі списку / Ввести значення / Вираз». Режим виводиться зі значення: містить
+`{{` — вираз, є серед варіантів — список, інше — введене значення. У сценарії значення — простий рядок чи число, формат
+workflow не змінюється. Список вантажиться через `POST /api/v1/connectors/{id}/tools/{tool}/call`, кешується в межах
+панелі (однакові конектор, tool і аргументи — один виклик), кнопка «Оновити» викликає tool повторно. Помилка конектора
+(`isError`, недоступний сервер) — поле стає текстовим з повідомленням, значення і сценарій не змінюються.
+
+Анотацію ставлять автоматично генератор OData (див. §5) і `connectors/telegram` (`chat_id` усіх tools → чати з
+`get_updates`, `valuePath = message.chat.id`, підпис — `title`/`username`/`first_name` чату).
+
 ## 3. `mcp.poll` (тригер)
 
 Параметри: `serverId`, `toolName`, `arguments`, `cron`, `keyField` (шлях до унікального поля у `json` item'а), `itemsPath` (як у `mcp.tool`; для списку записів у `structuredContent` обов'язковий, інакше вся відповідь — один item). Викликає tool за розкладом, перетворює результат на items як `mcp.tool`, порівнює ключі з `NodeState.seenKeys` (кільцевий буфер 1000), віддає лише нові items. Item без ключа — помилка вузла, стан не змінюється.
@@ -155,6 +196,10 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
     `Edm.Decimal` → `number`, `MaxLength` → `maxLength`), складні типи й `Collection(…)` розгортаються, перелічення →
     `enum`, успадковані властивості й ключі (`BaseType`) враховуються; `select`/`expand` мають `enum` з назв
     властивостей і навігацій;
+  - посилання на довідник — властивість `<Name>_Key` з навігацією `<Name>` (v4 `Type` або v3 `Association`) на один
+    об'єкт типу, для якого є entity set з простим ключем, — отримує `x-openbp-options` (§2): `tool = list_<цільовий set>`,
+    `select` ключа і `Description`, значення — ключ (`Ref_Key`), підпис — `Description` (якщо є, інакше ключ); цільовий
+    set відфільтровано — анотації немає;
   - фільтр: `Connector:OData:Include` / `Exclude` — шаблони назв entity sets з `*`; `Connector:OData:FormatParameter`
     додає `$format=json` (1С без нього віддає Atom XML); помилка сервісу → `isError` без секретів.
 - Транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
@@ -171,7 +216,7 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
   `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_document` (URL або base64),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
-  `get_chat`; токен — лише змінна
+  `get_chat`; `chat_id` має `x-openbp-options` на `get_updates` (§2); токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
 - `connectors/msgraph` — Microsoft Graph, пошта (F3-15): `list_messages` (`{ result }`, для `mcp.poll` —
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
