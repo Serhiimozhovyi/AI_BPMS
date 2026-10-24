@@ -225,3 +225,26 @@ jobs:
           name: playwright-report-live
           path: apps/web/playwright-report-live
           retention-days: 7
+
+  docker-images:
+    name: Docker-образи (api, worker, migrate, web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Лише збірка, без публікації (F4-09). Контекст — корінь репозиторію, див. .dockerignore.
+      - name: Збірка образів
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          for image in api worker migrate web; do
+            docker build -f "docker/${image}.Dockerfile" -t "openbp-${image}:ci" .
+          done
+
+      - name: Розміри образів
+        run: |
+          {
+            echo '| Образ | Розмір |'
+            echo '|---|---|'
+            docker images --format '| {{.Repository}}:{{.Tag}} | {{.Size}} |' | grep 'openbp-'
+          } >> "$GITHUB_STEP_SUMMARY"

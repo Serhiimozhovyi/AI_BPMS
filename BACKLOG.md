@@ -573,7 +573,7 @@
 - DoD: тести: `ready` червоний без БД і зелений з нею, воркер `ready` червоніє, коли цикл зупинено; у JSON-журналі є scope виконання і немає значень credentials; README оновлено.
 
 ### F4-09 · Docker-образи api, worker, web
-- model: `sonnet` · status: `ready` · depends: F4-08
+- model: `sonnet` · status: `in-progress agent/F4-09-docker-images` · depends: F4-08
 - Що: багатоетапні `Dockerfile` для `OpenBP.Api`, `OpenBP.Worker` (runtime `aspnet:10`, не root, `HEALTHCHECK` на F4-08) і `apps/web` (збірка Angular → `nginx` з проксі `/api`, `/mcp`, `/webhook` на api, SPA-fallback, gzip, кеш статики); `.dockerignore`. Окремий образ `migrate` (EF Core bundle) для застосування міграцій. CI-джоб збирає всі образи (без публікації).
 - DoD: CI-джоб зелений; локальний `docker build` кожного образу; розміри образів — у PR.
 

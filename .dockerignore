@@ -1,0 +1,18 @@
+# Контекст збірки образів — корінь репозиторію (docker/*.Dockerfile). Лише вихідний код, без артефактів і секретів.
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.angular/
+**/test-results/
+**/playwright-report/
+.git/
+.github/
+.env
+.env.*
+!.env.example
+data/
+backups/
+tests/
+connectors/
+tools/

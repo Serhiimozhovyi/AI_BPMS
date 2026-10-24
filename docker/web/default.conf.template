@@ -1,0 +1,49 @@
+# nginx для образу web (docker/web.Dockerfile). ${OPENBP_API_UPSTREAM} підставляється при старті контейнера.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    client_max_body_size 50m;
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+
+    # Живість самого nginx для HEALTHCHECK образу (стан Api — /health/ready, проксіюється нижче).
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok";
+    }
+
+    # Api: REST (/api, зокрема SSE журналу виконань), MCP-сервер (/mcp), webhook-и, health-checks.
+    location ~ ^/(api|mcp|webhook|health)(/|$) {
+        proxy_pass http://${OPENBP_API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        # SSE (/api/v1/executions/{id}/events, MCP Streamable HTTP): без буферизації і з довгим читанням.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+
+    # Статика з хешем у назві — назавжди; index.html — завжди свіжий.
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico|webp)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+}
