@@ -9,7 +9,7 @@ import { PaletteItem, PaletteSection, filterPalette } from './palette';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatFormFieldModule, MatInputModule],
   template: `
-    <mat-form-field class="w-full" subscriptSizing="dynamic">
+    <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
       <mat-label i18n="@@canvas.palette.search">Пошук вузла</mat-label>
       <input matInput type="search" data-testid="palette-search" [value]="query()" (input)="search($event)" />
     </mat-form-field>

@@ -25,7 +25,7 @@ import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '.
       </p>
 
       <div class="mb-4 flex items-start gap-2">
-        <mat-form-field class="w-80">
+        <mat-form-field appearance="outline" class="w-80">
           <mat-label i18n="@@settings.apiKeys.name">Назва ключа</mat-label>
           <input matInput [formControl]="name" name="name" data-testid="key-name" (keydown.enter)="create()" />
         </mat-form-field>

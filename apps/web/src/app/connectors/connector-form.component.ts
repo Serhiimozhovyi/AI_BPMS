@@ -40,7 +40,7 @@ function keyValues(separator: '=' | ':'): ValidatorFn {
   imports: [ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatButtonToggleModule],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-2" data-testid="connector-form">
-      <mat-form-field>
+      <mat-form-field appearance="outline">
         <mat-label i18n="@@connectors.form.name">Назва</mat-label>
         <input matInput formControlName="name" name="name" />
         @if (form.controls.name.hasError('required')) {
@@ -59,18 +59,18 @@ function keyValues(separator: '=' | ':'): ValidatorFn {
       </mat-button-toggle-group>
 
       @if (form.controls.transport.value === 'stdio') {
-        <mat-form-field>
+        <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.command">Команда</mat-label>
           <input matInput formControlName="command" name="command" placeholder="npx" />
           @if (form.controls.command.hasError('required')) {
             <mat-error i18n="@@connectors.form.command.required">Вкажіть команду</mat-error>
           }
         </mat-form-field>
-        <mat-form-field>
+        <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.arguments">Аргументи (по одному на рядок)</mat-label>
           <textarea matInput formControlName="arguments" name="arguments" rows="3"></textarea>
         </mat-form-field>
-        <mat-form-field>
+        <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.environment">Змінні середовища (KEY=value, по одній на рядок)</mat-label>
           <textarea matInput formControlName="environment" name="environment" rows="2"></textarea>
           <mat-hint i18n="@@connectors.form.environment.hint">Секрети зберігайте в облікових даних, а не тут.</mat-hint>
@@ -78,12 +78,12 @@ function keyValues(separator: '=' | ':'): ValidatorFn {
             <mat-error i18n="@@connectors.form.environment.format">Кожен рядок — у форматі KEY=value</mat-error>
           }
         </mat-form-field>
-        <mat-form-field>
+        <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.workingDirectory">Робоча тека</mat-label>
           <input matInput formControlName="workingDirectory" name="workingDirectory" />
         </mat-form-field>
       } @else {
-        <mat-form-field>
+        <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.url">Адреса (URL)</mat-label>
           <input matInput formControlName="url" name="url" placeholder="https://example.com/mcp" />
           @if (form.controls.url.hasError('required')) {
@@ -92,7 +92,7 @@ function keyValues(separator: '=' | ':'): ValidatorFn {
             <mat-error i18n="@@connectors.form.url.invalid">Адреса має починатися з http:// або https://</mat-error>
           }
         </mat-form-field>
-        <mat-form-field>
+        <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.headers">Заголовки (Name: value, по одному на рядок)</mat-label>
           <textarea matInput formControlName="headers" name="headers" rows="2"></textarea>
           <mat-hint i18n="@@connectors.form.headers.hint">Токени зберігайте в облікових даних, а не тут.</mat-hint>
@@ -102,7 +102,7 @@ function keyValues(separator: '=' | ':'): ValidatorFn {
         </mat-form-field>
       }
 
-      <mat-form-field>
+      <mat-form-field appearance="outline">
         <mat-label i18n="@@connectors.form.credentialId">ID облікових даних (необов'язково)</mat-label>
         <input matInput formControlName="credentialId" name="credentialId" />
         @if (form.controls.credentialId.hasError('pattern')) {
