@@ -17,6 +17,7 @@ COPY --from=build /app .
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     DOTNET_NOLOGO=1 \
     Logging__LogLevel__Microsoft.AspNetCore=Warning \
+    Logging__LogLevel__Microsoft.EntityFrameworkCore=Warning \
     DOTNET_CLI_TELEMETRY_OPTOUT=1
 EXPOSE 8080
 USER $APP_UID

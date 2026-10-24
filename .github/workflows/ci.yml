@@ -237,7 +237,7 @@ jobs:
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          for image in api worker migrate web; do
+          for image in api worker migrate web backup; do
             docker build -f "docker/${image}.Dockerfile" -t "openbp-${image}:ci" .
           done
 
@@ -258,5 +258,7 @@ jobs:
       # F4-10: docker-compose.prod.yml з випадковими секретами → /health/ready → вхід адміном → приклад success.
       - run: scripts/gen-env.sh
       - run: scripts/smoke-prod.sh
+      # F4-11: сценарій + credential → бекап → видалення → відновлення → сценарій є, credential розшифровується.
+      - run: scripts/smoke-backup.sh
       - if: always()
         run: docker compose -f docker-compose.prod.yml down -v

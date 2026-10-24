@@ -51,6 +51,23 @@ docker compose -f docker-compose.prod.yml up -d --build --wait   # postgres → 
 - Журнали Docker обмежено (json-file, 5 × 10 МБ на контейнер), формат журналів застосунку — JSON.
 - `scripts/smoke-prod.sh` перевіряє розгортання: `/health/ready`, вхід адміністратором, запуск `examples/hello-manual.json`.
 
+#### Бекапи і відновлення
+
+Сервіс `backup` щодня робить `pg_dump -Fc` у `./backups` на хості (`OPENBP_BACKUP_DIR`) і видаляє файли, старші
+за `OPENBP_BACKUP_KEEP_DAYS` днів (типово 14). Розклад — `OPENBP_BACKUP_CRON`, 5 полів crontab у часовому поясі `TZ`
+(типово `0 2 * * *`, о 02:00). Результат кожного запуску — рядок у `docker compose -f docker-compose.prod.yml logs backup`.
+
+```bash
+scripts/backup.sh                                   # разовий бекап; друкує шлях до файлу
+scripts/restore.sh backups/openbp-openbp-<час>.dump  # зупиняє api/worker, замінює базу, migrate, піднімає назад
+```
+
+- Файли мають права 600 і належать користувачу, який запускав `scripts/gen-env.sh` (`OPENBP_BACKUP_UID/GID`).
+- **Ключ `OPENBP_ENCRYPTION_KEY` у бекап не потрапляє.** Зберігайте його окремо (менеджер паролів, сейф): без нього
+  credentials із бекапу не розшифруються, а з ним і копією `.env` розгортання відновлюється на новому сервері.
+- Копіюйте `./backups` за межі сервера (rsync, об'єктне сховище): бекап на тому самому диску не рятує від втрати диска.
+- `scripts/smoke-backup.sh` (CI) перевіряє весь цикл: сценарій і credential → бекап → видалення → відновлення.
+
 ### Docker-образи
 
 Образи збираються з кореня репозиторію (контекст — `.`, див. `.dockerignore`):
@@ -60,7 +77,8 @@ docker compose -f docker-compose.prod.yml up -d --build --wait   # postgres → 
 | api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
 | worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
 | migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
-| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`), решта — SPA |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), решта — SPA |
+| backup | `docker/backup.Dockerfile` | `pg_dump` 16 і busybox `crond`: бекапи за `OPENBP_BACKUP_CRON` (див. «Бекапи і відновлення») |
 
 ```bash
 docker build -f docker/api.Dockerfile -t openbp-api .
