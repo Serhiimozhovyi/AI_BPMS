@@ -1,3 +1,6 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Connectors.PsySupport.Bot;
 using OpenBP.Connectors.PsySupport.Data;
@@ -9,6 +12,11 @@ namespace OpenBP.Connectors.PsySupport.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class BotTests(PostgresFixture pg)
 {
+    private static readonly JsonSerializerOptions Readable = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    /// <summary>Клавіатура без \u-екранування кирилиці й емодзі — щоб шукати в ній текст кнопок.</summary>
+    private static string Json(JsonObject? markup) => markup?.ToJsonString(Readable) ?? "";
+
     [Fact]
     public async Task Start_asks_for_own_contact_registers_and_gives_a_psychologist_the_cabinet_command()
     {
@@ -28,12 +36,106 @@ public sealed class BotTests(PostgresFixture pg)
         Assert.NotNull(registered.Commands);
         Assert.Contains(registered.Commands!.Commands, c => c.Command == "psy");
         Assert.Equal(111, (long)registered.Commands.Scope["chat_id"]!);
-        Assert.Contains("p:h", registered.Screen.ReplyMarkup!.ToJsonString(), StringComparison.Ordinal);
+        // Як у n8n-боті: «✅ Номер збережено» з постійною кнопкою «🏠 Головне меню», меню — наступним повідомленням.
+        Assert.StartsWith("✅ Номер збережено", registered.Screen.Text, StringComparison.Ordinal);
+        Assert.True(registered.Screen.NewMessage);
+        Assert.Contains("Головне меню", Json(registered.Screen.ReplyMarkup), StringComparison.Ordinal);
+        Assert.Contains("is_persistent", Json(registered.Screen.ReplyMarkup), StringComparison.Ordinal);
+        Assert.All(registered.Notifications, n => Assert.Equal(111, n.ChatId));
+        Assert.Contains("p:h", registered.Notifications[0].ReplyMarkup!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains(registered.Notifications, n => n.Text.Contains("Вас підключено як психолога", StringComparison.Ordinal));
 
         var person = await app.With<BotScreens, BotResult>(s => s.StartAsync(333, "Марія", new BotContact(333, "0501112233")));
         Assert.Equal(Codes.Registered, person.Code);
         Assert.Null(person.Commands);
         Assert.Equal("380501112233", (await app.Query(db => db.Users.Where(u => u.TelegramId == 333))).Single().Phone);
+    }
+
+    [Fact]
+    public async Task Start_of_a_registered_person_links_a_psychologist_added_later()
+    {
+        await using var app = await PsyApp.CreateAsync(pg);
+        await app.UserAsync(121, "Олена", "380671112233");
+        var plain = await app.With<BotScreens, BotResult>(s => s.StartAsync(121, "Олена", null));
+        Assert.Equal("Вітаємо знову 👋", plain.Screen.Text);
+        Assert.Null(plain.Commands);
+        Assert.Single(plain.Notifications);
+        Assert.Contains("m:help", plain.Notifications[0].ReplyMarkup!.ToJsonString(), StringComparison.Ordinal);
+
+        var pid = await app.PsychologistAsync(phone: "+38 067 111 22 33");
+        var linked = await app.With<BotScreens, BotResult>(s => s.StartAsync(121, "Олена", null));
+        Assert.NotNull(linked.Commands);
+        Assert.Contains("p:h", linked.Notifications[0].ReplyMarkup!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Equal(121, (await app.Query(db => db.Psychologists.Where(p => p.Id == pid))).Single().TelegramId);
+
+        var again = await app.With<BotScreens, BotResult>(s => s.StartAsync(121, "Олена", null));
+        Assert.Null(again.Commands);
+    }
+
+    [Fact]
+    public async Task Menu_and_help_match_the_old_bot()
+    {
+        await using var app = await PsyApp.CreateAsync(pg);
+        await app.UserAsync(131);
+
+        var menu = Json((await app.With<BotScreens, BotResult>(s => s.MenuAsync(131, "m:psy"))).Screen.ReplyMarkup);
+        string[] order = ["Мені потрібна психологічна допомога", "Записатися на консультацію", "Біосугестивна терапія", "Події та вебінари", "Корисні матеріали", "Термінова допомога"];
+        Assert.Equal(order, order.OrderBy(t => menu.IndexOf(t, StringComparison.Ordinal)));
+        Assert.All(order, t => Assert.Contains(t, menu, StringComparison.Ordinal));
+
+        var help = (await app.With<BotScreens, BotResult>(s => s.MenuAsync(131, "m:help"))).Screen.ReplyMarkup!.ToJsonString();
+        Assert.All(["m:cons", "m:ev", "m:mat", "m:sos", "m:psy"], c => Assert.Contains($"\"{c}\"", help, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Lists_mark_own_registrations_show_format_on_time_and_queue_position()
+    {
+        await using var app = await PsyApp.CreateAsync(pg);
+        var pid = await app.PsychologistAsync();
+        await app.UserAsync(141);
+        await app.UserAsync(142);
+        await app.UserAsync(143);
+        var slot = await app.SlotAsync(pid, TimeSpan.FromDays(2));
+        var ev = await app.EventAsync(0, TimeSpan.FromDays(3));
+        var session = await app.SessionAsync(pid, 1, TimeSpan.FromDays(4));
+
+        var noBookings = (await app.With<BotScreens, BotResult>(s => s.ConsultAsync(141, "m:cons"))).Screen.ReplyMarkup!.ToJsonString();
+        Assert.DoesNotContain("c:my", noBookings, StringComparison.Ordinal);
+        var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(app.Clock.Now.AddDays(2), TimeZoneInfo.FindSystemTimeZoneById("Europe/Kyiv")).DateTime);
+        var times = Json((await app.With<BotScreens, BotResult>(s => s.ConsultAsync(141, $"c:d:{pid}:{day:yyyyMMdd}"))).Screen.ReplyMarkup);
+        Assert.Contains(" · онлайн", times, StringComparison.Ordinal);
+        await app.With<BotScreens, BotResult>(s => s.ConsultAsync(141, $"c:ok:{slot}"));
+        var withBooking = Json((await app.With<BotScreens, BotResult>(s => s.ConsultAsync(141, "m:cons"))).Screen.ReplyMarkup);
+        Assert.Contains("Мої записи (1)", withBooking, StringComparison.Ordinal);
+
+        await app.With<BotScreens, BotResult>(s => s.EventsAsync(141, $"e:ok:{ev}"));
+        Assert.Contains("✅ ", Json((await app.With<BotScreens, BotResult>(s => s.EventsAsync(141, "m:ev"))).Screen.ReplyMarkup), StringComparison.Ordinal);
+        Assert.DoesNotContain("✅ ", Json((await app.With<BotScreens, BotResult>(s => s.EventsAsync(142, "m:ev"))).Screen.ReplyMarkup), StringComparison.Ordinal);
+
+        await app.With<BotScreens, BotResult>(s => s.BstAsync(141, $"b:ok:{session}"));
+        await app.With<BotScreens, BotResult>(s => s.BstAsync(142, $"b:w:{session}"));
+        var second = await app.With<BotScreens, BotResult>(s => s.BstAsync(143, $"b:w:{session}"));
+        Assert.Contains("позиція 2", second.Screen.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Limit_text_declines_the_number()
+    {
+        await using var app = await PsyApp.CreateAsync(pg);
+        var pid = await app.PsychologistAsync();
+        await app.UserAsync(151);
+        var slots = new List<long>();
+        for (var i = 0; i < 3; i++)
+        {
+            slots.Add(await app.SlotAsync(pid, TimeSpan.FromDays(2) + TimeSpan.FromHours(i)));
+        }
+
+        await app.With<BotScreens, BotResult>(s => s.ConsultAsync(151, $"c:ok:{slots[0]}"));
+        await app.With<BotScreens, BotResult>(s => s.ConsultAsync(151, $"c:ok:{slots[1]}"));
+        var limit = await app.With<BotScreens, BotResult>(s => s.ConsultAsync(151, $"c:ok:{slots[2]}"));
+
+        Assert.Equal(Codes.LimitReached, limit.Code);
+        Assert.Contains("У вас уже 2 активні записи", limit.Screen.Text, StringComparison.Ordinal);
     }
 
     [Fact]

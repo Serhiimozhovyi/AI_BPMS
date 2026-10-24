@@ -226,6 +226,23 @@ public sealed class PsySupportBotTests(PsySupportFixture psy) : IClassFixture<Ps
     }
 
     [Fact]
+    public async Task HomeButton_OpensMenu_AndButtonInNotificationSendsNewMessage()
+    {
+        var id = await Registered();
+
+        var home = await Run(Update.Message(id, "🏠 Головне меню"));
+        Assert.Contains("▶ psy-support: меню [mcp.tool] — Success", home, StringComparison.Ordinal);
+        Assert.Contains("▶ Надіслати відповідь [mcp.tool] — Success", home, StringComparison.Ordinal);
+
+        var update = Update.Callback(id, "m:psy");
+        update["callback_query"]!["message"]!["text"] = "⏰ Нагадування: консультація з психологом — завтра о 10:00.";
+        var fromReminder = await Run(update);
+        Assert.Contains("▶ Підтвердити натискання [mcp.tool] — Success", fromReminder, StringComparison.Ordinal);
+        Assert.Contains("▶ Надіслати відповідь [mcp.tool] — Success", fromReminder, StringComparison.Ordinal);
+        Assert.DoesNotContain("▶ Змінити повідомлення [mcp.tool] — Success", fromReminder, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Consult_Booking_AndConcurrentBookingOfSameSlot()
     {
         var slot = await psy.ScalarAsync<long>(
