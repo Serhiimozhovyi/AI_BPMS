@@ -358,6 +358,8 @@ test('F3-58: ПКМ → Дублювати, D вимикає вузол, пер�
   // D на виділеному вузлі — вимикає (копія зсунута на 40 px і перекриває центр оригіналу — клік у кут).
   await card(page, 'Задати поля').click({ position: { x: 12, y: 12 } });
   await expect(card(page, 'Задати поля')).toHaveClass(/selected/);
+  // Виділення доходить до редактора через подію vflow — чекаємо панель саме цього вузла, інакше D влучить у копію.
+  await expect(page.getByTestId('node-panel-name')).toHaveText('Задати поля');
   await page.keyboard.press('d');
   await expect(card(page, 'Задати поля')).toHaveClass(/disabled/);
   await waitSaved(page);
