@@ -28,7 +28,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
   imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <!-- Не <form>: компонент вкладається у форму конектора (F4-03), а вкладені форми HTML не дозволяє. -->
-    <div class="flex flex-col gap-2" data-testid="credential-form" (keydown.enter)="onEnter($event)">
+    <div class="flex flex-col gap-2" data-testid="credential-form">
       <mat-form-field appearance="outline">
         <mat-label i18n="@@credentials.form.name">Назва</mat-label>
         <input matInput name="name" data-testid="credential-name" [value]="name()" (input)="name.set(text($event))" />
@@ -215,14 +215,6 @@ export class CredentialFormComponent implements OnInit {
 
   addPair(map: string): void {
     this.value.update((s) => ({ ...s, maps: { ...s.maps, [map]: [...s.maps[map], emptyPair()] } }));
-  }
-
-  /** Enter у текстовому полі зберігає (і не відправляє зовнішню форму). */
-  onEnter(event: Event): void {
-    if ((event.target as HTMLElement).tagName === 'INPUT') {
-      event.preventDefault();
-      this.save();
-    }
   }
 
   save(): void {
