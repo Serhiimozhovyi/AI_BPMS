@@ -43,7 +43,8 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             .Select(w => new { w.Active, w.CurrentVersionId })
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("workflow", launch.WorkflowId);
-        if (launch.Mode == ExecutionMode.Trigger && !workflow.Active)
+        // Сценарій помилок (F4-06) теж запускається лише активним: вимкнений — як тригер неактивного сценарію.
+        if (launch.Mode is ExecutionMode.Trigger or ExecutionMode.Error && !workflow.Active)
         {
             throw new ConflictException(WorkflowInactiveCode, $"Сценарій «{launch.WorkflowId}» неактивний; тригери його не запускають.");
         }

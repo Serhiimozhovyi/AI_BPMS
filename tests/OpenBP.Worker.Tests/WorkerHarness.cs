@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using OpenBP.Ai;
@@ -74,9 +75,11 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
     private ExecutionRecoveryService? _recovery;
 
-    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null, IBinaryStore? binary = null)
+    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null)
     {
+        Loggers = loggers;
         Binary = binary;
+        Limits = limits;
         EncryptionKey = encryptionKey ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         ConnectionString = cs;
         Db = new Contexts(cs);
@@ -104,7 +107,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
             new JintExpressionEvaluator(),
             binary,
             options,
-            NullLogger<ExecutionJobProcessor>.Instance);
+            loggers?.CreateLogger<ExecutionJobProcessor>() ?? NullLogger<ExecutionJobProcessor>.Instance,
+            limits: limits);
         Poll = new PollJobProcessor(
             Db,
             Queue,
@@ -121,6 +125,12 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public string EncryptionKey { get; }
 
     public PollJobProcessor Poll { get; }
+
+    /// <summary>Журнали обробника; <c>null</c> — без журналу.</summary>
+    public ILoggerFactory? Loggers { get; }
+
+    /// <summary>Серверні межі виконання; <c>null</c> — типові.</summary>
+    public WorkflowLimits? Limits { get; }
 
     /// <summary>Файлове сховище воркера; <c>null</c> — як без <c>Storage:LocalPath</c>.</summary>
     public IBinaryStore? Binary { get; }
@@ -149,7 +159,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
     /// <param name="maxConcurrent">Паралельність воркера.</param>
     /// <param name="lockTimeout">Поріг протухання lock'а (і heartbeat виконання) для черги й відновлення; за замовчуванням 5 хв.</param>
     /// <param name="binary">Файлове сховище; <c>null</c> — немає.</param>
-    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null)
+    /// <param name="limits">Серверні межі виконання (<c>OPENBP_MAX_EXECUTION_TIMEOUT_SEC</c>); <c>null</c> — типові.</param>
+    /// <param name="loggers">Журнали обробника виконань; <c>null</c> — без журналу.</param>
+    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null)
     {
         var cs = await postgres.NewMigratedDatabaseAsync();
         return new WorkerHarness(
@@ -162,7 +174,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
                 PollInterval = TimeSpan.FromMilliseconds(50),
             },
             new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) },
-            binary: binary);
+            binary: binary,
+            limits: limits,
+            loggers: loggers);
     }
 
     /// <summary>
@@ -172,7 +186,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public async Task<WorkerHarness> RestartAsync()
     {
         await StopAsync();
-        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey, Binary);
+        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey, Binary, Limits, Loggers);
     }
 
     /// <summary>Запускає <see cref="ExecutionWorker"/> як hosted service; з <paramref name="withRecovery"/> — і <see cref="ExecutionRecoveryService"/>.</summary>
@@ -205,12 +219,12 @@ internal sealed class WorkerHarness : IAsyncDisposable
     }
 
     /// <summary>Сценарій з однією версією; повертає (workflowId, versionId).</summary>
-    public async Task<(Guid WorkflowId, Guid VersionId)> SaveWorkflowAsync(WorkflowDefinition definition)
+    public async Task<(Guid WorkflowId, Guid VersionId)> SaveWorkflowAsync(WorkflowDefinition definition, bool active = false)
     {
         var workflowId = Guid.NewGuid();
         var versionId = Guid.NewGuid();
         await using var db = Db.CreateDbContext();
-        db.Workflows.Add(new WorkflowEntity { Id = workflowId, Name = definition.Name, CurrentVersionId = versionId, UpdatedAt = DateTimeOffset.UtcNow });
+        db.Workflows.Add(new WorkflowEntity { Id = workflowId, Name = definition.Name, Active = active, CurrentVersionId = versionId, UpdatedAt = DateTimeOffset.UtcNow });
         db.WorkflowVersions.Add(new WorkflowVersionEntity
         {
             Id = versionId,

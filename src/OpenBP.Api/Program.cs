@@ -6,6 +6,7 @@ using OpenBP.Api;
 using OpenBP.Api.Auth;
 using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
+using OpenBP.Api.Health;
 using OpenBP.Api.Nodes;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
@@ -21,9 +22,11 @@ using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Mcp.Server;
 using OpenBP.Nodes.Core;
+using OpenBP.Shared.Workflow;
 using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddOpenBpConsole(builder.Configuration);
 
 // Фабрика (для CredentialStore) і scoped-контекст для сервісів application-шару.
 builder.Services.AddDbContextFactory<OpenBpDbContext>(
@@ -44,6 +47,8 @@ builder.Services.AddOpenBpAuthentication();
 builder.Services.AddSingleton<IMcpServerRegistry>(_ => new McpServerRegistry());
 builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
     CoreNodes.All().Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>())).Concat(AiNodes.All())));
+// Межа таймауту виконання (F4-05): валідатор відхиляє settings.executionTimeoutSec більше за неї.
+builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<IConfiguration>()[WorkflowLimits.MaxExecutionTimeoutKey]));
 builder.Services.AddOpenBpWorkflowServices();
 builder.Services.AddOpenBpNodeServices();
 builder.Services.AddOpenBpExecutionServices();
@@ -65,10 +70,17 @@ builder.Services.AddHostedService<ConnectorRegistryLoader>();
 
 // Розклади core.schedule (F2-11): Quartz у Postgres; планувальник живе в Api і стартує разом із ним.
 builder.Services.AddOpenBpScheduleServices();
+
+// Очищення історії виконань (F4-07): Quartz-job раз на добу, пачками.
+builder.Services.AddOpenBpExecutionRetention(ExecutionRetentionOptions.Parse(
+    builder.Configuration[ExecutionRetentionOptions.DaysKey], builder.Configuration[ExecutionRetentionOptions.CronKey]));
 builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
 // MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
 builder.Services.AddOpenBpMcpServer();
+
+// Health-checks (F4-08): /health/live і /health/ready (БД і міграції).
+builder.Services.AddOpenBpHealthChecks();
 
 var app = builder.Build();
 
@@ -76,7 +88,7 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapOpenBpHealth();
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();

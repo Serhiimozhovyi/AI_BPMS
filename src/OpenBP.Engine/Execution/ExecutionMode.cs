@@ -13,4 +13,7 @@ public enum ExecutionMode
 
     /// <summary>Повторний запуск із журналу виконань.</summary>
     Retry = 2,
+
+    /// <summary>Запуск сценарію помилок (<c>core.errorTrigger</c>) після помилки чи таймауту іншого сценарію (F4-06).</summary>
+    Error = 3,
 }

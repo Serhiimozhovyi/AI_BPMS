@@ -516,6 +516,16 @@
 - Що: у `connectors/msgraph` tools того самого контракту, що й F3-28 (`read_sheets`, `update_row`, `append_row`, `upsert_row`, `append_rows`; `spreadsheet_id` → `{ drive_id, item_id }` або посилання на файл), поверх Graph Excel API (`/drives/{id}/items/{id}/workbook`: `worksheets/{name}/usedRange`, `range(address=…)` PATCH; дописування — `tables/{name}/rows/add`, бо в таблиці Excel воно атомарне, на відміну від запису «в кінець usedRange»). Сесія книги (`createSession`, `persistChanges: true`) на один виклик tool'а. Дозволи застосунку: `Sites.Selected` з доступом лише до потрібного сайту (README: як видати), запасний варіант — `Files.ReadWrite.All`. Запит власника: бот психологічної підтримки має працювати і з Excel у SharePoint, не лише з Google Sheets.
 - DoD: тести проти фейку Graph на ті самі сценарії, що й F3-28 (успіх кожного tool'а, невідома колонка, 401 → одне повторне отримання токена, 423/429/503 з `Retry-After` → `isError`); `upsert_row` і `append_row` працюють і з листом без таблиці Excel (помилка з підказкою створити таблицю); `docs/connectors.md` і README оновлено.
 
+### F3-36 · UI: непрозорі панелі редактора й діалоги за AC-Kit
+- model: `sonnet` · status: `done` · depends: F3-26
+- Що: баг від власника (2026-10-24): бічна панель налаштувань вузла прозора, крізь неї видно вузли й лінії канвасу, текст накладається. Палітра, панель вузла й рядок інструментів редактора — біле тло над канвасом, канвас обрізає вміст своєю областю; діалоги, select і autocomplete — непрозорі білі з радіусом AC-Kit.
+- DoD: перевірено в браузері (вузли під панеллю не видно); lint/test/build/e2e зелені.
+
+### F3-37 · UI: згортання секцій палітри вузлів
+- model: `sonnet` · status: `done` · depends: F3-26
+- Що: запит власника (2026-10-24): групи палітри (Тригери, Логіка, Дані, ШІ, кожен конектор) згортаються до заголовка, щоб довгий список tools конектора не займав усю палітру. Конектори за замовчуванням згорнуті, групи `core.*` розгорнуті; вибір пам'ятається в `localStorage`; пошук розгортає знайдені секції. Заголовок — кнопка зі стрілкою й лічильником за AC-Kit.
+- DoD: Vitest — стан за замовчуванням, перемикання, відновлення з `localStorage`, пошук розгортає; lint/test/build/e2e зелені.
+
 ## Фаза 4 — Продуктова готовність
 
 Критерій фази (`docs/roadmap.md`): інсталяція у клієнта за документацією без нашої участі.
@@ -548,27 +558,27 @@
 - DoD: тести проти фейкового OAuth-сервера (успіх, хибний/прострочений state, відмова користувача, refresh, refresh із помилкою → `expired`, паралельний refresh), секрети й коди не потрапляють у журнали; `docs/connectors.md` (як підключити Microsoft/Google OAuth) оновлено.
 
 ### F4-05 · UI: налаштування сценарію і межа таймауту
-- model: `sonnet` · status: `ready` · depends: F3-26
+- model: `sonnet` · status: `done` · depends: F3-26
 - Що: діалог «Налаштування» в редакторі для `settings` сценарію: `timezone` (список IANA), `executionTimeoutSec`, `errorWorkflowId` (вибір серед сценаріїв, крім себе), `saveSuccessfulData`. Серверна межа `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (типово 3600): валідатор і Api відхиляють більше значення з помилкою поля; воркер застосовує меншу з двох. Виконання, що перевищило час, отримує статус `timedOut` у REST/SSE/MCP/UI (уже є в движку — перевірити наскрізь).
 - DoD: Vitest на діалог; тести Api на межу і на `timedOut` наскрізь через воркер (Testcontainers); `docs/workflow-format.md` (межа) оновлено.
 
 ### F4-06 · Error-workflow (`core.errorTrigger`)
-- model: `sonnet` · status: `ready` · depends: F4-05
+- model: `sonnet` · status: `done` · depends: F4-05
 - Що: тригер `core.errorTrigger` (без параметрів, вихід `{ execution: { id, status, startedAt, finishedAt, mode }, workflow: { id, name }, error: { message, nodeId, nodeName } }`, без значень credentials). Коли виконання сценарію з `settings.errorWorkflowId` завершилось `error` або `timedOut`, воркер ставить job запуску сценарію помилок з цим входом (режим `error`). Захист від циклу: помилка самого сценарію помилок не запускає інший. `errorWorkflowId` на сценарій без `core.errorTrigger` — помилка валідатора.
 - DoD: тести: помилка → запуск сценарію помилок з правильним входом, `timedOut` теж, успіх — ні, цикл не виникає, вимкнений/видалений сценарій помилок → запис у журнал без падіння; вузол у `describe_nodes` і палітрі; `docs/workflow-format.md` оновлено.
 
 ### F4-07 · Очищення історії виконань
-- model: `sonnet` · status: `ready` · depends: F2-02, F2-11
+- model: `sonnet` · status: `done` · depends: F2-02, F2-11
 - Що: `settings.saveSuccessfulData = false` → для успішного виконання `execution_steps` зберігаються без `input`/`output` (лише статус і час); помилкові — повністю. Quartz-задача в Api раз на добу (час — `OPENBP_EXECUTION_RETENTION_CRON`, типово 03:00 сервера) видаляє завершені виконання старші за `OPENBP_EXECUTION_RETENTION_DAYS` (типово 30; `0` — не видаляти) пачками, щоб не тримати довгих блокувань; активні (`queued`/`running`) не чіпає. Кількість видаленого — у журнал.
 - DoD: тести (Testcontainers): `saveSuccessfulData` для успіху й помилки, видалення за віком, активні лишаються, пачки; `architecture.md` і `.env.example`/README оновлено.
 
 ### F4-08 · Health-checks і структуровані журнали
-- model: `sonnet` · status: `ready` · depends: F2-07
+- model: `sonnet` · status: `done` · depends: F2-07
 - Що: Api — `/health/live` (процес живий) і `/health/ready` (БД доступна, міграції застосовані); воркер — той самий `ready` через маленький Kestrel-ендпойнт на окремому порту (`OPENBP_WORKER_HEALTH_PORT`, типово 8089) і перевірку «цикл опитування jobs живий» (останнє опитування < 1 хв). Журнали: `OPENBP_LOG_FORMAT=json` → JSON-консоль (`AddJsonConsole`) з `executionId`/`workflowId` у scope; рівні через `Logging__LogLevel__*`. Без анонімного доступу до чогось, крім `/health/*`.
 - DoD: тести: `ready` червоний без БД і зелений з нею, воркер `ready` червоніє, коли цикл зупинено; у JSON-журналі є scope виконання і немає значень credentials; README оновлено.
 
 ### F4-09 · Docker-образи api, worker, web
-- model: `sonnet` · status: `ready` · depends: F4-08
+- model: `sonnet` · status: `done` · depends: F4-08
 - Що: багатоетапні `Dockerfile` для `OpenBP.Api`, `OpenBP.Worker` (runtime `aspnet:10`, не root, `HEALTHCHECK` на F4-08) і `apps/web` (збірка Angular → `nginx` з проксі `/api`, `/mcp`, `/webhook` на api, SPA-fallback, gzip, кеш статики); `.dockerignore`. Окремий образ `migrate` (EF Core bundle) для застосування міграцій. CI-джоб збирає всі образи (без публікації).
 - DoD: CI-джоб зелений; локальний `docker build` кожного образу; розміри образів — у PR.
 

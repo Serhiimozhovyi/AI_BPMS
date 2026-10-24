@@ -25,6 +25,31 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
+### Стан сервісів і журнали
+
+- Api: `GET /health/live` — процес живий; `GET /health/ready` — БД доступна і всі міграції застосовано (200 `Healthy`
+  або 503 `Unhealthy`). Обидва без автентифікації; решта Api — лише з входом або API-ключем.
+- Воркер слухає лише health-порт `OPENBP_WORKER_HEALTH_PORT` (типово 8089): `/health/live` і `/health/ready` — БД
+  готова і цикл опитування jobs обертався протягом останньої хвилини (`Worker__HealthMaxPollAge`).
+- `OPENBP_LOG_FORMAT=json` — журнали Api і воркера в JSON (одна подія на рядок, UTC-час) зі scope `executionId` і
+  `workflowId` для записів виконання; значення credentials у журнал не потрапляють. Рівні — як завжди,
+  `Logging__LogLevel__Default=Warning`, `Logging__LogLevel__OpenBP=Information` тощо.
+
+### Docker-образи
+
+Образи збираються з кореня репозиторію (контекст — `.`, див. `.dockerignore`):
+
+| Образ | Dockerfile | Що всередині |
+|---|---|---|
+| api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
+| worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
+| migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`), решта — SPA |
+
+```bash
+docker build -f docker/api.Dockerfile -t openbp-api .
+```
+
 ### Запуск сценарію з CLI
 
 `openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
@@ -81,6 +106,9 @@ scripts/dev.sh migrate            # EF Core міграції (з'являтьс�
 scripts/dev.sh test               # dotnet test; тести OpenBP.Data самі піднімають postgres:16 через Testcontainers
 scripts/dev.sh down
 ```
+
+Історія виконань очищується щодня: завершені виконання старші за 30 днів видаляються. Термін і час задають
+`OPENBP_EXECUTION_RETENTION_DAYS` (`0` — зберігати все) і `OPENBP_EXECUTION_RETENTION_CRON`, див. `.env.example`.
 
 Структура: `src/*` — проєкти з [docs/architecture.md](docs/architecture.md) §1, `tests/*` — xUnit-проєкт на кожен `src/*`.
 Версії NuGet-пакетів — централізовано в `Directory.Packages.props`; спільні налаштування збірки — у `Directory.Build.props`.

@@ -21,7 +21,8 @@ export interface ExecutionSummary {
   id: string;
   workflowId: string;
   versionId: string;
-  mode: 'manual' | 'trigger' | 'retry';
+  /** `error` — запуск сценарію помилок (`core.errorTrigger`, F4-06). */
+  mode: 'manual' | 'trigger' | 'retry' | 'error';
   state: ExecutionState;
   startedAt: string | null;
   finishedAt: string | null;
@@ -189,5 +190,7 @@ export function executionModeLabel(mode: ExecutionSummary['mode']): string {
       return $localize`:@@executions.mode.trigger:Тригер`;
     case 'retry':
       return $localize`:@@executions.mode.retry:Повтор`;
+    case 'error':
+      return $localize`:@@executions.mode.error:Сценарій помилок`;
   }
 }

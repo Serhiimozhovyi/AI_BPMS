@@ -106,9 +106,45 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 
 - Сценарій: `formatVersion` (= 1), `name`, `settings`, `nodes`, `connections`, `pinData` (може бути `{}`).
 - `settings`: `timezone`, `executionTimeoutSec`, `errorWorkflowId` (`null`, якщо немає), `saveSuccessfulData`.
+  У редакторі їх змінює діалог «Налаштування» (кнопка на панелі інструментів).
+  `saveSuccessfulData: false` — у кроках успішних виконань (крім ручного тесту) лишаються лише статус і час (docs/architecture.md §10.4).
 - Вузол: `id`, `name`, `type`, `typeVersion` (≥ 1), `position` (`[x, y]`), `parameters` (об'єкт). Необов'язкові: `timeoutSec`, `retry` (`maxTries`, `waitMs`), `continueOnFail`, `disabled`, `notes`.
 - Ребро: `from.node` + `from.output`, `to.node` + `to.input` (індекси від 0).
 - Невідомі поля на будь-якому рівні дозволені й зберігаються при (де)серіалізації.
+
+### Таймаут виконання і серверна межа
+
+`executionTimeoutSec` — найбільший час виконання сценарію в секундах; `0` — власного ліміту немає. Сервер має межу
+`OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (типово 3600):
+
+- збереження зі значенням, більшим за межу, відхиляється помилкою `EXECUTION_TIMEOUT_TOO_LARGE` з
+  `path: "/settings/executionTimeoutSec"`;
+- воркер застосовує менше з двох значень — тож сценарій з `0` чи версія, збережена до зменшення межі, теж
+  не працює довше за неї;
+- виконання, що перевищило час, завершується станом `timed_out` (REST, SSE, MCP і журнал виконань в UI), вузол,
+  що працював, — `cancelled`, наступні вузли не запускаються.
+
+### Сценарій помилок
+
+`errorWorkflowId` — id іншого сценарію, поточна версія якого має вузол `core.errorTrigger` («Помилка сценарію»).
+Інакше збереження відхиляється помилкою `ERROR_WORKFLOW_INVALID` з `path: "/settings/errorWorkflowId"`
+(так само для неіснуючого сценарію і для посилання на себе).
+
+Коли виконання завершилось `error` або `timed_out`, воркер ставить запуск сценарію помилок у режимі `error`;
+вихід `core.errorTrigger` — один item:
+
+```json
+{
+  "execution": { "id": "…", "status": "error", "startedAt": "…", "finishedAt": "…", "mode": "trigger" },
+  "workflow": { "id": "…", "name": "Звіт" },
+  "error": { "message": "…", "nodeId": "n_wait", "nodeName": "Пауза" }
+}
+```
+
+`error.message` — той самий текст, що в журналі виконань, без значень credentials. Сценарій помилок запускається,
+лише коли він активний; вимкнений, видалений чи без `core.errorTrigger` — запис у журнал воркера, виконання
+завершується як звичайно. Помилка самого сценарію помилок (режим `error`) інший сценарій помилок не запускає,
+тож циклу не буде. У тестовому запуску без `pinData` вузол віддає приклад такого item.
 
 ## Item і BinaryRef
 
@@ -133,5 +169,7 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 4. Активний сценарій має ≥ 1 тригер.
 5. Параметри кожного вузла відповідають його схемі (рядок `{{ }}` допустимий замість будь-якого типу). Для `mcp.tool` схема — `inputSchema` tool'а з кешу; якщо сервер невідомий або tool не знайдено — помилка з кодом `MCP_TOOL_UNKNOWN`.
 6. `serverId`/`credentialId` існують і доступні користувачу.
+7. `settings.executionTimeoutSec` не більший за серверну межу `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (`EXECUTION_TIMEOUT_TOO_LARGE`).
+8. `settings.errorWorkflowId` — інший існуючий сценарій з `core.errorTrigger` (`ERROR_WORKFLOW_INVALID`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.

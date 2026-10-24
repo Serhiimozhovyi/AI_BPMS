@@ -56,7 +56,7 @@ public class CoreNodesTests
             registry.Register(node);
         }
 
-        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code"];
+        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code"];
         Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Distinct().Order());
         foreach (var type in expected)
         {
@@ -70,6 +70,7 @@ public class CoreNodesTests
         Assert.True(registry.Resolve("core.manualTrigger", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.webhook", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.schedule", 1).Descriptor.IsTrigger);
+        Assert.True(registry.Resolve("core.errorTrigger", 1).Descriptor.IsTrigger);
         Assert.Equal(2, registry.Resolve("core.merge", 1).Descriptor.Inputs.Count);
         Assert.Equal(5, registry.Resolve("core.switch", 1).Descriptor.Outputs.Count);
         Assert.Equal(17, registry.Resolve("core.switch", 2).Descriptor.Outputs.Count);

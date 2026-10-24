@@ -9,6 +9,7 @@ using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Nodes.Core;
+using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Worker;
 
@@ -47,6 +48,7 @@ public static class WorkerServiceCollectionExtensions
         }
 
         services.AddSingleton(queueOptions);
+        services.AddSingleton(WorkflowLimits.Parse(configuration[WorkflowLimits.MaxExecutionTimeoutKey]));
 
         var storage = new BinaryStorageOptions();
         configuration.GetSection(BinaryStorageOptions.Section).Bind(storage);
@@ -57,6 +59,7 @@ public static class WorkerServiceCollectionExtensions
 
         services.AddDbContextFactory<OpenBpDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("Default")));
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(sp => new WorkerLiveness(sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton(sp => new JobQueue(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<JobQueueOptions>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
         // Оновлення oauth2-токенів при читанні credential'а (F4-04): власний HttpClient з таймаутом.
@@ -85,7 +88,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetService<IBinaryStore>(),
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionJobProcessor>>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<WorkflowLimits>()));
         services.AddSingleton(sp => new PollJobProcessor(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),
@@ -103,7 +107,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionWorker>>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<PollJobProcessor>()));
+            sp.GetRequiredService<PollJobProcessor>(),
+            sp.GetRequiredService<WorkerLiveness>()));
         services.AddHostedService(sp => new ExecutionRecoveryService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

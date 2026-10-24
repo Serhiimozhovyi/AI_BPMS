@@ -22,6 +22,9 @@ public sealed class ExecutionService(
     /// <summary>Код конфлікту: повтор незавершеного виконання.</summary>
     public const string ExecutionNotFinishedCode = "EXECUTION_NOT_FINISHED";
 
+    /// <summary>Код конфлікту: дані успішного виконання не збережено (<c>saveSuccessfulData: false</c>) — стартових items немає.</summary>
+    public const string ExecutionDataNotSavedCode = "EXECUTION_DATA_NOT_SAVED";
+
     private const string Entity = "execution";
 
     /// <inheritdoc />
@@ -268,6 +271,13 @@ public sealed class ExecutionService(
         IReadOnlyList<Item>? startItems = null;
         if (rootSteps.Count == 1)
         {
+            if (rootSteps[0].Output is null && rootSteps[0].Status == StepStatuses.ToDb(StepStatus.Success))
+            {
+                throw new ConflictException(
+                    ExecutionDataNotSavedCode,
+                    $"Дані виконання «{id}» не збережено (saveSuccessfulData: false) — повторити з тими самими стартовими даними неможливо.");
+            }
+
             var step = ExecutionMapping.ToStep(rootSteps[0]);
             startNodeId = step.NodeId;
             startItems = step.Output.Length > 0 ? step.Output[0] : [];

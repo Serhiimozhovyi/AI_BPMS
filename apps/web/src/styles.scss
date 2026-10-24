@@ -127,6 +127,26 @@ html {
     )
   );
 
+  // Модальні вікна й випадні списки — непрозорі білі, радіус і тінь AC-Kit (Atoms / Modal).
+  @include mat.dialog-overrides(
+    (
+      container-color: var(--ac-white),
+      container-shape: var(--ac-radius-lg),
+    )
+  );
+
+  @include mat.select-overrides(
+    (
+      panel-background-color: var(--ac-white),
+    )
+  );
+
+  @include mat.autocomplete-overrides(
+    (
+      background-color: var(--ac-white),
+    )
+  );
+
   @include mat.chips-overrides(
     (
       container-shape-radius: var(--ac-radius-sm),
