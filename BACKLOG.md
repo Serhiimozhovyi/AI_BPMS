@@ -662,6 +662,11 @@
 - Що: веб-компонент отримує атрибути `view` (`business` | `technical`, за замовчуванням `technical`) і `execution-id` (показати виконання на бізнес-вигляді, лише читання) і, за потреби, `correlation-key` (останнє виконання з цим ключем, коли буде F5-04). Режим `view="business"` без палітри й панелі вузла, перемикач приховано атрибутом `lock-view`. Права — як у `readonly` (viewer достатньо).
 - DoD: тест елемента — `view`, `execution-id`, `lock-view`; демо-сторінка елемента показує бізнес-вигляд виконання; розмір бандла елемента в межах бюджету; `docs/embedding.md` оновлено.
 
+
+### F3-71 · MCP-клієнт: проба `server/discover` чекає весь таймаут підключення
+- model: `sonnet` · status: `review` agent/F3-71-mcp-discover-timeout · depends: —
+- Що: SDK `ModelContextProtocol` 2.3.0 спершу надсилає `server/discover` і через 5 с (`DiscoverProbeTimeout`) відкочується на `initialize`. Сервер, що відповів на discover пізніше (повільний старт stdio-процесу, навантаження CI), уже на протоколі 2026-07-28 і відхиляє `initialize` — так нестабільно падав `PsySupportBotTests.Consult_Booking_AndConcurrentBookingOfSameSlot`. `McpServerRegistry` задає `DiscoverProbeTimeout = ConnectTimeout`.
+- DoD: тест реєстру — stdio-сервер, що стартує 6 с, підключається протоколом 2026-07-28 без відкату (без фіксу тест червоний); `dotnet build -warnaserror`, `dotnet test`, `dotnet format` зелені.
 ## Фаза 4 — Продуктова готовність
 
 Критерій фази (`docs/roadmap.md`): інсталяція у клієнта за документацією без нашої участі.

@@ -27,6 +27,22 @@ public sealed class McpServerRegistryTests
     }
 
     [Fact]
+    public async Task SlowStdioServerKeepsDiscoverHandshakeWithinConnectTimeout()
+    {
+        // Сервер починає читати stdin за 6 с — довше за стандартну пробу `server/discover` (5 с). Клієнт не має
+        // відкочуватися на `initialize`: сервер, що вже відповів на discover, відхиляє його («not available on
+        // protocol version 2026-07-28») — так падали PsySupportBotTests під навантаженням.
+        await using var registry = new McpServerRegistry(new McpRegistryOptions { ConnectTimeout = TimeSpan.FromSeconds(20) });
+        await registry.RegisterAsync(FakeServers.Stdio("srv_slow", "--startup-delay", "6000"));
+
+        var version = await registry.RunAsync("srv_slow", (c, _) => Task.FromResult(c.NegotiatedProtocolVersion));
+        var cache = await registry.RefreshToolsAsync("srv_slow");
+
+        Assert.Equal("2026-07-28", version);
+        AssertFakeTools(cache);
+    }
+
+    [Fact]
     public async Task HttpDiscoveryReturnsToolSchemas()
     {
         await using var server = await FakeServers.StartHttpAsync();
