@@ -457,7 +457,7 @@
 
 ### F3-34 · Адмінка психологічної підтримки: бекенд і MCP-tools
 - model: `opus` · status: `ready` · depends: F3-33
-- Що: `connectors/psy-support` за `docs/psy-support.md`: шаблон Connector Kit, власний sln. БД `psy_support` і міграції EF Core за моделлю з §3. Правила §4 у транзакціях: частковий унікальний індекс «один слот — один активний запис», `FOR UPDATE` для місткості подій і БСТ та для ліміту консультацій, черга з `offered`. MCP-tools §5: сім tools бота з екранами (`screen`, `notifications`, `commands`; короткі `short_id` у `callback_data`, §6.1) і доменні tools §5.2. Транспорти: stdio і Streamable HTTP з `PSY_MCP_TOKEN`/`PSY_MCP_TOKEN_PII` (§7.3). REST `/api/v1` і вхід для адмінки (§7.1): cookie, ролі `coordinator`/`psychologist`, перший координатор з env, блокування після 5 невдалих входів. Команда `import --dir` для CSV-вивантаження листів таблиці (§9).
+- Що: `connectors/psy-support` за `docs/psy-support.md`: шаблон Connector Kit, власний sln. БД `psy_support` і міграції EF Core за моделлю з §3. Правила §4 у транзакціях: частковий унікальний індекс «один слот — один активний запис», `FOR UPDATE` для місткості подій і БСТ та для ліміту консультацій, черга з `offered`. MCP-tools §5: сім tools бота з екранами (`screen`, `notifications`, `commands`; числові id у `callback_data`, §6.1), доменні tools §5.2 і черга `outbox` для сповіщень з адмінки. Транспорти: stdio і Streamable HTTP з `PSY_MCP_TOKEN`/`PSY_MCP_TOKEN_PII` (§7.3). REST `/api/v1` і вхід для адмінки (§7.1): cookie, ролі `coordinator`/`psychologist`, перший координатор з env, блокування після 5 невдалих входів. Команда `import --dir` для CSV-вивантаження листів таблиці (§9).
 - DoD:
   - тести правил:
     - одночасний запис двох людей на слот — один успіх, другий `slot_taken`;
@@ -498,7 +498,7 @@
   - цикл `notifications` → `send_message`;
   - `set_my_commands` для психолога.
   
-  Окремий сценарій «Шедулер» (`due_reminders`, `generate_slots`) — наступна задача. Перевірка — окремим тестовим ботом, не бойовим токеном.
+  Окремий сценарій «Шедулер» (`due_notifications`, `generate_slots`, `anonymize_old_records`) — наступна задача. Перевірка — окремим тестовим ботом, не бойовим токеном.
 - DoD: CLI-прогін з моками Telegram і справжнім `psy-support` (stdio, Testcontainers) для сценаріїв:
   - /start → номер → меню;
   - запис на консультацію і одночасний запис двох людей (один отримує «час зайняли»);

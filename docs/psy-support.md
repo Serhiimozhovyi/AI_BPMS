@@ -20,8 +20,9 @@ F3-34; що зміниться в такому разі, там теж запи�
 | Вхід психологів і координатора в адмінку | `psy-support` | окремий застосунок зі своїми ролями (§7) |
 
 `psy-support` ніколи сам не надсилає повідомлень у Telegram. Коли дія когось сповіщає (психолога про новий запис, першого
-в черзі про звільнене місце, учасників про оголошення), tool повертає список `notifications`, а сценарій OpenBP
-надсилає їх через Telegram-конектор.
+в черзі про звільнене місце, учасників про оголошення), tool бота повертає список `notifications`, а сценарій OpenBP
+надсилає їх через Telegram-конектор. Сповіщення від дій в адмінці (координатор скасував запис, психолог надіслав
+оголошення) потрапляють у таблицю `outbox`, і «Шедулер» OpenBP забирає їх разом із нагадуваннями (`due_notifications`).
 
 ## 2. Розташування і стек
 
@@ -45,7 +46,7 @@ F3-34; що зміниться в такому разі, там теж запи�
 
 Усі моменти часу зберігаються як `timestamptz` (UTC). У `Europe/Kyiv` вони переводяться лише під час показу й під час
 розбору вводу. Тексти статусів — англійські enum-рядки в БД, а українською їх показують бот і адмінка. Ключі —
-`uuid` (v7), крім `users.telegram_id` і `settings.key`.
+`bigint` identity, крім `users.telegram_id` і `settings.key`: короткі числа поміщаються в `callback_data` (§6.1).
 
 | Таблиця | Колонки | Обмеження й індекси |
 |---|---|---|
@@ -63,6 +64,8 @@ F3-34; що зміниться в такому разі, там теж запи�
 | `materials` | `id`, `title`, `body`, `link`, `status` (`published` / `archived` / `draft`), `published_at`, `views` | — |
 | `reminders` | `id`, `kind` (`booking` / `event` / `bst`), `target_id`, `offset_min` (1440 / 60 / 10), `sent_at` | `(kind, target_id, offset_min)` унікальний — замість колонок `r1440/r60/r10` |
 | `slot_templates` | `id`, `psychologist_id`, `weekday`, `time`, `duration_min`, `format`, `valid_from`, `valid_to` | для генерації слотів «Шедулером» |
+| `outbox` | `id`, `chat_id`, `text`, `reply_markup` jsonb null, `created_at`, `sent_at` null | сповіщення від дій в адмінці (§1) |
+| `invites` | `id`, `staff_account_id`, `token_hash`, `expires_at`, `used_at` | одноразові посилання для встановлення пароля (§7.1) |
 | `counters` | `metric` PK, `value` bigint | атомарний `UPDATE … SET value = value + 1` |
 | `audit_log` | `id`, `at`, `actor` (`bot` / `staff:<id>` / `system`), `action`, `entity`, `entity_id`, `details` jsonb | без телефонів, імен і `telegram_id` у `details` (§8) |
 
@@ -104,9 +107,10 @@ F3-34; що зміниться в такому разі, там теж запи�
    уперед (як у n8n), але телефон бачить лише у своїх записах.
 9. **Оголошення** (`send_event_notice`, `send_bst_notice`): повертає `notifications` усім активним учасникам і ставить
    `notice_sent_at`. Повторний виклик без зміни `notice` нічого не надсилає.
-10. **Нагадування** (`due_reminders`): записи, події й БСТ з `starts_at - offset_min` у минулому і без рядка в
-    `reminders` → `notifications` з `reminder_id`. Після надсилання `mark_reminders_sent` вставляє рядки
-    (ідемпотентно, за унікальним ключем).
+10. **Нагадування й черга сповіщень** (`due_notifications`): записи, події й БСТ, для яких `starts_at - offset_min` уже
+    минуло, `starts_at` ще ні, а рядка в `reminders` немає, плюс не надіслані рядки `outbox` → список з `id` вигляду
+    `r:<kind>:<target>:<offset>` або `o:<outbox id>`. Після надсилання `mark_notifications_sent { ids }` вставляє рядки
+    `reminders` і ставить `outbox.sent_at` (ідемпотентно).
 11. **Посилання «додати в календар»** (Outlook, Google) мають нейтральну назву «Особиста зустріч».
 
 ## 5. MCP-tools
@@ -160,11 +164,11 @@ F3-34; що зміниться в такому разі, там теж запи�
 - Події: `list_events`, `register_event`, `cancel_event_registration`, `rate_event`.
 - БСТ: `list_bst_sessions`, `book_bst`, `cancel_bst`, `join_waitlist`, `leave_waitlist`, `move_bst`.
 - Матеріали: `list_materials { page, archived? }`, `get_material` (збільшує `views`).
-- Розклад і розсилки: `due_reminders { now? }`, `mark_reminders_sent { ids[] }`, `generate_slots { days }` (з
-  `slot_templates`), `send_event_notice`, `send_bst_notice`.
+- Розклад і розсилки: `due_notifications`, `mark_notifications_sent { ids[] }`, `generate_slots { days }` (з
+  `slot_templates`), `anonymize_old_records` (§8), `send_event_notice`, `send_bst_notice`.
 - Аналітика: `get_counters`.
 
-Записувальні tools мають анотацію `Destructive = false` і `Idempotent` там, де це правда (`mark_reminders_sent`,
+Записувальні tools мають анотацію `Destructive = false` і `Idempotent` там, де це правда (`mark_notifications_sent`,
 `rate_event`). Персональні дані (§8): `list_bookings` віддає телефон, лише якщо виклик іде від імені психолога цього
 запису (у бота) або токена з правом `pii` (§7.3).
 
@@ -180,15 +184,14 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
   → set_my_commands (якщо commands)
 ```
 
-Окремий сценарій «Шедулер»: `core.schedule` (щохвилини) → `due_reminders` → цикл `send_message` → `mark_reminders_sent`;
-`core.schedule` (щоночі) → `generate_slots`.
+Окремий сценарій «Шедулер»: `core.schedule` (щохвилини) → `due_notifications` → цикл `send_message` →
+`mark_notifications_sent`; `core.schedule` (щоночі) → `generate_slots` і `anonymize_old_records`.
 
 ### 6.1. Коди кнопок
 
-`callback_data` має до 64 байт, а `uuid` у тексті займає 36. Тому в кнопках використовуються короткі id: `slots`,
-`events`, `bst_sessions` і `materials` мають `short_id` (base32 від послідовності, 6–8 символів). Схема префіксів
-лишається з n8n (`m:`, `mt:`, `c:`, `e:`, `b:`, `p:`), а `<key>` замінюється на `short_id`. Перенесення
-`c:mt:<old>~<new>` займає менше 30 байт.
+`callback_data` має до 64 байт, тому кнопки несуть числові id (`bigint`, §3). Схема префіксів лишається з n8n
+(`m:`, `mt:`, `c:`, `e:`, `b:`, `p:`), а `<key>` замінюється на id: `c:ok:1834`, перенесення `c:mo:1834:2051`, дата —
+`yyyyMMdd`. Найдовший код займає менше 30 байт.
 
 ## 7. Ролі, вхід і доступ
 
@@ -234,8 +237,8 @@ Telegram підтверджує `from.id`. Обліковий запис в ад
   координатора, і він пишеться в `audit_log`.
 - **Видалення.** Людина може попросити видалити дані: координатор натискає «Видалити користувача». `users.phone` і `name`
   стираються, ставиться `deleted_at`, активні записи скасовуються. Знеособлені записи лишаються для лічильників.
-- **Зберігання.** Записи старші за 12 місяців знеособлюються нічним завданням (`telegram_id` → NULL у
-  `bookings`/`registrations`/`bst_bookings`/`waitlist`).
+- **Зберігання.** Записи старші за 12 місяців знеособлюються tool'ом `anonymize_old_records`, який «Шедулер» викликає
+  щоночі (`telegram_id` → NULL у `bookings`/`event_registrations`/`bst_bookings`/`waitlist`).
 - **Шифрування.** БД і бекапи шифруються на рівні диска або хостингу. Окремого шифрування колонок у MVP немає, бо
   телефони потрібні для пошуку й прив'язки психолога.
 
@@ -278,7 +281,7 @@ Telegram підтверджує `from.id`. Обліковий запис в ад
 
 ## 11. Чого цей документ не вирішує
 
-- «Шедулер» як сценарій OpenBP — окрема задача після F3-31. Tools для нього (`due_reminders`, `generate_slots`) входять
-  в F3-34.
+- «Шедулер» як сценарій OpenBP — окрема задача після F3-31. Tools для нього (`due_notifications`, `generate_slots`,
+  `anonymize_old_records`) входять в F3-34.
 - Сповіщення про збої (`errorWorkflow` n8n) — після перенесення, через `settings.errorWorkflowId` в OpenBP.
 - Публічна HTTPS-адреса для webhook (тунель або розгортання) — питання розгортання, а не цього застосунку.
