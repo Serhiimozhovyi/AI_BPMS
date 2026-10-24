@@ -68,15 +68,15 @@ interface PortView {
       border-radius: 8px;
       font-size: 12px;
       color: #fff;
-      background: #757575;
+      background: var(--ac-cool-grey-4);
     }
 
     .run__status--success {
-      background: #2e7d32;
+      background: var(--ac-green);
     }
 
     .run__status--error {
-      background: #c62828;
+      background: var(--ac-red);
     }
 
     .run__subtitle {
@@ -95,7 +95,7 @@ interface PortView {
       padding: 6px 8px;
       overflow: auto;
       border-radius: 4px;
-      background: #f4f6f8;
+      background: var(--ac-cool-grey);
       font-size: 12px;
       white-space: pre-wrap;
       word-break: break-word;
