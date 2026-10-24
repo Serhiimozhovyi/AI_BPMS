@@ -4,6 +4,35 @@
     <span class="shell-brand__name" i18n="@@app.brand">Open<b>BP</b></span>
   </a>
   @if (user(); as u) {
+    <div class="shell-project">
+      <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
+      <select
+        class="shell-project__select"
+        data-testid="project-select"
+        aria-label="Проєкт"
+        i18n-aria-label="@@app.project.label"
+        [value]="projects.current() ?? ''"
+        (change)="selectProject($any($event.target).value)"
+      >
+        <option value="" i18n="@@app.project.all" [selected]="projects.current() === null">Усі проєкти</option>
+        <option [value]="sharedSpace" i18n="@@app.project.shared" [selected]="projects.current() === sharedSpace">Спільний простір</option>
+        @for (p of projects.projects(); track p.id) {
+          <option [value]="p.id" [selected]="projects.current() === p.id">{{ p.name }}</option>
+        }
+      </select>
+      @if (projects.currentProject(); as current) {
+        <a
+          class="shell-icon-button"
+          data-testid="project-members"
+          title="Учасники проєкту"
+          i18n-title="@@app.project.members"
+          [routerLink]="['/projects', current.id]"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">group</span>
+          <span class="sr-only" i18n="@@app.project.members">Учасники проєкту</span>
+        </a>
+      }
+    </div>
     <div class="shell-user">
       <span class="shell-icon-button shell-icon-button--static" aria-hidden="true">
         <span class="material-symbols-outlined">person</span>

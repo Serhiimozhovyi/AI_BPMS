@@ -43,6 +43,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
@@ -51,6 +55,8 @@ namespace OpenBP.Data.Migrations
 
                     b.HasIndex("Hash")
                         .IsUnique();
+
+                    b.HasIndex("ProjectId");
 
                     b.ToTable("api_keys", (string)null);
                 });
@@ -158,12 +164,18 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("bytea")
                         .HasColumnName("nonce");
 
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("type");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
 
                     b.ToTable("credentials", (string)null);
                 });
@@ -459,6 +471,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text")
@@ -478,6 +494,8 @@ namespace OpenBP.Data.Migrations
                         .HasColumnName("transport");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
 
                     b.ToTable("mcp_servers", (string)null);
                 });
@@ -645,6 +663,32 @@ namespace OpenBP.Data.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.ToTable("oauth_states", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.ProjectMemberEntity", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
+                    b.HasKey("ProjectId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("project_members", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.UserEntity", b =>
@@ -908,6 +952,22 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("workflow_versions", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.ApiKeyEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowGroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.CredentialEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowGroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("OpenBP.Data.DataRowEntity", b =>
                 {
                     b.HasOne("OpenBP.Data.DataTableEntity", null)
@@ -917,11 +977,34 @@ namespace OpenBP.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OpenBP.Data.McpServerEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowGroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("OpenBP.Data.NotificationSendEntity", b =>
                 {
                     b.HasOne("OpenBP.Data.NotificationChannelEntity", null)
                         .WithMany()
                         .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.ProjectMemberEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowGroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OpenBP.Data.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

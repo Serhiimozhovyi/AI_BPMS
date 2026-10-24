@@ -38,17 +38,32 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
 
         return await query
             .OrderBy(k => k.Name).ThenBy(k => k.Id)
-            .Select(k => new ApiKeyInfo(k.Id, k.Name, k.UserId, k.LastUsedAt))
+            .Select(k => new ApiKeyInfo(k.Id, k.Name, k.UserId, k.LastUsedAt, k.ProjectId))
             .ToListAsync(ct);
     }
 
     /// <inheritdoc />
-    public async Task<ApiKeyCreated> CreateAsync(string name, CancellationToken ct)
+    public async Task<ApiKeyCreated> CreateAsync(string name, CancellationToken ct, Guid? projectId = null)
     {
         currentUser.Require(UserRole.Viewer);
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Назва API-ключа не може бути порожньою.", nameof(name));
+        }
+
+        if (currentUser.ApiKeyProjectId is { } keyProject && projectId != keyProject)
+        {
+            // Ключ проєкту не може видати ключ ширшої дії, ніж має сам.
+            throw new ForbiddenException(UserRole.Admin);
+        }
+
+        if (projectId is { } project)
+        {
+            if (!await db.WorkflowGroups.AnyAsync(g => g.Id == project, ct)
+                || await new ProjectAccess(db, currentUser).RoleInAsync(project, ct) is null)
+            {
+                throw new NotFoundException("workflow-group", project);
+            }
         }
 
         var key = KeyPrefix + Base64UrlEncode(RandomNumberGenerator.GetBytes(KeyBytes));
@@ -58,12 +73,13 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
             UserId = currentUser.UserId!.Value,
             Name = name.Trim(),
             Hash = Hash(key),
+            ProjectId = projectId,
         };
         db.ApiKeys.Add(entity);
         db.Audit(currentUser, time.GetUtcNow(), AuditActions.ApiKeyCreated, AuditEntities.ApiKey, entity.Id.ToString(),
-            new JsonObject { ["name"] = entity.Name, ["ownerId"] = entity.UserId.ToString() });
+            new JsonObject { ["name"] = entity.Name, ["ownerId"] = entity.UserId.ToString(), ["projectId"] = projectId?.ToString() });
         await db.SaveChangesAsync(ct);
-        return new ApiKeyCreated(entity.Id, entity.Name, key);
+        return new ApiKeyCreated(entity.Id, entity.Name, key, projectId);
     }
 
     /// <inheritdoc />
@@ -94,7 +110,7 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
         var hash = Hash(key);
         var found = await db.ApiKeys.AsNoTracking()
             .Where(k => k.Hash == hash)
-            .Join(db.Users, k => k.UserId, u => u.Id, (k, u) => new { k.Id, k.LastUsedAt, u.Email, u.Role, UserId = u.Id })
+            .Join(db.Users, k => k.UserId, u => u.Id, (k, u) => new { k.Id, k.LastUsedAt, k.ProjectId, u.Email, u.Role, UserId = u.Id })
             .SingleOrDefaultAsync(ct);
         var role = UserRoles.TryParse(found?.Role);
         if (found is null || role is null)
@@ -111,7 +127,7 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
                 .ExecuteUpdateAsync(s => s.SetProperty(k => k.LastUsedAt, now), ct);
         }
 
-        return new UserInfo(found.UserId, found.Email, role.Value, found.Id);
+        return new UserInfo(found.UserId, found.Email, role.Value, found.Id, found.ProjectId);
     }
 
     private static string Base64UrlEncode(byte[] bytes) =>

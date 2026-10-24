@@ -33,11 +33,14 @@ public sealed class ExecutionService(
 
     private const string Entity = "execution";
 
+    private readonly ProjectAccess _access = new(db, currentUser);
+
     /// <inheritdoc />
-    public Task<ExecutionSummary> StartAsync(Guid workflowId, StartExecutionRequest? request, CancellationToken ct)
+    public async Task<ExecutionSummary> StartAsync(Guid workflowId, StartExecutionRequest? request, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        return launcher.LaunchAsync(
+        currentUser.Require(UserRole.Viewer);
+        await RequireWorkflowAsync(workflowId, UserRole.Editor, ct);
+        return await launcher.LaunchAsync(
             new ExecutionLaunch(workflowId, ExecutionMode.Manual, request?.StartNodeId, request?.StartItems, request?.DestinationNodeId, request?.RunData),
             ct);
     }
@@ -46,7 +49,8 @@ public sealed class ExecutionService(
     public async Task<ExecutionSummary> StartNodeAsync(Guid workflowId, string nodeId, IReadOnlyList<Item>? items, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrEmpty(nodeId);
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
+        await RequireWorkflowAsync(workflowId, UserRole.Editor, ct);
         var definition = await CurrentDefinitionAsync(workflowId, ct);
         var ancestors = Ancestors(definition, nodeId);
         var runData = items is null
@@ -64,6 +68,12 @@ public sealed class ExecutionService(
         page = page.Normalized();
 
         var query = db.Executions.AsNoTracking();
+        if (await _access.VisibleProjectsAsync(ct) is not null)
+        {
+            var visible = (await _access.VisibleWorkflowsAsync(db.Workflows.AsNoTracking(), ct)).Select(w => w.Id);
+            query = query.Where(e => visible.Contains(e.WorkflowId));
+        }
+
         if (filter.WorkflowId is { } workflowId)
         {
             query = query.Where(e => e.WorkflowId == workflowId);
@@ -103,6 +113,7 @@ public sealed class ExecutionService(
         currentUser.Require(UserRole.Viewer);
         var execution = await db.Executions.AsNoTracking().SingleOrDefaultAsync(e => e.Id == id, ct)
                         ?? throw new NotFoundException(Entity, id);
+        await RequireWorkflowAsync(execution.WorkflowId, UserRole.Viewer, ct, (Entity, id));
         var steps = await db.ExecutionSteps.AsNoTracking()
             .Where(s => s.ExecutionId == id)
             .OrderBy(s => s.Id)
@@ -113,7 +124,8 @@ public sealed class ExecutionService(
     /// <inheritdoc />
     public async Task<ExecutionSummary> CancelAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
+        await RequireExecutionAsync(id, UserRole.Editor, ct);
 
         // Стан може змінитись між читанням і оновленням (воркер узяв job) — тоді читаємо знову.
         while (true)
@@ -249,12 +261,13 @@ public sealed class ExecutionService(
     /// </remarks>
     public async Task<ExecutionSummary> RetryAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
         var original = await db.Executions.AsNoTracking()
             .Where(e => e.Id == id)
             .Select(e => new { e.WorkflowId, e.VersionId, e.Status })
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException(Entity, id);
+        await RequireWorkflowAsync(original.WorkflowId, UserRole.Editor, ct, (Entity, id));
         if (original.Status is ExecutionStatuses.Queued or ExecutionStatuses.Running or ExecutionStatuses.Cancelling)
         {
             throw new ConflictException(ExecutionNotFinishedCode, $"Виконання «{id}» ще не завершене ({original.Status}); повторити можна лише завершене.");
@@ -304,12 +317,13 @@ public sealed class ExecutionService(
     /// </remarks>
     public async Task<ExecutionSummary> ResumeFromFailedAsync(Guid id, IReadOnlyList<Item>? items, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
         var original = await db.Executions.AsNoTracking()
             .Where(e => e.Id == id)
             .Select(e => new { e.WorkflowId, e.VersionId, e.Status })
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException(Entity, id);
+        await RequireWorkflowAsync(original.WorkflowId, UserRole.Editor, ct, (Entity, id));
         if (original.Status is not (ExecutionStatuses.Error or ExecutionStatuses.TimedOut))
         {
             throw new ConflictException(ExecutionNotFailedCode, $"Виконання «{id}» у стані {original.Status}; продовжити можна лише error або timed_out.");
@@ -393,5 +407,28 @@ public sealed class ExecutionService(
 
         await tx.CommitAsync(ct);
         return summary;
+    }
+
+    /// <summary>
+    /// Права на сценарій (F6-14): чужий проєкт — 404 (для <paramref name="notFound"/>, типово — сам сценарій), бракує ролі — 403.
+    /// Неіснуючий сценарій пропускається: його відхилить запуск.
+    /// </summary>
+    private async Task RequireWorkflowAsync(Guid workflowId, UserRole minimum, CancellationToken ct, (string Entity, Guid Id)? notFound = null)
+    {
+        var workflow = await db.Workflows.AsNoTracking().Where(w => w.Id == workflowId).Select(w => new { w.GroupId }).SingleOrDefaultAsync(ct);
+        if (workflow is null)
+        {
+            return;
+        }
+
+        var (entity, id) = notFound ?? ("workflow", workflowId);
+        await _access.RequireAsync(workflow.GroupId, minimum, entity, id, ct);
+    }
+
+    private async Task RequireExecutionAsync(Guid id, UserRole minimum, CancellationToken ct)
+    {
+        var workflowId = await db.Executions.AsNoTracking().Where(e => e.Id == id).Select(e => (Guid?)e.WorkflowId).SingleOrDefaultAsync(ct)
+                         ?? throw new NotFoundException(Entity, id);
+        await RequireWorkflowAsync(workflowId, minimum, ct, (Entity, id));
     }
 }

@@ -43,10 +43,11 @@ public sealed class OAuth2Service(OpenBpDbContext db, ICurrentUser currentUser, 
     /// <exception cref="CredentialValidationException">Тип не <c>oauth2</c> або немає адреси авторизації.</exception>
     public async Task<Uri> StartAsync(Guid credentialId, Uri redirectUri, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        currentUser.Require(UserRole.Viewer);
         ArgumentNullException.ThrowIfNull(redirectUri);
         var row = await db.Credentials.AsNoTracking().SingleOrDefaultAsync(c => c.Id == credentialId, ct)
                   ?? throw new NotFoundException("credential", credentialId);
+        await new ProjectAccess(db, currentUser).RequireManageAsync(row.ProjectId, "credential", credentialId, ct);
         if (row.Type != OAuth2Credential.Type)
         {
             throw new CredentialValidationException([new("type", "Підключення доступне лише для облікових даних типу oauth2.")]);
@@ -109,7 +110,8 @@ public sealed class OAuth2Service(OpenBpDbContext db, ICurrentUser currentUser, 
     /// <exception cref="UnauthenticatedException">Запит без сесії.</exception>
     public async Task<OAuth2CallbackResult> CompleteAsync(string? state, string? code, string? error, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Admin);
+        // Права перевірено на старті; state одноразовий і прив'язаний до того самого користувача.
+        currentUser.Require(UserRole.Viewer);
         if (string.IsNullOrEmpty(state))
         {
             return new(null, "invalid_state");

@@ -10,8 +10,10 @@ namespace OpenBP.Application.Workflows;
 /// <list type="bullet">
 /// <item>Назва групи унікальна без урахування регістру; повтор — <see cref="ConflictException"/> з кодом
 /// <see cref="WorkflowGroupService.NameTakenCode"/>.</item>
-/// <item>Видалення групи лишає її сценарії без групи.</item>
-/// <item>Ролі: читання — <see cref="UserRole.Viewer"/>, зміни — <see cref="UserRole.Editor"/>.</item>
+/// <item>Видалення групи лишає її сценарії без групи (у спільному просторі); проєкт з credentials чи конекторами не
+/// видаляється (<see cref="WorkflowGroupService.ProjectNotEmptyCode"/>).</item>
+/// <item>Група — це проєкт (F6-14, <see cref="ProjectAccess"/>): admin бачить усі, інші — лише ті, де вони учасники.
+/// Створює глобальний editor (стає editor-учасником), перейменовує, видаляє й керує учасниками admin або editor проєкту.</item>
 /// </list>
 /// </summary>
 public interface IWorkflowGroupService
@@ -47,4 +49,26 @@ public interface IWorkflowGroupService
     /// <param name="ct">Скасування.</param>
     /// <exception cref="ArgumentException">Список не збігається з наявними групами.</exception>
     Task<IReadOnlyList<WorkflowGroupSummary>> ReorderAsync(IReadOnlyList<Guid> ids, CancellationToken ct);
+
+    /// <summary>Учасники проєкту (F6-14), за email.</summary>
+    /// <param name="id"><c>workflow_groups.id</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Проєкту немає або користувач не його учасник.</exception>
+    Task<IReadOnlyList<ProjectMember>> ListMembersAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Додає користувача до проєкту або змінює його роль (admin або editor проєкту).</summary>
+    /// <param name="id"><c>workflow_groups.id</c>.</param>
+    /// <param name="email">Email наявного користувача.</param>
+    /// <param name="role"><see cref="UserRole.Editor"/> або <see cref="UserRole.Viewer"/>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Проєкту чи користувача немає.</exception>
+    /// <exception cref="ForbiddenException">Користувач не admin і не editor проєкту.</exception>
+    Task<ProjectMember> SetMemberAsync(Guid id, string email, UserRole role, CancellationToken ct);
+
+    /// <summary>Прибирає користувача з проєкту (admin або editor проєкту).</summary>
+    /// <param name="id"><c>workflow_groups.id</c>.</param>
+    /// <param name="userId"><c>users.id</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Проєкту чи учасника немає.</exception>
+    Task RemoveMemberAsync(Guid id, Guid userId, CancellationToken ct);
 }

@@ -1656,8 +1656,8 @@
         "tags": [
           "Сценарії"
         ],
-        "summary": "Групи сценаріїв",
-        "description": "Усі групи в заданому порядку з кількістю сценаріїв; сценарії без групи — `GET /workflows?groupId=none`.",
+        "summary": "Групи (проєкти) сценаріїв",
+        "description": "Видимі групи в заданому порядку з кількістю сценаріїв і роллю поточного користувача (`role`); admin бачить усі, інші — ті, де вони учасники. Сценарії спільного простору — `GET /workflows?groupId=none`.",
         "responses": {
           "200": {
             "description": "OK",
@@ -1697,7 +1697,7 @@
           "Сценарії"
         ],
         "summary": "Створити групу",
-        "description": "Назва унікальна без урахування регістру (повтор — 409 WORKFLOW_GROUP_NAME_TAKEN); нова група — в кінці списку.",
+        "description": "Назва унікальна без урахування регістру (повтор — 409 WORKFLOW_GROUP_NAME_TAKEN); нова група — в кінці списку. Не-адмін автор стає editor-учасником.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1803,7 +1803,7 @@
           "Сценарії"
         ],
         "summary": "Видалити групу",
-        "description": "Сценарії групи лишаються, без групи.",
+        "description": "Сценарії групи переходять у спільний простір; проєкт з обліковими даними чи конекторами — 409 PROJECT_NOT_EMPTY. API-ключі проєкту видаляються.",
         "parameters": [
           {
             "name": "id",
@@ -1846,7 +1846,7 @@
           "Сценарії"
         ],
         "summary": "Змінити порядок груп",
-        "description": "`ids` — усі групи в новому порядку, кожна рівно раз.",
+        "description": "`ids` — усі видимі групи в новому порядку, кожна рівно раз; невидимі лишаються на своїх позиціях.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1870,6 +1870,167 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflow-groups/{id}/members": {
+      "get": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Учасники проєкту",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectMember"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Додати учасника або змінити його роль",
+        "description": "Лише admin або editor проєкту; `role` — `editor` чи `viewer`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMember"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflow-groups/{id}/members/{userId}": {
+      "delete": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Прибрати учасника з проєкту",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "4XX": {
             "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
@@ -3668,6 +3829,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -3972,6 +4141,13 @@
           },
           "key": {
             "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4001,6 +4177,13 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4289,6 +4472,13 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4337,6 +4527,13 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4351,6 +4548,13 @@
               "null",
               "string"
             ]
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4379,6 +4583,13 @@
           },
           "data": {
             "$ref": "#/components/schemas/JsonObject"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4457,6 +4668,13 @@
           },
           "type": {
             "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -4557,6 +4775,13 @@
                 "$ref": "#/components/schemas/CredentialOAuthStatus"
               }
             ]
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -5837,6 +6062,62 @@
         },
         "description": "Помилка (RFC 9457) з машинним кодом."
       },
+      "ProjectMember": {
+        "required": [
+          "userId",
+          "email",
+          "role",
+          "globalRole"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "globalRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserRole"
+              }
+            ]
+          }
+        }
+      },
+      "ProjectMemberRequest": {
+        "required": [
+          "email",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserRole"
+              }
+            ]
+          }
+        }
+      },
       "ResumeExecutionRequest": {
         "type": "object",
         "properties": {
@@ -6365,6 +6646,16 @@
               "string"
             ],
             "format": "int32"
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserRole"
+              }
+            ]
           }
         }
       },

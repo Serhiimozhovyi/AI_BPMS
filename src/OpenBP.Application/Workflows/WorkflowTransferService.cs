@@ -19,8 +19,9 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
     /// <inheritdoc />
     public async Task<WorkflowExport> ExportAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
         var detail = await workflows.GetAsync(id, ct);
+        await new ProjectAccess(db, currentUser).RequireAsync(detail.GroupId, UserRole.Editor, "workflow", id, ct);
         var document = ToDocument(detail.Definition);
         var refs = References.Collect(document);
 
@@ -46,7 +47,7 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
     public async Task<WorkflowImportResult> ImportAsync(WorkflowImportRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        currentUser.Require(UserRole.Editor);
+        currentUser.Require(UserRole.Viewer);
         var definition = request.Definition ?? throw new ArgumentException("Потрібне поле definition.", nameof(request));
         var document = ToDocument(definition);
         var refs = References.Collect(document);
@@ -54,11 +55,16 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
         var mapping = request.Mapping ?? new ImportMapping();
         var unmapped = new List<UnmappedReference>();
 
-        var servers = await db.McpServers.AsNoTracking().Select(s => new Target(s.Id, s.Name, s.Transport)).ToListAsync(ct);
-        var credentials = await db.Credentials.AsNoTracking().Select(c => new Target(c.Id, c.Name, c.Type)).ToListAsync(ct);
+        // Перемаплювати можна лише на спільні ресурси та ресурси проєкту, куди імпортуємо (F6-14).
+        var project = request.GroupId ?? currentUser.ApiKeyProjectId;
+        var servers = await db.McpServers.AsNoTracking().Where(s => s.ProjectId == null || s.ProjectId == project)
+            .Select(s => new Target(s.Id, s.Name, s.Transport)).ToListAsync(ct);
+        var credentials = await db.Credentials.AsNoTracking().Where(c => c.ProjectId == null || c.ProjectId == project)
+            .Select(c => new Target(c.Id, c.Name, c.Type)).ToListAsync(ct);
         var targetWorkflows = refs.Workflows.Count == 0
             ? []
-            : await db.Workflows.AsNoTracking().Select(w => new Target(w.Id, w.Name, null)).ToListAsync(ct);
+            : await (await new ProjectAccess(db, currentUser).VisibleWorkflowsAsync(db.Workflows.AsNoTracking(), ct))
+                .Select(w => new Target(w.Id, w.Name, null)).ToListAsync(ct);
 
         var connectorMap = Resolve(
             ReferenceKinds.Connector,

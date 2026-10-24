@@ -16,6 +16,8 @@ export interface ConnectorSummary {
   status: ConnectorStatus;
   toolCount: number;
   toolsCachedAt: string | null;
+  /** Проєкт (F6-14); `null` — спільний. */
+  projectId?: string | null;
 }
 
 /** `ConnectorConfig` — налаштування транспорту без секретів. */
@@ -51,6 +53,8 @@ export interface ConnectorInput {
   transport: ConnectorTransport;
   config: ConnectorConfig;
   credentialId?: string | null;
+  /** Проєкт (F6-14); `null` — спільний (лише admin). */
+  projectId?: string | null;
 }
 
 /** `ToolCallResult` — відповідь тестового виклику; `elapsed` — TimeSpan (`hh:mm:ss.fffffff`). */

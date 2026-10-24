@@ -10,6 +10,7 @@ public static class OpenBpClaims
     public const string Email = "email";
     public const string Role = "role";
     public const string ApiKeyId = "api_key_id";
+    public const string ApiKeyProjectId = "api_key_project_id";
 
     /// <summary><see cref="ClaimsPrincipal"/> користувача для схеми <paramref name="scheme"/>.</summary>
     /// <param name="user">Користувач.</param>
@@ -29,6 +30,11 @@ public static class OpenBpClaims
         if (user.ApiKeyId is { } keyId)
         {
             identity.AddClaim(new Claim(ApiKeyId, keyId.ToString()));
+        }
+
+        if (user.ApiKeyProjectId is { } projectId)
+        {
+            identity.AddClaim(new Claim(ApiKeyProjectId, projectId.ToString()));
         }
 
         return new ClaimsPrincipal(identity);
@@ -56,4 +62,8 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
     /// <inheritdoc />
     public Guid? ApiKeyId =>
         Guid.TryParse(Principal?.FindFirst(OpenBpClaims.ApiKeyId)?.Value, out var id) ? id : null;
+
+    /// <inheritdoc />
+    public Guid? ApiKeyProjectId =>
+        Guid.TryParse(Principal?.FindFirst(OpenBpClaims.ApiKeyProjectId)?.Value, out var id) ? id : null;
 }

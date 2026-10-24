@@ -8,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ProjectContextService } from '../../projects/project-context.service';
 import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
 import { AuthService } from '../../auth/auth.service';
 import { AuditSection } from '../../settings/audit-section.component';
@@ -28,7 +29,8 @@ import { VariablesSection } from '../../settings/variables-section.component';
 
       <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.apiKeys.title">API-ключі</h2>
       <p class="mb-4 opacity-70" i18n="@@settings.apiKeys.hint">
-        Ключ дає доступ до REST і MCP-сервера OpenBP з вашими правами. Зберігайте його як пароль.
+        Ключ дає доступ до REST і MCP-сервера OpenBP з вашими правами. Зберігайте його як пароль. Ключ проєкту бачить лише
+        сценарії, облікові дані й конектори цього проєкту.
       </p>
 
       <div class="mb-4 flex items-start gap-2">
@@ -36,6 +38,12 @@ import { VariablesSection } from '../../settings/variables-section.component';
           <mat-label i18n="@@settings.apiKeys.name">Назва ключа</mat-label>
           <input matInput [formControl]="name" name="name" data-testid="key-name" (keydown.enter)="create()" />
         </mat-form-field>
+        <select class="border" data-testid="key-project" aria-label="Дія ключа" i18n-aria-label="@@settings.apiKeys.scope" [value]="keyProject()" (change)="keyProject.set($any($event.target).value)">
+          <option value="" i18n="@@settings.apiKeys.scope.all">Увесь інстанс</option>
+          @for (p of projects.projects(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
         <button mat-flat-button type="button" data-testid="create-button" (click)="create()" [disabled]="creating()" i18n="@@settings.apiKeys.create">
           Створити ключ
         </button>
@@ -84,7 +92,12 @@ import { VariablesSection } from '../../settings/variables-section.component';
           <tbody>
             @for (k of keys(); track k.id) {
               <tr [attr.data-key]="k.id">
-                <td class="p-2">{{ k.name }}</td>
+                <td class="p-2">
+                  {{ k.name }}
+                  @if (k.projectId) {
+                    <span class="text-sm opacity-70" data-testid="key-project-name">· {{ projectName(k.projectId) }}</span>
+                  }
+                </td>
                 <td class="p-2">
                   @if (k.lastUsedAt) {
                     {{ k.lastUsedAt | date: 'short' }}
@@ -136,6 +149,9 @@ export class SettingsPage implements OnInit {
   private readonly clipboard = inject(Clipboard);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  protected readonly projects = inject(ProjectContextService);
+  /** Проєкт нового ключа (F6-14); порожньо — весь інстанс. */
+  readonly keyProject = signal('');
 
   readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
   readonly keys = signal<ApiKeyInfo[]>([]);
@@ -177,6 +193,10 @@ export class SettingsPage implements OnInit {
       });
   }
 
+  projectName(id: string): string {
+    return this.projects.projects().find((p) => p.id === id)?.name ?? id;
+  }
+
   create(): void {
     const name = this.name.value.trim();
     if (!name) {
@@ -186,7 +206,7 @@ export class SettingsPage implements OnInit {
     this.creating.set(true);
     this.error.set(null);
     this.api
-      .create(name)
+      .create(name, this.keyProject() || null)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (created) => {

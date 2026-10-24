@@ -9,6 +9,8 @@ export interface ApiKeyInfo {
   name: string;
   createdBy: string;
   lastUsedAt: string | null;
+  /** Проєкт, до якого обмежено ключ (F6-14); `null` — весь інстанс. */
+  projectId?: string | null;
 }
 
 /** `ApiKeyCreated` — відповідь `POST /api/v1/api-keys`: `key` показується лише один раз. */
@@ -16,6 +18,7 @@ export interface ApiKeyCreated {
   id: string;
   name: string;
   key: string;
+  projectId?: string | null;
 }
 
 /** Клієнт `/api/v1/api-keys` (docs/architecture.md §10.3, §10.6). */
@@ -28,8 +31,9 @@ export class ApiKeysApiService {
     return this.http.get<ApiKeyInfo[]>(this.base);
   }
 
-  create(name: string): Observable<ApiKeyCreated> {
-    return this.http.post<ApiKeyCreated>(this.base, { name });
+  /** `projectId` — обмежити ключ проєктом (F6-14); `null` — ключ на весь інстанс з вашими правами. */
+  create(name: string, projectId: string | null = null): Observable<ApiKeyCreated> {
+    return this.http.post<ApiKeyCreated>(this.base, projectId ? { name, projectId } : { name });
   }
 
   revoke(id: string): Observable<void> {

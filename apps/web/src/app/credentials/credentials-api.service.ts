@@ -41,6 +41,8 @@ export interface CredentialSummary {
   error: string | null;
   /** Для `oauth2` — стан підключення (F4-04). */
   oauth?: CredentialOAuthStatus | null;
+  /** Проєкт (F6-14); `null` — спільний. */
+  projectId?: string | null;
 }
 
 /** Стан oauth2-credential'а: `notConnected` · `connected` · `expired` · `error`. */
@@ -55,6 +57,8 @@ export interface CredentialOption {
   id: string;
   name: string;
   type: string;
+  /** Проєкт (F6-14); `null` — спільний. */
+  projectId?: string | null;
 }
 
 /** Дані credential'а: рядки або об'єкти «назва → рядок»; `null` у PATCH видаляє. */
@@ -79,8 +83,9 @@ export class CredentialsApiService {
     return this.http.get<CredentialSummary[]>(this.base);
   }
 
-  create(name: string, type: string, data: CredentialData): Observable<CredentialSummary> {
-    return this.http.post<CredentialSummary>(this.base, { name, type, data });
+  /** `projectId` — проєкт (F6-14); `null` — спільний (лише admin). */
+  create(name: string, type: string, data: CredentialData, projectId: string | null = null): Observable<CredentialSummary> {
+    return this.http.post<CredentialSummary>(this.base, projectId ? { name, type, data, projectId } : { name, type, data });
   }
 
   update(id: string, changes: { name?: string; data?: CredentialData }): Observable<CredentialSummary> {
