@@ -406,7 +406,7 @@
 - DoD: три сценарії працюють у компанії ≥ 1 тиждень; звіт пілоту в `docs/`.
 
 ### F3-25 · UI: тема AC-Kit (токени, шрифт, Material)
-- model: `sonnet` · status: `review` · depends: —
+- model: `sonnet` · status: `done` · depends: —
 - Що: перевести `apps/web` на дизайн-систему AC-Kit (Figma, лише читання): палітра (Kit #7A6FF0, Vivid #261F4B, Mid #372F6C, Highlight-кольори), шрифт Ubuntu і шкала H1–H7/P1–P4, системні токени Angular Material і `@theme` Tailwind, кнопки/поля/тулбар/таблиці/картки сторінок за атомами AC-Kit, кольори канвасу — з Highlight-палітри. Без змін у шаблонах shell (`app.html`), бо його змінює F3-24.
 - DoD: `npm run lint`, `npm test`, `npm run build` зелені; жодних захардкоджених кольорів поза токенами AC-Kit.
 
