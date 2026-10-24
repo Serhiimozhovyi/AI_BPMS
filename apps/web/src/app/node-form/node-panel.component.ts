@@ -8,6 +8,7 @@ import { WorkflowNode } from '../workflows/workflows-api.service';
 import { CommonModel, MCP_TOOL_TYPES, applyCommon, applyParameters, commonFields, commonModel, parameterFields, parametersModel } from './node-form';
 import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext } from './expression-suggest';
 import { NodeFormState, provideNodeForm } from './node-form-fields';
+import { OptionsConnector, ToolOptionsService } from './tool-options.service';
 
 /** Стан форм для одного вузла: моделі (копії) і поля formly. Новий стан — нові екземпляри форм. */
 interface PanelState {
@@ -38,7 +39,8 @@ interface PanelState {
   selector: 'app-node-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormlyForm],
-  providers: [provideNodeForm()],
+  // Кеш списків з конекторів (F3-54) — у межах панелі.
+  providers: [provideNodeForm(), ToolOptionsService],
   template: `
     @let s = state();
     <section class="panel" data-testid="node-panel" [attr.data-node]="s.node.id">
@@ -138,6 +140,9 @@ export class NodePanelComponent {
   /** Для `mcp.tool`: tool із `tools_cache` (його `inputSchema` описує `arguments`). */
   readonly tool = input<McpToolInfo | null>(null);
 
+  /** Для `mcp.tool`/`mcp.poll`: усі tools конектора вузла — списки `x-openbp-options` (F3-54); `null` — без списків. */
+  readonly serverTools = input<readonly McpToolInfo[] | null>(null);
+
   /** Облікові дані для вибору в параметрах з `credentials` дескриптора (F4-03); `null` — недоступні, поле текстове. */
   readonly credentials = input<readonly CredentialOption[] | null>(null);
 
@@ -169,6 +174,7 @@ export class NodePanelComponent {
       if (prev && src.node === this.lastEmitted && src.descriptor === prev.descriptor && src.tool === prev.tool && src.credentials === prev.credentials) {
         return { ...prev, node: src.node };
       }
+      this.formState.connector = connectorOf(src.node, this.serverTools());
       return createState(src, this.formState);
     },
   });
@@ -195,6 +201,12 @@ export class NodePanelComponent {
 }
 
 let nextStateId = 0;
+
+/** Конектор вузла для списків з `x-openbp-options`: лише `mcp.*` з відомим `serverId` і tools. */
+function connectorOf(node: WorkflowNode, tools: readonly McpToolInfo[] | null): OptionsConnector | null {
+  const serverId = node.parameters?.['serverId'];
+  return MCP_TOOL_TYPES.includes(node.type) && typeof serverId === 'string' && serverId && tools ? { id: serverId, tools } : null;
+}
 
 interface PanelSource {
   node: WorkflowNode;

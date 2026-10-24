@@ -234,6 +234,21 @@ public sealed class OneCConnectorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task OData_generator_annotates_reference_keys_with_options_from_the_catalog_list()
+    {
+        var client = await ConnectAsync(settings: [$"--Connector:Source=odata:{_onec.BaseUrl}$metadata"]);
+        var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
+
+        // 1С (OData v3): навігація Контрагент через Association → Catalog_Контрагенты; без навігації — без анотації.
+        var order = tools[tools.Keys.Single(k => k.StartsWith("create_document_zakaz", StringComparison.Ordinal))].InputSchema.GetProperty("properties").GetProperty("body").GetProperty("properties");
+        var options = order.GetProperty("Контрагент_Key").GetProperty(OpenBP.Connectors.OneC.OData.ODataToolFactory.OptionsAnnotation);
+        Assert.Equal("list_catalog_kontragenty", options.GetProperty("tool").GetString());
+        Assert.Equal(("Ref_Key", "Description"), (options.GetProperty("valuePath").GetString(), options.GetProperty("labelPath").GetString()));
+        var sales = tools[tools.Keys.Single(k => k.StartsWith("create_document_realiz", StringComparison.Ordinal))].InputSchema.GetProperty("properties").GetProperty("body").GetProperty("properties");
+        Assert.False(sales.GetProperty("Контрагент_Key").TryGetProperty(OpenBP.Connectors.OneC.OData.ODataToolFactory.OptionsAnnotation, out _));
+    }
+
+    [Fact]
     public async Task Stdio_transport_serves_the_same_tools()
     {
         var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host : "dotnet";

@@ -1,5 +1,6 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { isAssignmentSchema, isCombineSchema, isConditionSchema, isRuleSchema, operatorLabel } from './conditions';
+import { OPTIONS_ANNOTATION, OptionsSource, parseOptionsSource } from './dynamic-options';
 import { ValueRules, isPlainObject } from './node-value';
 
 /**
@@ -7,7 +8,8 @@ import { ValueRules, isPlainObject } from './node-value';
  * і `inputSchema` MCP tools: `type` (зокрема `[T, "null"]`), `enum`/`const`, `properties`/`required`, `items`,
  * локальні `$ref` (`#/$defs/…`, `#/definitions/…`), `title`, `description`, `default`, `minimum`.
  * Решта (`oneOf`, кілька типів, об'єкти без `properties`) редагується як JSON-значення. Умови, «AND/OR» і присвоєння
- * впізнаються за формою схеми й отримують власні типи полів (F3-53, `conditions.ts`).
+ * впізнаються за формою схеми й отримують власні типи полів (F3-53, `conditions.ts`). Властивість з анотацією
+ * `x-openbp-options` — поле зі списком варіантів з конектора (F3-54, `dynamic-options.ts`).
  * Значення за замовчуванням у модель не підставляються — лише показуються підказкою: відкриття панелі не змінює вузол.
  */
 
@@ -54,6 +56,8 @@ export interface NodeFieldProps {
   compact?: boolean;
   /** Рядок-назва присвоєння: автодоповнення іменами полів входу. */
   suggestInputFields?: boolean;
+  /** Анотація `x-openbp-options`: значення обирається зі списку, який повертає tool конектора (F3-54). */
+  optionsSource?: OptionsSource;
 }
 
 /** Поля форми для об'єктної схеми (параметри вузла). Не об'єкт — порожній список. */
@@ -75,6 +79,12 @@ export function schemaFields(schema: JsonSchema | null | undefined, options: Sch
 }
 
 function fieldFor(key: string | undefined, raw: JsonSchema, required: boolean, root: JsonSchema, depth: number): FormlyFieldConfig {
+  const field = typedField(key, raw, required, root, depth);
+  const source = field.type === VALUE_FIELD ? parseOptionsSource(resolve(raw, root, 0)[OPTIONS_ANNOTATION]) : null;
+  return source ? { ...field, props: { ...field.props, multiline: false, optionsSource: source } } : field;
+}
+
+function typedField(key: string | undefined, raw: JsonSchema, required: boolean, root: JsonSchema, depth: number): FormlyFieldConfig {
   const schema = resolve(raw, root, 0);
   const props: NodeFieldProps = {
     label: typeof schema['title'] === 'string' && schema['title'] ? schema['title'] : key,

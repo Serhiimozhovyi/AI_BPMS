@@ -235,3 +235,35 @@ test('IF з двома умовами OR, зібраний у конструкт
     combine: 'or',
   });
 });
+
+test('telegram-1c: chat_id обирається зі списку чатів get_updates — у параметр записується id (F3-54)', async ({ page }) => {
+  const workflow = await openExample(page);
+  await page.locator('[data-node-id="n_reply"]').click();
+
+  // У прикладі chat_id — вираз: режим виводиться зі значення.
+  await expect(page.getByTestId('mode-expression-chat_id')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('mode-list-chat_id').click();
+  await expect(page.getByTestId('mode-list-chat_id')).toHaveAttribute('aria-checked', 'true');
+
+  const field = page.getByTestId('field-chat_id');
+  await field.click();
+  // Мок get_updates: три оновлення з двох чатів — два варіанти.
+  await expect(page.getByTestId('option-chat_id')).toHaveCount(2);
+  await page.getByTestId('option-chat_id').filter({ hasText: 'Петро' }).click();
+  await expect(field).toHaveValue('Петро');
+
+  await expect
+    .poll(async () => {
+      const saved = await json<{ definition: { nodes: { id: string; parameters: { arguments?: Record<string, unknown> } }[] } }>(
+        await page.request.get(`/api/v1/workflows/${workflow.id}`),
+      );
+      return saved.definition.nodes.find((n) => n.id === 'n_reply')?.parameters.arguments?.['chat_id'];
+    })
+    .toBe(2002);
+
+  // Повний запуск: мок send_message повертає chat_id, що прийшов у аргументах.
+  await runAndWait(page, 'run');
+  await page.locator('[data-node-id="n_reply"]').click();
+  await showOutputJson(page);
+  await expect(page.getByTestId('node-run-output')).toContainText('2002');
+});

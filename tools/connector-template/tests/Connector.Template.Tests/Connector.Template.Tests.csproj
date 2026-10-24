@@ -11,6 +11,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="ModelContextProtocol.Core" />
+    <PackageReference Include="JsonSchema.Net" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +21,7 @@
   <ItemGroup>
     <None Include="OpenApi/petstore.yaml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="OData/trade.xml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../schemas/x-openbp-options.schema.json" Link="schemas/x-openbp-options.schema.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

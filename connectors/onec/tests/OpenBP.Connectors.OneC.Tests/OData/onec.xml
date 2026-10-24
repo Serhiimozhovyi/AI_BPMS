@@ -37,6 +37,7 @@
         <Property Name="Posted" Type="Edm.Boolean" />
         <Property Name="Контрагент_Key" Type="Edm.Guid" />
         <Property Name="Товары" Type="Collection(StandardODATA.Document_ЗаказПокупателя_Товары_RowType)" Nullable="false" />
+        <NavigationProperty Name="Контрагент" Relationship="StandardODATA.Document_ЗаказПокупателя_Контрагент" FromRole="Begin" ToRole="End" />
       </EntityType>
       <EntityType Name="Document_РеализацияТоваровУслуг">
         <Key>
@@ -50,6 +51,10 @@
         <Property Name="Контрагент_Key" Type="Edm.Guid" />
         <Property Name="СуммаДокумента" Type="Edm.Double" />
       </EntityType>
+      <Association Name="Document_ЗаказПокупателя_Контрагент">
+        <End Role="Begin" Type="StandardODATA.Document_ЗаказПокупателя" Multiplicity="*" />
+        <End Role="End" Type="StandardODATA.Catalog_Контрагенты" Multiplicity="0..1" />
+      </Association>
       <EntityContainer Name="StandardODATA" m:IsDefaultEntityContainer="true">
         <EntitySet Name="Catalog_Контрагенты" EntityType="StandardODATA.Catalog_Контрагенты" />
         <EntitySet Name="Catalog_Номенклатура" EntityType="StandardODATA.Catalog_Номенклатура" />

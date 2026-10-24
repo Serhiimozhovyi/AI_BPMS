@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbp.dev/schemas/x-openbp-options.schema.json",
+  "title": "x-openbp-options",
+  "description": "Анотація властивості inputSchema tool'а: форма OpenBP пропонує значення зі списку, який повертає інший tool того самого конектора (docs/connectors.md §2).",
+  "type": "object",
+  "required": ["tool", "valuePath"],
+  "additionalProperties": false,
+  "properties": {
+    "tool": {
+      "description": "Tool того самого MCP-сервера, що повертає варіанти (зазвичай readOnly).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+    },
+    "arguments": {
+      "description": "Аргументи виклику; рядки можуть містити {{ $params.<param> }} — значення інших аргументів вузла.",
+      "type": "object"
+    },
+    "itemsPath": {
+      "description": "Шлях до масиву варіантів у structuredContent (крапки, числа — індекси). Без нього — сам structuredContent, якщо це масив, інакше result.",
+      "type": "string"
+    },
+    "valuePath": {
+      "description": "Шлях до значення в елементі списку — саме воно записується в параметр.",
+      "type": "string",
+      "minLength": 1
+    },
+    "labelPath": {
+      "description": "Шлях до підпису (або кілька — береться перший непорожній). Без нього підпис — значення.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+      ]
+    },
+    "dependsOn": {
+      "description": "Аргументи вузла, від яких залежить список: при їх зміні список перезавантажується.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}

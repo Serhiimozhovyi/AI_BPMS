@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Xml.Linq;
 using Connector.Template.OData;
+using Json.Schema;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -14,6 +15,9 @@ public sealed class ODataGeneratorTests : IAsyncLifetime
 {
     private const string Password = "p@ss-odata-secret";
     private const string Kontragenty = "Catalog_%D0%9A%D0%BE%D0%BD%D1%82%D1%80%D0%B0%D0%B3%D0%B5%D0%BD%D1%82%D1%8B";
+
+    /// <summary>Схема анотації <c>x-openbp-options</c> (реєструється в JsonSchema.Net один раз — за <c>$id</c>).</summary>
+    private static readonly JsonSchema OptionsSchema = JsonSchema.FromFile(Path.Combine(AppContext.BaseDirectory, "schemas", "x-openbp-options.schema.json"));
 
     private MockODataApi _odata = null!;
     private readonly List<IAsyncDisposable> _disposables = [];
@@ -92,6 +96,49 @@ public sealed class ODataGeneratorTests : IAsyncLifetime
 
         // update: ключ + body.
         Assert.Equal(["Ref_Key", "LineNumber", "body"], Strings(tools["update_order_lines"].InputSchema.GetProperty("required")));
+    }
+
+    [Fact]
+    public async Task Reference_keys_get_options_annotation_valid_against_its_schema()
+    {
+        var client = await ConnectAsync($"--Connector:Source={Metadata}");
+        var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
+        var schema = OptionsSchema;
+
+        // Customer_Key + навігація Customer → тип Customer, entity set Catalog_Контрагенты (успадкований ключ Ref_Key).
+        foreach (var tool in new[] { "create_document_orders", "update_document_orders" })
+        {
+            var customerKey = tools[tool].InputSchema.GetProperty("properties").GetProperty("body").GetProperty("properties").GetProperty("Customer_Key");
+            var options = customerKey.GetProperty(ODataToolFactory.OptionsAnnotation);
+            var evaluation = schema.Evaluate(options, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            Assert.True(evaluation.IsValid, $"{tool}: {options.GetRawText()}");
+            Assert.Equal("list_catalog_kontragenty", options.GetProperty("tool").GetString());
+            Assert.Equal(["Ref_Key", "Description"], Strings(options.GetProperty("arguments").GetProperty("select")));
+            Assert.Equal(("result", "Ref_Key", "Description"), (options.GetProperty("itemsPath").GetString(), options.GetProperty("valuePath").GetString(), options.GetProperty("labelPath").GetString()));
+            Assert.Equal("uuid", customerKey.GetProperty("format").GetString());
+        }
+
+        // Ключі самої сутності, властивості без навігації й колекції — без анотації.
+        var order = tools["create_document_orders"].InputSchema.GetProperty("properties").GetProperty("body").GetProperty("properties");
+        Assert.False(order.GetProperty("Ref_Key").TryGetProperty(ODataToolFactory.OptionsAnnotation, out _));
+        Assert.False(order.GetProperty("Number").TryGetProperty(ODataToolFactory.OptionsAnnotation, out _));
+
+        // Цільовий set відфільтровано — посилання лишається звичайним полем.
+        var filtered = await ConnectAsync($"--Connector:Source={Metadata}", "--Connector:OData:Exclude:0=Catalog_*");
+        var create = (await filtered.ListToolsAsync()).Single(t => t.Name == "create_document_orders").ProtocolTool;
+        Assert.False(create.InputSchema.GetProperty("properties").GetProperty("body").GetProperty("properties").GetProperty("Customer_Key").TryGetProperty(ODataToolFactory.OptionsAnnotation, out _));
+    }
+
+    [Fact]
+    public void Options_schema_rejects_annotation_without_tool_or_with_unknown_keys()
+    {
+        var schema = OptionsSchema;
+        bool Valid(string json) => schema.Evaluate(JsonDocument.Parse(json).RootElement).IsValid;
+
+        Assert.True(Valid("""{ "tool": "get_updates", "valuePath": "message.chat.id", "labelPath": ["message.chat.title", "message.chat.first_name"], "dependsOn": ["x"] }"""));
+        Assert.False(Valid("""{ "valuePath": "id" }"""));
+        Assert.False(Valid("""{ "tool": "list", "valuePath": "id", "extra": 1 }"""));
+        Assert.False(Valid("""{ "tool": "list", "valuePath": "id", "labelPath": [] }"""));
     }
 
     [Fact]
