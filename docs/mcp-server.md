@@ -73,11 +73,14 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 |---|---|---|---|
 | `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }`; `outputSchema` — форма `json` item'а на виході `mcp.tool` (`null`, якщо сервер її не оголосив) |
 | `describe_nodes` | viewer | — | `{ nodes: [{ type, version, displayName, group, description, trigger, inputs, outputs, parametersSchema, credentials: [{ parameter, type, required }] }] }` — типи вузлів, які можна вписати в `type`/`typeVersion` |
-| `list_workflows` | viewer | `search?`, `active?`, `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt` |
+| `list_workflows` | viewer | `search?`, `active?`, `groupId?` (id групи або `"none"` — без групи), `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt`, `groupId` |
 | `get_workflow` | viewer | `id` | сценарій з `definition` поточної версії |
 | `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }] }` (`path` — JSON Pointer); помилки сценарію не є помилкою tool'а |
-| `create_workflow` | editor | `definition` | створений неактивний сценарій, версія 1 |
+| `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |
 | `update_workflow` | editor | `id`, `definition` | нова поточна версія (назва не змінюється) |
+| `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount }] }` — групи сценаріїв у порядку показу (F3-63) |
+| `create_workflow_group` | editor | `name` | створена група в кінці списку; назва унікальна без урахування регістру (`WORKFLOW_GROUP_NAME_TAKEN`) |
+| `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
 | `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла) |
 | `test_node` | editor | `workflowId`, `nodeId`, `items?`, `timeoutSec?` | вхід і вихід одного вузла; помилка вузла — `NODE_FAILED` |
 | `get_execution` | viewer | `id` | те саме, що `run_workflow` |
@@ -119,6 +122,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 Помилка application-шару — результат з `isError: true` і `structuredContent = { code, message, errors? }`, коди ті
 самі, що в REST: `BAD_REQUEST` (аргументи), `FORBIDDEN` (роль), `NOT_FOUND`, `WORKFLOW_INVALID` (з `errors`, як у
 `validate_workflow`), `WORKFLOW_VERSION_CONFLICT` (збережено паралельно: `get_workflow` і повторити),
+`WORKFLOW_GROUP_NAME_TAKEN` (група з такою назвою вже є),
 `START_NODE_UNKNOWN`, `NODE_FAILED` (`test_node`). Коди валідації: `SCHEMA_VIOLATION`, `CONNECTION_*`, `GRAPH_CYCLE`,
 `TRIGGER_MISSING`, `NODE_TYPE_UNKNOWN`, `PARAMETER_INVALID`, `MCP_TOOL_UNKNOWN`, `WEBHOOK_PATH_CONFLICT`.
 

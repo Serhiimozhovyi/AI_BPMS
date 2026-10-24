@@ -31,6 +31,7 @@ public static class McpServerSetup
             .WithTools<ConnectorTools>(McpJson.Options)
             .WithTools<NodeTools>(McpJson.Options)
             .WithTools<WorkflowTools>(McpJson.Options)
+            .WithTools<WorkflowGroupTools>(McpJson.Options)
             .WithTools<ExecutionTools>(McpJson.Options)
             .WithTools<TestNodeTool>(McpJson.Options)
             .WithResources<OpenBpResources>();

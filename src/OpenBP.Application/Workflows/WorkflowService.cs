@@ -64,12 +64,17 @@ public sealed class WorkflowService(
             query = query.Where(w => w.Active == active);
         }
 
+        if (filter.Group is { } group)
+        {
+            query = query.Where(w => w.GroupId == group.GroupId);
+        }
+
         var total = await query.CountAsync(ct);
         var items = await query
             .OrderByDescending(w => w.UpdatedAt).ThenByDescending(w => w.Id)
             .Skip(page.Skip).Take(page.PageSize)
             .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => v.Id,
-                (w, v) => new WorkflowSummary(w.Id, w.Name, w.Active, v.Version, w.UpdatedAt))
+                (w, v) => new WorkflowSummary(w.Id, w.Name, w.Active, v.Version, w.UpdatedAt, w.GroupId))
             .ToListAsync(ct);
         return new PageResult<WorkflowSummary>(items, page.Page, page.PageSize, total);
     }
@@ -84,10 +89,11 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc />
-    public async Task<WorkflowDetail> CreateAsync(WorkflowDefinition definition, CancellationToken ct)
+    public async Task<WorkflowDetail> CreateAsync(WorkflowDefinition definition, Guid? groupId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(definition);
         currentUser.Require(UserRole.Editor);
+        await EnsureGroupExistsAsync(groupId, ct);
 
         var name = definition.Name?.Trim() ?? "";
         var document = ToDocument(definition);
@@ -102,6 +108,7 @@ public sealed class WorkflowService(
             Active = false,
             CreatedBy = currentUser.UserId,
             UpdatedAt = now,
+            GroupId = groupId,
         };
         var version = NewVersion(workflow, 1, document, now);
         workflow.CurrentVersionId = version.Id;
@@ -176,6 +183,22 @@ public sealed class WorkflowService(
         workflow.Name = name.Trim();
         workflow.UpdatedAt = time.GetUtcNow();
         await db.SaveChangesAsync(ct);
+        return await DetailAsync(workflow, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowDetail> MoveAsync(Guid id, Guid? groupId, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        var workflow = await FindAsync(id, ct);
+        await EnsureGroupExistsAsync(groupId, ct);
+        if (workflow.GroupId != groupId)
+        {
+            // Група — не зміст сценарію: версії не додаємо і updated_at не чіпаємо (порядок списку не стрибає).
+            workflow.GroupId = groupId;
+            await db.SaveChangesAsync(ct);
+        }
+
         return await DetailAsync(workflow, ct);
     }
 
@@ -297,7 +320,7 @@ public sealed class WorkflowService(
     {
         var definition = WorkflowJson.Deserialize(version.Definition);
         definition.Name = workflow.Name;
-        return new WorkflowDetail(workflow.Id, workflow.Name, workflow.Active, version.Version, version.Id, definition, workflow.UpdatedAt);
+        return new WorkflowDetail(workflow.Id, workflow.Name, workflow.Active, version.Version, version.Id, definition, workflow.UpdatedAt, workflow.GroupId);
     }
 
     private WorkflowVersionEntity NewVersion(WorkflowEntity workflow, int number, JsonObject document, DateTimeOffset now) => new()
@@ -384,6 +407,14 @@ public sealed class WorkflowService(
 
     private async Task<WorkflowEntity> FindAsync(Guid id, CancellationToken ct) =>
         await db.Workflows.SingleOrDefaultAsync(w => w.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+
+    private async Task EnsureGroupExistsAsync(Guid? groupId, CancellationToken ct)
+    {
+        if (groupId is { } id && !await db.WorkflowGroups.AnyAsync(g => g.Id == id, ct))
+        {
+            throw new NotFoundException(WorkflowGroupService.Entity, id);
+        }
+    }
 
     private async Task EnsureExistsAsync(Guid id, CancellationToken ct)
     {

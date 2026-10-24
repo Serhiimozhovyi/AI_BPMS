@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, input, output, untracked } from '@angular/core';
-import { Connection, ConnectionSettings, Edge, Node, Vflow, createEdges, createNodes } from 'ngx-vflow';
+import { ChangeDetectionStrategy, Component, DestroyRef, booleanAttribute, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { ConnectEndEvent, Connection, ConnectionSettings, Edge, Node, Vflow, VflowComponent, createEdges, createNodes } from 'ngx-vflow';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection } from '../canvas-edit';
 import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition } from '../canvas-model';
 import { groupLabel } from '../palette';
+import { QuickAddRequest, ScreenPoint } from '../quick-add';
 import { NodeRunStatus } from '../test-run';
 
 interface NodeData {
@@ -79,6 +80,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       [connection]="connectionSettings"
       (nodeDragEnd)="dragEnded()"
       (connect)="connected($event)"
+      (connectEnd)="connectEnded($event)"
       (nodesChanges.select)="selectionChanged()"
       (edgesChanges.select)="selectionChanged()"
     >
@@ -149,7 +151,39 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               >
             }
           }
+          @if (ctx.selected() && !readonly()) {
+            @for (port of ctx.data().node.outputs; track $index; let i = $index) {
+              <button
+                type="button"
+                class="node__add"
+                data-testid="port-add"
+                [attr.data-output]="i"
+                [style.top.px]="portTop(i, ctx.data().node.outputs.length, ctx.data().height)"
+                i18n-title="@@canvas.quickAdd.portHint"
+                title="Додати наступний крок"
+                (mousedown)="$event.stopPropagation()"
+                (pointerdown)="$event.stopPropagation()"
+                (click)="addFromPort($event, ctx.node.id, i)"
+              >
+                +
+              </button>
+            }
+          }
         </div>
+      </ng-template>
+      <ng-template edgeLabelHtml let-ctx>
+        <button
+          type="button"
+          class="edge__add"
+          data-testid="edge-add"
+          i18n-title="@@canvas.quickAdd.edgeHint"
+          title="Вставити крок між вузлами"
+          (mousedown)="$event.stopPropagation()"
+          (pointerdown)="$event.stopPropagation()"
+          (click)="addOnEdge($event, ctx.label.data.index)"
+        >
+          +
+        </button>
       </ng-template>
     </vflow>
   `,
@@ -158,6 +192,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       display: block;
       width: 100%;
       height: 100%;
+    }
+
+    /* Картка вузла — у foreignObject ngx-vflow, який обрізає все за межами вузла; «+» біля порту стоїть за краєм. */
+    :host ::ng-deep foreignObject.selectable {
+      overflow: visible;
     }
 
     .node {
@@ -282,6 +321,35 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .node__port--error {
       color: var(--ac-red);
     }
+
+    /* «+» біля вихідного порту виділеного вузла (F3-50): за межею картки, щоб не заважати тягнути з'єднання з порту. */
+    .node__add,
+    .edge__add {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: 1.5px solid var(--ac-kit);
+      border-radius: 50%;
+      background: var(--ac-white);
+      color: var(--ac-kit);
+      font: 700 14px/1 Ubuntu, sans-serif;
+      cursor: pointer;
+    }
+
+    .node__add {
+      position: absolute;
+      right: -40px;
+      transform: translateY(-50%);
+    }
+
+    .node__add:hover,
+    .edge__add:hover {
+      background: var(--ac-kit);
+      color: var(--ac-white);
+    }
   `,
 })
 export class VflowCanvasComponent {
@@ -314,6 +382,14 @@ export class VflowCanvasComponent {
 
   /** Користувач змінив виділення (клік, рамка, Ctrl+клік). */
   readonly selectionChange = output<CanvasSelection>();
+
+  /** Відкрити спливаючу палітру (F3-50): «+» біля порту чи на ребрі, з'єднання відпущено в порожньому місці. */
+  readonly quickAdd = output<QuickAddRequest>();
+
+  private readonly flow = viewChild(VflowComponent);
+
+  /** Останнє положення вказівника: `connectEnd` не несе координат, а палітра відкривається там, де відпустили. */
+  private pointer: ScreenPoint | null = null;
 
   /** Лише вихід → вхід різних вузлів (цикл на себе формат забороняє). */
   protected readonly connectionSettings: ConnectionSettings = {
@@ -368,6 +444,7 @@ export class VflowCanvasComponent {
           targetHandle: inputHandle(e.targetInput),
           curve: 'bezier' as const,
           markers: { end: { type: 'arrow-closed' as const } },
+          edgeLabels: this.addLabel(index, selected.has(index)),
           selected: selected.has(index),
           data: { index },
         })),
@@ -375,6 +452,15 @@ export class VflowCanvasComponent {
   });
 
   constructor() {
+    // Слухач без зміни стану компонента: лише запам'ятовує координати, тож change detection не потрібен.
+    const track = (e: PointerEvent) => (this.pointer = { x: e.clientX, y: e.clientY });
+    document.addEventListener('pointermove', track, { capture: true, passive: true });
+    document.addEventListener('pointerup', track, { capture: true, passive: true });
+    inject(DestroyRef).onDestroy(() => {
+      document.removeEventListener('pointermove', track, { capture: true });
+      document.removeEventListener('pointerup', track, { capture: true });
+    });
+
     // Виділення ззовні (вставка, видалення, undo) → сигнали `selected` наявних вузлів і ребер.
     effect(() => {
       const selection = this.selection();
@@ -383,6 +469,7 @@ export class VflowCanvasComponent {
       untracked(() => {
         for (const node of this.nodes()) node.selected?.set(nodeIds.has(node.id));
         for (const edge of this.edges()) edge.selected?.set(edgeIndexes.has(edgeIndex(edge)));
+        this.syncEdgeLabels();
       });
     });
   }
@@ -395,6 +482,27 @@ export class VflowCanvasComponent {
     this.connectionCreated.emit({ source: c.source, sourceOutput, target: c.target, targetInput });
   }
 
+  /** З'єднання з вихідного порту відпущено не на вузлі — палітра там, де відпустили, новий вузол з'єднається з портом. */
+  protected connectEnded(event: ConnectEndEvent): void {
+    const output = handleIndex(event.from.handle.id, 'out');
+    const flow = this.flow();
+    if (this.readonly() || event.to.node || output < 0 || !this.pointer || !flow) return;
+    const point = flow.documentPointToFlowPoint(this.pointer);
+    // Точка відпускання — на рівні входу нової картки (середина лівого краю), з кроком сітки.
+    const at: [number, number] = [snap(point.x), snap(point.y - MIN_NODE_HEIGHT / 2)];
+    this.quickAdd.emit({ target: { kind: 'port', from: { node: event.from.node.id, output }, at }, anchor: this.pointer });
+  }
+
+  protected addFromPort(event: MouseEvent, node: string, output: number): void {
+    event.stopPropagation();
+    this.quickAdd.emit({ target: { kind: 'port', from: { node, output } }, anchor: anchorOf(event) });
+  }
+
+  protected addOnEdge(event: MouseEvent, edgeIndex: number): void {
+    event.stopPropagation();
+    this.quickAdd.emit({ target: { kind: 'edge', edgeIndex }, anchor: anchorOf(event) });
+  }
+
   /** Виділення змінила бібліотека — читаємо його з сигналів `selected` і віддаємо назовні. */
   protected selectionChanged(): void {
     const nodes = this.nodes()
@@ -403,9 +511,25 @@ export class VflowCanvasComponent {
     const edges = this.edges()
       .filter((e) => e.selected?.())
       .map(edgeIndex);
+    this.syncEdgeLabels();
     const current = this.selection();
     if (sameItems(current.nodes, nodes) && sameItems(current.edges, edges)) return;
     this.selectionChange.emit({ nodes, edges });
+  }
+
+  /**
+   * «+» на ребрі — мітка в центрі лише виділеного ребра: мітка (foreignObject) перехоплює кліки, тож на невиділеному
+   * ребрі її немає, і клік по середині ребра виділяє його.
+   */
+  private addLabel(index: number, selected: boolean): NonNullable<StaticEdgeLabels> {
+    return selected && !this.readonly() ? { center: { type: 'html-template', data: { index } } } : {};
+  }
+
+  private syncEdgeLabels(): void {
+    for (const edge of this.edges()) {
+      const labels = this.addLabel(edgeIndex(edge), !!edge.selected?.());
+      if (!!edge.edgeLabels?.().center !== !!labels.center) edge.edgeLabels?.set(labels);
+    }
   }
 
   protected dragEnded(): void {
@@ -438,6 +562,18 @@ export class VflowCanvasComponent {
     return step * (index + 1);
   }
 }
+
+/** Палітра — праворуч від кнопки «+», на рівні її верху. */
+function anchorOf(event: MouseEvent): ScreenPoint {
+  const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
+  return rect ? { x: rect.right + 8, y: rect.top } : { x: event.clientX, y: event.clientY };
+}
+
+function snap(value: number): number {
+  return Math.round(value / 10) * 10;
+}
+
+type StaticEdgeLabels = ReturnType<NonNullable<Edge['edgeLabels']>>;
 
 function edgeIndex(edge: Edge): number {
   return (edge.data?.() as { index: number } | undefined)?.index ?? -1;

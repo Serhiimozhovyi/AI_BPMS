@@ -42,6 +42,19 @@ public sealed class WorkflowEntity
     public Guid? CurrentVersionId { get; set; }
     public Guid? CreatedBy { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    /// <summary>Група сценарію (<c>workflow_groups.id</c>); <c>null</c> — без групи.</summary>
+    public Guid? GroupId { get; set; }
+}
+
+/// <summary>Група сценаріїв (F3-63): плоский список поза визначенням сценарію.</summary>
+public sealed class WorkflowGroupEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Назва у верхньому регістрі (інваріантна культура) — унікальність без урахування регістру.</summary>
+    public string NormalizedName { get; set; } = "";
+    public int SortOrder { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 public sealed class WorkflowVersionEntity

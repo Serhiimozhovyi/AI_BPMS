@@ -3,6 +3,7 @@ import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workflows-api.service';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
+import { QuickAddRequest } from './quick-add';
 import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
 
 /**
@@ -25,6 +26,7 @@ import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
     (selectionChange)="selectionChange.emit($event)"
+    (quickAdd)="quickAdd.emit($event)"
   />`,
   styles: `
     :host {
@@ -61,6 +63,9 @@ export class CanvasComponent {
 
   /** Нове виділення після дій користувача на канвасі. */
   readonly selectionChange = output<CanvasSelection>();
+
+  /** Відкрити спливаючу палітру (F3-50); у режимі перегляду не надходить. */
+  readonly quickAdd = output<QuickAddRequest>();
 
   private readonly index = computed(() => new DescriptorIndex(this.descriptors()));
 

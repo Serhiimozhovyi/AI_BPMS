@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using OpenBP.Api.OpenApi;
 using OpenBP.Application.Paging;
 using OpenBP.Application.Workflows;
@@ -5,9 +7,13 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Api.Endpoints;
 
-/// <summary>Тіло <c>PATCH /workflows/{id}</c>.</summary>
+/// <summary>
+/// Тіло <c>PATCH /workflows/{id}</c> (для OpenAPI): змінюються лише передані поля. <c>groupId: null</c> прибирає сценарій
+/// з групи, відсутній <c>groupId</c> групу не змінює.
+/// </summary>
 /// <param name="Name">Нова назва.</param>
-public sealed record RenameWorkflowRequest(string? Name);
+/// <param name="GroupId">Нова група (F3-63); <c>null</c> — без групи.</param>
+public sealed record PatchWorkflowRequest(string? Name, Guid? GroupId);
 
 /// <summary>Тіло <c>POST /workflows/validate</c>.</summary>
 /// <param name="Definition">Визначення.</param>
@@ -24,20 +30,22 @@ public static class WorkflowEndpoints
         var workflows = api.MapGroup("/workflows").WithTags(OpenApiSetup.Tags.Workflows);
 
         workflows.MapGet("/", (IWorkflowService service, CancellationToken ct,
-                int? page, int? pageSize, string? search, bool? active) =>
+                int? page, int? pageSize, string? search, bool? active, string? groupId) =>
             service.ListAsync(
-                new WorkflowFilter(search, active),
+                new WorkflowFilter(search, active, WorkflowGroupFilter.Parse(groupId)),
                 new PageRequest { Page = page ?? 1, PageSize = pageSize ?? PageRequest.DefaultPageSize },
                 ct))
-            .WithSummary("Список сценаріїв").WithDescription("Пошук за назвою (`search`), фільтр `active`, сторінки `page`/`pageSize`.");
+            .WithSummary("Список сценаріїв")
+            .WithDescription("Пошук за назвою (`search`), фільтр `active`, група `groupId` (id групи або `none` — без групи), сторінки `page`/`pageSize`.");
 
-        workflows.MapPost("/", async (WorkflowDefinition? definition, IWorkflowService service, CancellationToken ct) =>
+        workflows.MapPost("/", async (WorkflowDefinition? definition, Guid? groupId, IWorkflowService service, CancellationToken ct) =>
         {
-            var created = await service.CreateAsync(Required(definition), ct);
+            var created = await service.CreateAsync(Required(definition), groupId, ct);
             return Results.Created($"/api/v1/workflows/{created.Id}", created);
         })
             .WithSummary("Створити сценарій з визначення")
-            .WithDescription("Тіло — сценарій у форматі docs/workflow-format.md; невалідне визначення — 400 WORKFLOW_INVALID з `errors[]`.")
+            .WithDescription("Тіло — сценарій у форматі docs/workflow-format.md; невалідне визначення — 400 WORKFLOW_INVALID з `errors[]`. " +
+                             "`?groupId=` — група нового сценарію.")
             .Produces<WorkflowDetail>(StatusCodes.Status201Created);
 
         workflows.MapPost("/validate", (ValidateWorkflowRequest body, IWorkflowService service, CancellationToken ct) =>
@@ -52,9 +60,13 @@ public static class WorkflowEndpoints
             service.SaveAsync(id, Required(definition), ct))
             .WithSummary("Зберегти нову версію сценарію");
 
-        workflows.MapPatch("/{id:guid}", (Guid id, RenameWorkflowRequest body, IWorkflowService service, CancellationToken ct) =>
-            service.RenameAsync(id, body.Name ?? "", ct))
-            .WithSummary("Перейменувати сценарій");
+        // Тіло читається як JSON-дерево: треба відрізнити `"groupId": null` (прибрати з групи) від відсутнього поля.
+        workflows.MapPatch("/{id:guid}", async (Guid id, HttpRequest request, IWorkflowService service, CancellationToken ct) =>
+            await PatchAsync(id, await ReadObjectAsync(request, ct), service, ct))
+            .WithSummary("Перейменувати сценарій або перенести в групу")
+            .WithDescription("Змінюються лише передані поля: `name` — назва, `groupId` — група (`null` — без групи).")
+            .Accepts<PatchWorkflowRequest>("application/json")
+            .Produces<WorkflowDetail>();
 
         workflows.MapPost("/{id:guid}/activate", (Guid id, IWorkflowService service, CancellationToken ct) =>
             service.ActivateAsync(id, ct))
@@ -81,6 +93,49 @@ public static class WorkflowEndpoints
 
         return api;
     }
+
+    private static async Task<WorkflowDetail> PatchAsync(Guid id, JsonObject? body, IWorkflowService service, CancellationToken ct)
+    {
+        if (body is null || (!body.ContainsKey("name") && !body.ContainsKey("groupId")))
+        {
+            throw new ArgumentException("Тіло запиту має містити `name` або `groupId`.", nameof(body));
+        }
+
+        WorkflowDetail? result = null;
+        if (body.TryGetPropertyValue("name", out var name))
+        {
+            result = await service.RenameAsync(id, StringOf(name, "name") ?? "", ct);
+        }
+
+        if (body.TryGetPropertyValue("groupId", out var group))
+        {
+            var groupId = StringOf(group, "groupId") is { } text
+                ? Guid.TryParse(text, out var parsed) ? parsed : throw new ArgumentException("`groupId` має бути id групи або null.", nameof(body))
+                : (Guid?)null;
+            result = await service.MoveAsync(id, groupId, ct);
+        }
+
+        return result!;
+    }
+
+    private static async Task<JsonObject?> ReadObjectAsync(HttpRequest request, CancellationToken ct)
+    {
+        try
+        {
+            return await JsonNode.ParseAsync(request.Body, cancellationToken: ct) as JsonObject;
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException($"Тіло запиту — не JSON: {ex.Message}", nameof(request), ex);
+        }
+    }
+
+    private static string? StringOf(JsonNode? node, string field) => node switch
+    {
+        null => null,
+        JsonValue value when value.GetValueKind() == JsonValueKind.String => value.GetValue<string>(),
+        _ => throw new ArgumentException($"`{field}` має бути рядком або null.", field),
+    };
 
     private static WorkflowDefinition Required(WorkflowDefinition? definition) =>
         definition ?? throw new ArgumentException("Тіло запиту має містити визначення сценарію.", nameof(definition));

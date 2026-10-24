@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, booleanAttribute, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -14,6 +14,8 @@ import { EditHistory } from '../canvas/edit-history';
 import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../canvas/palette';
 import { PaletteComponent } from '../canvas/palette.component';
 import { NodeRunDataComponent } from '../canvas/node-run-data.component';
+import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
+import { QuickAddComponent } from '../canvas/quick-add.component';
 import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed } from '../canvas/test-run';
 import { ExecutionsApiService, StartExecutionRequest } from '../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
@@ -38,6 +40,19 @@ export interface EditorSavedEvent {
   version: number;
 }
 
+/** Відкрита спливаюча палітра (F3-50): куди додається вузол і де стоїть палітра в межах канвасу. */
+interface QuickAddState {
+  target: QuickAddTarget;
+  mode: QuickAddMode;
+  title: string;
+  left: number;
+  top: number;
+}
+
+/** Розмір спливаючої палітри з відступом — щоб вона не виходила за край канвасу. */
+const QUICK_ADD_WIDTH = 308;
+const QUICK_ADD_HEIGHT = 388;
+
 /** Почато виконання сценарію (тестовий запуск). */
 export interface EditorRunEvent {
   executionId: string;
@@ -54,13 +69,14 @@ export interface EditorErrorEvent {
  * з'єднання портів, видалення, копіювання/вставка, переміщення, undo/redo і автозбереження кожної зміни в нову
  * версію з помилками валідації на вузлах (F2-17); панель з формою виділеного вузла (F2-18); тестовий запуск
  * «Виконати» з живим статусом вузлів через SSE та input/output вузла в панелі (F2-20); «Виконати вузол» на даних
- * останнього запуску і закріплення output вузла в `pinData` (F2-21).
+ * останнього запуску і закріплення output вузла в `pinData` (F2-21); спливаюча палітра з «+» біля порту, на ребрі,
+ * з відпущеного в порожнє з'єднання і з `Tab`/`N` (F3-50).
  */
 @Component({
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, NodePanelComponent, NodeRunDataComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeRunDataComponent],
   template: `
     <section class="editor">
       <header class="editor__bar">
@@ -146,7 +162,7 @@ export interface EditorErrorEvent {
               <app-palette [sections]="palette()" (pick)="add($event)" />
             </aside>
           }
-          <div class="editor__canvas">
+          <div class="editor__canvas" #canvasArea>
             <app-canvas
               [definition]="def"
               [descriptors]="descriptors()"
@@ -156,7 +172,21 @@ export interface EditorErrorEvent {
               [readonly]="readonly()"
               (definitionChange)="changed($event)"
               (selectionChange)="selection.set($event)"
+              (quickAdd)="openQuickAdd($event)"
             />
+            @if (quickAdd(); as qa) {
+              <div class="editor__backdrop" data-testid="quick-add-backdrop" (pointerdown)="closeQuickAdd()"></div>
+              <app-quick-add
+                class="editor__quick-add"
+                data-testid="quick-add"
+                [style.left.px]="qa.left"
+                [style.top.px]="qa.top"
+                [title]="qa.title"
+                [sections]="quickAddSections()"
+                (pick)="quickPick($event)"
+                (closed)="closeQuickAdd()"
+              />
+            }
           </div>
           @if (selectedNode(); as node) {
             <aside class="editor__panel">
@@ -301,6 +331,17 @@ export interface EditorErrorEvent {
       overflow: hidden;
     }
 
+    .editor__backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+
+    .editor__quick-add {
+      position: absolute;
+      z-index: 3;
+    }
+
     .editor__panel {
       flex-shrink: 0;
       width: 360px;
@@ -356,6 +397,12 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly runError = signal<string | null>(null);
   private runSubscription: Subscription | null = null;
 
+  /** Спливаюча палітра; `null` — закрита. */
+  protected readonly quickAdd = signal<QuickAddState | null>(null);
+  /** Ключі останніх доданих елементів палітри (секція «Останні»). */
+  private readonly recent = signal<string[]>(readRecent());
+  private readonly canvasArea = viewChild<ElementRef<HTMLElement>>('canvasArea');
+
   private readonly history = new EditHistory<WorkflowDefinition | null>(null);
   private readonly autosave = new Autosave<SaveRequest, WorkflowDetail>(
     (r) => this.workflows.save(r.id, r.definition),
@@ -370,6 +417,7 @@ export class WorkflowEditorComponent implements OnInit {
   );
 
   protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers()));
+  protected readonly quickAddSections = computed(() => quickAddSections(this.palette(), this.quickAdd()?.mode ?? 'step', this.recent()));
   private readonly descriptorIndex = computed(() => new DescriptorIndex(this.descriptors()));
 
   /** Вузол для панелі — коли виділено рівно один. */
@@ -449,6 +497,7 @@ export class WorkflowEditorComponent implements OnInit {
           this.definition.set(null);
           this.history.reset(null);
           this.selection.set(EMPTY_SELECTION);
+          this.quickAdd.set(null);
           this.stopRun();
           this.testRun.set(null);
           this.runError.set(null);
@@ -490,7 +539,67 @@ export class WorkflowEditorComponent implements OnInit {
   protected add(item: PaletteItem): void {
     const def = this.definition();
     if (!def) return;
+    this.remember(item);
     this.changed(addNode(def, item));
+  }
+
+  /** Канвас просить спливаючу палітру: «+» біля порту чи на ребрі, з'єднання відпущено в порожньому місці. */
+  protected openQuickAdd(request: QuickAddRequest): void {
+    if (this.readonly() || !this.definition()) return;
+    this.showQuickAdd(request.target, 'step', request.anchor);
+  }
+
+  protected closeQuickAdd(): void {
+    this.quickAdd.set(null);
+  }
+
+  /** Вибір у спливаючій палітрі: вузол туди, куди вказує ціль, і виділення на ньому. */
+  protected quickPick(item: PaletteItem): void {
+    const state = this.quickAdd();
+    const def = this.definition();
+    this.closeQuickAdd();
+    if (!state || !def) return;
+    const result = applyQuickAdd(def, item, state.target);
+    if (!result) return;
+    this.remember(item);
+    this.changed(result.definition);
+    this.selection.set({ nodes: [result.nodeId], edges: [] });
+  }
+
+  /**
+   * `Tab`/`N`: порожній сценарій — лише тригери; виділено один вузол з виходами — наступний крок після виходу 0;
+   * інакше — крок без з'єднання.
+   */
+  private quickAddFromKeyboard(): void {
+    const def = this.definition();
+    const area = this.canvasArea()?.nativeElement;
+    if (!def || !area) return;
+    const box = area.getBoundingClientRect();
+    const center: ScreenPoint = { x: box.left + box.width / 2 - QUICK_ADD_WIDTH / 2, y: box.top + 48 };
+    if (def.nodes.length === 0) {
+      this.showQuickAdd({ kind: 'free' }, 'trigger', center);
+      return;
+    }
+    const node = this.selectedNode();
+    if (node && (this.selectedDescriptor()?.outputs.length ?? 0) > 0) {
+      const card = area.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`)?.getBoundingClientRect();
+      this.showQuickAdd({ kind: 'port', from: { node: node.id, output: 0 } }, 'step', card ? { x: card.right + 48, y: card.top } : center);
+      return;
+    }
+    this.showQuickAdd({ kind: 'free' }, 'step', center);
+  }
+
+  private showQuickAdd(target: QuickAddTarget, mode: QuickAddMode, anchor: ScreenPoint): void {
+    const box = this.canvasArea()?.nativeElement.getBoundingClientRect();
+    const left = box ? clamp(anchor.x - box.left, 8, box.width - QUICK_ADD_WIDTH) : anchor.x;
+    const top = box ? clamp(anchor.y - box.top, 8, box.height - QUICK_ADD_HEIGHT) : anchor.y;
+    this.quickAdd.set({ target, mode, title: quickAddTitle(target, mode), left, top });
+  }
+
+  private remember(item: PaletteItem): void {
+    const recent = rememberRecent(this.recent(), item.key);
+    this.recent.set(recent);
+    writeRecent(recent);
   }
 
   /** Зміна вузла з панелі. */
@@ -660,6 +769,8 @@ export class WorkflowEditorComponent implements OnInit {
     else if (mod && key === 'c') action = this.hasNodeSelection() ? () => this.copy() : null;
     else if (mod && key === 'v') action = this.canPaste() ? () => this.paste() : null;
     else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) action = this.hasSelection() ? () => this.deleteSelected() : null;
+    else if (!mod && !event.altKey && !event.shiftKey && (event.key === 'Tab' || key === 'n') && onCanvas(event.composedPath()[0] ?? event.target))
+      action = this.quickAdd() ? null : () => this.quickAddFromKeyboard();
     if (!action) return;
     event.preventDefault();
     action();
@@ -694,6 +805,23 @@ export class WorkflowEditorComponent implements OnInit {
       }),
     );
   }
+}
+
+/** Фокус ніде (`body`) або на канвасі: тоді `Tab` відкриває палітру, а не переводить фокус між кнопками. */
+function onCanvas(target: EventTarget | null): boolean {
+  if (target === document.body) return true;
+  return target instanceof HTMLElement && !!target.closest('.editor__canvas');
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(value, Math.max(min, max)));
+}
+
+function quickAddTitle(target: QuickAddTarget, mode: QuickAddMode): string {
+  if (mode === 'trigger') return $localize`:@@workfloweditor.quickAdd.trigger:Додати тригер`;
+  if (target.kind === 'edge') return $localize`:@@workfloweditor.quickAdd.insert:Вставити крок`;
+  if (target.kind === 'port') return $localize`:@@workfloweditor.quickAdd.next:Наступний крок`;
+  return $localize`:@@workfloweditor.quickAdd.step:Додати крок`;
 }
 
 function isEditable(target: EventTarget | null): boolean {
