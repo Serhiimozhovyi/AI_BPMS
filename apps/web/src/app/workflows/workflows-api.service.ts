@@ -132,6 +132,8 @@ export interface WorkflowDefinition {
     throttle?: { limit: number; periodSec: number; onLimit?: LimitAction; [extra: string]: unknown };
     /** Скільки помилок тригера підряд вимикає сценарій (F6-06); 0 чи немає — не вимикати. */
     disableAfterErrors?: number;
+    /** Кореляція виконань (F5-04): `skipIfActive` — не запускати дубль, поки йде виконання з тим самим ключем. */
+    correlation?: { skipIfActive: boolean; [extra: string]: unknown };
     [extra: string]: unknown;
   };
   nodes: WorkflowNode[];

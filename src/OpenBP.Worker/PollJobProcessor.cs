@@ -12,6 +12,7 @@ using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
+using OpenBP.Engine.Expressions;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Worker;
@@ -39,7 +40,10 @@ public enum PollOutcome
 /// <param name="Outcome">Що сталося.</param>
 /// <param name="ExecutionId">Виконання для <see cref="PollOutcome.Launched"/>.</param>
 /// <param name="ItemCount">Скільки нових записів передано у виконання.</param>
-public sealed record PollResult(PollOutcome Outcome, Guid? ExecutionId = null, int ItemCount = 0);
+/// <param name="ExecutionIds">
+/// Усі поставлені виконання: одне на всі записи або, з <c>correlationKey</c> вузла (F5-04), по одному на запис.
+/// </param>
+public sealed record PollResult(PollOutcome Outcome, Guid? ExecutionId = null, int ItemCount = 0, IReadOnlyList<Guid>? ExecutionIds = null);
 
 /// <summary>
 /// Обробка job <see cref="JobKinds.Poll"/> (F2-12, docs/architecture.md §10.4): Quartz в Api за <c>cron</c> вузла
@@ -212,11 +216,13 @@ public sealed partial class PollJobProcessor
 
         var fresh = scrubber.Scrub([[.. items]])[0];
         var newState = result.NodeStates.TryGetValue(payload.NodeId, out var s) ? s : state;
-        return await CommitAsync(payload, stateRow, newState, fresh, ct).ConfigureAwait(false);
+        var keyExpression = CorrelationKeys.ExpressionOf(workflow.Nodes.Single(n => n.Id == payload.NodeId));
+        return await CommitAsync(payload, stateRow, newState, fresh, keyExpression, ct).ConfigureAwait(false);
     }
 
     /// <summary>Новий стан і виконання — однією транзакцією, якщо стан у БД не змінився з моменту читання.</summary>
-    private async Task<PollResult> CommitAsync(PollJobPayload payload, string? stateRow, JsonObject newState, Item[] items, CancellationToken ct)
+    private async Task<PollResult> CommitAsync(
+        PollJobPayload payload, string? stateRow, JsonObject newState, Item[] items, string? keyExpression, CancellationToken ct)
     {
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -237,13 +243,31 @@ public sealed partial class PollJobProcessor
             db.NodeStates.Add(new NodeStateEntity { WorkflowId = payload.WorkflowId, NodeId = payload.NodeId, State = json });
         }
 
-        ExecutionSummary execution;
+        List<Guid> executions = [];
         try
         {
             // SaveChanges лаунчера пише і рядок node_state (якщо його ще не було) — у тій самій транзакції.
-            execution = await new ExecutionLauncher(db, _time)
-                .LaunchAsync(new ExecutionLaunch(payload.WorkflowId, ExecutionMode.Trigger, payload.NodeId, items), ct)
-                .ConfigureAwait(false);
+            var launcher = new ExecutionLauncher(db, _time);
+            if (keyExpression is null)
+            {
+                var execution = await launcher
+                    .LaunchAsync(new ExecutionLaunch(payload.WorkflowId, ExecutionMode.Trigger, payload.NodeId, items), ct)
+                    .ConfigureAwait(false);
+                executions.Add(execution.Id);
+            }
+            else
+            {
+                // З ключем кореляції кожен запис — окреме виконання (угода → свій процес).
+                foreach (var item in items)
+                {
+                    var execution = await launcher
+                        .LaunchAsync(
+                            new ExecutionLaunch(payload.WorkflowId, ExecutionMode.Trigger, payload.NodeId, [item], CorrelationKey: KeyOf(payload, keyExpression, item)),
+                            ct)
+                        .ConfigureAwait(false);
+                    executions.Add(execution.Id);
+                }
+            }
         }
         catch (ConflictException ex) when (ex.Code == ExecutionLauncher.WorkflowInactiveCode)
         {
@@ -261,7 +285,21 @@ public sealed partial class PollJobProcessor
         }
 
         await tx.CommitAsync(ct).ConfigureAwait(false);
-        return new(PollOutcome.Launched, execution.Id, items.Length);
+        return new(PollOutcome.Launched, executions[0], items.Length, executions);
+    }
+
+    /// <summary>Ключ кореляції запису; помилка виразу — запуск без ключа з попередженням у лозі (записи не губляться).</summary>
+    private string? KeyOf(PollJobPayload payload, string expression, Item item)
+    {
+        try
+        {
+            return CorrelationKeys.Evaluate(_expressions, expression, item, _time.GetUtcNow());
+        }
+        catch (ExpressionException ex)
+        {
+            LogCorrelationKeyFailed(_logger, payload.WorkflowId, payload.NodeId, ex.Message);
+            return null;
+        }
     }
 
     /// <summary>
@@ -327,6 +365,9 @@ public sealed partial class PollJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Job {JobId}: некоректний payload опитування ({Error}); job завершено.")]
     private static partial void LogBadPayload(ILogger logger, Guid jobId, string error);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Опитування {WorkflowId}/{NodeId}: correlationKey не обчислено ({Error}); виконання запущено без ключа.")]
+    private static partial void LogCorrelationKeyFailed(ILogger logger, Guid workflowId, string nodeId, string error);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Опитування {WorkflowId}/{NodeId}: {Outcome}, нових записів {Count}, виконання {ExecutionId}.")]
     private static partial void LogPolled(ILogger logger, Guid workflowId, string nodeId, PollOutcome outcome, int count, Guid? executionId);

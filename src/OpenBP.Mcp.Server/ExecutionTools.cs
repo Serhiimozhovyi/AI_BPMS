@@ -24,13 +24,16 @@ public sealed class ExecutionTools
     /// <param name="startItems">Items тригера.</param>
     /// <param name="wait">Чекати фінального стану.</param>
     /// <param name="timeoutSec">Скільки чекати.</param>
+    /// <param name="correlationKey">Ключ кореляції.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "run_workflow", Title = "Run workflow", Destructive = false, Idempotent = false, UseStructuredContent = true)]
     [Description(
         "Runs the current version of a workflow manually (nodes with pinData return their pinned items instead of executing). " +
         "With wait=true (default) waits up to timeoutSec (default 60, max 600) for a final state and returns the execution with all steps; " +
         "if the time runs out, returns the execution as it is then (state queued/running) — poll it with get_execution. " +
-        "With wait=false returns immediately in state queued. Step data is already scrubbed of secrets.")]
+        "With wait=false returns immediately in state queued. Step data is already scrubbed of secrets. " +
+        "correlationKey ties the execution to a deal or customer; with settings.correlation.skipIfActive a run while another one with the same key is active " +
+        "is recorded as cancelled with the reason.")]
     public static async Task<ExecutionDetail> RunWorkflow(
         IExecutionService executions,
         IExecutionEventSource events,
@@ -39,9 +42,10 @@ public sealed class ExecutionTools
         [Description("Items the trigger fires with (e.g. a webhook body as [{\"json\": {...}}]); requires startNodeId.")] Item[]? startItems = null,
         [Description("Wait for the execution to finish.")] bool wait = true,
         [Description("How long to wait, in seconds (1–600).")] int timeoutSec = DefaultWaitSec,
+        [Description("Correlation key (up to 200 characters), e.g. a deal id.")] string? correlationKey = null,
         CancellationToken ct = default)
     {
-        var started = await executions.StartAsync(id, new StartExecutionRequest(startNodeId, startItems), ct).ConfigureAwait(false);
+        var started = await executions.StartAsync(id, new StartExecutionRequest(startNodeId, startItems, CorrelationKey: correlationKey), ct).ConfigureAwait(false);
         if (wait)
         {
             await WaitForFinalStateAsync(events, started.Id, TimeSpan.FromSeconds(Math.Clamp(timeoutSec, 1, MaxWaitSec)), ct).ConfigureAwait(false);
@@ -66,6 +70,7 @@ public sealed class ExecutionTools
     /// <param name="executions">Сервіс виконань.</param>
     /// <param name="workflowId">Сценарій.</param>
     /// <param name="status">Стан.</param>
+    /// <param name="correlationKey">Ключ кореляції.</param>
     /// <param name="page">Сторінка.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "list_executions", Title = "List executions", ReadOnly = true, UseStructuredContent = true)]
@@ -75,9 +80,10 @@ public sealed class ExecutionTools
         [Description("Only executions of this workflow.")] Guid? workflowId = null,
         [Description("Only in this state: queued, running, cancelling, success, error, cancelled, timed_out.")] string? status = null,
         [Description("Page number, starting at 1.")] int page = 1,
+        [Description("Only executions with this correlation key (exact match), e.g. all processes of one deal.")] string? correlationKey = null,
         CancellationToken ct = default) =>
         executions.ListAsync(
-            new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status)),
+            new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), CorrelationKey: correlationKey),
             new PageRequest { Page = page },
             ct);
 

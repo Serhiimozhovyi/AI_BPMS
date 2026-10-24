@@ -165,6 +165,31 @@ public sealed class PollJobTests(PostgresFixture postgres)
         Assert.Equal(new[] { 1, 2 }, await SeenKeysAsync(worker, workflowId));
     }
 
+    [Fact]
+    public async Task Correlation_key_launches_one_execution_per_record_with_its_key()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var server = await AddServerAsync(worker);
+        var definition = OrdersPoll(server, [7, 8]);
+        definition.Nodes[0].Parameters["correlationKey"] = "order-{{ $json.id }}";
+        var (workflowId, _) = await worker.SaveWorkflowAsync(definition);
+        await ActivateAsync(worker, workflowId);
+
+        var result = await FireAsync(worker, workflowId);
+
+        Assert.Equal(PollOutcome.Launched, result.Outcome);
+        Assert.Equal(2, result.ExecutionIds!.Count);
+        await using var db = worker.Db.CreateDbContext();
+        var keys = await db.Executions.AsNoTracking().Where(e => e.WorkflowId == workflowId)
+            .ToDictionaryAsync(e => e.Id, e => e.CorrelationKey);
+        Assert.Equal(new HashSet<Guid>(result.ExecutionIds), keys.Keys.ToHashSet());
+        foreach (var id in result.ExecutionIds)
+        {
+            var record = Assert.Single(await StartIdsAsync(worker, id));
+            Assert.Equal($"order-{record}", keys[id]);
+        }
+    }
+
     // ---------- допоміжне ----------
 
     /// <summary><c>mcp.poll</c> по tool'у <c>orders</c> (записи у <c>structuredContent.result</c>) → <c>core.set</c>.</summary>

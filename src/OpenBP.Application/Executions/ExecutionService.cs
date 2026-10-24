@@ -41,7 +41,14 @@ public sealed class ExecutionService(
         currentUser.Require(UserRole.Viewer);
         await RequireWorkflowAsync(workflowId, UserRole.Editor, ct);
         return await launcher.LaunchAsync(
-            new ExecutionLaunch(workflowId, ExecutionMode.Manual, request?.StartNodeId, request?.StartItems, request?.DestinationNodeId, request?.RunData),
+            new ExecutionLaunch(
+                workflowId,
+                ExecutionMode.Manual,
+                request?.StartNodeId,
+                request?.StartItems,
+                request?.DestinationNodeId,
+                request?.RunData,
+                CorrelationKey: request?.CorrelationKey),
             ct);
     }
 
@@ -83,6 +90,12 @@ public sealed class ExecutionService(
         {
             var status = ExecutionStates.ToDb(state);
             query = query.Where(e => e.Status == status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.CorrelationKey))
+        {
+            var key = filter.CorrelationKey.Trim();
+            query = query.Where(e => e.CorrelationKey == key);
         }
 
         if (filter.From is { } from)
@@ -264,7 +277,7 @@ public sealed class ExecutionService(
         currentUser.Require(UserRole.Viewer);
         var original = await db.Executions.AsNoTracking()
             .Where(e => e.Id == id)
-            .Select(e => new { e.WorkflowId, e.VersionId, e.Status })
+            .Select(e => new { e.WorkflowId, e.VersionId, e.Status, e.CorrelationKey })
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException(Entity, id);
         await RequireWorkflowAsync(original.WorkflowId, UserRole.Editor, ct, (Entity, id));
@@ -303,7 +316,8 @@ public sealed class ExecutionService(
         }
 
         return await launcher.LaunchAsync(
-            new ExecutionLaunch(original.WorkflowId, ExecutionMode.Retry, startNodeId, startItems, VersionId: original.VersionId),
+            new ExecutionLaunch(
+                original.WorkflowId, ExecutionMode.Retry, startNodeId, startItems, VersionId: original.VersionId, CorrelationKey: original.CorrelationKey),
             ct);
     }
 
@@ -320,7 +334,7 @@ public sealed class ExecutionService(
         currentUser.Require(UserRole.Viewer);
         var original = await db.Executions.AsNoTracking()
             .Where(e => e.Id == id)
-            .Select(e => new { e.WorkflowId, e.VersionId, e.Status })
+            .Select(e => new { e.WorkflowId, e.VersionId, e.Status, e.CorrelationKey })
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException(Entity, id);
         await RequireWorkflowAsync(original.WorkflowId, UserRole.Editor, ct, (Entity, id));
@@ -380,7 +394,8 @@ public sealed class ExecutionService(
                 rootSteps.Count == 1 ? rootSteps[0] : null,
                 VersionId: original.VersionId,
                 ResumedFromExecutionId: id,
-                InputOverrides: overrides),
+                InputOverrides: overrides,
+                CorrelationKey: original.CorrelationKey),
             ct);
         if (summary.State == ExecutionState.Queued)
         {

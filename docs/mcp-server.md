@@ -88,13 +88,13 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
 | `list_tables` | viewer | — | `{ items: [{ id, name, columns: [{ name, type, key? }], rowCount, updatedAt }] }` — таблиці даних (F6-11) |
 | `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN` |
-| `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла; для `ai.agent` — ще `subSteps`, F6-12) |
+| `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `correlationKey?` (F5-04), `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла; для `ai.agent` — ще `subSteps`, F6-12) |
 | `test_node` | editor | `workflowId`, `nodeId`, `items?`, `timeoutSec?` | вхід і вихід одного вузла; помилка вузла — `NODE_FAILED` |
 | `list_evaluations` | viewer | `workflowId`, `nodeId?` | `{ items: [{ id, workflowId, nodeId, name, caseCount, lastRun }] }` — оцінки вузлів ШІ (F6-17); `lastRun` — `{ passed, total, version, … }` без результатів кейсів |
 | `create_evaluation` | editor | `workflowId`, `nodeId`, `cases`, `name?` | оцінка з кейсами `{ name?, input: [{json}], expected?, check: exact \| jsonPath \| expression \| llm, config? }`; невідомий вузол чи бракує налаштувань перевірки — `EVALUATION_INVALID` |
 | `run_evaluation` | editor | `id` | прогін `{ passed, total, version, versionId, results: [{ caseId, name, passed, actual, reason, error, durationMs, tokens, executionId }] }`: кожен кейс виконується як `test_node` з `items` на поточній версії, прогін зберігається за версією |
 | `get_execution` | viewer | `id` | те саме, що `run_workflow` |
-| `list_executions` | viewer | `workflowId?`, `status?`, `page?` | сторінка виконань без кроків |
+| `list_executions` | viewer | `workflowId?`, `status?`, `correlationKey?`, `page?` | сторінка виконань без кроків |
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
 | `resume_execution` | editor | `id`, `items?` | нове виконання `resume` (у черзі): продовження помилкового (`error`/`timed_out`) з вузла, що впав; успішні вузли не виконуються знову, `items` — нові дані на вхід 0 вузла, що впав (F6-08). Інакше — `EXECUTION_NOT_FAILED` / `RESUME_INPUT_NOT_APPLICABLE` |
 

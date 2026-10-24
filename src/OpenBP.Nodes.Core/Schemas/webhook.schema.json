@@ -19,6 +19,12 @@
       "maxLength": 200,
       "pattern": "^[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*$"
     },
+    "correlationKey": {
+      "title": "Ключ кореляції",
+      "description": "Вираз над запитом, напр. {{ $json.body.dealId }}: зв'язує виконання з угодою чи клієнтом; з settings.correlation.skipIfActive повторний запуск з тим самим ключем пропускається.",
+      "type": "string",
+      "maxLength": 500
+    },
     "auth": {
       "title": "Автентифікація",
       "description": "Без неї webhook приймає будь-який запит. Секрет — у credential: header → { token }, basic → { username, password }.",

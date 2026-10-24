@@ -7,6 +7,7 @@ using OpenBP.Application.Executions;
 using OpenBP.Data;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
+using OpenBP.Engine.Expressions;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Webhooks;
@@ -22,10 +23,14 @@ namespace OpenBP.Application.Webhooks;
 /// Джерело credentials для <c>auth</c>; береться ліниво — лише коли webhook має автентифікацію,
 /// тож хост без ключа шифрування обслуговує webhook-и без <c>auth</c>.
 /// </param>
+/// <param name="expressions">Вирази для <c>correlationKey</c> вузла (F5-04); <c>null</c> — webhook з ключем не запускається.</param>
+/// <param name="time">Годинник для <c>$now</c> у виразі ключа; <c>null</c> — системний.</param>
 public sealed class WebhookService(
     OpenBpDbContext db,
     IExecutionLauncher launcher,
-    Func<ICredentialProvider> credentials) : IWebhookService
+    Func<ICredentialProvider> credentials,
+    IExpressionEvaluator? expressions = null,
+    TimeProvider? time = null) : IWebhookService
 {
     private const string Entity = "webhook";
 
@@ -56,16 +61,36 @@ public sealed class WebhookService(
         }
 
         var item = CreateItem(request, parameters.Auth);
+        var correlationKey = CorrelationKeyOf(node, item);
         try
         {
             var execution = await launcher.LaunchAsync(
-                new ExecutionLaunch(hook.WorkflowId, ExecutionMode.Trigger, hook.NodeId, [item]), ct);
+                new ExecutionLaunch(hook.WorkflowId, ExecutionMode.Trigger, hook.NodeId, [item], CorrelationKey: correlationKey), ct);
             return execution.Id;
         }
         catch (ConflictException ex) when (ex.Code == ExecutionLauncher.WorkflowInactiveCode)
         {
             // Сценарій деактивовано між пошуком і запуском.
             throw new NotFoundException(Entity, path);
+        }
+    }
+
+    /// <summary>Ключ кореляції з параметра вузла; помилка виразу — 400 для викликача.</summary>
+    private string? CorrelationKeyOf(NodeDefinition node, Item item)
+    {
+        if (CorrelationKeys.ExpressionOf(node) is not { } expression)
+        {
+            return null;
+        }
+
+        var evaluator = expressions ?? throw new InvalidOperationException("Хост не зареєстрував IExpressionEvaluator для correlationKey webhook-ів.");
+        try
+        {
+            return CorrelationKeys.Evaluate(evaluator, expression, item, (time ?? TimeProvider.System).GetUtcNow());
+        }
+        catch (ExpressionException ex)
+        {
+            throw new ArgumentException($"correlationKey: {ex.Message}", ex);
         }
     }
 

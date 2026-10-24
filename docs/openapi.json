@@ -774,7 +774,7 @@
           "Виконання"
         ],
         "summary": "Запустити сценарій вручну",
-        "description": "Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`).",
+        "description": "Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`). `correlationKey` — ключ кореляції (до 200 символів); з `settings.correlation.skipIfActive` за активного виконання з тим самим ключем запуск одразу `cancelled` з поясненням.",
         "parameters": [
           {
             "name": "id",
@@ -3383,7 +3383,7 @@
           "Виконання"
         ],
         "summary": "Історія виконань",
-        "description": "Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`.",
+        "description": "Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).",
         "parameters": [
           {
             "name": "workflowId",
@@ -3414,6 +3414,13 @@
             "schema": {
               "type": "string",
               "format": "date-time"
+            }
+          },
+          {
+            "name": "correlationKey",
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -6660,6 +6667,12 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "correlationKey": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7595,6 +7608,12 @@
                 }
               }
             }
+          },
+          "correlationKey": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

@@ -33,18 +33,19 @@ public static class ExecutionEndpoints
             return Results.Accepted($"/api/v1/executions/{started.Id}", started);
         })
             .WithTags(OpenApiSetup.Tags.Executions).WithSummary("Запустити сценарій вручну")
-            .WithDescription("Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`).")
+            .WithDescription("Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`). " +
+                             "`correlationKey` — ключ кореляції (до 200 символів); з `settings.correlation.skipIfActive` за активного виконання з тим самим ключем запуск одразу `cancelled` з поясненням.")
             .Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
 
         var executions = api.MapGroup("/executions").WithTags(OpenApiSetup.Tags.Executions);
 
         executions.MapGet("/", (IExecutionService service, CancellationToken ct,
-                Guid? workflowId, string? status, DateTimeOffset? from, DateTimeOffset? to, int? page, int? pageSize) =>
+                Guid? workflowId, string? status, DateTimeOffset? from, DateTimeOffset? to, string? correlationKey, int? page, int? pageSize) =>
             service.ListAsync(
-                new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), from, to),
+                new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), from, to, correlationKey),
                 new PageRequest { Page = page ?? 1, PageSize = pageSize ?? PageRequest.DefaultPageSize },
                 ct))
-            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`.");
+            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).");
 
         executions.MapGet("/{id:guid}", (Guid id, IExecutionService service, CancellationToken ct) =>
             service.GetAsync(id, ct))
