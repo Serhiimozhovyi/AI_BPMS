@@ -543,7 +543,7 @@
 - DoD: Vitest на фільтр за типом і запис у параметр; Playwright: створити credential з діалогу конектора і зберегти конектор.
 
 ### F4-04 · OAuth2 authorization code для credentials
-- model: `opus` · status: `review #89` · depends: F4-01, F4-02
+- model: `opus` · status: `done` · depends: F4-01, F4-02
 - Що: тип `oauth2` (`authorizationUrl`, `tokenUrl`, `clientId`, `clientSecret`, `scopes`, `audience?`, `extraAuthParams?`): кнопка «Підключити» на сторінці credentials → `GET /api/v1/credentials/{id}/oauth2/start` (state + PKCE S256, одноразовий, 10 хв, прив'язаний до користувача) → провайдер → `GET /api/v1/oauth2/callback` обмінює код, шифрує `accessToken`/`refreshToken`/`expiresAt` у тих самих даних credential'а, повертає на сторінку зі статусом. Воркер (і реєстрація конектора) перед використанням оновлює токен, якщо до `expiresAt` < 60 с (refresh, з блокуванням рядка, щоб два воркери не оновлювали разом); для конектора `mcp.http` з credential'ом `oauth2` додається `Authorization: Bearer`. Статус credential'а: `connected`/`expired`/`error` без деталей секретів.
 - DoD: тести проти фейкового OAuth-сервера (успіх, хибний/прострочений state, відмова користувача, refresh, refresh із помилкою → `expired`, паралельний refresh), секрети й коди не потрапляють у журнали; `docs/connectors.md` (як підключити Microsoft/Google OAuth) оновлено.
 
