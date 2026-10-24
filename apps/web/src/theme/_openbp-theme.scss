@@ -21,21 +21,29 @@
   --ac-cool-grey-4: #8d86a3;
   // Highlight colours і їхні 15%-відтінки
   --ac-teal: #27c7be;
+  --ac-teal-15: #dff7f5;
   --ac-blue: #20aaea;
+  --ac-blue-15: #def2fc;
   --ac-green: #47cc8a;
   --ac-green-15: #e3f7ed;
   --ac-orange: #ff840a;
+  --ac-orange-15: #ffedda;
   --ac-red: #ff6060;
   --ac-red-15: #ffe7e7;
   --ac-violet: #b36bd4;
   --ac-plum: #73327a;
   --ac-navy: #006298;
   --ac-yellow: #fac701;
+  --ac-yellow-15: #fef7d9;
+  // Текст на жовтому блоці «БП схеми» (жовтий #fac701 на світлому тлі не читається)
+  --ac-yellow-dark: #e2b400;
 
   --ac-radius-sm: 4px;
   --ac-radius: 8px;
   --ac-radius-lg: 12px;
   --ac-shadow: 0 4px 24px rgb(38 31 75 / 0.08);
+  // Картка схеми «БП схема» (Rectangle 287)
+  --ac-shadow-card: 0 10px 17px rgb(38 31 75 / 0.1);
 }
 
 /// Angular Material: системні токени і перевизначення компонентів під AC-Kit.

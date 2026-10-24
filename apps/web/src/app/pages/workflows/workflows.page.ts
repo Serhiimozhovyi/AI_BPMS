@@ -235,40 +235,55 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                         </td>
                         <td class="p-2">{{ w.version }}</td>
                         <td class="p-2">{{ w.updatedAt | date: 'short' }}</td>
-                        <td class="p-2 whitespace-nowrap text-right">
+                        <td class="p-2 text-right">
                           @if (deletingId() === w.id) {
-                            <span class="mr-2" i18n="@@workflows.delete.confirm">Видалити сценарій разом з історією виконань?</span>
-                            <button mat-button type="button" color="warn" data-testid="delete-confirm" [disabled]="busy()" (click)="confirmDelete(w.id)" i18n="@@workflows.delete.yes">
-                              Так, видалити
-                            </button>
-                            <button mat-button type="button" (click)="deletingId.set(null)" i18n="@@workflows.delete.no">Ні</button>
+                            <div class="row__confirm">
+                              <span i18n="@@workflows.delete.confirm">Видалити сценарій разом з історією виконань?</span>
+                              <span class="whitespace-nowrap">
+                                <button mat-button type="button" color="warn" data-testid="delete-confirm" [disabled]="busy()" (click)="confirmDelete(w.id)" i18n="@@workflows.delete.yes">
+                                  Так, видалити
+                                </button>
+                                <button mat-button type="button" (click)="deletingId.set(null)" i18n="@@workflows.delete.no">Ні</button>
+                              </span>
+                            </div>
                           } @else {
-                            <a mat-button [routerLink]="['/workflows', w.id]" i18n="@@workflows.open">Відкрити</a>
-                            <button mat-button type="button" data-testid="rename-button" (click)="startRename(w)" i18n="@@workflows.rename">
-                              Перейменувати
-                            </button>
-                            <button mat-button type="button" data-testid="move-button" [matMenuTriggerFor]="moveMenu" i18n="@@workflows.move">Перемістити</button>
-                            <mat-menu #moveMenu="matMenu">
-                              @for (g of orderedGroups(); track g.id) {
-                                <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="g.id" [disabled]="w.groupId === g.id" (click)="move(w, g.id)">{{ g.name }}</button>
-                              }
-                              <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="noGroup" [disabled]="!w.groupId" (click)="move(w, null)" i18n="@@workflows.groups.none">Без групи</button>
-                              <button mat-menu-item type="button" data-testid="move-to-new" (click)="startCreateGroup(w.id)" i18n="@@workflows.groups.newEllipsis">Нова група…</button>
-                            </mat-menu>
-                            <button mat-button type="button" data-testid="export-button" [disabled]="busy()" (click)="exportWorkflow(w)" i18n="@@workflows.export">
-                              Експортувати
-                            </button>
-                            <button
-                              mat-button
-                              type="button"
-                              data-testid="delete-button"
-                              [disabled]="w.active"
-                              [attr.title]="w.active ? deleteActiveHint : null"
-                              (click)="startDelete(w.id)"
-                              i18n="@@workflows.delete"
-                            >
-                              Видалити
-                            </button>
+                            <div class="row__actions">
+                              <a mat-icon-button class="row__action" [routerLink]="['/workflows', w.id]" data-testid="open-button" [attr.title]="openLabel">
+                                <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                                <span class="sr-only" i18n="@@workflows.open">Відкрити</span>
+                              </a>
+                              <button mat-icon-button class="row__action" type="button" data-testid="rename-button" [attr.title]="renameLabel" (click)="startRename(w)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                <span class="sr-only" i18n="@@workflows.rename">Перейменувати</span>
+                              </button>
+                              <button mat-icon-button class="row__action" type="button" data-testid="move-button" [attr.title]="moveLabel" [matMenuTriggerFor]="moveMenu">
+                                <span class="material-symbols-outlined" aria-hidden="true">drive_file_move</span>
+                                <span class="sr-only" i18n="@@workflows.move">Перемістити</span>
+                              </button>
+                              <mat-menu #moveMenu="matMenu">
+                                @for (g of orderedGroups(); track g.id) {
+                                  <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="g.id" [disabled]="w.groupId === g.id" (click)="move(w, g.id)">{{ g.name }}</button>
+                                }
+                                <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="noGroup" [disabled]="!w.groupId" (click)="move(w, null)" i18n="@@workflows.groups.none">Без групи</button>
+                                <button mat-menu-item type="button" data-testid="move-to-new" (click)="startCreateGroup(w.id)" i18n="@@workflows.groups.newEllipsis">Нова група…</button>
+                              </mat-menu>
+                              <button mat-icon-button class="row__action" type="button" data-testid="export-button" [attr.title]="exportLabel" [disabled]="busy()" (click)="exportWorkflow(w)">
+                                <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                <span class="sr-only" i18n="@@workflows.export">Експортувати</span>
+                              </button>
+                              <button
+                                mat-icon-button
+                                class="row__action row__action--danger"
+                                type="button"
+                                data-testid="delete-button"
+                                [disabled]="w.active"
+                                [attr.title]="w.active ? deleteActiveHint : deleteLabel"
+                                (click)="startDelete(w.id)"
+                              >
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                <span class="sr-only" i18n="@@workflows.delete">Видалити</span>
+                              </button>
+                            </div>
                           }
                         </td>
                       </tr>
@@ -334,7 +349,30 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
     }
 
     .col--actions {
-      width: 440px;
+      width: 232px;
+    }
+
+    .row__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+
+    .row__action {
+      color: var(--ac-kit, #7a6ff0);
+    }
+
+    .row__action--danger:not([disabled]) {
+      color: var(--ac-red, #ff6060);
+    }
+
+    .row__confirm {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px 8px;
+      text-align: right;
     }
 
     .group__handle-space {
@@ -443,6 +481,11 @@ export class WorkflowsPage implements OnInit {
   readonly activateLabel = $localize`:@@workflows.activate:Активувати`;
   readonly deactivateLabel = $localize`:@@workflows.deactivate:Деактивувати`;
   readonly deleteActiveHint = $localize`:@@workflows.delete.activeHint:Спершу деактивуйте сценарій`;
+  readonly openLabel = $localize`:@@workflows.open:Відкрити`;
+  readonly renameLabel = $localize`:@@workflows.rename:Перейменувати`;
+  readonly moveLabel = $localize`:@@workflows.move:Перемістити`;
+  readonly exportLabel = $localize`:@@workflows.export:Експортувати`;
+  readonly deleteLabel = $localize`:@@workflows.delete:Видалити`;
   readonly noGroupLabel = $localize`:@@workflows.groups.none:Без групи`;
   readonly noGroup = NO_GROUP;
 

@@ -9,11 +9,13 @@ export const LANE_LABEL_WIDTH = 190;
 export const STEP_WIDTH = 150;
 export const STEP_HEIGHT = 64;
 export const COLUMN_GAP = 40;
-export const ROW_HEIGHT = 96;
+export const ROW_HEIGHT = 112;
 export const LANE_GAP = 12;
 const LANE_PADDING = (ROW_HEIGHT - STEP_HEIGHT) / 2;
+/** Рішення — компактний ромб AC-Kit (схема «БП схема»), назва — над ним; вершини ромба — на межах кроку. */
+export const DECISION_SIZE = 48;
 /** На скільки вершини ромба рішення виступають за прямокутник кроку. */
-export const DIAMOND_OVERHANG = 6;
+export const DIAMOND_OVERHANG = 0;
 
 export interface PlacedLane extends BusinessLane {
   y: number;
@@ -67,14 +69,14 @@ export function layoutBusinessView(view: BusinessView): BusinessLayout {
 
   const steps: PlacedStep[] = view.steps.map((step) => {
     const column = columns.get(step.id)!;
-    return {
-      ...step,
-      column,
-      x: LANE_LABEL_WIDTH + column * (STEP_WIDTH + COLUMN_GAP),
-      y: (laneY.get(step.lane) ?? 0) + subRow.get(step.id)! * ROW_HEIGHT + LANE_PADDING,
-      width: STEP_WIDTH,
-      height: STEP_HEIGHT,
-    };
+    const x = LANE_LABEL_WIDTH + column * (STEP_WIDTH + COLUMN_GAP);
+    const y = (laneY.get(step.lane) ?? 0) + subRow.get(step.id)! * ROW_HEIGHT + LANE_PADDING;
+    if (step.kind === 'decision') {
+      const dx = (STEP_WIDTH - DECISION_SIZE) / 2;
+      const dy = (STEP_HEIGHT - DECISION_SIZE) / 2;
+      return { ...step, column, x: x + dx, y: y + dy, width: DECISION_SIZE, height: DECISION_SIZE };
+    }
+    return { ...step, column, x, y, width: STEP_WIDTH, height: STEP_HEIGHT };
   });
   const byId = new Map(steps.map((s) => [s.id, s]));
 
@@ -152,7 +154,8 @@ function route(from: PlacedStep, to: PlacedStep): { path: string; labelX: number
     const sy = from.y + from.height / 2;
     const tx = to.x;
     const ty = to.y + to.height / 2;
-    const midX = tx - COLUMN_GAP / 2;
+    // Злам — посередині проміжку між колонками, навіть якщо ціль — вужчий за колонку ромб рішення.
+    const midX = LANE_LABEL_WIDTH + to.column * (STEP_WIDTH + COLUMN_GAP) - COLUMN_GAP / 2;
     const path = sy === ty ? `M${sx} ${sy}H${tx}` : `M${sx} ${sy}H${midX}V${ty}H${tx}`;
     return { path, labelX: sy === ty ? sx + 4 : midX + 4, labelY: sy === ty ? sy - 6 : (sy + ty) / 2 };
   }

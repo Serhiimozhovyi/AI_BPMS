@@ -19,7 +19,7 @@ import {
   setStepTitle,
   toggleLinkDirection,
 } from './business-edit';
-import { BusinessLayout, DIAMOND_OVERHANG, LANE_GAP, LANE_LABEL_WIDTH, PlacedEdge, PlacedLane, PlacedStep, layoutBusinessView } from './business-layout';
+import { BusinessLayout, DECISION_SIZE, LANE_GAP, LANE_LABEL_WIDTH, PlacedEdge, PlacedLane, PlacedStep, layoutBusinessView } from './business-layout';
 import { exportPng, exportSvg } from './business-export';
 import { BusinessRun, BusinessRunStatus, businessRunStatuses } from './business-run';
 
@@ -27,7 +27,11 @@ import { BusinessRun, BusinessRunStatus, businessRunStatuses } from './business-
 const KIND_MARKS: Partial<Record<BusinessStepKind, string>> = { trigger: '⚡', wait: '⏱', loop: '↻' };
 
 /** Скільки символів у рядку назви кроку й максимум рядків — решта обрізається «…». */
-const LINE_CHARS = 22;
+const LINE_CHARS = 20;
+/** Назва рішення — над ромбом, ширша за нього. */
+const DECISION_LINE_CHARS = 24;
+const DECISION_LINES = 2;
+const LINE_HEIGHT = 16;
 const MAX_LINES = 3;
 
 const MIN_ZOOM = 0.3;
@@ -113,14 +117,14 @@ interface MenuItem {
         <svg #svg xmlns="http://www.w3.org/2000/svg" class="bv__svg" [attr.width]="svgWidth(l)" [attr.height]="svgHeight(l)" [attr.viewBox]="viewBox(l)" role="img" [attr.aria-label]="ariaLabel()" [style.transform]="transform()">
           <defs>
             @for (k of markerKinds; track k) {
-              <marker [attr.id]="markerId(k)" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <marker [attr.id]="markerId(k)" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
                 <path d="M0 0L10 5L0 10z" class="bv__arrowhead bv__arrowhead--{{ k }}" />
               </marker>
             }
           </defs>
           @for (lane of l.lanes; track lane.id) {
             <g data-testid="business-lane" [attr.data-lane]="lane.id" [class.bv__lane--drop]="dropLane() === lane.id" (contextmenu)="openLaneMenu($event, lane)">
-              <rect class="bv__lane" x="0" [attr.y]="lane.y" [attr.width]="l.width" [attr.height]="lane.height" rx="6" />
+              <rect class="bv__lane" x="0" [attr.y]="lane.y" [attr.width]="l.width" [attr.height]="lane.height" rx="15" />
               <text class="bv__lane-name" data-testid="business-lane-name" (dblclick)="editLane(lane, 'lane-name')" x="14" [attr.y]="lane.y + lane.height / 2 - (lane.description ? 4 : -4)">{{ lane.name }}</text>
               @if (lane.description) {
                 <text class="bv__lane-desc" (dblclick)="editLane(lane, 'lane-desc')" x="14" [attr.y]="lane.y + lane.height / 2 + 12">{{ lane.description }}</text>
@@ -134,7 +138,7 @@ interface MenuItem {
               }
               <path class="bv__edge bv__edge--{{ e.kind }}" [attr.d]="e.path" [attr.marker-end]="'url(#' + markerId(e.kind) + ')'" />
               @if (e.label) {
-                <text class="bv__edge-label" [attr.x]="e.labelX" [attr.y]="e.labelY">{{ e.label }}</text>
+                <text class="bv__edge-label" [class.bv__edge-label--yes]="e.branch === 'yes'" [class.bv__edge-label--no]="e.branch === 'no'" [attr.x]="e.labelX" [attr.y]="e.labelY">{{ e.label }}</text>
               }
             </g>
           }
@@ -156,18 +160,22 @@ interface MenuItem {
               (pointerdown)="stepDown($event, s)"
             >
               @if (s.kind === 'decision') {
-                <polygon class="bv__shape" [attr.points]="diamond(s)" />
+                <rect class="bv__shape" [attr.x]="s.x + diamondInset" [attr.y]="s.y + diamondInset" [attr.width]="diamondSide" [attr.height]="diamondSide" rx="6" [attr.transform]="'rotate(45 ' + (s.x + s.width / 2) + ' ' + (s.y + s.height / 2) + ')'" />
+                <path class="bv__gate-mark" [attr.d]="gateMark(s)" />
+                @for (line of lines(s); track $index) {
+                  <text class="bv__title bv__title--decision" text-anchor="middle" [attr.x]="s.x + s.width / 2" [attr.y]="titleY(s, $index)">{{ line }}</text>
+                }
               } @else {
-                <rect class="bv__shape" [attr.x]="s.x" [attr.y]="s.y" [attr.width]="s.width" [attr.height]="s.height" rx="8" />
-              }
-              @if (mark(s.kind); as m) {
-                <text class="bv__mark" [attr.x]="s.x + 8" [attr.y]="s.y + 15">{{ m }}</text>
-              }
-              @for (line of lines(s); track $index) {
-                <text class="bv__title" text-anchor="middle" [attr.x]="s.x + s.width / 2" [attr.y]="titleY(s, $index)">{{ line }}</text>
-              }
-              @if (s.subtitle || s.badge) {
-                <text class="bv__sub" text-anchor="middle" [attr.x]="s.x + s.width / 2" [attr.y]="s.y + s.height - 8">{{ s.subtitle ?? s.badge }}</text>
+                <rect class="bv__shape" [attr.x]="s.x" [attr.y]="s.y" [attr.width]="s.width" [attr.height]="s.height" rx="15" />
+                @if (mark(s.kind); as m) {
+                  <text class="bv__mark" [attr.x]="s.x + 10" [attr.y]="s.y + 16">{{ m }}</text>
+                }
+                @for (line of lines(s); track $index) {
+                  <text class="bv__title" text-anchor="middle" [attr.x]="s.x + s.width / 2" [attr.y]="titleY(s, $index)">{{ line }}</text>
+                }
+                @if (s.subtitle || s.badge) {
+                  <text class="bv__sub" text-anchor="middle" [attr.x]="s.x + s.width / 2" [attr.y]="s.y + s.height - 8">{{ s.subtitle ?? s.badge }}</text>
+                }
               }
               <title>{{ tooltip(s) }}</title>
             </g>
@@ -241,13 +249,23 @@ interface MenuItem {
       display: inline-block;
       width: 18px;
       height: 12px;
-      border: 1.5px solid;
-      border-radius: 3px;
+      border: 1px solid;
+      border-radius: 4px;
+    }
+
+    .bv__swatch--trigger {
+      background: var(--ac-yellow-15);
+      border-color: var(--ac-yellow);
     }
 
     .bv__swatch--node {
-      background: var(--ac-cool-grey-2);
-      border-color: var(--ac-mid);
+      background: var(--ac-teal-15);
+      border-color: var(--ac-teal);
+    }
+
+    .bv__swatch--wait {
+      background: var(--ac-orange-15);
+      border-color: var(--ac-orange);
     }
 
     .bv__swatch--external {
@@ -256,9 +274,10 @@ interface MenuItem {
     }
 
     .bv__swatch--decision {
-      background: var(--ac-white);
-      border-color: var(--ac-mid);
-      transform: rotate(45deg) scale(0.7);
+      width: 12px;
+      background: var(--ac-stone);
+      border-color: var(--ac-cool-grey-4);
+      transform: rotate(45deg) scale(0.8);
     }
 
     .bv__swatch--read,
@@ -299,7 +318,11 @@ interface MenuItem {
       position: relative;
       flex: 1;
       min-height: 0;
+      margin: 16px;
       overflow: hidden;
+      border-radius: 15px;
+      background: var(--ac-white);
+      box-shadow: var(--ac-shadow-card);
       cursor: grab;
       touch-action: none;
     }
@@ -316,13 +339,13 @@ interface MenuItem {
     }
 
     .bv__lane {
-      fill: var(--ac-white);
+      fill: var(--ac-stone);
       stroke: var(--ac-line-2);
     }
 
     .bv__lane-name {
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       fill: var(--ac-cool-grey-4);
@@ -333,19 +356,53 @@ interface MenuItem {
       fill: var(--ac-cool-grey-4);
     }
 
+    /* Кроки — як блоки «БП схеми» AC-Kit: тло 15% кольору, рамка й текст кольором кроку. */
+    .bv__step {
+      --bv-color: var(--ac-teal);
+      --bv-fill: var(--ac-teal-15);
+      --bv-text: var(--ac-teal);
+    }
+
+    .bv__step--trigger {
+      --bv-color: var(--ac-yellow);
+      --bv-fill: var(--ac-yellow-15);
+      --bv-text: var(--ac-yellow-dark);
+    }
+
+    .bv__step--wait {
+      --bv-color: var(--ac-orange);
+      --bv-fill: var(--ac-orange-15);
+      --bv-text: var(--ac-orange);
+    }
+
+    .bv__step--loop {
+      --bv-color: var(--ac-blue);
+      --bv-fill: var(--ac-blue-15);
+      --bv-text: var(--ac-blue);
+    }
+
+    .bv__step--external {
+      --bv-color: var(--ac-kit);
+      --bv-fill: var(--ac-button);
+      --bv-text: var(--ac-kit);
+    }
+
     .bv__shape {
-      fill: var(--ac-cool-grey-2);
-      stroke: var(--ac-mid);
-      stroke-width: 1.5;
+      fill: var(--bv-fill);
+      stroke: var(--bv-color);
+      stroke-width: 1;
     }
 
     .bv__step--decision .bv__shape {
-      fill: var(--ac-white);
+      fill: var(--ac-stone);
+      stroke: var(--ac-cool-grey-4);
     }
 
-    .bv__step--external .bv__shape {
-      fill: var(--ac-button);
-      stroke: var(--ac-kit);
+    .bv__gate-mark {
+      fill: none;
+      stroke: var(--ac-vivid);
+      stroke-width: 1.6;
+      stroke-linecap: round;
     }
 
     .bv__step--link {
@@ -354,7 +411,6 @@ interface MenuItem {
 
     .bv__step--link:hover .bv__shape,
     .bv__step--link:focus-visible .bv__shape {
-      stroke: var(--ac-kit);
       stroke-width: 2.5;
     }
 
@@ -363,18 +419,39 @@ interface MenuItem {
     }
 
     .bv__title {
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 500;
-      fill: var(--ac-vivid);
+      fill: var(--bv-text);
+    }
+
+    /* Підписи над стрілками — з ореолом кольору доріжки, щоб лінія не перекреслювала текст. */
+    .bv__title--decision,
+    .bv__edge-label {
+      paint-order: stroke;
+      stroke: var(--ac-stone);
+      stroke-width: 4px;
+      stroke-linejoin: round;
+    }
+
+    .bv__title--decision {
+      fill: var(--ac-cool-grey-4);
     }
 
     .bv__sub,
     .bv__mark {
       font-size: 10.5px;
-      fill: var(--ac-cool-grey-4);
+      fill: var(--bv-text);
+      opacity: 0.75;
     }
 
-    .bv__step--st-done .bv__shape {
+    /* Статуси виконання — як «стрілки етапів» AC-Kit: пройдено — зелений з білим текстом, ще ні — Cool Grey 2 з текстом Kit. */
+    .bv__step--st-done {
+      --bv-color: var(--ac-green);
+      --bv-fill: var(--ac-green);
+      --bv-text: var(--ac-white);
+    }
+
+    .bv__step--st-done.bv__step--decision .bv__shape {
       fill: var(--ac-green-15);
       stroke: var(--ac-green);
     }
@@ -389,18 +466,24 @@ interface MenuItem {
       stroke-dasharray: 6 3;
     }
 
+    .bv__step--st-error {
+      --bv-color: var(--ac-red);
+      --bv-fill: var(--ac-red-15);
+      --bv-text: var(--ac-red);
+    }
+
     .bv__step--st-error .bv__shape {
-      fill: var(--ac-red-15);
-      stroke: var(--ac-red);
       stroke-width: 2;
     }
 
     .bv__step--st-pending {
-      opacity: 0.5;
+      --bv-color: var(--ac-cool-grey-3);
+      --bv-fill: var(--ac-cool-grey-2);
+      --bv-text: var(--ac-kit);
     }
 
     .bv__swatch--st-done {
-      background: var(--ac-green-15);
+      background: var(--ac-green);
       border-color: var(--ac-green);
     }
 
@@ -417,14 +500,13 @@ interface MenuItem {
 
     .bv__swatch--st-pending {
       background: var(--ac-cool-grey-2);
-      border-color: var(--ac-mid);
-      opacity: 0.5;
+      border-color: var(--ac-cool-grey-3);
     }
 
     .bv__edge {
       fill: none;
       stroke: var(--ac-vivid);
-      stroke-width: 1.4;
+      stroke-width: 1;
     }
 
     .bv__edge--read {
@@ -450,8 +532,17 @@ interface MenuItem {
     }
 
     .bv__edge-label {
-      font-size: 10.5px;
+      font-size: 12px;
+      font-weight: 500;
       fill: var(--ac-cool-grey-4);
+    }
+
+    .bv__edge-label--yes {
+      fill: var(--ac-green);
+    }
+
+    .bv__edge-label--no {
+      fill: var(--ac-red);
     }
 
     .bv__edge-hit {
@@ -555,7 +646,9 @@ export class BusinessViewComponent {
   protected readonly legend = computed((): LegendEntry[] => {
     const v = this.view();
     const entries: LegendEntry[] = [];
-    if (v.steps.some((s) => s.kind !== 'external')) entries.push({ id: 'node', label: $localize`:@@business.legend.node:крок сценарію` });
+    if (v.steps.some((s) => s.kind === 'trigger')) entries.push({ id: 'trigger', label: $localize`:@@business.legend.trigger:старт` });
+    if (v.steps.some((s) => s.kind === 'task' || s.kind === 'loop')) entries.push({ id: 'node', label: $localize`:@@business.legend.node:крок сценарію` });
+    if (v.steps.some((s) => s.kind === 'wait')) entries.push({ id: 'wait', label: $localize`:@@business.legend.wait:очікування` });
     if (v.steps.some((s) => s.kind === 'external')) entries.push({ id: 'external', label: $localize`:@@business.legend.external:дія людини в іншій системі` });
     if (v.steps.some((s) => s.kind === 'decision')) entries.push({ id: 'decision', label: $localize`:@@business.legend.decision:рішення` });
     if (v.edges.some((e) => e.kind === 'read')) entries.push({ id: 'read', label: $localize`:@@business.legend.read:сценарій читає зі системи` });
@@ -639,21 +732,30 @@ export class BusinessViewComponent {
     return KIND_MARKS[kind];
   }
 
-  protected diamond(s: PlacedStep): string {
+  /** Ромб рішення — квадрат зі скругленням, повернутий на 45°, вписаний у крок. */
+  protected readonly diamondSide = DECISION_SIZE / Math.SQRT2;
+  protected readonly diamondInset = (DECISION_SIZE - DECISION_SIZE / Math.SQRT2) / 2;
+
+  /** «×» у ромбі — виключне рішення, як на схемі AC-Kit. */
+  protected gateMark(s: PlacedStep): string {
     const cx = s.x + s.width / 2;
     const cy = s.y + s.height / 2;
-    return `${cx},${s.y - DIAMOND_OVERHANG} ${s.x + s.width + 4},${cy} ${cx},${s.y + s.height + DIAMOND_OVERHANG} ${s.x - 4},${cy}`;
+    const r = 6;
+    return `M${cx - r} ${cy - r}L${cx + r} ${cy + r}M${cx + r} ${cy - r}L${cx - r} ${cy + r}`;
   }
 
   protected lines(s: PlacedStep): string[] {
-    return wrapTitle(s.title, s.kind === 'decision' ? LINE_CHARS - 6 : LINE_CHARS, s.subtitle || s.badge ? MAX_LINES - 1 : MAX_LINES);
+    if (s.kind === 'decision') return wrapTitle(s.title, DECISION_LINE_CHARS, DECISION_LINES);
+    return wrapTitle(s.title, LINE_CHARS, s.subtitle || s.badge ? MAX_LINES - 1 : MAX_LINES);
   }
 
   protected titleY(s: PlacedStep, index: number): number {
     const count = this.lines(s).length;
-    const block = count * 15;
+    // Назва рішення — над ромбом, останній рядок одразу над верхньою вершиною.
+    if (s.kind === 'decision') return s.y - 6 - (count - 1 - index) * LINE_HEIGHT;
+    const block = count * LINE_HEIGHT;
     const area = s.subtitle || s.badge ? s.height - 14 : s.height;
-    return s.y + (area - block) / 2 + 12 + index * 15;
+    return s.y + (area - block) / 2 + 12 + index * LINE_HEIGHT;
   }
 
   protected runStatus(id: string): BusinessRunStatus | null {
@@ -696,8 +798,10 @@ export class BusinessViewComponent {
     if (!this.editable()) return;
     clearTimeout(this.clickTimer);
     this.menu.set(null);
-    const y = field === 'title' ? s.y + s.height / 2 - 14 : s.y + s.height - 24;
-    const at = this.toScreen(s.x, y);
+    // Назва рішення — над ромбом, поле редагування теж.
+    const decision = s.kind === 'decision';
+    const y = decision ? s.y - 30 : field === 'title' ? s.y + s.height / 2 - 14 : s.y + s.height - 24;
+    const at = this.toScreen(decision ? s.x + s.width / 2 - 80 : s.x, y);
     const value = field === 'title' ? s.title : (s.subtitle ?? '');
     this.editing.set({ field, id: s.id, value, x: at.x, y: at.y, width: Math.max(s.width * this.zoom(), 160) });
   }
