@@ -15,18 +15,18 @@ import { AuthService, safeReturnUrl } from '../../auth/auth.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatProgressBarModule],
   template: `
-    <section class="flex justify-center p-6">
-      <mat-card class="w-full max-w-sm">
+    <section class="login">
+      <mat-card class="login__card w-full max-w-sm" appearance="outlined">
         <mat-card-header>
           <mat-card-title i18n="@@login.title">Вхід до OpenBP</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           <form class="mt-4 flex flex-col" [formGroup]="form" (ngSubmit)="submit()" data-testid="login-form">
-            <mat-form-field>
+            <mat-form-field appearance="outline">
               <mat-label i18n="@@login.email">Email</mat-label>
               <input matInput type="email" formControlName="email" name="email" autocomplete="username" data-testid="login-email" />
             </mat-form-field>
-            <mat-form-field>
+            <mat-form-field appearance="outline">
               <mat-label i18n="@@login.password">Пароль</mat-label>
               <input
                 matInput
@@ -38,7 +38,7 @@ import { AuthService, safeReturnUrl } from '../../auth/auth.service';
               />
             </mat-form-field>
             @if (error()) {
-              <p role="alert" class="mb-4" style="color: var(--mat-sys-error)" data-testid="login-error">{{ error() }}</p>
+              <p role="alert" class="mb-4" style="color: var(--ac-red)" data-testid="login-error">{{ error() }}</p>
             }
             @if (submitting()) {
               <mat-progress-bar class="mb-4" mode="indeterminate" />
@@ -48,6 +48,27 @@ import { AuthService, safeReturnUrl } from '../../auth/auth.service';
         </mat-card-content>
       </mat-card>
     </section>
+  `,
+  styles: `
+    .login {
+      display: flex;
+      justify-content: center;
+      padding: 12vh 16px 24px;
+    }
+
+    .login__card {
+      padding: 16px 12px 8px;
+      box-shadow: var(--ac-shadow);
+    }
+
+    .login__card .mat-mdc-card-title {
+      font: 700 24px/30px Ubuntu, sans-serif;
+      color: var(--ac-vivid);
+    }
+
+    .login__card button[type='submit'] {
+      height: 40px;
+    }
   `,
 })
 export class LoginPage {

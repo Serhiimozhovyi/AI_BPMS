@@ -62,7 +62,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
       @if (mode() === 'checkbox') {
         <mat-checkbox [formControl]="formControl" [attr.data-testid]="'field-' + key">{{ label }}</mat-checkbox>
       } @else {
-        <mat-form-field class="value__field" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline" class="value__field" subscriptSizing="dynamic">
           <mat-label>{{ label }}</mat-label>
           @if (mode() === 'select') {
             <mat-select [formControl]="formControl" [required]="!!props.required" [attr.data-testid]="'field-' + key">

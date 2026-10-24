@@ -20,12 +20,15 @@ public sealed record ConnectorDescription(
     ConnectorStatus Status,
     IReadOnlyList<ConnectorToolDescription> Tools);
 
-/// <summary>Tool конектора без output-схеми і без налаштувань сервера.</summary>
+/// <summary>Tool конектора без налаштувань сервера.</summary>
 /// <param name="Name">Ім'я — <c>toolName</c> у параметрах вузла.</param>
 /// <param name="Title">Людська назва.</param>
 /// <param name="Description">Опис.</param>
 /// <param name="InputSchema">JSON Schema аргументів.</param>
-public sealed record ConnectorToolDescription(string Name, string? Title, string? Description, JsonObject InputSchema);
+/// <param name="OutputSchema">
+/// JSON Schema результату (<c>structuredContent</c> — <c>json</c> item'а на виході <c>mcp.tool</c>); <c>null</c>, якщо сервер її не оголосив.
+/// </param>
+public sealed record ConnectorToolDescription(string Name, string? Title, string? Description, JsonObject InputSchema, JsonObject? OutputSchema);
 
 /// <summary>Результат <c>describe_connectors</c>.</summary>
 /// <param name="Servers">Усі конектори за назвою.</param>
@@ -52,7 +55,7 @@ public sealed record ConnectorsDescription(IReadOnlyList<ConnectorDescription> S
                     summary.Name,
                     summary.Transport,
                     summary.Status,
-                    [.. detail.Tools.Select(t => new ConnectorToolDescription(t.Name, t.Title, t.Description, t.InputSchema))]));
+                    [.. detail.Tools.Select(t => new ConnectorToolDescription(t.Name, t.Title, t.Description, t.InputSchema, t.OutputSchema))]));
             }
 
             if (result.Items.Count == 0 || page * result.PageSize >= result.Total)
@@ -74,7 +77,8 @@ public sealed class ConnectorTools
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "describe_connectors", Title = "Describe connectors", ReadOnly = true, UseStructuredContent = true)]
     [Description(
-        "Lists the MCP servers connected to OpenBP and the tools each one exposes (name, title, description, inputSchema). " +
+        "Lists the MCP servers connected to OpenBP and the tools each one exposes (name, title, description, inputSchema, " +
+        "outputSchema — the shape of the item a `mcp.tool` node outputs, when the server declares it). " +
         "Use a server's id as `serverId` and a tool's name as `toolName` in `mcp.tool` / `mcp.poll` nodes; " +
         "the workflow format is described by the resource openbp://schema/workflow-format.")]
     public static Task<ConnectorsDescription> DescribeConnectors(IConnectorService connectors, CancellationToken ct) =>

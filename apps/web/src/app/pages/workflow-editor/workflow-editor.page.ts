@@ -151,7 +151,8 @@ interface SaveRequest {
     .editor {
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 64px);
+      /* 106px — шапка AC-Kit: 60px верхній рядок + 46px навігація (app.scss). */
+      height: calc(100vh - 106px);
     }
 
     .editor__bar {

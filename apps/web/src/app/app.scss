@@ -1,3 +1,109 @@
-.active {
-  font-weight: 600;
+// Шапка за AC-Kit («AgriChainKit»): верхній рядок Vivid з логотипом і користувачем,
+// другий рівень навігації на тлі Mid з підкресленням активного пункту.
+.shell-top {
+  height: 60px;
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ac-white);
+  text-decoration: none;
+}
+
+.shell-brand__sign {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ac-radius);
+  background: var(--ac-kit);
+  font: 700 15px/1 Ubuntu, sans-serif;
+}
+
+.shell-brand__name {
+  font: 400 20px/24px Ubuntu, sans-serif;
+
+  b {
+    font-weight: 700;
+  }
+}
+
+.shell-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.shell-user__email {
+  font: 400 14px/20px Ubuntu, sans-serif;
+  opacity: 0.85;
+}
+
+.shell-icon-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.08);
+  color: var(--ac-white);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ac-kit);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ac-kit);
+    outline-offset: 2px;
+  }
+}
+
+.shell-icon-button--static {
+  cursor: default;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.08);
+  }
+}
+
+.shell-nav {
+  display: flex;
+  gap: 8px;
+  height: 46px;
+  padding: 0 24px;
+  overflow-x: auto;
+  background: var(--ac-mid);
+}
+
+.shell-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  color: rgb(255 255 255 / 0.6);
+  font: 500 14px/20px Ubuntu, sans-serif;
+  white-space: nowrap;
+  text-decoration: none;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  &:hover {
+    color: var(--ac-white);
+  }
+
+  &.active {
+    border-bottom-color: var(--ac-white);
+    color: var(--ac-white);
+  }
 }

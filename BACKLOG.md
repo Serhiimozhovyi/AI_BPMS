@@ -406,7 +406,7 @@
 - DoD: тест — viewer отримує каталог (тригер `mcp.poll` без входів і з `keyField`, `core.if` з двома виходами, `mcp.tool` з `itemsPath`, `ai.llm` з credential'ом), склад збігається з REST `/nodes`, resource повертає те саме; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
 
 ### F3-22 · `outputSchema` tools у `describe_connectors`
-- model: `sonnet` · status: `ready` · depends: F3-03
+- model: `sonnet` · status: `review #74` · depends: F3-03
 - Що: `describe_connectors` і `openbp://connectors` віддають і `outputSchema` tool'а з кешу discovery (конектори на шаблоні її публікують), щоб агент знав форму відповіді (`{ result: [{ id, name }] }`) і писав правильні вирази в наступних вузлах. Знайдено ручною перевіркою F3-17: агент написав `{{ $json.attachmentId }}` замість `{{ $json.id }}` і дізнався про це лише під час запуску. Статично валідатор такого не зловить: вирази обчислюються під час виконання.
 - DoD: тест — tool з `outputSchema` у кеші віддає її, без неї — `null`; конфіг і credentials, як і раніше, не потрапляють у відповідь; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
 
@@ -431,7 +431,7 @@
 - DoD: `npm run lint`, `npm test`, `npm run build` зелені; жодних захардкоджених кольорів поза токенами AC-Kit.
 
 ### F3-26 · UI: shell за AC-Kit (шапка, навігація, вкладки)
-- model: `sonnet` · status: `todo` · depends: F3-24, F3-25
+- model: `sonnet` · status: `done` · depends: F3-24, F3-25
 - Що: шапка як у AC-Kit «AgriChainKit» (логотип, головне меню, іконки пошуку/сповіщень/налаштувань/профілю), другий рівень навігації на тлі Mid, сторінки як білі картки; кроки-«стрілки» для майстрів, де вони є. Після мерджу F3-24 (вхід), бо він змінює `app.html`/`app.ts`.
 - DoD: lint/test/build зелені; скріншоти до і після в PR.
 

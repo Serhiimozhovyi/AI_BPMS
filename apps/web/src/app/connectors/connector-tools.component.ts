@@ -47,7 +47,7 @@ interface CallState {
 
             @let s = state()[tool.name];
             @if (s) {
-              <mat-form-field class="w-full">
+              <mat-form-field appearance="outline" class="w-full">
                 <mat-label i18n="@@connectors.tools.arguments">Аргументи (JSON)</mat-label>
                 <textarea
                   matInput

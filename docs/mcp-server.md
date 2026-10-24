@@ -71,7 +71,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 
 | Tool | Роль | Аргументи | Що повертає |
 |---|---|---|---|
-| `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema }] }] }` |
+| `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }`; `outputSchema` — форма `json` item'а на виході `mcp.tool` (`null`, якщо сервер її не оголосив) |
 | `describe_nodes` | viewer | — | `{ nodes: [{ type, version, displayName, group, description, trigger, inputs, outputs, parametersSchema, credentials: [{ parameter, type, required }] }] }` — типи вузлів, які можна вписати в `type`/`typeVersion` |
 | `list_workflows` | viewer | `search?`, `active?`, `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt` |
 | `get_workflow` | viewer | `id` | сценарій з `definition` поточної версії |
