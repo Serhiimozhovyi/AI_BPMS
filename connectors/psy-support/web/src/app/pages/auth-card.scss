@@ -1,0 +1,10 @@
+.auth-card {
+    max-width: 420px;
+    margin: 64px auto !important;
+    padding: 32px;
+
+    form {
+        display: flex;
+        flex-direction: column;
+    }
+}

@@ -22,6 +22,9 @@ export PSY_ADMIN_EMAIL=coordinator@…  PSY_ADMIN_PASSWORD=…   # перший 
 dotnet run --project src/OpenBP.Connectors.PsySupport -- --http http://0.0.0.0:8090
 ```
 
+Адмінка відкривається на тій самій адресі (`/login`). Її треба зібрати один раз перед запуском:
+`cd web && npm ci && npm run build` (результат — у `src/OpenBP.Connectors.PsySupport/wwwroot`, у git не потрапляє).
+
 Міграції застосовуються під час старту. Без `--http` процес працює як stdio-MCP-сервер (так його запускає OpenBP).
 
 | Змінна | Що |
@@ -78,3 +81,23 @@ dotnet OpenBP.Connectors.PsySupport.dll import --dir ./sheets
 dotnet build -warnaserror && dotnet format --verify-no-changes && dotnet test   # тести піднімають postgres:16 у Testcontainers
 ConnectionStrings__PsySupport=… dotnet ef migrations add <Назва> --project src/OpenBP.Connectors.PsySupport --output-dir Data/Migrations
 ```
+
+### Адмінка (`web/`)
+
+Angular (standalone, Signals) + Material + Tailwind, токени AC-Kit скопійовано з `apps/web`; тексти — через i18n-ключі.
+
+```bash
+cd web && npm ci
+npm start                          # dev-сервер :4200, /api → бекенд на :8090 (proxy.conf.json)
+npm run lint && npm test && npm run build
+npm run e2e                        # Playwright проти справжнього бекенду (dotnet run --http :8095) і Postgres
+```
+
+`npm run e2e` створює окрему базу `psy_e2e_<випадково>` (рядок без бази — `PSY_E2E_POSTGRES`, типово локальний
+`openbp/openbp`), координатора й токен `/mcp` генерує на кожен прогін. Записи людей створюються tools бота через `/mcp`.
+Сценарії: вхід, обидві ролі, посилання-запрошення, психолог не бачить сторінок координатора й чужих телефонів (і REST
+координатора відповідає йому 403). Скріншоти — у `test-results/screenshots`, приклади — у [`docs/screenshots`](docs/screenshots).
+
+| Координатор: записи | Психолог: записи |
+|---|---|
+| ![](docs/screenshots/coordinator-bookings.png) | ![](docs/screenshots/psychologist-bookings.png) |

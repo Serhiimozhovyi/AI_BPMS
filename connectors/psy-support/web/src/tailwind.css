@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Токени дизайн-системи AC-Kit (Figma, лише читання) для утиліт Tailwind: bg-ac-kit, text-ac-vivid тощо. */
+@theme {
+  --font-sans: "Ubuntu", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ac-kit: #7a6ff0;
+  --color-ac-vivid: #261f4b;
+  --color-ac-mid: #372f6c;
+  --color-ac-button: #ebe9fd;
+  --color-ac-stone: #f9f8f8;
+  --color-ac-line: #c7c4cf;
+  --color-ac-line-2: #e3e0fc;
+  --color-ac-cool-grey: #f4f3f8;
+  --color-ac-cool-grey-2: #f2f1fd;
+  --color-ac-cool-grey-3: #bdbbd2;
+  --color-ac-cool-grey-4: #8d86a3;
+
+  --color-ac-teal: #27c7be;
+  --color-ac-blue: #20aaea;
+  --color-ac-green: #47cc8a;
+  --color-ac-orange: #ff840a;
+  --color-ac-red: #ff6060;
+  --color-ac-violet: #b36bd4;
+  --color-ac-plum: #73327a;
+  --color-ac-navy: #006298;
+  --color-ac-yellow: #fac701;
+}

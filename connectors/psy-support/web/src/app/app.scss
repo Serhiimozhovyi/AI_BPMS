@@ -1,0 +1,80 @@
+:host {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.shell-top {
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.shell-brand {
+    font:
+        700 18px/24px Ubuntu,
+        sans-serif;
+}
+
+.shell-user {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 14px;
+}
+
+.shell-role {
+    padding: 2px 8px;
+    border-radius: var(--ac-radius-sm);
+    background: var(--ac-mid);
+}
+
+.shell-logout {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+}
+
+.shell-body {
+    display: flex;
+    flex: 1;
+}
+
+.shell-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 220px;
+    padding: 16px 8px;
+    background: var(--ac-white);
+    border-right: 1px solid var(--ac-line-2);
+}
+
+.shell-nav__link {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: var(--ac-radius);
+    color: var(--ac-vivid);
+    text-decoration: none;
+
+    &:hover {
+        background: var(--ac-cool-grey-2);
+    }
+
+    &.active {
+        background: var(--ac-button);
+        color: var(--ac-kit);
+    }
+}
+
+main {
+    flex: 1;
+    min-width: 0;
+}
