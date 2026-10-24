@@ -30,6 +30,7 @@ export type NodeRunStatuses = ReadonlyMap<string, NodeRunStatus>;
 const NO_RUN: NodeRunStatuses = new Map();
 
 const NO_PINNED: ReadonlySet<string> = new Set();
+const NO_COUNTS: ReadonlyMap<string, number> = new Map();
 
 export const NODE_WIDTH = 220;
 const MIN_NODE_HEIGHT = 72;
@@ -172,18 +173,25 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
         </div>
       </ng-template>
       <ng-template edgeLabelHtml let-ctx>
-        <button
-          type="button"
-          class="edge__add"
-          data-testid="edge-add"
-          i18n-title="@@canvas.quickAdd.edgeHint"
-          title="Вставити крок між вузлами"
-          (mousedown)="$event.stopPropagation()"
-          (pointerdown)="$event.stopPropagation()"
-          (click)="addOnEdge($event, ctx.label.data.index)"
-        >
-          +
-        </button>
+        <span class="edge__label">
+          @if (ctx.label.data.count !== undefined) {
+            <span class="edge__count" data-testid="edge-count" [attr.data-edge]="ctx.label.data.index">{{ itemsLabel(ctx.label.data.count) }}</span>
+          }
+          @if (ctx.label.data.add) {
+            <button
+              type="button"
+              class="edge__add"
+              data-testid="edge-add"
+              i18n-title="@@canvas.quickAdd.edgeHint"
+              title="Вставити крок між вузлами"
+              (mousedown)="$event.stopPropagation()"
+              (pointerdown)="$event.stopPropagation()"
+              (click)="addOnEdge($event, ctx.label.data.index)"
+            >
+              +
+            </button>
+          }
+        </span>
       </ng-template>
     </vflow>
   `,
@@ -339,6 +347,29 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       cursor: pointer;
     }
 
+    /* Лічильник items після запуску (F3-52) — лише підпис: кліки проходять до ребра. */
+    :host ::ng-deep foreignObject:has(.edge__count):not(:has(.edge__add)) {
+      pointer-events: none;
+    }
+
+    .edge__label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .edge__count {
+      display: block;
+      padding: 0 3px;
+      border-radius: 6px;
+      background: var(--ac-cool-grey);
+      color: var(--ac-cool-grey-4);
+      font: 400 10px/14px Ubuntu, sans-serif;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
     .node__add {
       position: absolute;
       right: -40px;
@@ -367,6 +398,9 @@ export class VflowCanvasComponent {
 
   /** Вузли із закріпленим output (`pinData`). */
   readonly pinnedNodes = input<ReadonlySet<string>>(NO_PINNED);
+
+  /** Кількість items на виході після запуску за `вузол:порт` — підпис на ребрах (F3-52). */
+  readonly itemCounts = input<ReadonlyMap<string, number>>(NO_COUNTS);
 
   /** Виділення (вузли за id, ребра за індексом у `connections`); змінюється і ззовні (вставка, видалення). */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
@@ -427,6 +461,7 @@ export class VflowCanvasComponent {
   protected readonly edges = computed<Edge[]>(() => {
     const ports = new Map(this.model().nodes.map((n) => [n.id, n]));
     const selected = new Set(untracked(this.selection).edges);
+    const counts = this.itemCounts();
     return createEdges(
       this.model()
         .edges.map((e, index) => ({ e, index }))
@@ -444,7 +479,7 @@ export class VflowCanvasComponent {
           targetHandle: inputHandle(e.targetInput),
           curve: 'bezier' as const,
           markers: { end: { type: 'arrow-closed' as const } },
-          edgeLabels: this.addLabel(index, selected.has(index)),
+          edgeLabels: this.edgeLabels(index, selected.has(index), counts.get(`${e.source}:${e.sourceOutput}`)),
           selected: selected.has(index),
           data: { index },
         })),
@@ -518,18 +553,26 @@ export class VflowCanvasComponent {
   }
 
   /**
-   * «+» на ребрі — мітка в центрі лише виділеного ребра: мітка (foreignObject) перехоплює кліки, тож на невиділеному
-   * ребрі її немає, і клік по середині ребра виділяє його.
+   * Мітка в центрі ребра: «+» лише на виділеному ребрі (мітка-foreignObject перехоплює кліки, тож на невиділеному
+   * ребрі кнопки немає і клік по середині ребра виділяє його) і лічильник items після запуску (F3-52) — кліки крізь нього
+   * проходять до ребра.
    */
-  private addLabel(index: number, selected: boolean): NonNullable<StaticEdgeLabels> {
-    return selected && !this.readonly() ? { center: { type: 'html-template', data: { index } } } : {};
+  private edgeLabels(index: number, selected: boolean, count: number | undefined): NonNullable<StaticEdgeLabels> {
+    const add = selected && !this.readonly();
+    return add || count !== undefined ? { center: { type: 'html-template', data: { index, add, count } satisfies EdgeLabelData } } : {};
   }
 
   private syncEdgeLabels(): void {
     for (const edge of this.edges()) {
-      const labels = this.addLabel(edgeIndex(edge), !!edge.selected?.());
-      if (!!edge.edgeLabels?.().center !== !!labels.center) edge.edgeLabels?.set(labels);
+      const current = edge.edgeLabels?.().center;
+      const data = current?.type === 'html-template' ? (current.data as EdgeLabelData | undefined) : undefined;
+      const add = !!edge.selected?.() && !this.readonly();
+      if (!!data?.add !== add) edge.edgeLabels?.set(this.edgeLabels(edgeIndex(edge), !!edge.selected?.(), data?.count));
     }
+  }
+
+  protected itemsLabel(count: number): string {
+    return count === 1 ? $localize`:@@canvas.edge.item:1 item` : $localize`:@@canvas.edge.items:${count}:count: items`;
   }
 
   protected dragEnded(): void {
@@ -571,6 +614,13 @@ function anchorOf(event: MouseEvent): ScreenPoint {
 
 function snap(value: number): number {
   return Math.round(value / 10) * 10;
+}
+
+/** Дані мітки ребра: індекс у `connections`, чи показувати «+», кількість items після запуску. */
+interface EdgeLabelData {
+  index: number;
+  add: boolean;
+  count?: number;
 }
 
 type StaticEdgeLabels = ReturnType<NonNullable<Edge['edgeLabels']>>;

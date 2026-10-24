@@ -72,13 +72,23 @@ async function runAndWait(page: Page, testId: 'run' | 'run-node'): Promise<void>
   await expect(page.getByTestId('run')).toBeEnabled();
 }
 
+/** Вкладка «Вихід» панелі у вигляді JSON (вид запам'ятовується, тож перемикаємо лише раз). */
+async function showOutputJson(page: Page): Promise<void> {
+  await page.getByTestId('panel-tab-output').click();
+  const json = page.getByTestId('output-view-json');
+  if ((await json.getAttribute('aria-pressed')) !== 'true') await json.click();
+}
+
 /** Номер замовлення з виходу вузла 1С у панелі (мок видає новий номер на кожен виклик). */
 async function orderNumber(page: Page): Promise<number> {
   await page.locator('[data-node-id="n_1c"]').click();
+  await showOutputJson(page);
   await expect(page.getByTestId('node-run-output')).toContainText('"number"');
   const text = (await page.getByTestId('node-run-output').textContent()) ?? '';
   const match = /"number":\s*(\d+)/.exec(text);
   expect(match, text).not.toBeNull();
+  // Дії над вузлом (pin, тест кроку) — у вкладці «Параметри».
+  await page.getByTestId('panel-tab-params').click();
   return Number(match![1]);
 }
 
@@ -96,7 +106,8 @@ test('telegram-1c: «Виконати» з канвасу — усі вузли 
   await page.locator('[data-node-id="n_1c"]').click();
   const run = page.getByTestId('node-run');
   await expect(run).toHaveAttribute('data-status', 'success');
-  await expect(run.getByTestId('node-run-input')).toContainText('Петренко');
+  await expect(page.getByTestId('node-run-input')).toContainText('Петренко');
+  await showOutputJson(page);
   await expect(run.getByTestId('node-run-output')).toContainText('"number"');
 });
 
@@ -147,4 +158,27 @@ test('telegram-1c: відредагований закріплений output 1�
   await page.locator('app-canvas').click({ position: { x: 5, y: 5 } });
   await page.locator('[data-node-id="n_reply"]').click();
   await expect(page.getByTestId('node-run-input')).toContainText('777001');
+});
+
+test('telegram-1c: клік по полю схеми входу вставляє вираз у параметр, запуск вузла дає значення (F3-52)', async ({ page }) => {
+  await openExample(page);
+  await runAndWait(page, 'run');
+  await page.locator('[data-node-id="n_reply"]').click();
+
+  // Поле параметра з фокусом — ціль вставки; курсор у кінці введеного тексту.
+  const text = page.getByTestId('field-text');
+  await text.fill('Номер ');
+  await page.getByTestId('panel-tab-input').click();
+  await expect(page.getByTestId('input-port')).toContainText('1 item');
+  await page.locator('[data-testid="schema-field"][data-path=".number"]').click();
+
+  // Після вставки панель повертається на «Параметри».
+  await expect(text).toBeVisible();
+  await expect(text).toHaveValue('Номер {{ $json.number }}');
+
+  await runAndWait(page, 'run-node');
+  await page.getByTestId('panel-tab-output').click();
+  await expect(page.getByTestId('node-run-output')).toContainText(/"Номер \d+"/);
+  // Лічильник items на ребрі з виходу 1С.
+  await expect(page.locator('[data-testid="edge-count"]').first()).toHaveText('1 item');
 });
