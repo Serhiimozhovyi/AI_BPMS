@@ -598,7 +598,7 @@
 - DoD: тест знімка; кожен ендпойнт `/api/v1/*` є в документі з тегом; `docs/` посилаються на файл.
 
 ### F4-13 · Web-component `<openbp-canvas>`
-- model: `opus` · status: `in-progress agent/F4-13-canvas-element` · depends: F4-12
+- model: `opus` · status: `review #102` · depends: F4-12
 - Що: окремий build-target `apps/web` (`npm run build:element`) на `@angular/elements`: один JS-файл (+ CSS у Shadow DOM), що реєструє `<openbp-canvas>` з власним Angular (хост може бути на іншій версії Angular, напр. 16 у «Кіт 2», або не на Angular). Атрибути/властивості: `api-base`, `workflow-id`, `readonly`, `locale`; автентифікація — `token` (API-ключ або OIDC access token, коли F4-14 дозволить Bearer від OIDC) або cookie того самого домену. Події: `openbp-saved { workflowId, version }`, `openbp-run { executionId }`, `openbp-error { code, message }`. Канвас, палітра, панель вузла, тестовий запуск — ті самі компоненти, що в SPA, без роутера й shell. Демо `apps/web/element-demo/index.html` і `docs/embedding.md` (підключення в Angular 16 через `CUSTOM_ELEMENTS_SCHEMA`, у чистий HTML, CORS/`OPENBP_CORS_ORIGINS`).
 - DoD: Playwright на демо: завантажити сценарій, змінити, зберегти → подія `openbp-saved`; `readonly` не дає редагувати; стилі хоста не ламають канвас і навпаки; розмір бандла — у PR; SPA-збірка не змінилась.
 
