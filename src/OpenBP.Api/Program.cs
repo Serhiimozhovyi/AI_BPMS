@@ -95,7 +95,7 @@ app.UseAuthorization();
 app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

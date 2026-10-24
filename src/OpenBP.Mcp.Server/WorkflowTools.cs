@@ -17,14 +17,15 @@ namespace OpenBP.Mcp.Server;
 /// <param name="VersionId">Id поточної версії.</param>
 /// <param name="UpdatedAt">Останнє збереження.</param>
 /// <param name="Definition">Визначення у форматі <c>workflow-format.md</c> (невідомі поля збережені).</param>
-public sealed record WorkflowView(Guid Id, string Name, bool Active, int Version, Guid VersionId, DateTimeOffset UpdatedAt, JsonObject Definition)
+/// <param name="GroupId">Група сценарію (F3-63); <c>null</c> — без групи.</param>
+public sealed record WorkflowView(Guid Id, string Name, bool Active, int Version, Guid VersionId, DateTimeOffset UpdatedAt, JsonObject Definition, Guid? GroupId = null)
 {
     /// <summary>Подання <see cref="WorkflowDetail"/>.</summary>
     /// <param name="detail">Сценарій.</param>
     public static WorkflowView From(WorkflowDetail detail)
     {
         ArgumentNullException.ThrowIfNull(detail);
-        return new(detail.Id, detail.Name, detail.Active, detail.Version, detail.VersionId, detail.UpdatedAt, WorkflowDefinitions.ToJson(detail.Definition));
+        return new(detail.Id, detail.Name, detail.Active, detail.Version, detail.VersionId, detail.UpdatedAt, WorkflowDefinitions.ToJson(detail.Definition), detail.GroupId);
     }
 }
 
@@ -75,17 +76,19 @@ public sealed class WorkflowTools
     /// <param name="workflows">Сервіс сценаріїв.</param>
     /// <param name="search">Підрядок назви.</param>
     /// <param name="active">Лише активні/неактивні.</param>
+    /// <param name="groupId">Id групи або <c>none</c> — сценарії без групи.</param>
     /// <param name="page">Сторінка, з 1.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "list_workflows", Title = "List workflows", ReadOnly = true, UseStructuredContent = true)]
-    [Description("Lists workflows (id, name, active, current version, updatedAt), most recently updated first, 50 per page.")]
+    [Description("Lists workflows (id, name, active, current version, updatedAt, groupId), most recently updated first, 50 per page.")]
     public static Task<PageResult<WorkflowSummary>> ListWorkflows(
         IWorkflowService workflows,
         [Description("Case-insensitive substring of the workflow name.")] string? search = null,
         [Description("Only active (true) or only inactive (false) workflows.")] bool? active = null,
+        [Description("Only workflows of this group (id from list_workflow_groups), or \"none\" for workflows without a group.")] string? groupId = null,
         [Description("Page number, starting at 1.")] int page = 1,
         CancellationToken ct = default) =>
-        workflows.ListAsync(new WorkflowFilter(search, active), new PageRequest { Page = page }, ct);
+        workflows.ListAsync(new WorkflowFilter(search, active, WorkflowGroupFilter.Parse(groupId)), new PageRequest { Page = page }, ct);
 
     /// <summary><c>get_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
@@ -102,6 +105,7 @@ public sealed class WorkflowTools
     /// <summary><c>create_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
     /// <param name="definition">Визначення.</param>
+    /// <param name="groupId">Група нового сценарію.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "create_workflow", Title = "Create workflow", Destructive = false, UseStructuredContent = true)]
     [Description(
@@ -110,8 +114,9 @@ public sealed class WorkflowTools
     public static async Task<WorkflowView> CreateWorkflow(
         IWorkflowService workflows,
         [Description(DefinitionHint)] JsonElement definition,
+        [Description("Optional group of the new workflow (id from list_workflow_groups).")] Guid? groupId = null,
         CancellationToken ct = default) =>
-        WorkflowView.From(await workflows.CreateAsync(WorkflowDefinitions.FromJson(definition), ct).ConfigureAwait(false));
+        WorkflowView.From(await workflows.CreateAsync(WorkflowDefinitions.FromJson(definition), groupId, ct).ConfigureAwait(false));
 
     /// <summary><c>update_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
