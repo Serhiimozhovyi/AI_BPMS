@@ -820,7 +820,7 @@
 - DoD: тести: подія помилки → повідомлення у фейковий конектор, cooldown працює; вимкнення сценарію → повідомлення; агрегати збігаються з `executions` на тестових даних; `/metrics` містить метрики й не містить секретів; Vitest «Огляд» і налаштувань каналів; README/доки адміна оновлено.
 
 ### F6-08 · Продовжити з вузла, що впав
-- model: `opus` · status: `review` · depends: F2-08, F3-08
+- model: `opus` · status: `done` · depends: F2-08, F3-08
 - Що: `IExecutionService.ResumeFromFailedAsync(id, overrideInput?)`: для виконання `error`/`timed_out` — нове виконання `mode = resume` **тієї самої** версії, знімок кроків до вузла, що впав, копіюється (успішні вузли не виконуються знову), вузол, що впав, виконується з тими самими вхідними items або з `overrideInput` (JSON items), далі граф як звичайно; зв'язок `resumed_from_execution_id`. REST `POST /api/v1/executions/{id}/resume`, MCP `resume_execution { id, items? }`; UI: у деталях виконання кнопка «Продовжити з вузла» з редактором вхідних items; роль editor. Виконання `saveSuccessfulData: false` не стосується (вони помилкові, кроки збережені).
 - DoD: тести (Testcontainers): сценарій з моком, що падає на третьому вузлі → виправити мок → `resume` дає `success`, перші два вузли не викликались повторно (лічильник у FakeServer); `overrideInput`; `resume` для `success` → 409; viewer → 403; Vitest кнопки й редактора; `architecture.md` §10.4, `docs/mcp-server.md` оновлено.
 
