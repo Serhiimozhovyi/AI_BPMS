@@ -114,7 +114,8 @@ public class McpEndpointTests(McpServerFactory mcp)
                 ToolsCache = """
                     [{"name":"create_order","title":"Створити замовлення","description":"Створює замовлення в 1С.",
                       "inputSchema":{"type":"object","properties":{"customer":{"type":"string"}}},
-                      "outputSchema":{"type":"object"}}]
+                      "outputSchema":{"type":"object","properties":{"number":{"type":"string"}}}},
+                     {"name":"ping","inputSchema":{"type":"object"}}]
                     """,
                 ToolsCachedAt = DateTimeOffset.UtcNow,
             });
@@ -128,12 +129,19 @@ public class McpEndpointTests(McpServerFactory mcp)
         var server = structured["servers"]!.AsArray().Single(s => (string?)s!["id"] == connectorId.ToString())!;
         Assert.Equal("http", (string?)server["transport"]);
         Assert.Equal("ok", (string?)server["status"]);
-        var tool = server["tools"]!.AsArray().Single()!;
-        Assert.Equal("create_order", (string?)tool["name"]);
+        var tools = server["tools"]!.AsArray();
+        Assert.Equal(2, tools.Count);
+        var tool = tools.Single(t => (string?)t!["name"] == "create_order")!;
         Assert.Equal("Створити замовлення", (string?)tool["title"]);
         Assert.Equal("string", (string?)tool["inputSchema"]!["properties"]!["customer"]!["type"]);
         Assert.Equal(["id", "name", "transport", "status", "tools"], server.AsObject().Select(p => p.Key));
-        Assert.Equal(["name", "title", "description", "inputSchema"], tool.AsObject().Select(p => p.Key));
+        Assert.Equal(["name", "title", "description", "inputSchema", "outputSchema"], tool.AsObject().Select(p => p.Key));
+
+        // outputSchema — форма item'а на виході mcp.tool; tool без неї віддає null, а не пропускає поле.
+        Assert.Equal("string", (string?)tool["outputSchema"]!["properties"]!["number"]!["type"]);
+        var ping = tools.Single(t => (string?)t!["name"] == "ping")!.AsObject();
+        Assert.True(ping.ContainsKey("outputSchema"));
+        Assert.Null(ping["outputSchema"]);
 
         // Ні config, ні credentials — ані у structuredContent, ані в текстових блоках, ані в resource.
         var resource = Assert.IsType<TextResourceContents>(Assert.Single((await client.ReadResourceAsync(OpenBpResources.ConnectorsUri)).Contents));
