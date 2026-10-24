@@ -5,6 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
+import { BusinessNodeFieldsComponent } from '../business-view/business-node-fields.component';
 import { BusinessViewComponent } from '../business-view/business-view.component';
 import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
 import { BusinessRun } from '../business-view/business-run';
@@ -100,7 +101,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -192,7 +193,7 @@ export interface EditorErrorEvent {
       }
       @if (definition(); as def) {
         @if (view() === 'business') {
-          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" (stepPick)="openStep($event)" />
+          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
         } @else {
         <div class="editor__body">
           @if (!readonly()) {
@@ -321,6 +322,7 @@ export interface EditorErrorEvent {
                       <app-pinned-data-editor panelPinned class="editor__pinned" [items]="items" [readonly]="readonly()" (save)="savePinned(node.id, $event)" />
                     }
                   </app-node-panel>
+                  <app-business-node-fields [definition]="def" [nodeId]="node.id" [descriptors]="descriptors()" [connectors]="businessConnectors()" [readonly]="readonly()" (definitionChange)="changed($event)" />
                 </div>
                 <div class="editor__col editor__col--data" data-testid="node-run" [attr.data-status]="selectedStep()?.status ?? null" [hidden]="!wide() && panelTab() !== 'output'">
                   <app-node-data-view side="output" [title]="outputTitle" [ports]="outputPorts()">
@@ -1363,14 +1365,15 @@ export class WorkflowEditorComponent implements OnInit {
 
   protected keydown(event: KeyboardEvent): void {
     // У Shadow DOM (`<openbp-canvas>`) `event.target` — сам елемент; справжня ціль — перша в composedPath.
-    // У бізнес-вигляді структура не змінюється — клавіші редагування канвасу не діють.
-    if (!this.definition() || this.readonly() || this.view() === 'business' || isEditable(event.composedPath()[0] ?? event.target)) return;
+    if (!this.definition() || this.readonly() || isEditable(event.composedPath()[0] ?? event.target)) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     // Перехоплюємо лише доступну дію — інакше працює стандартна поведінка браузера (копіювання тексту тощо).
     let action: (() => void) | null = null;
     if (mod && key === 'z' && !event.shiftKey) action = this.canUndo() ? () => this.undo() : null;
     else if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) action = this.canRedo() ? () => this.redo() : null;
+    // У бізнес-вигляді структура не змінюється — з клавіш діють лише скасувати й повторити.
+    else if (this.view() === 'business') action = null;
     else if (mod && key === 'c') action = this.hasNodeSelection() ? () => this.copy() : null;
     else if (mod && key === 'v') action = this.canPaste() ? () => this.paste() : null;
     else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) action = this.hasSelection() ? () => this.deleteSelected() : null;
