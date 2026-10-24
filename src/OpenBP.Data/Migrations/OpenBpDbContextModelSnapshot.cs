@@ -17,7 +17,7 @@ namespace OpenBP.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -294,6 +294,41 @@ namespace OpenBP.Data.Migrations
                     b.HasKey("WorkflowId", "NodeId");
 
                     b.ToTable("node_state", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.OAuthStateEntity", b =>
+                {
+                    b.Property<string>("State")
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<string>("CodeVerifier")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code_verifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CredentialId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("credential_id");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("redirect_uri");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("State");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("oauth_states", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.UserEntity", b =>

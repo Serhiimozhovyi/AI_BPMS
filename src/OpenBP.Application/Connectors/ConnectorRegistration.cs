@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using OpenBP.Data;
+using OpenBP.Data.Credentials;
 using OpenBP.Mcp.Client;
 
 namespace OpenBP.Application.Connectors;
@@ -158,6 +159,12 @@ internal static class ConnectorRegistration
         foreach (var (key, value) in Section(row, credential, "headers"))
         {
             headers[key] = value;
+        }
+
+        // oauth2-credential (F4-04): токен — у заголовок Authorization.
+        if (OAuth2Credential.AuthorizationHeader(credential) is { } authorization)
+        {
+            headers["Authorization"] = authorization;
         }
 
         return new McpServerConfig

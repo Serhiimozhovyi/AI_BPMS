@@ -122,3 +122,14 @@ public sealed class NodeStateEntity
     /// <summary>jsonb: стан polling-тригера.</summary>
     public string State { get; set; } = "{}";
 }
+
+/// <summary>Незавершений вхід OAuth2 authorization code (F4-04): одноразовий <c>state</c> з PKCE-верифікатором.</summary>
+public sealed class OAuthStateEntity
+{
+    public string State { get; set; } = "";
+    public Guid CredentialId { get; set; }
+    public Guid UserId { get; set; }
+    public string CodeVerifier { get; set; } = "";
+    public string RedirectUri { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+}

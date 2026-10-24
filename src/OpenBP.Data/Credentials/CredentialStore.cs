@@ -13,12 +13,21 @@ namespace OpenBP.Data.Credentials;
 /// <c>nonce</c> — 12 випадкових байт, новий на кожен запис.</item>
 /// <item>Associated data — id рядка: дані, перенесені в інший рядок, не розшифровуються.</item>
 /// <item>Відкритий текст у БД не потрапляє; помилка розшифровки — <see cref="CredentialDecryptionException"/>.</item>
+/// <item>Credential <c>oauth2</c> (F4-04) при читанні оновлюється, якщо токен спливає (<see cref="OAuth2Credential.NeedsRefresh"/>):
+/// під блокуванням рядка (<c>FOR UPDATE</c>), тож паралельні читання з кількох воркерів оновлюють його один раз.
+/// Без <paramref name="oauth"/> — не оновлюється.</item>
 /// </list>
 /// Потокобезпечний: кожен виклик бере власний <see cref="OpenBpDbContext"/> з фабрики.
 /// </summary>
 /// <param name="contexts">Фабрика контекстів БД.</param>
 /// <param name="key">Ключ шифрування.</param>
-public sealed class CredentialStore(IDbContextFactory<OpenBpDbContext> contexts, CredentialEncryptionKey key)
+/// <param name="oauth">Клієнт token-ендпойнта для оновлення oauth2-токенів; <c>null</c> — не оновлювати.</param>
+/// <param name="time">Годинник; <c>null</c> — системний.</param>
+public sealed class CredentialStore(
+    IDbContextFactory<OpenBpDbContext> contexts,
+    CredentialEncryptionKey key,
+    OAuth2Client? oauth = null,
+    TimeProvider? time = null)
 {
     /// <summary>Довжина nonce AES-GCM у байтах.</summary>
     public const int NonceSize = 12;
@@ -28,6 +37,7 @@ public sealed class CredentialStore(IDbContextFactory<OpenBpDbContext> contexts,
 
     private readonly IDbContextFactory<OpenBpDbContext> _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
     private readonly CredentialEncryptionKey _key = key ?? throw new ArgumentNullException(nameof(key));
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
 
     /// <summary>Створює credential і повертає його id.</summary>
     /// <param name="name">Назва для людини.</param>
@@ -85,10 +95,67 @@ public sealed class CredentialStore(IDbContextFactory<OpenBpDbContext> contexts,
         var row = await db.Credentials
             .AsNoTracking()
             .Where(c => c.Id == id)
-            .Select(c => new { c.DataEncrypted, c.Nonce })
+            .Select(c => new { c.Type, c.DataEncrypted, c.Nonce })
             .SingleOrDefaultAsync(ct)
             .ConfigureAwait(false);
-        return row is null ? null : Decrypt(id, row.DataEncrypted, row.Nonce);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var data = Decrypt(id, row.DataEncrypted, row.Nonce);
+        if (oauth is null || row.Type != OAuth2Credential.Type || !OAuth2Credential.NeedsRefresh(data, _time.GetUtcNow()))
+        {
+            return data;
+        }
+
+        return await RefreshAsync(id, ct).ConfigureAwait(false) ?? data;
+    }
+
+    /// <summary>
+    /// Оновлює токен oauth2-credential'а під блокуванням рядка, якщо він досі спливає (інший процес міг уже оновити).
+    /// Помилка сервера записується в <c>oauthError</c>, токени лишаються; повертаються актуальні дані.
+    /// </summary>
+    /// <param name="id">Id credential'а.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Дані після оновлення або <c>null</c>, якщо credential'а немає.</returns>
+    public async Task<JsonObject?> RefreshAsync(Guid id, CancellationToken ct)
+    {
+        await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var row = await db.Credentials
+            .FromSql($"SELECT * FROM credentials WHERE id = {id} FOR UPDATE")
+            .AsNoTracking()
+            .SingleOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var data = Decrypt(id, row.DataEncrypted, row.Nonce);
+        if (oauth is null || !OAuth2Credential.NeedsRefresh(data, _time.GetUtcNow()))
+        {
+            return data;
+        }
+
+        try
+        {
+            var tokens = await oauth.RefreshAsync(data, ct).ConfigureAwait(false);
+            data = OAuth2Credential.WithTokens(data, tokens, _time.GetUtcNow());
+        }
+        catch (OAuth2Exception ex)
+        {
+            data = OAuth2Credential.WithError(data, ex.Message);
+        }
+
+        var (cipher, nonce) = Encrypt(id, data);
+        await db.Credentials
+            .Where(c => c.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.DataEncrypted, cipher).SetProperty(c => c.Nonce, nonce), ct)
+            .ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return data;
     }
 
     private (byte[] Cipher, byte[] Nonce) Encrypt(Guid id, JsonObject data)

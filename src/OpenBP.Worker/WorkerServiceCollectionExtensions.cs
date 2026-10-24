@@ -59,6 +59,8 @@ public static class WorkerServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(sp => new JobQueue(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<JobQueueOptions>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
+        // Оновлення oauth2-токенів при читанні credential'а (F4-04): власний HttpClient з таймаутом.
+        services.AddSingleton(_ => new OAuth2Client(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }));
         services.AddSingleton<CredentialStore>();
 
         services.AddSingleton(sp => new McpServerRegistry(loggerFactory: sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>()));

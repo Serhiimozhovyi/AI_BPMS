@@ -4,7 +4,8 @@ import { Observable } from 'rxjs';
 import { API_BASE } from '../connectors/connectors-api.service';
 
 /** Вид поля credential'а (`CredentialFieldKind`). */
-export type CredentialFieldKind = 'text' | 'secret' | 'url' | 'secretMap';
+/** `managed` — поля, якими керує OpenBP (токени OAuth2); форма їх не показує. */
+export type CredentialFieldKind = 'text' | 'secret' | 'url' | 'secretMap' | 'managed';
 
 /** Поле типу (`CredentialFieldInfo`). */
 export interface CredentialFieldInfo {
@@ -37,6 +38,15 @@ export interface CredentialSummary {
   fields: string[];
   createdBy: string | null;
   usedBy: { connectors: CredentialReference[]; workflows: CredentialReference[] };
+  error: string | null;
+  /** Для `oauth2` — стан підключення (F4-04). */
+  oauth?: CredentialOAuthStatus | null;
+}
+
+/** Стан oauth2-credential'а: `notConnected` · `connected` · `expired` · `error`. */
+export interface CredentialOAuthStatus {
+  status: 'notConnected' | 'connected' | 'expired' | 'error';
+  expiresAt: string | null;
   error: string | null;
 }
 
@@ -75,6 +85,11 @@ export class CredentialsApiService {
 
   update(id: string, changes: { name?: string; data?: CredentialData }): Observable<CredentialSummary> {
     return this.http.patch<CredentialSummary>(`${this.base}/${encodeURIComponent(id)}`, changes);
+  }
+
+  /** Починає OAuth2-підключення: адреса, куди перейти браузеру (F4-04). */
+  startOAuth(id: string): Observable<{ authorizationUrl: string }> {
+    return this.http.post<{ authorizationUrl: string }>(`${this.base}/${encodeURIComponent(id)}/oauth2/start`, null);
   }
 
   delete(id: string): Observable<void> {

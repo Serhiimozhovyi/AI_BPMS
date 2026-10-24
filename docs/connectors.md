@@ -202,3 +202,26 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
   Спрацювання → виконання з item'ом `{ timestamp, timezone }` (запланований час, ISO 8601 зі зміщенням поясу); пропущені, поки api не працював, спрацювання не доганяються.
   У тестовому запуску вузол віддає такий самий item з поточним часом.
 - `mcp.poll` — див. вище.
+
+## 7. OAuth2 для облікових даних (F4-04)
+
+Тип облікових даних `oauth2` — вхід через провайдера за authorization code з PKCE (S256). OpenBP зберігає токени
+зашифрованими в даних credential'а й сам оновлює їх за `refresh_token`, коли до `expiresAt` лишається менше 60 с
+(під блокуванням рядка, тож кілька воркерів оновлюють один раз). Для HTTP-конектора з таким credential'ом
+у кожен запит додається `Authorization: Bearer <accessToken>`.
+
+1. Зареєструйте застосунок у провайдера з redirect URI `https://<адреса OpenBP>/api/v1/oauth2/callback`
+   (адреса — `OPENBP_PUBLIC_URL`, а без неї — хост, на який прийшов запит).
+2. «Облікові дані» → «Додати» → «OAuth2 (authorization code)»: адреси авторизації й токена, Client ID,
+   Client secret (для публічного клієнта з PKCE — порожній), scopes через пробіл.
+3. «Підключити» → вхід у провайдера → повернення на сторінку зі станом «підключено».
+   Помилка (`access_denied`, `invalid_state` — посилання застаріло (10 хв) або чуже, `invalid_grant`…) показується там же.
+4. Сплив токен і не оновлюється (немає `refresh_token` або провайдер відмовив) — стан «токен сплив», «Підключити знову».
+   Зміна адрес, Client ID/secret чи scopes скидає отримані токени.
+
+| Провайдер | Адреса авторизації | Адреса токена | Scopes (приклад) |
+|---|---|---|---|
+| Microsoft Entra ID | `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/authorize` | `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token` | `offline_access https://graph.microsoft.com/Mail.Read` (без `offline_access` немає `refresh_token`) |
+| Google | `https://accounts.google.com/o/oauth2/v2/auth` | `https://oauth2.googleapis.com/token` | `https://www.googleapis.com/auth/spreadsheets` (для `refresh_token` Google потребує `access_type=offline` — задайте його в адресі авторизації: `…/auth?access_type=offline&prompt=consent`) |
+
+Токени, коди й верифікатори не потрапляють у відповіді REST/MCP, журнали й адресу сторінки — лише код помилки провайдера.

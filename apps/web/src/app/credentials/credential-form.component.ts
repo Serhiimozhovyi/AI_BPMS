@@ -171,7 +171,7 @@ export class CredentialFormComponent implements OnInit {
     if (existing) {
       this.name.set(existing.name);
       this.selectType(existing.type);
-    } else if (this.availableTypes().length === 1) {
+    } else if (this.availableTypes().length === 1 || (this.allowedTypes() && this.availableTypes().length > 0)) {
       this.selectType(this.availableTypes()[0].type);
     }
   }

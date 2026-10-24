@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 
@@ -26,6 +27,7 @@ public sealed record CredentialUsage(IReadOnlyList<CredentialReference> Connecto
 /// <param name="CreatedBy">Хто створив; <c>null</c> — системний.</param>
 /// <param name="UsedBy">Де використовується.</param>
 /// <param name="Error">Дані не розшифровуються (інший ключ шифрування): пояснення; інакше <c>null</c>.</param>
+/// <param name="OAuth">Для типу <c>oauth2</c> — стан підключення; інакше <c>null</c>.</param>
 public sealed record CredentialSummary(
     Guid Id,
     string Name,
@@ -33,7 +35,14 @@ public sealed record CredentialSummary(
     IReadOnlyList<string> Fields,
     Guid? CreatedBy,
     CredentialUsage UsedBy,
-    string? Error);
+    string? Error,
+    [property: JsonPropertyName("oauth")] CredentialOAuthStatus? OAuth = null);
+
+/// <summary>Стан oauth2-credential'а (без токенів).</summary>
+/// <param name="Status"><c>notConnected</c> — токена ще немає; <c>connected</c>; <c>expired</c> — токен сплив і не оновлюється; <c>error</c> — останнє оновлення не вдалося.</param>
+/// <param name="ExpiresAt">Коли спливає поточний токен.</param>
+/// <param name="Error">Код помилки провайдера (напр. <c>invalid_grant</c>).</param>
+public sealed record CredentialOAuthStatus(string Status, DateTimeOffset? ExpiresAt, string? Error);
 
 /// <summary>Credential для вибору у формі вузла чи конектора (<c>GET /credentials/options</c>): лише id, назва, тип.</summary>
 /// <param name="Id">Id.</param>

@@ -191,6 +191,12 @@ public sealed class McpServerSync(
                     headers[key] = value;
                 }
 
+                // oauth2-credential (F4-04): токен — у заголовок Authorization.
+                if (OAuth2Credential.AuthorizationHeader(credential) is { } authorization)
+                {
+                    headers["Authorization"] = authorization;
+                }
+
                 return new McpServerConfig
                 {
                     Id = serverId,

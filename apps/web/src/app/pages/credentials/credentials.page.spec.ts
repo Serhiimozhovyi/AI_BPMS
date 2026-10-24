@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { CredentialSummary, CredentialTypeInfo } from '../../credentials/credentials-api.service';
 import { CredentialsPage } from './credentials.page';
 
@@ -25,7 +26,7 @@ const used: CredentialSummary = {
 
 describe('CredentialsPage', () => {
   async function setup(list: CredentialSummary[] = [used]) {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
     const fixture = TestBed.createComponent(CredentialsPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -116,5 +117,25 @@ describe('CredentialsPage', () => {
     http.expectOne({ method: 'DELETE', url: '/api/v1/credentials/c1' }).flush(null, { status: 204, statusText: 'No Content' });
     await render(fixture);
     expect(host.querySelector('[data-credential="c1"]')).toBeNull();
+  });
+
+  it('oauth2: стан і «Підключити» переходить на адресу провайдера', async () => {
+    const oauth: CredentialSummary = {
+      ...used,
+      id: 'o1',
+      name: 'Microsoft',
+      type: 'oauth2',
+      fields: ['clientId', 'accessToken'],
+      usedBy: { connectors: [], workflows: [] },
+      oauth: { status: 'connected', expiresAt: null, error: null },
+    };
+    const { fixture, http, host } = await setup([oauth]);
+    expect(host.querySelector('[data-testid="oauth-status"]')?.getAttribute('data-status')).toBe('connected');
+    expect(host.textContent).not.toContain('accessToken');
+    const assign = vi.fn();
+    Object.defineProperty(fixture.componentInstance as object, 'document', { value: { location: { assign } } });
+    host.querySelector<HTMLButtonElement>('[data-testid="oauth-connect"]')!.click();
+    http.expectOne({ method: 'POST', url: '/api/v1/credentials/o1/oauth2/start' }).flush({ authorizationUrl: 'https://login.example/authorize?x=1' });
+    expect(assign).toHaveBeenCalledWith('https://login.example/authorize?x=1');
   });
 });

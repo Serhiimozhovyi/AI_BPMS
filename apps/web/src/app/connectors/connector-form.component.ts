@@ -37,9 +37,12 @@ function keyValues(separator: '=' | ':'): ValidatorFn {
   return (c) => (parseKeyValues(String(c.value ?? ''), separator) === null ? { format: true } : null);
 }
 
-/** Тип credential'а конектора за транспортом: `{ headers }` для http, `{ env }` для stdio (architecture.md §10.7). */
-export function credentialTypeFor(transport: ConnectorTransport): string {
-  return transport === 'http' ? 'mcp.http' : 'mcp.stdio';
+/**
+ * Типи credential'а конектора за транспортом (architecture.md §10.7): `{ headers }` або OAuth2-токен (F4-04) для http,
+ * `{ env }` для stdio. Перший — тип нових облікових даних за замовчуванням.
+ */
+export function credentialTypesFor(transport: ConnectorTransport): string[] {
+  return transport === 'http' ? ['mcp.http', 'oauth2'] : ['mcp.stdio'];
 }
 
 /**
@@ -139,7 +142,7 @@ export function credentialTypeFor(transport: ConnectorTransport): string {
           <h3 class="mb-2 font-semibold" i18n="@@connectors.form.credential.newTitle">Нові облікові дані</h3>
           <app-credential-form
             [types]="credentialTypes()"
-            [allowedTypes]="[credentialType()]"
+            [allowedTypes]="allowedCredentialTypes()"
             (saved)="credentialCreated($event)"
             (cancelled)="creatingCredential.set(false)"
           />
@@ -188,8 +191,8 @@ export class ConnectorFormComponent implements OnInit {
   });
 
   private readonly transport = signal<ConnectorTransport>('stdio');
-  readonly credentialType = computed(() => credentialTypeFor(this.transport()));
-  readonly matchingCredentials = computed(() => this.credentials().filter((c) => c.type === this.credentialType()));
+  readonly allowedCredentialTypes = computed(() => credentialTypesFor(this.transport()));
+  readonly matchingCredentials = computed(() => this.credentials().filter((c) => this.allowedCredentialTypes().includes(c.type)));
 
   constructor() {
     this.form.controls.transport.valueChanges.pipe(takeUntilDestroyed()).subscribe((transport) => {

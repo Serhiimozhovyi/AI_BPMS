@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using OpenBP.Application.Errors;
+using OpenBP.Data.Credentials;
 
 namespace OpenBP.Application.Credentials;
 
@@ -17,6 +18,9 @@ public enum CredentialFieldKind
 
     /// <summary>Об'єкт «назва → секретне значення» (заголовки, змінні середовища).</summary>
     SecretMap = 3,
+
+    /// <summary>Керує OpenBP (токени OAuth2): користувач не задає, UI не показує.</summary>
+    Managed = 4,
 }
 
 /// <summary>Поле типу credential'а.</summary>
@@ -67,6 +71,16 @@ public static class CredentialTypes
             [new("apiKey", "API-ключ", CredentialFieldKind.Secret, true)]),
         Build("openai", "LLM: OpenAI", "Вузол ai.llm з провайдером openai.",
             [new("apiKey", "API-ключ", CredentialFieldKind.Secret, true)]),
+        Build(OAuth2Credential.Type, "OAuth2 (authorization code)", "Вхід через провайдера (Microsoft, Google…): кнопка «Підключити» отримує токен, OpenBP оновлює його сам. Для HTTP-конектора додає Authorization: Bearer.",
+            [
+                new("authorizationUrl", "Адреса авторизації", CredentialFieldKind.Url, true),
+                new("tokenUrl", "Адреса токена", CredentialFieldKind.Url, true),
+                new("clientId", "Client ID", CredentialFieldKind.Text, true),
+                new("clientSecret", "Client secret", CredentialFieldKind.Secret, false),
+                new("scopes", "Scopes (через пробіл)", CredentialFieldKind.Text, false),
+                new("audience", "Audience", CredentialFieldKind.Text, false),
+                .. OAuth2Credential.ManagedFields.Select(f => new CredentialFieldInfo(f, f, CredentialFieldKind.Managed, false)),
+            ]),
         Build("webhook.header", "Webhook: токен у заголовку", "Тригер core.webhook з auth.type = header.",
             [new("token", "Токен", CredentialFieldKind.Secret, true)]),
         Build("webhook.basic", "Webhook: Basic", "Тригер core.webhook з auth.type = basic.",
@@ -209,6 +223,8 @@ public static class CredentialTypes
                 }
 
                 return map.Any(p => p.Key.Length == 0 || !IsText(p.Value)) ? "Кожна назва непорожня, кожне значення — рядок." : null;
+            case CredentialFieldKind.Managed:
+                return value is JsonValue ? null : "Очікується рядок.";
             case CredentialFieldKind.Url:
                 return IsText(value) && Uri.TryCreate(value.GetValue<string>(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
                     ? null
@@ -228,7 +244,7 @@ public static class CredentialTypes
     private static CredentialTypeInfo Build(string type, string displayName, string description, IReadOnlyList<CredentialFieldInfo> fields)
     {
         var properties = new JsonObject();
-        foreach (var f in fields)
+        foreach (var f in fields.Where(f => f.Kind != CredentialFieldKind.Managed))
         {
             JsonObject schema = f.Kind switch
             {
