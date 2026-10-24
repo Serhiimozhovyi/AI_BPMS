@@ -147,6 +147,52 @@ public class CoreNodesExecutionTests
         Assert.Equal("""{"chatId":42,"reply":"ok","h":12}""", Assert.Single(result.OutputOf("c")).Json.ToJsonString());
     }
 
+    [Fact]
+    public async Task Vars_are_available_in_expressions_and_code_in_both_modes()
+    {
+        var registry = new InMemoryNodeRegistry();
+        foreach (var node in CoreNodes.All())
+        {
+            registry.Register(node);
+        }
+
+        var workflow = new WorkflowDefinition { Name = "Змінні", Settings = new() { Timezone = "Europe/Kyiv" } };
+        Node(workflow, "t", "core.manualTrigger", "{}");
+        Node(workflow, "s", "core.set", """{"fields":[{"name":"region","value":"{{ $vars.region }}"},{"name":"missing","value":"{{ typeof $vars.nope }}"}]}""");
+        Node(workflow, "c", "core.code", """{"code":"return { url: $vars['api_url'] + '/orders', region: $json.region };","mode":"eachItem"}""");
+        Node(workflow, "a", "core.code", """{"code":"return [{ n: items.length, region: $vars.region }];","mode":"allItems"}""");
+        Edge(workflow, "t", "s");
+        Edge(workflow, "s", "c");
+        Edge(workflow, "c", "a");
+
+        var store = new InMemoryExecutionStore();
+        var request = new ExecutionRequest
+        {
+            ExecutionId = Guid.NewGuid(),
+            Workflow = workflow,
+            Vars = new Dictionary<string, string> { ["region"] = "ua-central", ["api_url"] = "https://erp.example" },
+        };
+        store.Register(new ExecutionSnapshot
+        {
+            Id = request.ExecutionId,
+            WorkflowId = "wf_vars",
+            Workflow = workflow,
+            Mode = request.Mode,
+            StartedAt = DateTimeOffset.UtcNow,
+        });
+        var executor = new WorkflowExecutor(
+            registry, store, new JintExpressionEvaluator(), new FakeCredentialProvider(), new InMemoryBinaryStore(), new InMemoryExecutionLogger());
+
+        var result = await executor.RunAsync(request, CancellationToken.None);
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        var set = Assert.Single(result.OutputOf("s")).Json;
+        Assert.Equal("ua-central", set["region"]!.GetValue<string>());
+        Assert.Equal("undefined", set["missing"]!.GetValue<string>());
+        Assert.Equal("""{"url":"https://erp.example/orders","region":"ua-central"}""", Assert.Single(result.OutputOf("c")).Json.ToJsonString());
+        Assert.Equal("""{"n":1,"region":"ua-central"}""", Assert.Single(result.OutputOf("a")).Json.ToJsonString());
+    }
+
     private static void Node(WorkflowDefinition workflow, string id, string type, string parameters, int typeVersion = 1) =>
         workflow.Nodes.Add(new NodeDefinition
         {

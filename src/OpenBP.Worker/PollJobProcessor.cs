@@ -7,6 +7,7 @@ using OpenBP.Application.Errors;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
 using OpenBP.Application.Schedules;
+using OpenBP.Application.Variables;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
@@ -171,6 +172,12 @@ public sealed partial class PollJobProcessor
         }
 
         var runId = Guid.CreateVersion7(_time.GetUtcNow());
+        IReadOnlyDictionary<string, string> vars;
+        await using (var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false))
+        {
+            vars = await VariableService.LoadAsync(db, ct).ConfigureAwait(false);
+        }
+
         var executor = new WorkflowExecutor(
             _nodes,
             new DiscardingExecutionStore(),
@@ -186,6 +193,7 @@ public sealed partial class PollJobProcessor
                 Workflow = workflow,
                 Mode = ExecutionMode.Trigger,
                 StartNodeId = payload.NodeId,
+                Vars = vars,
                 NodeStates = new Dictionary<string, JsonObject>(StringComparer.Ordinal) { [payload.NodeId] = state },
             },
             ct).ConfigureAwait(false);

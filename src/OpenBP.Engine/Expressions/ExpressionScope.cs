@@ -39,6 +39,9 @@ public sealed record ExpressionScope
     /// <summary>Дозволені змінні середовища — <c>$env</c>. Лише білий список; секретів тут немає.</summary>
     public IReadOnlyDictionary<string, string> Env { get; init; } = EmptyEnv;
 
+    /// <summary>Змінні інстансу — <c>$vars</c> (F6-09); не секрети, секрети лишаються в credentials.</summary>
+    public IReadOnlyDictionary<string, string> Vars { get; init; } = EmptyEnv;
+
     /// <summary>Ідентифікатор виконання — <c>$execution.id</c>.</summary>
     public Guid ExecutionId { get; init; }
 

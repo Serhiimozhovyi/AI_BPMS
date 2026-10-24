@@ -42,7 +42,7 @@
 | `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
 | `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
 | `src/OpenBP.Worker` | хост: бере job, виконує через Engine, пише кроки |
-| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести) |
+| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
 | `apps/web` | Angular SPA: список, канвас, журнал, конектори, credentials |
 | `tests/*` | xUnit на кожен src-проєкт; Testcontainers для Data/Api |
 | `tools/connector-template` | Connector Kit — шаблон MCP-сервера над REST/OData |
@@ -95,12 +95,15 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 
 ## 5. Вирази і Code-вузол
 
-- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$execution.id`.
+- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$vars` (змінні інстансу з таблиці `variables`, F6-09; невідомий ключ — `undefined`), `$execution.id`.
 - Обчислення — Jint з лімітами: 50 мс, 16 МБ, глибина рекурсії 64, без `require`, без доступу до CLR. Code-вузол: ті ж обмеження, ліміт 5 с.
 - Code-вузол (`core.code`, F3-30): `$json`, `$index` (eachItem) або `items` (allItems), а також `$node["Назва"].json` (як у
   виразах: item з тим самим індексом або перший) і `$node["Назва"].all` (усі items) — копії виходів, лише читання;
   вузол, що не виконувався, — помилка з його назвою. `Date` працює в `settings.timezone` сценарію, а не в UTC. Движок
-  передає вузлам ці дані через `INodeContext.NodeOutputs` і `INodeContext.Timezone`.
+  передає вузлам ці дані через `INodeContext.NodeOutputs` і `INodeContext.Timezone`; `$vars` — через `INodeContext.Vars`.
+- Змінні інстансу (F6-09): воркер читає всю таблицю `variables` на старті кожного виконання і poll-прогону
+  (`ExecutionRequest.Vars`), тож зміна діє з наступного виконання. Значення — не секрети: їх бачать усі ролі й журнал
+  кроків, для секретів — credentials.
 
 ## 6. Схема БД (EF Core, PostgreSQL)
 
@@ -111,6 +114,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `api_keys` | id, user_id, hash, name, last_used_at |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
 | `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням) |
+| `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
@@ -224,7 +228,10 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `PATCH /workflows/{id} { name?, groupId? }` | editor | `WorkflowDetail`; змінюються лише передані поля, `groupId: null` — прибрати з групи (без нової версії) |
 | `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання), editor | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії лишаються без групи) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
-| `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[] }` (200 навіть з помилками) |
+| `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
+| `GET /workflows/{id}/export` | editor | `{ definition, manifest: { connectors: [{ ref, name, transport }], credentials: [{ ref, name, type }], variables: [key], workflows: [{ ref, name }] } }` — без секретів і значень змінних (F6-09) |
+| `POST /workflows/import { definition, manifest?, mapping?, groupId? }` | editor | 201 `{ workflow, mapping, missingVariables }` — новий неактивний сценарій; `serverId`/`credentialId`/`settings.errorWorkflowId` перемаплюються (`mapping` → єдиний об'єкт з тією самою назвою і транспортом/типом); незмаплене — 422 `IMPORT_UNMAPPED` з `unmapped: [{ kind, ref, name, type, reason }]`, нічого не створено |
+| `GET /variables` · `PUT /variables/{key} { value, description? }` · `DELETE /variables/{key}` | viewer (читання), admin | `VariableDto[]` · `VariableDto` (створює або змінює) · 204 |
 | `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
 | `GET /workflows/{id}/versions` · `GET /workflows/{id}/versions/{version}` | viewer | `WorkflowVersionSummary[]` · визначення |
 | `POST /workflows/{id}/executions { startNodeId?, startItems?, destinationNodeId?, runData? }` | editor | 202 `ExecutionSummary` (ручний запуск; `destinationNodeId` — «Виконати вузол»: лише вузол і його попередники, сам вузол виконується навіть із `pinData`; `runData` — виходи вузлів попереднього запуску `{ nodeId: Item[][] }` по портах, такі вузли не виконуються, мають пріоритет над `pinData`; невідомий вузол → 422 `START_NODE_UNKNOWN`/`DESTINATION_NODE_UNKNOWN`) |
@@ -243,7 +250,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `POST /credentials { name, type, data }` · `PATCH /credentials/{id} { name?, data? }` · `DELETE /credentials/{id}` | admin | 201 `CredentialSummary` · `CredentialSummary` (часткова заміна: ключ замінює, `null` видаляє, решта лишається; для `headers`/`env` — на рівні їхніх ключів) · 204; 400 `CREDENTIAL_INVALID` з `errors: [{ field, message }]`; 409 `CREDENTIAL_IN_USE`, якщо на credential посилається конектор або поточна версія будь-якого сценарію |
 
 Помилки — RFC 9457 `application/problem+json`: `{ type, title, status, detail, code, errors? }`.
-`code` — машинний код з `OpenBpException`; `errors` — список `WorkflowValidationError` для 422.
+`code` — машинний код з `OpenBpException`; `errors` — список `WorkflowValidationError` для 422; `unmapped` — для 422 `IMPORT_UNMAPPED`.
 Відображення: `NotFound` → 404, `Forbidden` → 403, не автентифіковано → 401, `Conflict` → 409,
 `WorkflowValidation` → 422, `ConnectorUnavailable` → 502, `CredentialValidation` → 400 з `errors`, помилка аргументів → 400.
 

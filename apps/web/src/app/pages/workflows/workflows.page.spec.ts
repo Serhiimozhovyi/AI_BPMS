@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { GROUPS_COLLAPSE_KEY } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowSummary, emptyWorkflowDefinition } from '../../workflows/workflows-api.service';
-import { WorkflowsPage } from './workflows.page';
+import { WorkflowsPage, exportFileName } from './workflows.page';
 
 const draft: WorkflowSummary = { id: 'w1', name: 'Заявки', active: false, version: 2, updatedAt: '2026-10-23T10:00:00Z' };
 const live: WorkflowSummary = { id: 'w2', name: 'Розсилка', active: true, version: 5, updatedAt: '2026-10-22T08:00:00Z' };
@@ -12,6 +12,13 @@ const live: WorkflowSummary = { id: 'w2', name: 'Розсилка', active: true
 function detailOf(s: WorkflowSummary): WorkflowDetail {
   return { ...s, versionId: `v-${s.id}`, definition: emptyWorkflowDefinition(s.name) };
 }
+
+describe('exportFileName', () => {
+  it('назва файлу експорту без недозволених символів', () => {
+    expect(exportFileName('Заявка: 1С / Telegram?')).toBe('Заявка 1С Telegram');
+    expect(exportFileName(' \u0007 ')).toBe('workflow');
+  });
+});
 
 describe('WorkflowsPage', () => {
   async function render(fixture: ComponentFixture<WorkflowsPage>) {
@@ -53,6 +60,24 @@ describe('WorkflowsPage', () => {
     expect(link.getAttribute('href')).toBe('/workflows/w1');
     expect(toggleInput(host, 'w1').getAttribute('aria-checked')).toBe('false');
     expect(toggleInput(host, 'w2').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('«Експортувати» завантажує файл з визначенням і маніфестом', async () => {
+    const { fixture, http, host } = await setup();
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    row(host, 'w1').querySelector<HTMLButtonElement>('[data-testid="export-button"]')!.click();
+    http.expectOne({ method: 'GET', url: '/api/v1/workflows/w1/export' }).flush({
+      definition: emptyWorkflowDefinition('Заявки'),
+      manifest: { connectors: [], credentials: [], variables: [] },
+    });
+    await render(fixture);
+    expect(created).toHaveBeenCalledOnce();
+    expect(click).toHaveBeenCalledOnce();
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('Заявки.openbp.json');
+    expect(revoked).toHaveBeenCalledWith('blob:x');
+    vi.restoreAllMocks();
   });
 
   it('порожній список — підказка', async () => {

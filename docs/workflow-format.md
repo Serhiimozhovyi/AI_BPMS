@@ -99,7 +99,9 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 - `connections` — масив ребер; один вихід → кілька ребер (розгалуження), один вхід ← кілька ребер (items об'єднуються в порядку надходження). Індекс виходу відповідає `Descriptor.Outputs`; у вузлів з `continueOnFail: true` з'являється додатковий останній вихід `error`.
 - Цикли заборонені (валідатор перевіряє DAG). Ітерація — через `core.loop`.
 - `pinData` використовується тільки в ручному тестовому запуску.
-- Секретів у форматі немає: лише `credentialId` і `serverId`. При імпорті в інше середовище посилання перемаплюються в UI.
+- Секретів у форматі немає: лише `credentialId` і `serverId`. При імпорті в інше середовище посилання перемаплюються (див. «Експорт та імпорт»).
+- `$vars.key` — змінні інстансу (Налаштування → «Змінні»): спільні для всіх сценаріїв значення на зразок адреси ERP чи
+  коду регіону. Не секрети — для них credentials.
 - `timeoutSec` на вузлі перекриває дефолт (30 с для `mcp.tool`, 60 с для `ai.llm`, без ліміту для логіки).
 
 ## Обов'язкові поля
@@ -203,3 +205,40 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 8. `settings.errorWorkflowId` — інший існуючий сценарій з `core.errorTrigger` (`ERROR_WORKFLOW_INVALID`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.
+
+Окремо від помилок — попередження `warnings` (не заважають збереженню й активації): `VARIABLE_UNKNOWN` — `$vars.key` чи
+`$vars["key"]` у параметрах (зокрема в коді `core.code`) посилається на змінну, якої немає; до її створення вираз дає
+`undefined`.
+
+## Експорт та імпорт
+
+`GET /api/v1/workflows/{id}/export` (UI: «Експортувати» у списку сценаріїв, CLI: `openbp export`) віддає визначення
+поточної версії і маніфест залежностей:
+
+```json
+{
+  "definition": { "formatVersion": 1, "name": "Заявка з Telegram → 1С", "...": "..." },
+  "manifest": {
+    "connectors":  [{ "ref": "5f0c…", "name": "1С", "transport": "http" }],
+    "credentials": [{ "ref": "9a12…", "name": "Anthropic", "type": "openai-compatible" }],
+    "variables":   ["region"],
+    "workflows":   [{ "ref": "77de…", "name": "Сповіщення про помилки" }]
+  }
+}
+```
+
+`ref` — id у середовищі-джерелі, як він записаний у визначенні; секретів і значень змінних у файлі немає.
+
+`POST /api/v1/workflows/import { definition, manifest?, mapping?, groupId? }` (UI: «Імпорт», CLI: `openbp import`)
+створює **новий неактивний** сценарій. Кожне посилання (`serverId` і `credentialId` будь-де в `parameters`,
+`settings.errorWorkflowId`) отримує відповідник у цьому середовищі:
+
+1. явний `mapping: { connectors: { "<ref>": "<id>" }, credentials: { … }, workflows: { … } }`;
+2. інакше — єдиний об'єкт з тією самою назвою (без урахування регістру) і тим самим транспортом (конектор) чи типом
+   (credential) з маніфесту;
+3. без маніфесту посилання лишається, якщо такий id тут є.
+
+Якщо для чогось відповідника немає, відповідь — 422 `IMPORT_UNMAPPED` зі списком
+`unmapped: [{ kind: connector | credential | workflow, ref, name, type, reason: not_found | ambiguous | invalid }]`, і
+нічого не створюється. Після перемапінгу сценарій проходить звичайну валідацію (422 `WORKFLOW_INVALID`). Відповідь
+успіху — `{ workflow, mapping, missingVariables }`: `missingVariables` — ключі `$vars`, яких тут ще немає.

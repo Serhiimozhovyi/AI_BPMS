@@ -59,6 +59,9 @@ public sealed record ExecutionRequest
     /// <summary>Дозволені змінні середовища для виразів (<c>$env</c>); лише білий список, без секретів.</summary>
     public IReadOnlyDictionary<string, string> Env { get; init; } = EmptyEnv;
 
+    /// <summary>Змінні інстансу (<c>variables</c>, F6-09) — <c>$vars</c> у виразах і <c>core.code</c>; не секрети.</summary>
+    public IReadOnlyDictionary<string, string> Vars { get; init; } = EmptyEnv;
+
     /// <summary>Стан вузлів між виконаннями (<c>node_state</c>): id вузла → стан, що отримає <c>INodeContext.NodeState</c>.</summary>
     public IReadOnlyDictionary<string, JsonObject> NodeStates { get; init; } = EmptyStates;
 }

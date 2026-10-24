@@ -10,6 +10,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
+    public DbSet<VariableEntity> Variables => Set<VariableEntity>();
     public DbSet<CredentialEntity> Credentials => Set<CredentialEntity>();
     public DbSet<McpServerEntity> McpServers => Set<McpServerEntity>();
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
@@ -61,6 +62,11 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("mcp_servers");
             e.Property(x => x.Config).HasColumnType("jsonb");
             e.Property(x => x.ToolsCache).HasColumnType("jsonb");
+        });
+        b.Entity<VariableEntity>(e =>
+        {
+            e.ToTable("variables");
+            e.HasKey(x => x.Key);
         });
         b.Entity<ExecutionEntity>(e =>
         {

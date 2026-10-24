@@ -32,7 +32,8 @@ public sealed record WorkflowView(Guid Id, string Name, bool Active, int Version
 /// <summary>Результат <c>validate_workflow</c>.</summary>
 /// <param name="Valid"><c>true</c>, якщо помилок немає.</param>
 /// <param name="Errors">Помилки валідації з кодами (<c>workflow-format.md</c> §«Валідація»).</param>
-public sealed record WorkflowValidationView(bool Valid, IReadOnlyList<WorkflowValidationError> Errors);
+/// <param name="Warnings">Попередження, що не заважають збереженню (<c>VARIABLE_UNKNOWN</c>).</param>
+public sealed record WorkflowValidationView(bool Valid, IReadOnlyList<WorkflowValidationError> Errors, IReadOnlyList<WorkflowValidationError> Warnings);
 
 /// <summary>Визначення сценарію в аргументах і відповідях MCP — за <see cref="WorkflowJson.Options"/>, як у REST і файлах.</summary>
 public static class WorkflowDefinitions
@@ -143,7 +144,8 @@ public sealed class WorkflowTools
     [McpServerTool(Name = "validate_workflow", Title = "Validate workflow", ReadOnly = true, UseStructuredContent = true)]
     [Description(
         "Validates a definition without saving it and returns all errors with codes (node ids and JSON paths where known). " +
-        "A definition with errors is not a tool error: the result has valid=false.")]
+        "A definition with errors is not a tool error: the result has valid=false. " +
+        "Warnings (e.g. VARIABLE_UNKNOWN for $vars.key without such an instance variable) do not block saving.")]
     public static async Task<WorkflowValidationView> ValidateWorkflow(
         IWorkflowService workflows,
         [Description(DefinitionHint)] JsonElement definition,
@@ -151,6 +153,6 @@ public sealed class WorkflowTools
         CancellationToken ct = default)
     {
         var result = await workflows.ValidateAsync(WorkflowDefinitions.FromJson(definition), active, ct).ConfigureAwait(false);
-        return new WorkflowValidationView(result.IsValid, result.Errors);
+        return new WorkflowValidationView(result.IsValid, result.Errors, result.Warnings);
     }
 }

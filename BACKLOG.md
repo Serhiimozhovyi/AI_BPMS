@@ -825,7 +825,7 @@
 - DoD: тести (Testcontainers): сценарій з моком, що падає на третьому вузлі → виправити мок → `resume` дає `success`, перші два вузли не викликались повторно (лічильник у FakeServer); `overrideInput`; `resume` для `success` → 409; viewer → 403; Vitest кнопки й редактора; `architecture.md` §10.4, `docs/mcp-server.md` оновлено.
 
 ### F6-09 · Змінні, експорт/імпорт з перемапінгом, CLI для CI
-- model: `sonnet` · status: `ready` · depends: F4-01, F1-10
+- model: `sonnet` · status: `review` · depends: F4-01, F1-10
 - Що: таблиця `variables (key, value, description)` (admin пише, усі читають), UI у `/settings`, `$vars.key` у виразах і `core.code` (валідатор — попередження про невідомий ключ); секрети лишаються в credentials. `GET /api/v1/workflows/{id}/export` → JSON сценарію + `manifest { connectors: [{ ref: serverId, name, transport }], credentials: [{ ref, name, type }], variables: [key] }`; `POST /api/v1/workflows/import { definition, manifest, mapping? }` — збіг за назвою і типом автоматично, інакше 422 зі списком незмапленого; UI-діалог імпорту з вибором відповідників. CLI (`OpenBP.Cli`): `openbp export <id|--all> --url --api-key --out dir`, `openbp import <file> --url --api-key [--map file]`, `openbp activate <id>`; приклад GitHub Actions у `docs/guide/integrators.md`.
 - DoD: тести: `$vars` у виразі й `core.code`; невідомий ключ → попередження валідатора; export→import на другу БД (Testcontainers) з іншими id конекторів за тими самими назвами — сценарій валідний і запускається; незмаплений credential → 422; CLI-тести проти `WebApplicationFactory`; Vitest діалогу імпорту та сторінки змінних; `docs/workflow-format.md` (імпорт), `architecture.md` оновлено.
 
