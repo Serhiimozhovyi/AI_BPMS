@@ -194,6 +194,15 @@ export interface ExpressionPreview {
   error: string | null;
 }
 
+/** Версія в історії (`GET /workflows/{id}/versions`), нові першими. */
+export interface WorkflowVersionSummary {
+  id: string;
+  version: number;
+  createdAt: string;
+  createdBy: string | null;
+  createdByEmail: string | null;
+}
+
 /** Шаблон «Почати з прикладу» (F3-59): приклад з `examples/` без `pinData`, конекторів і облікових даних. */
 export interface WorkflowTemplate {
   id: string;
@@ -214,6 +223,16 @@ export class WorkflowsApiService {
     if (search) params['search'] = search;
     if (filter.active !== undefined && filter.active !== null) params['active'] = filter.active;
     return this.http.get<PageResult<WorkflowSummary>>(this.base, { params });
+  }
+
+  /** Історія версій (F2-06), нові першими. */
+  versions(id: string): Observable<WorkflowVersionSummary[]> {
+    return this.http.get<WorkflowVersionSummary[]>(`${this.url(id)}/versions`);
+  }
+
+  /** Визначення версії `version`. */
+  version(id: string, version: number): Observable<WorkflowDefinition> {
+    return this.http.get<WorkflowDefinition>(`${this.url(id)}/versions/${version}`);
   }
 
   /** `GET /workflows/templates` — шаблони для порожнього сценарію (F3-59). */

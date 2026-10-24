@@ -10,7 +10,7 @@ describe('WorkflowEditorPage', () => {
   it('передає :id з роуту в редактор і оновлює його при переході', () => {
     const params = new BehaviorSubject(convertToParamMap({ id: 'w1' }));
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), { provide: ActivatedRoute, useValue: { paramMap: params } }],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), { provide: ActivatedRoute, useValue: { paramMap: params, queryParamMap: new BehaviorSubject(convertToParamMap({})) } }],
     });
     const fixture = TestBed.createComponent(WorkflowEditorPage);
     fixture.detectChanges();

@@ -313,7 +313,12 @@ public sealed class WorkflowService(
         return await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id)
             .OrderByDescending(v => v.Version)
-            .Select(v => new WorkflowVersionSummary(v.Id, v.Version, v.CreatedAt, v.CreatedBy))
+            .Select(v => new WorkflowVersionSummary(
+                v.Id,
+                v.Version,
+                v.CreatedAt,
+                v.CreatedBy,
+                db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.Email).FirstOrDefault()))
             .ToListAsync(ct);
     }
 

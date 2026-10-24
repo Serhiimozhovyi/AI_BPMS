@@ -36,7 +36,8 @@ public sealed record WorkflowDetail(
 /// <param name="Version">Номер версії (з 1, без пропусків).</param>
 /// <param name="CreatedAt">Час збереження.</param>
 /// <param name="CreatedBy">Хто зберіг; <c>null</c> — системна операція.</param>
-public sealed record WorkflowVersionSummary(Guid Id, int Version, DateTimeOffset CreatedAt, Guid? CreatedBy);
+/// <param name="CreatedByEmail">Email автора для історії версій (F3-61); <c>null</c> — системна операція або користувача видалено.</param>
+public sealed record WorkflowVersionSummary(Guid Id, int Version, DateTimeOffset CreatedAt, Guid? CreatedBy, string? CreatedByEmail = null);
 
 /// <summary>Фільтр списку сценаріїв.</summary>
 /// <param name="Search">Підрядок назви без урахування регістру; <c>null</c> — без фільтра.</param>

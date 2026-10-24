@@ -4,12 +4,12 @@ import { ActivatedRoute } from '@angular/router';
 import { map } from 'rxjs';
 import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.component';
 
-/** `/workflows/:id` — {@link WorkflowEditorComponent} на всю висоту під шапкою; `:id` змінюється без перестворення. */
+/** `/workflows/:id[?version=N]` — {@link WorkflowEditorComponent} на всю висоту під шапкою; `:id` змінюється без перестворення. */
 @Component({
   selector: 'app-workflow-editor-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [WorkflowEditorComponent],
-  template: `<app-workflow-editor [workflowId]="id()" />`,
+  template: `<app-workflow-editor [workflowId]="id()" [version]="version()" [readonly]="version() !== null" />`,
   styles: `
     :host {
       display: block;
@@ -19,5 +19,8 @@ import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.c
   `,
 })
 export class WorkflowEditorPage {
-  protected readonly id = toSignal(inject(ActivatedRoute).paramMap.pipe(map((p) => p.get('id') ?? '')), { initialValue: '' });
+  private readonly route = inject(ActivatedRoute);
+  protected readonly id = toSignal(this.route.paramMap.pipe(map((p) => p.get('id') ?? '')), { initialValue: '' });
+  /** `?version=N` — переглянути стару версію лише для читання (F3-61). */
+  protected readonly version = toSignal(this.route.queryParamMap.pipe(map((q) => (q.get('version') ? Number(q.get('version')) || null : null))), { initialValue: null });
 }

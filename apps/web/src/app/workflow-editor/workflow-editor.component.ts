@@ -25,6 +25,7 @@ import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickA
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EmptyStartComponent } from '../canvas/empty-start.component';
 import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
+import { VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore } from '../workflows/version-history-dialog.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
@@ -138,6 +139,12 @@ export interface EditorErrorEvent {
         }
         @if (readonly()) {
           <span class="editor__readonly" data-testid="readonly" i18n="@@workfloweditor.readonly">Лише перегляд</span>
+          @if (version(); as v) {
+            <span class="editor__readonly" data-testid="version-banner" i18n="@@workfloweditor.versionBanner">Версія {{ v }}</span>
+            @if (!embedded()) {
+              <a mat-button data-testid="version-current" [routerLink]="['/workflows', workflowId()]" i18n="@@workfloweditor.versionCurrent">До поточної версії</a>
+            }
+          }
         } @else if (definition(); as def) {
           <span class="editor__tools">
             <button mat-button type="button" data-testid="undo" [disabled]="!canUndo()" (click)="undo()" i18n-title="@@workfloweditor.undo.hint" title="Скасувати (Ctrl+Z)" i18n="@@workfloweditor.undo">Скасувати</button>
@@ -146,6 +153,7 @@ export interface EditorErrorEvent {
             <button mat-button type="button" data-testid="paste" [disabled]="!canPaste()" (click)="paste()" i18n-title="@@workfloweditor.paste.hint" title="Вставити (Ctrl+V)" i18n="@@workfloweditor.paste">Вставити</button>
             <button mat-button type="button" data-testid="delete" [disabled]="!hasSelection()" (click)="deleteSelected()" i18n-title="@@workfloweditor.delete.hint" title="Видалити (Delete)" i18n="@@workfloweditor.delete">Видалити</button>
             <button mat-button type="button" data-testid="assistant-toggle" [attr.aria-pressed]="assistantOpen()" (click)="toggleAssistant()" i18n-title="@@workfloweditor.assistant.hint" title="ШІ-помічник: описати процес, пояснити чи виправити вузол" i18n="@@workfloweditor.assistant">Помічник</button>
+            <button mat-button type="button" data-testid="history" (click)="openHistory()" i18n-title="@@workfloweditor.history.hint" title="Версії сценарію: переглянути або відновити" i18n="@@workfloweditor.history">Історія</button>
             <button mat-button type="button" data-testid="settings" (click)="openSettings()" i18n-title="@@workfloweditor.settings.hint" title="Часовий пояс, таймаут, сценарій помилок" i18n="@@workfloweditor.settings">Налаштування</button>
             @if (!embedded()) {
               <a mat-button data-testid="executions-link" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" i18n="@@workfloweditor.executions">Журнал виконань</a>
@@ -723,6 +731,9 @@ export class WorkflowEditorComponent implements OnInit {
   /** Лише перегляд: без палітри, редагування, запусків і збереження. */
   readonly readonly = input(false, { transform: booleanAttribute });
 
+  /** Переглянути стару версію (F3-61, `?version=N`): канвас лише для читання з визначенням цієї версії. */
+  readonly version = input<number | null>(null);
+
   /** Вбудований режим (`<openbp-canvas>`): без посилань на інші сторінки SPA. */
   readonly embedded = input(false, { transform: booleanAttribute });
 
@@ -975,11 +986,12 @@ export class WorkflowEditorComponent implements OnInit {
   }
 
   /** `workflowId` як потік: компонент перевикористовується при переході між сценаріями. */
-  private readonly workflowId$ = toObservable(this.workflowId);
+  /** Id і версія для перегляду: зміна будь-чого перезавантажує редактор. */
+  private readonly source$ = toObservable(computed(() => ({ id: this.workflowId(), version: this.version() })));
 
   ngOnInit(): void {
-    // Перезавантажуємо за кожним id.
-    this.workflowId$
+    // Перезавантажуємо за кожним id (і версією для перегляду).
+    this.source$
       .pipe(
         tap(() => {
           // Зміни попереднього сценарію зберігаються до переходу; стан автозбереження — з нуля.
@@ -997,8 +1009,12 @@ export class WorkflowEditorComponent implements OnInit {
           this.testRun.set(null);
           this.runError.set(null);
         }),
-        switchMap((id) =>
-          forkJoin({ workflow: this.workflows.get(id), descriptors: this.nodes.list() }).pipe(
+        switchMap(({ id, version }) =>
+          forkJoin({
+            workflow: this.workflows.get(id),
+            descriptors: this.nodes.list(),
+            version: version ? this.workflows.version(id, version) : of(null),
+          }).pipe(
             catchError((e: unknown) => {
               this.error.set(apiErrorMessage(e));
               this.failed.emit({ code: apiErrorCode(e), message: apiErrorMessage(e) });
@@ -1011,8 +1027,8 @@ export class WorkflowEditorComponent implements OnInit {
       .subscribe((loaded) => {
         if (loaded) {
           this.workflow.set(loaded.workflow);
-          this.definition.set(loaded.workflow.definition);
-          this.history.reset(loaded.workflow.definition);
+          this.definition.set(loaded.version ?? loaded.workflow.definition);
+          this.history.reset(loaded.version ?? loaded.workflow.definition);
           this.descriptors.set(loaded.descriptors);
           this.loadGroupName(loaded.workflow);
         }
@@ -1351,6 +1367,26 @@ export class WorkflowEditorComponent implements OnInit {
     if (this.readonly() || definition === this.definition()) return;
     this.history.push(definition);
     this.apply(definition);
+  }
+
+  /** «Історія» (F3-61): «Відновити» — визначення старої версії з поточною назвою, звичайна правка → нова версія. */
+  protected openHistory(): void {
+    const id = this.workflow()?.id;
+    if (!id) return;
+    this.dialog
+      .open<VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore>(VersionHistoryDialogComponent, {
+        data: { workflowId: id, currentVersion: this.workflow()?.version ?? 0, readonly: this.readonly() },
+        width: '640px',
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((restore) => {
+        const def = this.definition();
+        if (!restore || !def) return;
+        this.selection.set(EMPTY_SELECTION);
+        this.changed({ ...restore.definition, name: def.name });
+        this.showNotice($localize`:@@workfloweditor.history.restored:Відновлено версію ${restore.version}:version: — збережеться як нова версія.`);
+      });
   }
 
   /** Діалог «Налаштування» (F4-05): нові `settings` — звичайна зміна з історією й автозбереженням. */
