@@ -663,7 +663,7 @@
 - DoD: тест елемента — `view`, `execution-id`, `lock-view`; демо-сторінка елемента показує бізнес-вигляд виконання; розмір бандла елемента в межах бюджету; `docs/embedding.md` оновлено.
 
 ### F3-71 · MCP-клієнт: проба `server/discover` чекає весь таймаут підключення
-- model: `sonnet` · status: `review` agent/F3-71-mcp-discover-timeout · depends: —
+- model: `sonnet` · status: `done` agent/F3-71-mcp-discover-timeout · depends: —
 - Що: SDK `ModelContextProtocol` 2.3.0 спершу надсилає `server/discover` і через 5 с (`DiscoverProbeTimeout`) відкочується на `initialize`. Сервер, що відповів на discover пізніше (повільний старт stdio-процесу, навантаження CI), уже на протоколі 2026-07-28 і відхиляє `initialize` — так нестабільно падав `PsySupportBotTests.Consult_Booking_AndConcurrentBookingOfSameSlot`. `McpServerRegistry` задає `DiscoverProbeTimeout = ConnectTimeout`.
 - DoD: тест реєстру — stdio-сервер, що стартує 6 с, підключається протоколом 2026-07-28 без відкату (без фіксу тест червоний); `dotnet build -warnaserror`, `dotnet test`, `dotnet format` зелені.
 
