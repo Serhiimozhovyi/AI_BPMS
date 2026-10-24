@@ -3,7 +3,7 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
 import { NodePanelComponent } from './node-panel.component';
-import { FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_DESCRIPTOR, SWITCH_DESCRIPTOR } from './test-schemas';
+import { DECISION_TABLE_DESCRIPTOR, FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_DESCRIPTOR, SWITCH_DESCRIPTOR } from './test-schemas';
 
 describe('NodePanelComponent', () => {
   async function setup(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null = null) {
@@ -294,6 +294,73 @@ describe('NodePanelComponent', () => {
     expect(el(host, 'node-panel-unknown')).toBeTruthy();
     expect(host.querySelector('[data-testid="node-parameters"]')).toBeNull();
     expect(host.querySelector('[data-testid="field-timeoutSec"]')).not.toBeNull();
+  });
+
+  describe('таблиця рішень (F6-19)', () => {
+    const tableNode: WorkflowNode = {
+      id: 'n_dt',
+      name: 'Знижка',
+      type: 'core.decisionTable',
+      typeVersion: 1,
+      position: [0, 0],
+      parameters: {
+        inputs: [
+          { name: 'segment', expression: '{{ $json.segment }}' },
+          { name: 'total', expression: '{{ $json.total }}' },
+        ],
+        outputs: [{ name: 'discount' }],
+        rules: [
+          { when: [{ operator: 'equals', right: 'vip' }, '-'], then: [10] },
+          { when: ['-', { operator: 'gte', right: 5000 }], then: ['{{ $json.total / 1000 }}'] },
+        ],
+      },
+    };
+
+    it('рядки — правила, колонки — входи й виходи; відкриття не змінює вузол', async () => {
+      const { host, emitted } = await setup(tableNode, DECISION_TABLE_DESCRIPTOR);
+      expect(emitted).toEqual([]);
+      expect(Array.from(host.querySelectorAll('[data-testid="dt-input-col"]')).map((c) => c.textContent?.trim())).toEqual(['якщо segment', 'якщо total']);
+      expect(Array.from(host.querySelectorAll('[data-testid="dt-output-col"]')).map((c) => c.textContent?.trim())).toEqual(['→ discount']);
+      expect(host.querySelectorAll('[data-rule]')).toHaveLength(2);
+      expect(el<HTMLSelectElement>(host, 'dt-op-0-0').value).toBe('equals');
+      expect(el<HTMLInputElement>(host, 'dt-right-0-0').value).toBe('vip');
+      expect(el<HTMLSelectElement>(host, 'dt-op-0-1').value).toBe('-');
+      expect(host.querySelector('[data-testid="dt-right-0-1"]')).toBeNull();
+      expect(el<HTMLInputElement>(host, 'dt-then-1-0').value).toBe('{{ $json.total / 1000 }}');
+    });
+
+    it('правка комірок, нове правило, переміщення і видалення потрапляють у параметри', async () => {
+      const { fixture, host, last } = await setup(tableNode, DECISION_TABLE_DESCRIPTOR);
+
+      const op = el<HTMLSelectElement>(host, 'dt-op-0-1');
+      op.value = 'lt';
+      op.dispatchEvent(new Event('change'));
+      await render(fixture);
+      const right = el<HTMLInputElement>(host, 'dt-right-0-1');
+      right.value = '1000';
+      right.dispatchEvent(new Event('change'));
+      const then = el<HTMLInputElement>(host, 'dt-then-0-0');
+      then.value = 'п\'ять';
+      then.dispatchEvent(new Event('change'));
+      await render(fixture);
+      expect(last().parameters['rules']).toEqual([
+        { when: [{ operator: 'equals', right: 'vip' }, { operator: 'lt', right: 1000 }], then: ["п'ять"] },
+        { when: ['-', { operator: 'gte', right: 5000 }], then: ['{{ $json.total / 1000 }}'] },
+      ]);
+
+      el<HTMLButtonElement>(host, 'dt-add').click();
+      await render(fixture);
+      expect((last().parameters['rules'] as unknown[])[2]).toEqual({ when: ['-', '-'], then: [null] });
+
+      el<HTMLButtonElement>(host, 'dt-up-1').click();
+      await render(fixture);
+      expect((last().parameters['rules'] as { then: unknown[] }[]).map((r) => r.then[0])).toEqual(['{{ $json.total / 1000 }}', "п'ять", null]);
+
+      el<HTMLButtonElement>(host, 'dt-remove-2').click();
+      await render(fixture);
+      expect(last().parameters['rules']).toHaveLength(2);
+      expect(last().parameters['inputs']).toEqual(tableNode.parameters['inputs']);
+    });
   });
 
   describe('«Дія» конектора (F3-55)', () => {

@@ -25,6 +25,7 @@ public class CoreNodesTests
         { "core.code", """{"code":"return $json;","mode":"eachItem"}""" },
         { "core.dataTable", """{"table":"Клієнти","operation":"list","where":[{"column":"city","operator":"eq","value":"{{ $json.city }}"}],"limit":10}""" },
         { "core.dataTable", """{"table":"{{ $vars.table }}","operation":"upsert","values":{"phone":"{{ $json.phone }}"}}""" },
+        { "core.decisionTable", """{"inputs":[{"name":"s","expression":"{{ $json.s }}"}],"outputs":[{"name":"d"}],"rules":[{"when":["-"],"then":[1]},{"when":[{"operator":"equals","right":"vip"}],"then":["{{ $json.x }}"]}],"hitPolicy":"collect"}""" },
     };
 
     public static TheoryData<string, string> InvalidParameters => new()
@@ -51,6 +52,9 @@ public class CoreNodesTests
         { "core.dataTable", """{"operation":"get","key":"1"}""" },
         { "core.dataTable", """{"table":"t","operation":"list","limit":5000}""" },
         { "core.dataTable", """{"table":"t","operation":"list","where":[{"column":"a","operator":"like"}]}""" },
+        { "core.decisionTable", """{"inputs":[],"outputs":[{"name":"d"}],"rules":[]}""" },
+        { "core.decisionTable", """{"inputs":[{"name":"s","expression":1}],"outputs":[{"name":"d"}],"rules":[{"when":[{"operator":"like"}],"then":[1]}]}""" },
+        { "core.decisionTable", """{"inputs":[{"name":"s","expression":1}],"outputs":[{"name":"d"}],"rules":[],"hitPolicy":"any"}""" },
     };
 
     [Fact]
@@ -62,7 +66,7 @@ public class CoreNodesTests
             registry.Register(node);
         }
 
-        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable"];
+        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable", "core.decisionTable"];
         Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Distinct().Order());
         foreach (var type in expected)
         {

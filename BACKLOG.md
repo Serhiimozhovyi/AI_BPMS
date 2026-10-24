@@ -917,7 +917,7 @@
 - DoD: тести сховища проти MinIO у Testcontainers (запис/читання/хеш/підроблений ref); воркер з двома екземплярами бачить спільні файли (інтеграційний); тест, що спans мають потрібні атрибути й не містять credentials; README/доки адміна оновлено.
 
 ### F6-19 · Таблиця рішень `core.decisionTable`
-- model: `sonnet` · status: `ready` · depends: F3-53
+- model: `sonnet` · status: `review` · depends: F3-53
 - Що: вузол `core.decisionTable { inputs: [{ name, expression }], outputs: [{ name }], rules: [{ when: [умова на вхід | "-"], then: [значення виходу] }], hitPolicy: first | all | collect }`: умови — ті самі оператори, що у `core.if` (конструктор F3-53), значення виходів — вирази; `first` → один item з виходами, `all`/`collect` → усі збіги; жодного збігу → вихід `noMatch`. Панель вузла — таблична правка (рядки = правила, колонки = входи/виходи) на основі formly-типів F3-53.
 - DoD: тести вузла: `first`, `all`, `collect`, `noMatch`, умова `-` (будь-яке), помилка виразу → помилка вузла з номером правила; Vitest табличного редактора; `describe_nodes` і `docs/workflow-format.md` (приклад) оновлено.
 

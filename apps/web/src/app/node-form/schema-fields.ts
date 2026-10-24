@@ -1,5 +1,6 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { isAssignmentSchema, isCombineSchema, isConditionSchema, isRuleSchema, operatorLabel } from './conditions';
+import { isDecisionRulesSchema } from './decision-table';
 import { OPTIONS_ANNOTATION, OptionsSource, parseOptionsSource } from './dynamic-options';
 import { ValueRules, isPlainObject } from './node-value';
 
@@ -26,6 +27,8 @@ export const CONDITION_FIELD = 'app-condition';
 export const COMBINE_FIELD = 'app-combine';
 /** Таблиця присвоєнь «поле = значення» `core.set` (F3-53). */
 export const ASSIGNMENTS_FIELD = 'app-assignments';
+/** Правила таблиці рішень `core.decisionTable` таблицею «умови на входи → значення виходів» (F6-19). */
+export const DECISION_RULES_FIELD = 'app-decision-rules';
 
 /** Глибина вкладеності, після якої об'єкти й масиви редагуються як JSON (захист від рекурсивних `$ref`). */
 const MAX_DEPTH = 6;
@@ -125,6 +128,10 @@ function typedField(key: string | undefined, raw: JsonSchema, required: boolean,
     if (typeof schema['maxItems'] === 'number') props.maxItems = schema['maxItems'];
     // Назва без `title` у схемі — ключ; для впізнаних масивів — людська назва.
     const untitled = props.label === key;
+    if (isDecisionRulesSchema(items)) {
+      if (untitled) props.label = $localize`:@@dt.rules:Правила`;
+      return { key, type: DECISION_RULES_FIELD, props };
+    }
     if (isPlainObject(items['properties']) && isAssignmentSchema(items)) {
       if (untitled) props.label = $localize`:@@set.fields:Поля`;
       return { key, type: ASSIGNMENTS_FIELD, props, fieldArray: { fieldGroup: assignmentParts(items, root, depth) } };

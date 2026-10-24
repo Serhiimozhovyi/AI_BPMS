@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.decisionTable",
+  "type": "object",
+  "required": [
+    "inputs",
+    "outputs",
+    "rules"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "cell": {
+      "description": "Умова на вхід з тим самим номером: \"-\" — будь-яке значення, інакше оператор core.if і праве значення",
+      "oneOf": [
+        {
+          "const": "-"
+        },
+        {
+          "type": "object",
+          "required": [
+            "operator"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "operator": {
+              "type": "string",
+              "enum": [
+                "equals",
+                "notEquals",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "contains",
+                "notContains",
+                "startsWith",
+                "endsWith",
+                "isEmpty",
+                "isNotEmpty",
+                "isTrue",
+                "isFalse"
+              ]
+            },
+            "right": {
+              "description": "Праве значення; не потрібне для isEmpty, isNotEmpty, isTrue, isFalse"
+            }
+          }
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "when",
+        "then"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cell"
+          },
+          "description": "По умові на кожен вхід (у порядку inputs)"
+        },
+        "then": {
+          "type": "array",
+          "items": {},
+          "description": "Значення виходів (у порядку outputs); можна вирази {{ }}"
+        }
+      }
+    }
+  },
+  "properties": {
+    "inputs": {
+      "title": "Входи",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "expression"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Назва",
+            "type": "string"
+          },
+          "expression": {
+            "title": "Значення",
+            "description": "Зазвичай {{ $json.поле }}"
+          }
+        }
+      }
+    },
+    "outputs": {
+      "title": "Виходи",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Поле",
+            "type": "string",
+            "description": "Поле item'а, куди записується значення"
+          }
+        }
+      }
+    },
+    "rules": {
+      "title": "Правила",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "hitPolicy": {
+      "title": "Які правила застосувати",
+      "type": "string",
+      "enum": [
+        "first",
+        "all",
+        "collect"
+      ],
+      "default": "first",
+      "description": "first — перше правило, що збіглося; all — item на кожне правило, що збіглося; collect — один item, у полях виходів масиви значень усіх збігів"
+    }
+  }
+}
