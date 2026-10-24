@@ -110,3 +110,22 @@ public sealed class ConnectorUnavailableException : OpenBpException
     /// <summary>Id конектора.</summary>
     public Guid ConnectorId { get; }
 }
+
+/// <summary>400: дані credential'а не відповідають його типу (<c>GET /credentials/types</c>).</summary>
+public sealed class CredentialValidationException : OpenBpException
+{
+    /// <param name="errors">Помилки за полями: <c>{ field, message }</c>.</param>
+    public CredentialValidationException(IReadOnlyList<CredentialFieldError> errors)
+        : base("CREDENTIAL_INVALID", 400, $"Дані облікових даних некоректні: {errors?.Count ?? 0} помилок.")
+    {
+        Errors = errors ?? [];
+    }
+
+    /// <summary>Помилки; у REST — поле <c>errors</c> problem-details.</summary>
+    public IReadOnlyList<CredentialFieldError> Errors { get; }
+}
+
+/// <summary>Помилка поля credential'а.</summary>
+/// <param name="Field">Назва поля (<c>apiKey</c>, <c>headers</c>, <c>type</c>…).</param>
+/// <param name="Message">Пояснення українською.</param>
+public sealed record CredentialFieldError(string Field, string Message);

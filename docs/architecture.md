@@ -137,7 +137,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 ## 8. Безпека
 
-- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка тільки у воркері в момент виконання.
+- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`.
 - Secret scrubbing: значення credentials, що потрапили у вихід вузла, замінюються на `***` перед записом у `execution_steps` і перед віддачею через SSE/MCP.
 - Jint: без CLR-interop, без мережі, з лімітами. stdio MCP-сервери — з таймаутами і лімітами пам'яті.
 - Webhook: опційна автентифікація (header-токен / Basic).
@@ -229,11 +229,14 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `GET /connectors` · `GET /connectors/{id}` · `GET /connectors/{id}/tools` | viewer | `PageResult<ConnectorSummary>` · `ConnectorDetail` · `McpToolInfo[]` |
 | `POST /connectors` · `PUT /connectors/{id}` · `DELETE /connectors/{id}` · `POST /connectors/{id}/refresh-tools` | admin | `ConnectorDetail`; 409 при видаленні, якщо є активні сценарії з цим сервером |
 | `POST /connectors/{id}/tools/{tool}/call { arguments }` | editor | `ToolCallResult` |
+| `GET /credentials/types` | admin | `CredentialTypeInfo[]`: тип, поля (`text`/`secret`/`url`/`secretMap`), JSON Schema (секрети — `writeOnly`) |
+| `GET /credentials` · `GET /credentials/{id}` | admin | `CredentialSummary[]` · `CredentialSummary`: `{ id, name, type, fields, createdBy, usedBy: { connectors, workflows }, error }` — `fields` лише шляхи заповнених полів (`apiKey`, `headers.Authorization`), значень немає ніколи |
+| `POST /credentials { name, type, data }` · `PATCH /credentials/{id} { name?, data? }` · `DELETE /credentials/{id}` | admin | 201 `CredentialSummary` · `CredentialSummary` (часткова заміна: ключ замінює, `null` видаляє, решта лишається; для `headers`/`env` — на рівні їхніх ключів) · 204; 400 `CREDENTIAL_INVALID` з `errors: [{ field, message }]`; 409 `CREDENTIAL_IN_USE`, якщо на credential посилається конектор або поточна версія будь-якого сценарію |
 
 Помилки — RFC 9457 `application/problem+json`: `{ type, title, status, detail, code, errors? }`.
 `code` — машинний код з `OpenBpException`; `errors` — список `WorkflowValidationError` для 422.
 Відображення: `NotFound` → 404, `Forbidden` → 403, не автентифіковано → 401, `Conflict` → 409,
-`WorkflowValidation` → 422, `ConnectorUnavailable` → 502, помилка аргументів → 400.
+`WorkflowValidation` → 422, `ConnectorUnavailable` → 502, `CredentialValidation` → 400 з `errors`, помилка аргументів → 400.
 
 Пагінація — offset: `page` (з 1), `pageSize` (за замовчуванням 50, максимум 200);
 відповідь `{ items, page, pageSize, total }`. Сортування фіксоване: сценарії за `updated_at desc`,
