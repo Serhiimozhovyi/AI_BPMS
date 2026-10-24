@@ -11,6 +11,10 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4" />
   </ItemGroup>
 
+  <ItemGroup Label="OpenAPI">
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
+  </ItemGroup>
+
   <ItemGroup Label="Автентифікація">
     <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.4" />
   </ItemGroup>

@@ -10,4 +10,8 @@
     <ProjectReference Include="../OpenBP.Mcp.Server/OpenBP.Mcp.Server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
 </Project>

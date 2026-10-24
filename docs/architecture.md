@@ -208,6 +208,9 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}` і `/mcp` — поза префіксом.
 
+Машиночитний опис — OpenAPI 3.1 за адресою `/openapi/v1.json` (без входу, лише схеми); знімок у репозиторії —
+[`docs/openapi.json`](openapi.json), тест `OpenApiTests` звіряє його з живим документом (F4-12).
+
 | Метод і шлях | Роль | Відповідь |
 |---|---|---|
 | `POST /auth/login` `{ email, password }` · `POST /auth/logout` · `GET /auth/me` | — / будь-яка | 204 + cookie · 204 · `UserInfo` |

@@ -38,6 +38,8 @@ build=(--build)
 
 wait_for "/health/ready через web" curl -fsS "$BASE/health/ready"
 echo "ok: /health/ready"
+curl -fsS "$BASE/openapi/v1.json" | jq -e '.paths["/api/v1/workflows"]' >/dev/null || fail "/openapi/v1.json через web"
+echo "ok: /openapi/v1.json"
 
 curl -fsS -c "$COOKIES" -H 'content-type: application/json' \
   -d "{\"email\":\"${OPENBP_ADMIN_EMAIL}\",\"password\":\"${OPENBP_ADMIN_PASSWORD}\"}" \
