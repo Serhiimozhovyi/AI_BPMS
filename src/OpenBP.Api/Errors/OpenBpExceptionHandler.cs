@@ -31,6 +31,10 @@ public sealed class OpenBpExceptionHandler(IProblemDetailsService problems) : IE
         {
             problem.Extensions["errors"] = validation.Errors;
         }
+        else if (exception is CredentialValidationException credential)
+        {
+            problem.Extensions["errors"] = credential.Errors;
+        }
 
         httpContext.Response.StatusCode = status;
         return await problems.TryWriteAsync(new ProblemDetailsContext

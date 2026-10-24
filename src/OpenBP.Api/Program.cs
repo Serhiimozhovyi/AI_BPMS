@@ -8,6 +8,7 @@ using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Nodes;
 using OpenBP.Application.Connectors;
+using OpenBP.Application.Credentials;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Nodes;
 using OpenBP.Application.Schedules;
@@ -53,6 +54,9 @@ builder.Services.AddScoped<ICredentialProvider>(sp => new PostgresCredentialProv
     sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
 builder.Services.AddOpenBpWebhookServices();
 
+// Credentials (F4-01): CRUD без значень секретів, лише для admin.
+builder.Services.AddOpenBpCredentialServices();
+
 // Конектори (F2-13): CRUD mcp_servers, discovery, тестові виклики; реєстр заповнюється при старті.
 builder.Services.AddOpenBpConnectorServices();
 builder.Services.AddHostedService<ConnectorRegistryLoader>();
@@ -72,7 +76,7 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);
 
