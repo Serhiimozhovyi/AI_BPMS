@@ -10,7 +10,8 @@ RUN npx ng build --configuration production
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 # Адреса Api всередині мережі Compose; шаблон підставляється при старті (envsubst образу nginx).
-ENV OPENBP_API_UPSTREAM=api:8080
+ENV OPENBP_API_UPSTREAM=api:8080 \
+    OPENBP_DNS_RESOLVER=127.0.0.11
 COPY docker/web/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /web/dist/web/browser/ /usr/share/nginx/html/
 EXPOSE 8080

@@ -588,7 +588,7 @@
 - DoD: CI smoke-джоб зелений; `docker-compose.yml` для розробки не зламано.
 
 ### F4-11 · Бекапи і відновлення
-- model: `sonnet` · status: `ready` · depends: F4-10
+- model: `sonnet` · status: `review #99` · depends: F4-10
 - Що: сервіс `backup` у prod Compose: `pg_dump -Fc` за розкладом (`OPENBP_BACKUP_CRON`, типово 02:00) у том/теку `./backups`, ротація (`OPENBP_BACKUP_KEEP_DAYS`, типово 14), запис результату в журнал; `scripts/backup.sh` (разовий) і `scripts/restore.sh <файл>` (зупиняє api/worker, відновлює, запускає `migrate`, піднімає назад). Нагадування в документації: ключ `OPENBP_ENCRYPTION_KEY` бекапиться окремо, без нього credentials не розшифруються.
 - DoD: CI smoke: створити сценарій → бекап → видалити → відновити → сценарій є, credential розшифровується; README/доки адміна оновлено.
 
