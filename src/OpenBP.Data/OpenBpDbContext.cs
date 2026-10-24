@@ -151,6 +151,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("execution_steps");
             e.Property(x => x.Input).HasColumnType("jsonb");
             e.Property(x => x.Output).HasColumnType("jsonb");
+            e.Property(x => x.SubSteps).HasColumnType("jsonb");
             e.HasIndex(x => x.ExecutionId);
         });
         b.Entity<JobEntity>(e =>

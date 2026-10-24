@@ -35,6 +35,9 @@ public sealed record StepRecord
     /// <summary>Помилка вузла; заповнюється для <see cref="StepStatus.Error"/>, інакше <c>null</c>.</summary>
     public StepError? Error { get; init; }
 
+    /// <summary>Підкроки останньої спроби (F6-12: запити до моделі й виклики інструментів агентом); зазвичай порожньо.</summary>
+    public IReadOnlyList<SubStep> SubSteps { get; init; } = [];
+
     /// <summary>Початок запуску вузла (UTC).</summary>
     public required DateTimeOffset StartedAt { get; init; }
 

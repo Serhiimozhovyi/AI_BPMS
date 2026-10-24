@@ -264,9 +264,11 @@ public sealed class WorkflowExecutor
         }
 
         var startedAt = _time.GetUtcNow();
+        IReadOnlyList<SubStep> subSteps = [];
 
         StepRecord Step(StepStatus status, Item[][] output, StepError? error = null) => new()
         {
+            SubSteps = subSteps,
             ExecutionId = request.ExecutionId,
             NodeId = definition.Id,
             Status = status,
@@ -315,6 +317,7 @@ public sealed class WorkflowExecutor
             var ctx = new EngineNodeContext(
                 definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
                 run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state);
+            subSteps = ctx.SubSteps;
 
             // Span спроби (F6-18): без параметрів і items — лише ідентифікатори вузла.
             var span = OpenBpTelemetry.StartChild(OpenBpTelemetry.NodeSpan);

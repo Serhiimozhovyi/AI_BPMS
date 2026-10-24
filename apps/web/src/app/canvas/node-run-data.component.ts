@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { ExecutionItem, ExecutionStep } from '../executions/executions-api.service';
+import { ExecutionItem, ExecutionStep, SubStep } from '../executions/executions-api.service';
 
 /** Порт з items для показу. */
 interface PortView {
@@ -36,6 +36,33 @@ interface PortView {
           }
           <button type="button" class="run__error-input" data-testid="node-run-error-input" (click)="inputTitle.scrollIntoView({ block: 'nearest' })" i18n="@@noderun.error.showInput">Показати вхідні дані</button>
         </div>
+      }
+      @if (subSteps().length > 0) {
+        <h4 class="run__subtitle" i18n="@@noderun.subSteps">Кроки агента · {{ subSteps().length }}:count:</h4>
+        <ol class="run__subs" data-testid="node-run-substeps">
+          @for (sub of subSteps(); track $index) {
+            <li class="run__sub" [attr.data-kind]="sub.kind" [class.run__sub--error]="!!sub.error">
+              <details>
+                <summary>
+                  <span class="run__sub-kind">{{ kindLabel(sub) }}</span>
+                  {{ sub.name }}
+                  <span class="run__sub-meta">#{{ sub.iteration ?? 1 }} · {{ duration(sub) }}@if (tokens(sub); as t) { · {{ t }} }</span>
+                </summary>
+                @if (sub.error) {
+                  <p class="run__sub-error m-0" data-testid="node-run-substep-error">{{ sub.error }}</p>
+                }
+                @if (sub.input !== undefined && sub.input !== null) {
+                  <div class="run__port-label" i18n="@@noderun.subSteps.input">Аргументи</div>
+                  <pre class="run__json">{{ json(sub.input) }}</pre>
+                }
+                @if (sub.output !== undefined && sub.output !== null) {
+                  <div class="run__port-label" i18n="@@noderun.subSteps.output">Результат</div>
+                  <pre class="run__json">{{ json(sub.output) }}</pre>
+                }
+              </details>
+            </li>
+          }
+        </ol>
       }
       <h4 #inputTitle class="run__subtitle" i18n="@@noderun.input">Вхід</h4>
       @for (port of inputs(); track $index) {
@@ -141,6 +168,32 @@ interface PortView {
       font-size: 12px;
       opacity: 0.6;
     }
+
+    .run__subs {
+      margin: 0 0 8px;
+      padding: 0;
+      list-style: none;
+      font-size: 12px;
+    }
+
+    .run__sub summary {
+      cursor: pointer;
+    }
+
+    .run__sub-kind {
+      padding: 0 6px;
+      border-radius: 6px;
+      background: var(--ac-cool-grey);
+    }
+
+    .run__sub-meta {
+      opacity: 0.6;
+    }
+
+    .run__sub--error .run__sub-kind,
+    .run__sub-error {
+      color: var(--mat-sys-error);
+    }
   `,
 })
 export class NodeRunDataComponent {
@@ -155,6 +208,26 @@ export class NodeRunDataComponent {
 
   protected readonly inputs = computed(() => ports(this.step().input, this.inputNames(), false));
   protected readonly outputs = computed(() => ports(this.step().output, this.outputNames(), true));
+
+  protected readonly subSteps = computed<SubStep[]>(() => this.step().subSteps ?? []);
+
+  protected kindLabel(sub: SubStep): string {
+    return sub.kind === 'llm' ? $localize`:@@noderun.subSteps.llm:модель` : sub.kind === 'tool' ? $localize`:@@noderun.subSteps.tool:дія` : sub.kind;
+  }
+
+  protected duration(sub: SubStep): string {
+    const ms = Math.max(0, Date.parse(sub.finishedAt) - Date.parse(sub.startedAt));
+    return ms < 1000 ? `${ms} мс` : `${(ms / 1000).toLocaleString('uk-UA', { maximumFractionDigits: 1 })} с`;
+  }
+
+  protected tokens(sub: SubStep): string | null {
+    const total = (sub.usage?.input ?? 0) + (sub.usage?.output ?? 0);
+    return total > 0 ? $localize`:@@noderun.subSteps.tokens:${total}:total: токенів` : null;
+  }
+
+  protected json(value: unknown): string {
+    return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  }
 
   protected readonly statusLabel = computed(() => {
     switch (this.step().status) {

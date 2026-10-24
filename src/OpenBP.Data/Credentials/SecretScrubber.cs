@@ -140,6 +140,13 @@ public sealed class SecretScrubber
             Input = Scrub(step.Input),
             Output = Scrub(step.Output),
             Error = step.Error is null ? null : step.Error with { Message = Scrub(step.Error.Message), Type = Scrub(step.Error.Type), Details = Scrub(step.Error.Details) },
+            SubSteps = [.. step.SubSteps.Select(s => s with
+            {
+                Name = Scrub(s.Name) ?? "",
+                Input = Scrub(s.Input),
+                Output = Scrub(s.Output),
+                Error = Scrub(s.Error),
+            })],
         };
     }
 

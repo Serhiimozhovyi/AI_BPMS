@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
 using OpenBP.Engine.Nodes;
@@ -193,6 +194,46 @@ public class PostgresExecutionStoreTests(PostgresFixture postgres)
         var step = await db.ExecutionSteps.SingleAsync(s => s.ExecutionId == snapshot.Id);
         Assert.Equal(2, step.RunIndex);
         Assert.Equal("success", step.Status);
+    }
+
+    [Fact]
+    public async Task SaveStepAsync_StoresScrubbedSubSteps_AndLoadsThemBack()
+    {
+        var cs = await postgres.MigratedDatabaseAsync();
+        var scrubber = new SecretScrubber();
+        scrubber.Add(new JsonObject { ["token"] = "tool-secret-123" });
+        var store = new PostgresExecutionStore(new PooledDbContextFactory<OpenBpDbContext>(PostgresFixture.Options(cs)), scrubber: scrubber);
+        var workflow = new WorkflowDefinition { Name = "wf" };
+        var (wf, ver) = await SaveVersionAsync(cs, workflow);
+        var snapshot = Snapshot(wf, ver, workflow);
+        await store.CreateAsync(snapshot, CancellationToken.None);
+
+        await store.SaveStepAsync(
+            new StepRecord
+            {
+                ExecutionId = snapshot.Id,
+                NodeId = "n_agent",
+                Status = StepStatus.Error,
+                Error = new StepError("Агент не дав відповіді"),
+                SubSteps =
+                [
+                    new SubStep(SubStepKinds.Llm, "qwen", Now, Now, Output: new JsonObject { ["text"] = "Виклич crm" }, Usage: new JsonObject { ["input"] = 10 }),
+                    new SubStep(SubStepKinds.Tool, "CRM / find", Now, Now, Input: new JsonObject { ["q"] = "tool-secret-123" }, Error: "відмова tool-secret-123", Iteration: 2),
+                ],
+                StartedAt = Now,
+                FinishedAt = Now,
+            },
+            CancellationToken.None);
+
+        await using var db = PostgresFixture.CreateContext(cs);
+        var raw = (await db.ExecutionSteps.SingleAsync(s => s.ExecutionId == snapshot.Id)).SubSteps!;
+        Assert.DoesNotContain("tool-secret-123", raw, StringComparison.Ordinal);
+        var loaded = (await store.LoadAsync(snapshot.Id, CancellationToken.None))!.Steps.Single().SubSteps;
+        Assert.Equal(2, loaded.Count);
+        Assert.Equal("qwen", loaded[0].Name);
+        Assert.Equal(10, loaded[0].Usage!["input"]!.GetValue<int>());
+        Assert.Equal(SecretScrubber.Mask, loaded[1].Input!["q"]!.GetValue<string>());
+        Assert.Equal(2, loaded[1].Iteration);
     }
 
     [Fact]
