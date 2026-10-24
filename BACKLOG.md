@@ -528,7 +528,7 @@
 - Вхід через OIDC — ще одна cookie-схема поруч із паролем; таблиця `users` лишається джерелом ролей. У Keycloak «Кіт 2» (realm `astarta`) нічого не змінюємо самі: клієнт для OpenBP реєструє власник; тести — проти Keycloak у Testcontainers.
 
 ### F4-01 · Api: credentials (CRUD і типи)
-- model: `sonnet` · status: `in-progress agent/F4-01-credentials-api` · depends: F2-04
+- model: `sonnet` · status: `review #84` · depends: F2-04
 - Що: `ICredentialService` в application-шарі і REST `/api/v1/credentials` (лише `admin`): список `{ id, name, type, fields: { <поле>: "set" }, createdBy, usedBy: { connectors[], workflows[] } }`, отримати, створити, перейменувати, замінити дані (часткова заміна: поле, якого немає в запиті, лишається), видалити (`409 credential_in_use`, якщо на нього посилається конектор або поточна версія сценарію). Каталог типів `GET /api/v1/credentials/types`: `mcp.http` (`headers`), `mcp.stdio` (`env`), `openai-compatible` (`baseUrl`, `apiKey`), `anthropic` (`apiKey`), `openai` (`apiKey`), `generic` (довільні пари) — кожен із JSON Schema полів і позначкою секретних. Значення секретів не повертаються ніколи.
 - DoD: тести сервісу й REST (Testcontainers): ролі (editor/viewer → 403), відповідь не містить жодного значення з даних, часткова заміна, `credential_in_use`, невідомий тип → 400 з `errors`; `architecture.md` §8/§10 оновлено.
 
