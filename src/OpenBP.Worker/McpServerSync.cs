@@ -45,7 +45,10 @@ public sealed class McpServerSync(
     private readonly Dictionary<string, string> _fingerprints = new(StringComparer.Ordinal);
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
-    /// <summary>Id серверів, на які посилаються вузли <c>mcp.*</c> сценарію (без виразів у <c>serverId</c>).</summary>
+    /// <summary>
+    /// Id серверів, на які посилаються вузли <c>mcp.*</c> (<c>serverId</c>) та інструменти <c>ai.agent</c>
+    /// (<c>tools[].serverId</c>, F6-12) сценарію — без виразів.
+    /// </summary>
     /// <param name="workflow">Сценарій.</param>
     public static IReadOnlySet<string> ReferencedServers(WorkflowDefinition workflow)
     {
@@ -53,17 +56,31 @@ public sealed class McpServerSync(
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in workflow.Nodes)
         {
-            if (node.Type.StartsWith("mcp.", StringComparison.Ordinal)
-                && node.Parameters["serverId"] is JsonValue value
-                && value.TryGetValue<string>(out var serverId)
+            if (node.Type.StartsWith("mcp.", StringComparison.Ordinal))
+            {
+                Add(node.Parameters["serverId"]);
+            }
+            else if (node.Type == "ai.agent" && node.Parameters["tools"] is JsonArray tools)
+            {
+                foreach (var tool in tools)
+                {
+                    Add(tool?["serverId"]);
+                }
+            }
+        }
+
+        return result;
+
+        void Add(JsonNode? value)
+        {
+            if (value is JsonValue v
+                && v.TryGetValue<string>(out var serverId)
                 && !string.IsNullOrWhiteSpace(serverId)
                 && !ExpressionSyntax.ContainsExpression(serverId))
             {
                 result.Add(serverId);
             }
         }
-
-        return result;
     }
 
     /// <summary>Готує реєстр до виконання сценарію.</summary>

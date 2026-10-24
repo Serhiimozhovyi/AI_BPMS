@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using OpenBP.Engine.Execution;
 using OpenBP.Engine.Nodes;
 using OpenBP.Shared.Workflow;
 
@@ -48,6 +49,9 @@ public sealed class FakeNodeContext : INodeContext
     /// <summary>Змінні інстансу (<c>$vars</c>); тест задає їх напряму.</summary>
     public Dictionary<string, string> Vars { get; init; } = new(StringComparer.Ordinal);
 
+    /// <summary>Підкроки, які записав вузол (F6-12).</summary>
+    public List<SubStep> SubSteps { get; } = [];
+
     IReadOnlyDictionary<string, IReadOnlyList<Item>> INodeContext.NodeOutputs => NodeOutputs;
 
     IReadOnlyDictionary<string, string> INodeContext.Vars => Vars;
@@ -55,6 +59,9 @@ public sealed class FakeNodeContext : INodeContext
     IExecutionLogger INodeContext.Logger => Logger;
 
     IBinaryStore INodeContext.Binary => Binary;
+
+    /// <inheritdoc />
+    public void RecordSubStep(SubStep step) => SubSteps.Add(step);
 
     /// <summary>Задає items на вхідному порту (замінює попередні).</summary>
     /// <param name="input">Індекс входу.</param>

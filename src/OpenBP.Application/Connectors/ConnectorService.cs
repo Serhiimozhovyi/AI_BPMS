@@ -343,7 +343,10 @@ public sealed class ConnectorService(
         }
     }
 
-    /// <summary>Чи посилається визначення на сервер у <c>parameters.serverId</c> вузла <c>mcp.*</c>.</summary>
+    /// <summary>
+    /// Чи посилається визначення на сервер у <c>parameters.serverId</c> вузла <c>mcp.*</c> або в інструментах
+    /// <c>ai.agent</c> (<c>parameters.tools[].serverId</c>).
+    /// </summary>
     private static bool References(string definition, string serverId)
     {
         JsonNode? document;
@@ -363,15 +366,22 @@ public sealed class ConnectorService(
 
         foreach (var node in nodes.OfType<JsonObject>())
         {
-            if (node["type"] is JsonValue type && type.TryGetValue<string>(out var t) && t.StartsWith("mcp.", StringComparison.Ordinal)
-                && node["parameters"]?["serverId"] is JsonValue value && value.TryGetValue<string>(out var s)
-                && string.Equals(s, serverId, StringComparison.OrdinalIgnoreCase))
+            var type = node["type"] is JsonValue tv && tv.TryGetValue<string>(out var t) ? t : "";
+            if (type.StartsWith("mcp.", StringComparison.Ordinal) && Same(node["parameters"]?["serverId"]))
+            {
+                return true;
+            }
+
+            if (type == "ai.agent" && node["parameters"]?["tools"] is JsonArray tools && tools.Any(tool => Same(tool?["serverId"])))
             {
                 return true;
             }
         }
 
         return false;
+
+        bool Same(JsonNode? value) =>
+            value is JsonValue v && v.TryGetValue<string>(out var s) && string.Equals(s, serverId, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ConnectorSummary Summary(McpServerEntity row, IReadOnlyList<McpToolInfo> tools) => new(

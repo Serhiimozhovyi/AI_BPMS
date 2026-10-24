@@ -102,7 +102,10 @@ public static class WorkerServiceCollectionExtensions
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
             CoreNodes.All(dataTables: sp.GetRequiredService<PostgresDataTableStore>())
                 .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>()))
-                .Concat(AiNodes.All(sp.GetRequiredService<HttpClient>()))));
+                .Concat(AiNodes.All(
+                    sp.GetRequiredService<HttpClient>(),
+                    sp.GetRequiredService<IMcpServerRegistry>(),
+                    sp.GetRequiredService<PostgresDataTableStore>()))));
         services.AddSingleton<IExpressionEvaluator>(_ => new JintExpressionEvaluator());
 
         services.AddSingleton(sp => new ExecutionJobProcessor(
