@@ -77,6 +77,8 @@ function assistantStream(definition: unknown): string {
 /** Фейковий Api: сценарій з версіями; кожен `PUT` — нова версія. */
 class FakeApi {
   version = 1;
+  /** Визначення кожної збереженої версії (індекс = номер − 1) — для «Історії» (F3-61). */
+  saved: Definition[] = [];
   assistantRequests: unknown[] = [];
   definition: Definition = {
     formatVersion: 1,
@@ -86,6 +88,11 @@ class FakeApi {
     connections: [],
     pinData: {},
   };
+
+  /** Усі версії: перша — початкове визначення. */
+  history(): Definition[] {
+    return this.saved.length ? this.saved : [this.definition];
+  }
 
   detail() {
     return {
@@ -107,6 +114,13 @@ class FakeApi {
       if (path === '/api/v1/nodes') return route.fulfill({ json: DESCRIPTORS });
       if (path === '/api/v1/connectors') return route.fulfill({ json: { items: [], page: 1, pageSize: 200, total: 0 } });
       if (path === '/api/v1/workflows/templates') return route.fulfill({ json: TEMPLATES });
+      if (path === `/api/v1/workflows/${WORKFLOW_ID}/versions`) {
+        const all = this.history();
+        const list = all.map((_, i) => ({ id: `v${i + 1}`, version: i + 1, createdAt: '2026-10-24T10:00:00Z', createdBy: 'u1', createdByEmail: 'e2e@openbp.test' }));
+        return route.fulfill({ json: list.reverse() });
+      }
+      const versionMatch = new RegExp(`^/api/v1/workflows/${WORKFLOW_ID}/versions/(\\d+)$`).exec(path);
+      if (versionMatch) return route.fulfill({ json: this.history()[Number(versionMatch[1]) - 1] });
       if (path === `/api/v1/workflows/${WORKFLOW_ID}/assistant` && request.method() === 'POST') {
         this.assistantRequests.push(request.postDataJSON());
         return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(TEMPLATES[0].definition) });
@@ -118,8 +132,10 @@ class FakeApi {
       if (path === `/api/v1/workflows/${WORKFLOW_ID}`) {
         if (request.method() === 'GET') return route.fulfill({ json: this.detail() });
         if (request.method() === 'PUT') {
+          this.saved = this.history();
           this.definition = { ...(request.postDataJSON() as Definition), name: 'E2E' };
           this.version++;
+          this.saved.push(this.definition);
           return route.fulfill({ json: this.detail() });
         }
       }
@@ -510,4 +526,48 @@ test('F3-60: «Описати процес» → помічник будує с�
   await page.getByTestId('assistant-close').click();
   await page.getByTestId('undo').click();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
+});
+
+test('F3-61: змінити, відкрити історію, відновити попередню версію — канвас як до зміни; перегляд версії лише для читання', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+
+  // Версія 2 — шаблон з двома вузлами, версія 3 — без «Привітання».
+  await page.getByTestId('start-template').click();
+  await page.locator('[data-template="hello-manual"]').click();
+  await waitSaved(page);
+  await card(page, 'Привітання').click({ position: { x: 12, y: 12 } });
+  await expect(page.getByTestId('node-panel-name')).toHaveText('Привітання');
+  await page.getByTestId('delete').click();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 1 · ребер: 0');
+  await waitSaved(page);
+  expect(api.version).toBe(3);
+
+  await page.getByTestId('history').click();
+  const versions = page.getByTestId('version');
+  await expect(versions).toHaveCount(3);
+  await expect(versions.nth(0)).toContainText('поточна');
+  await expect(versions.nth(0).getByTestId('version-diff')).toContainText('видалено: Привітання');
+  await expect(versions.nth(1).getByTestId('version-diff')).toContainText('додано: Старт, Привітання');
+  await expect(versions.nth(0).getByTestId('version-restore')).toHaveCount(0);
+  await versions.nth(1).getByTestId('version-restore').click();
+
+  await expect(page.getByTestId('editor-notice')).toContainText('Відновлено версію 2');
+  await expect(card(page, 'Привітання')).toBeVisible();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await waitSaved(page);
+  expect(api.version).toBe(4);
+  expect(graph(api.definition)).toEqual(graph(api.saved[1]));
+
+  // «Переглянути» версію 3: канвас лише для читання, без палітри; «До поточної версії» повертає редагування.
+  await page.getByTestId('history').click();
+  await page.locator('[data-version="3"]').getByTestId('version-view').click();
+  await expect(page).toHaveURL(/version=3/);
+  await expect(page.getByTestId('version-banner')).toHaveText('Версія 3');
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 1');
+  await expect(page.getByTestId('undo')).toHaveCount(0);
+  await page.getByTestId('version-current').click();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await expect(page.getByTestId('undo')).toBeVisible();
 });

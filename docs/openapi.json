@@ -6909,6 +6909,12 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "createdByEmail": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       }

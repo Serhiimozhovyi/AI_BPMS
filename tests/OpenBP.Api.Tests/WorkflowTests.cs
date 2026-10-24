@@ -304,6 +304,8 @@ public class WorkflowTests(ApiFactory api)
         Assert.Equal([2, 1], versions.EnumerateArray().Select(v => v.GetProperty("version").GetInt32()).ToArray());
         Assert.Equal(saved.GetProperty("versionId").GetGuid(), versions[0].GetProperty("id").GetGuid());
         Assert.NotEqual(JsonValueKind.Null, versions[0].GetProperty("createdBy").ValueKind);
+        // Автор для історії версій (F3-61).
+        Assert.StartsWith("editor-", versions[0].GetProperty("createdByEmail").GetString(), StringComparison.Ordinal);
 
         var v1 = await JsonAsync(await editor.GetAsync($"{Base}/{id}/versions/1"));
         Assert.Equal(1, v1.GetProperty("nodes").GetArrayLength());
