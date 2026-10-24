@@ -6,9 +6,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, catchError, forkJoin, map, of } from 'rxjs';
+import { BusinessViewComponent } from '../../business-view/business-view.component';
+import { BusinessRun } from '../../business-view/business-run';
+import { EditorView, readEditorView, writeEditorView } from '../../business-view/editor-view';
+import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
 import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
-import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ConnectorsApiService, apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
   EXECUTION_STATES,
   ExecutionDetail,
@@ -24,7 +28,7 @@ import {
   isFinalState,
   parseItems,
 } from '../../executions/executions-api.service';
-import { WorkflowSummary, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { WorkflowDefinition, WorkflowSummary, WorkflowsApiService } from '../../workflows/workflows-api.service';
 
 /** Розмір сторінки журналу. */
 export const EXECUTIONS_PAGE_SIZE = 50;
@@ -59,7 +63,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
 @Component({
   selector: 'app-executions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, NodeRunDataComponent],
+  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, BusinessViewComponent, NodeRunDataComponent],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@executions.title">Виконання</h1>
@@ -200,8 +204,25 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             <p role="alert" class="mb-2 text-red-700" data-testid="action-error">{{ actionError() }}</p>
           }
 
+          <div class="mb-2 inline-flex overflow-hidden rounded border" role="radiogroup" i18n-aria-label="@@executions.view" aria-label="Вигляд виконання">
+            <button type="button" role="radio" class="px-3 py-1" data-testid="view-business" [class.font-semibold]="view() === 'business'" [attr.aria-checked]="view() === 'business'" (click)="setView('business')" i18n-title="@@executions.view.business.hint" title="Де зараз процес — на схемі з доріжками" i18n="@@executions.view.business">Бізнес</button>
+            <button type="button" role="radio" class="px-3 py-1" data-testid="view-technical" [class.font-semibold]="view() === 'technical'" [attr.aria-checked]="view() === 'technical'" (click)="setView('technical')" i18n-title="@@executions.view.technical.hint" title="Список кроків з даними" i18n="@@executions.view.technical">Технічний</button>
+          </div>
+          @if (view() === 'business') {
+            @if (definition(); as def) {
+              <app-business-view
+                class="mb-4 block h-[420px] rounded border"
+                [definition]="def"
+                [descriptors]="descriptors()"
+                [connectors]="connectorNames()"
+                [execution]="businessRun()"
+                [fileName]="workflowName(d.summary.workflowId)"
+                (stepPick)="pickNode($event)"
+              />
+            }
+          }
           <div class="flex flex-wrap gap-4">
-            <ol class="min-w-56" data-testid="steps">
+            <ol class="min-w-56" data-testid="steps" [hidden]="view() === 'business'">
               @for (s of d.steps; track s.id) {
                 <li [attr.data-step]="s.nodeId">
                   <button mat-button type="button" [class.font-semibold]="selectedStep()?.id === s.id" (click)="selectedStepId.set(s.id)">
@@ -224,6 +245,8 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
 export class ExecutionsPage implements OnInit {
   private readonly api = inject(ExecutionsApiService);
   private readonly workflowsApi = inject(WorkflowsApiService);
+  private readonly nodesApi = inject(NodesApiService);
+  private readonly connectorsApi = inject(ConnectorsApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -243,8 +266,18 @@ export class ExecutionsPage implements OnInit {
 
   readonly selected = signal<ExecutionDetail | null>(null);
   readonly selectedStepId = signal<string | null>(null);
-  /** Назви вузлів сценарію вибраного виконання (поточна версія; вузол, якого вже немає, — за id). */
-  private readonly nodeNames = signal<ReadonlyMap<string, string>>(new Map());
+  /** Визначення сценарію вибраного виконання (поточна версія; вузол, якого вже немає, — за id). */
+  readonly definition = signal<WorkflowDefinition | null>(null);
+  private readonly nodeNames = computed<ReadonlyMap<string, string>>(() => new Map((this.definition()?.nodes ?? []).map((n) => [n.id, n.name])));
+  /** «Бізнес | Технічний» (F3-69): бізнес — виконання на схемі з доріжками. */
+  readonly view = signal<EditorView>(readEditorView());
+  readonly descriptors = signal<NodeTypeInfo[]>([]);
+  readonly connectorNames = signal<{ id: string; name: string }[]>([]);
+  private businessLoaded = false;
+  readonly businessRun = computed((): BusinessRun | null => {
+    const detail = this.selected();
+    return detail ? { state: detail.summary.state, steps: detail.steps } : null;
+  });
   readonly acting = signal(false);
   readonly actionError = signal<string | null>(null);
   readonly resumeOpen = signal(false);
@@ -275,6 +308,7 @@ export class ExecutionsPage implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.view() === 'business') this.loadBusiness();
     this.workflowId.set(this.route.snapshot.queryParamMap.get('workflowId') || null);
     this.workflowsApi
       .list()
@@ -430,6 +464,36 @@ export class ExecutionsPage implements OnInit {
     return this.workflows().find((w) => w.id === id)?.name ?? id;
   }
 
+  setView(view: EditorView): void {
+    this.view.set(view);
+    writeEditorView(view, true);
+    if (view === 'business') this.loadBusiness();
+  }
+
+  /** Клік на крок схеми: дані останнього кроку цього вузла під схемою. */
+  pickNode(nodeId: string): void {
+    const step = this.selected()?.steps.filter((s) => s.nodeId === nodeId).at(-1);
+    if (step) this.selectedStepId.set(step.id);
+  }
+
+  /** Дескриптори (порти й назви гілок) і назви конекторів (доріжки) — лише коли вперше відкрили бізнес-вигляд. */
+  private loadBusiness(): void {
+    if (this.businessLoaded) return;
+    this.businessLoaded = true;
+    forkJoin({
+      descriptors: this.nodesApi.list().pipe(catchError(() => of([] as NodeTypeInfo[]))),
+      connectors: this.connectorsApi.list().pipe(
+        map((page) => page.items.map((c) => ({ id: c.id, name: c.name }))),
+        catchError(() => of([])),
+      ),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ descriptors, connectors }) => {
+        this.descriptors.set(descriptors);
+        this.connectorNames.set(connectors);
+      });
+  }
+
   nodeName(nodeId: string): string {
     return this.nodeNames().get(nodeId) ?? nodeId;
   }
@@ -529,8 +593,8 @@ export class ExecutionsPage implements OnInit {
       .get(workflowId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (w) => this.nodeNames.set(new Map(w.definition.nodes.map((n) => [n.id, n.name]))),
-        error: () => this.nodeNames.set(new Map()),
+        next: (w) => this.definition.set(w.definition),
+        error: () => this.definition.set(null),
       });
   }
 }
