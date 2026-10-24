@@ -6,6 +6,7 @@ using OpenBP.Api;
 using OpenBP.Api.Auth;
 using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
+using OpenBP.Api.Health;
 using OpenBP.Api.Nodes;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
@@ -25,6 +26,7 @@ using OpenBP.Shared.Workflow;
 using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddOpenBpConsole(builder.Configuration);
 
 // Фабрика (для CredentialStore) і scoped-контекст для сервісів application-шару.
 builder.Services.AddDbContextFactory<OpenBpDbContext>(
@@ -77,13 +79,16 @@ builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 // MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
 builder.Services.AddOpenBpMcpServer();
 
+// Health-checks (F4-08): /health/live і /health/ready (БД і міграції).
+builder.Services.AddOpenBpHealthChecks();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapOpenBpHealth();
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();

@@ -59,6 +59,7 @@ public static class WorkerServiceCollectionExtensions
 
         services.AddDbContextFactory<OpenBpDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("Default")));
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(sp => new WorkerLiveness(sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton(sp => new JobQueue(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<JobQueueOptions>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
         // Оновлення oauth2-токенів при читанні credential'а (F4-04): власний HttpClient з таймаутом.
@@ -106,7 +107,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionWorker>>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<PollJobProcessor>()));
+            sp.GetRequiredService<PollJobProcessor>(),
+            sp.GetRequiredService<WorkerLiveness>()));
         services.AddHostedService(sp => new ExecutionRecoveryService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

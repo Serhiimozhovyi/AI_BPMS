@@ -169,6 +169,12 @@ public sealed partial class ExecutionJobProcessor
 
     private async Task ExecuteAsync(ClaimedJob job, ExecutionJobPayload payload, bool resume, CancellationToken stoppingToken)
     {
+        // Scope журналу (F4-08): у JSON-журналі кожен запис виконання несе executionId і workflowId.
+        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["executionId"] = payload.ExecutionId,
+            ["workflowId"] = payload.WorkflowId,
+        });
         var executionId = payload.ExecutionId;
         var workflow = await LoadWorkflowAsync(payload.VersionId, stoppingToken).ConfigureAwait(false);
         if (workflow is null)

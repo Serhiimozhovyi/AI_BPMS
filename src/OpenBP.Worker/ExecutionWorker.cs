@@ -22,6 +22,7 @@ public sealed partial class ExecutionWorker : BackgroundService
     private readonly WorkerOptions _options;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
+    private readonly WorkerLiveness? _liveness;
 
     /// <summary>Створює хост виконань.</summary>
     /// <param name="queue">Черга jobs.</param>
@@ -30,13 +31,15 @@ public sealed partial class ExecutionWorker : BackgroundService
     /// <param name="logger">Системний лог.</param>
     /// <param name="time">Годинник; за замовчуванням системний.</param>
     /// <param name="poll">Обробник job'ів опитування <c>mcp.poll</c>; <c>null</c> — воркер їх не бере.</param>
+    /// <param name="liveness">Відмітки циклу для <c>/health/ready</c>; <c>null</c> — не ведуться.</param>
     public ExecutionWorker(
         JobQueue queue,
         ExecutionJobProcessor processor,
         WorkerOptions options,
         ILogger<ExecutionWorker> logger,
         TimeProvider? time = null,
-        PollJobProcessor? poll = null)
+        PollJobProcessor? poll = null,
+        WorkerLiveness? liveness = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -46,6 +49,7 @@ public sealed partial class ExecutionWorker : BackgroundService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _time = time ?? TimeProvider.System;
         _poll = poll;
+        _liveness = liveness;
         _kinds = poll is null ? [JobKinds.Execution] : [JobKinds.Execution, JobKinds.Poll];
     }
 
@@ -59,7 +63,12 @@ public sealed partial class ExecutionWorker : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await slots.WaitAsync(stoppingToken).ConfigureAwait(false);
+                _liveness?.Beat();
+                while (!await slots.WaitAsync(_options.PollInterval, stoppingToken).ConfigureAwait(false))
+                {
+                    _liveness?.Beat();
+                }
+
                 ClaimedJob? job;
                 try
                 {
