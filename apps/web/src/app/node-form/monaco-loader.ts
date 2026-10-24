@@ -36,6 +36,8 @@ declare const $json: any;
 declare const $index: number;
 /** Усі вхідні items (режим allItems). */
 declare const items: any[];
+/** Виходи вже виконаних вузлів за назвою: \`json\` — item з тим самим індексом (або перший), \`all\` — усі items. */
+declare const $node: Record<string, { json: any; all: any[] }>;
 `;
 
 let pending: Promise<CodeEditorFactory> | null = null;

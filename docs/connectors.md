@@ -25,6 +25,8 @@ public interface INodeContext
     IExecutionLogger Logger { get; }
     IBinaryStore Binary { get; }
     JsonObject NodeState { get; set; }               // для polling-тригерів
+    IReadOnlyDictionary<string, IReadOnlyList<Item>> NodeOutputs { get; } // виходи виконаних вузлів за назвою ($node)
+    string Timezone { get; }                         // settings.timezone сценарію
 }
 ```
 

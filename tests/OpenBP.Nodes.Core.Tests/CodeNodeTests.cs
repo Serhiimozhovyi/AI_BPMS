@@ -45,6 +45,83 @@ public class CodeNodeTests
         Assert.Equal(["""{"sum":3,"count":2}"""], Ctx.Json(output[0]));
     }
 
+    [Fact]
+    public async Task Each_item_reads_previous_node_output_with_the_same_index()
+    {
+        var ctx = Ctx.For(_node, Params("""return { order: $node["1С: замовлення"].json.number, chat: $node["Telegram"].json.chat, i: $index };"""), "{}", "{}");
+        ctx.NodeOutputs["1С: замовлення"] = [Ctx.Item("""{"number":"0001"}"""), Ctx.Item("""{"number":"0002"}""")];
+        ctx.NodeOutputs["Telegram"] = [Ctx.Item("""{"chat":42}""")]; // один item — для всіх індексів береться перший
+
+        var output = await _node.ExecuteAsync(ctx, CancellationToken.None);
+
+        Assert.Equal(["""{"order":"0001","chat":42,"i":0}""", """{"order":"0002","chat":42,"i":1}"""], Ctx.Json(output[0]));
+    }
+
+    [Fact]
+    public async Task All_items_reads_first_item_and_all_items_of_previous_node()
+    {
+        var ctx = Ctx.For(_node, Params("""return [{ first: $node["Слоти"].json.id, count: $node["Слоти"].all.length, ids: $node["Слоти"].all.map(s => s.id) }];""", "allItems"), "{}");
+        ctx.NodeOutputs["Слоти"] = [Ctx.Item("""{"id":"s1"}"""), Ctx.Item("""{"id":"s2"}""")];
+
+        var output = await _node.ExecuteAsync(ctx, CancellationToken.None);
+
+        Assert.Equal(["""{"first":"s1","count":2,"ids":["s1","s2"]}"""], Ctx.Json(output[0]));
+    }
+
+    [Fact]
+    public async Task Missing_node_fails_with_its_name()
+    {
+        var ctx = Ctx.For(_node, Params("""return { x: $node["Немає такого"].json.x };"""), "{}");
+        ctx.NodeOutputs["Webhook"] = [Ctx.Item("{}")];
+
+        var ex = await Assert.ThrowsAsync<CoreNodeException>(() => _node.ExecuteAsync(ctx, CancellationToken.None));
+
+        Assert.Contains("«Немає такого»", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("«Webhook»", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Previous_node_output_is_read_only()
+    {
+        var ctx = Ctx.For(_node, Params("""
+            $node["A"].json.x = 99;
+            $node["Нове"] = { json: {} };
+            return { inCode: $node["A"].json.x, added: Object.keys($node).length };
+            """), "{}");
+        var source = Ctx.Item("""{"x":1}""");
+        ctx.NodeOutputs["A"] = [source];
+
+        var output = await _node.ExecuteAsync(ctx, CancellationToken.None);
+
+        Assert.Equal("""{"x":1}""", source.Json.ToJsonString()); // вихід вузла A у движку не змінився
+        Assert.Equal(1, output[0][0].Json["added"]!.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData("UTC", "2026-01-15T10:00:00Z", 10)]
+    [InlineData("Europe/Kyiv", "2026-01-15T10:00:00Z", 12)] // зима: UTC+2
+    [InlineData("Europe/Kyiv", "2026-07-15T10:00:00Z", 13)] // літо: UTC+3
+    public async Task Date_uses_workflow_timezone(string timezone, string utc, int hours)
+    {
+        var ctx = Ctx.For(_node, Params($$"""return { h: new Date('{{utc}}').getHours(), offset: new Date('{{utc}}').getTimezoneOffset() };"""), "{}");
+        ctx.Timezone = timezone;
+
+        var output = await _node.ExecuteAsync(ctx, CancellationToken.None);
+
+        Assert.Equal(hours, output[0][0].Json["h"]!.GetValue<int>());
+        Assert.Equal((10 - hours) * 60, output[0][0].Json["offset"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Unknown_timezone_fails()
+    {
+        var ctx = Ctx.For(_node, Params("return {};"), "{}");
+        ctx.Timezone = "Mars/Olympus";
+
+        var ex = await Assert.ThrowsAsync<CoreNodeException>(() => _node.ExecuteAsync(ctx, CancellationToken.None));
+        Assert.Contains("Mars/Olympus", ex.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("throw new Error('бум');")]
     [InlineData("return 42;")]

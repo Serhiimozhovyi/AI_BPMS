@@ -97,6 +97,10 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 
 - Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$input`, `$node["Назва"].json`, `$now`, `$env` (лише дозволені), `$execution.id`.
 - Обчислення — Jint з лімітами: 50 мс, 16 МБ, глибина рекурсії 64, без `require`, без доступу до CLR. Code-вузол: ті ж обмеження, ліміт 5 с.
+- Code-вузол (`core.code`, F3-30): `$json`, `$index` (eachItem) або `items` (allItems), а також `$node["Назва"].json` (як у
+  виразах: item з тим самим індексом або перший) і `$node["Назва"].all` (усі items) — копії виходів, лише читання;
+  вузол, що не виконувався, — помилка з його назвою. `Date` працює в `settings.timezone` сценарію, а не в UTC. Движок
+  передає вузлам ці дані через `INodeContext.NodeOutputs` і `INodeContext.Timezone`.
 
 ## 6. Схема БД (EF Core, PostgreSQL)
 

@@ -55,6 +55,43 @@ public class CoreNodesExecutionTests
             [.. result.OutputOf("m").Select(i => i.Json.ToJsonString())]);
     }
 
+    [Fact]
+    public async Task Code_reads_earlier_node_by_name_and_uses_workflow_timezone()
+    {
+        var registry = new InMemoryNodeRegistry();
+        foreach (var node in CoreNodes.All())
+        {
+            registry.Register(node);
+        }
+
+        var workflow = new WorkflowDefinition { Name = "Контекст у коді", Settings = new() { Timezone = "Europe/Kyiv" } };
+        Node(workflow, "t", "core.manualTrigger", "{}");
+        Node(workflow, "s", "core.set", """{"fields":[{"name":"chatId","value":42}]}""");
+        Node(workflow, "x", "core.set", """{"fields":[{"name":"reply","value":"ok"}],"keepOnlySet":true}""");
+        Node(workflow, "c", "core.code", """{"code":"return { chatId: $node['Вузол s'].json.chatId, reply: $json.reply, h: new Date('2026-01-15T10:00:00Z').getHours() };"}""");
+        Edge(workflow, "t", "s");
+        Edge(workflow, "s", "x");
+        Edge(workflow, "x", "c");
+
+        var store = new InMemoryExecutionStore();
+        var request = new ExecutionRequest { ExecutionId = Guid.NewGuid(), Workflow = workflow };
+        store.Register(new ExecutionSnapshot
+        {
+            Id = request.ExecutionId,
+            WorkflowId = "wf_code",
+            Workflow = workflow,
+            Mode = request.Mode,
+            StartedAt = DateTimeOffset.UtcNow,
+        });
+        var executor = new WorkflowExecutor(
+            registry, store, new JintExpressionEvaluator(), new FakeCredentialProvider(), new InMemoryBinaryStore(), new InMemoryExecutionLogger());
+
+        var result = await executor.RunAsync(request, CancellationToken.None);
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        Assert.Equal("""{"chatId":42,"reply":"ok","h":12}""", Assert.Single(result.OutputOf("c")).Json.ToJsonString());
+    }
+
     private static void Node(WorkflowDefinition workflow, string id, string type, string parameters) =>
         workflow.Nodes.Add(new NodeDefinition
         {

@@ -77,7 +77,9 @@ public sealed class NodeTools
         "expression string `{{ … }}` instead: `$json` is the current input item from the previous node, " +
         "`$node[\"Node name\"].json` the matching item of an earlier node. " +
         "`mcp.tool` returns a tool's structured result as one item; set `itemsPath` to split an array into items. " +
-        "Tools of connected systems are listed by describe_connectors.")]
+        "Tools of connected systems are listed by describe_connectors. " +
+        "In `core.code` JavaScript the same `$node[\"Node name\"].json` is available (plus `.all` with every item), " +
+        "and `Date` uses the workflow's `settings.timezone`.")]
     public static Task<NodesDescription> DescribeNodes(INodeService nodes, CancellationToken ct) =>
         NodesDescription.BuildAsync(nodes, ct);
 }

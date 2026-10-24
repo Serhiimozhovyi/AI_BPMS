@@ -17,12 +17,18 @@ namespace OpenBP.Nodes.Core;
 /// ліміти — <see cref="DefaultTimeout"/> на весь запуск вузла, 16 МБ пам'яті, рекурсія 64.
 /// <para>
 /// <c>mode: eachItem</c> (за замовчуванням) — код виконується для кожного item'а окремо зі змінними
-/// <c>$json</c> (дані item'а) і <c>$index</c>; повертає об'єкт (новий <c>json</c>), масив об'єктів (кілька items)
+/// <c>$json</c> (дані item'а), <c>$index</c> і <c>$node["Назва"].json</c> (вихід уже виконаного вузла: item з тим самим
+/// індексом або перший, як у виразах); повертає об'єкт (новий <c>json</c>), масив об'єктів (кілька items)
 /// або <c>null</c> (item відкидається). Бінарні вкладення item'а зберігаються.
 /// </para>
 /// <para>
 /// <c>mode: allItems</c> — код виконується один раз зі змінною <c>items</c> (масив <c>json</c> усіх items)
-/// і повертає масив об'єктів; бінарні вкладення не переносяться.
+/// і <c>$node["Назва"].json</c> (перший item; усі — <c>$node["Назва"].all</c>), повертає масив об'єктів; бінарні вкладення
+/// не переносяться.
+/// </para>
+/// <para>
+/// <c>$node["Назва"]</c> вузла, який не виконувався, — помилка з його назвою. <c>Date</c> працює в часовому поясі
+/// сценарію (<c>settings.timezone</c>), а не в UTC.
 /// </para>
 /// </summary>
 public sealed class CodeNode : INode
@@ -70,6 +76,8 @@ public sealed class CodeNode : INode
 
         var output = new List<Item>();
         var first = ctx.Params<CodeParameters>(0);
+        var timeZone = ResolveTimeZone(ctx.Timezone);
+        var nodes = ctx.NodeOutputs;
         switch (first.Mode)
         {
             case "eachItem":
@@ -77,20 +85,22 @@ public sealed class CodeNode : INode
                 {
                     ct.ThrowIfCancellationRequested();
                     var p = i == 0 ? first : ctx.Params<CodeParameters>(i);
-                    var result = Run(p.Code, deadline.Token, ct, (engine, parser) =>
+                    var result = Run(p.Code, timeZone, deadline.Token, ct, (engine, parser) =>
                     {
                         engine.SetValue("$json", parser.Parse(items[i].Json.ToJsonString()));
                         engine.SetValue("$index", i);
+                        SetNodes(engine, parser, p.Code, nodes, i);
                     });
                     output.AddRange(ToJsonObjects(result, allowSingle: true).Select(json => ItemCopy.WithJson(items[i], json)));
                 }
 
                 break;
             case "allItems":
-                var all = Run(first.Code, deadline.Token, ct, (engine, parser) =>
+                var all = Run(first.Code, timeZone, deadline.Token, ct, (engine, parser) =>
                 {
                     var array = new JsonArray([.. items.Select(item => (JsonNode)item.Json.DeepClone())]);
                     engine.SetValue("items", parser.Parse(array.ToJsonString()));
+                    SetNodes(engine, parser, first.Code, nodes, 0);
                 });
                 output.AddRange(ToJsonObjects(all, allowSingle: false).Select(json => new Item { Json = json }));
                 break;
@@ -101,7 +111,61 @@ public sealed class CodeNode : INode
         return Task.FromResult<Item[][]>([[.. output]]);
     }
 
-    private JsonNode? Run(string code, CancellationToken deadline, CancellationToken ct, Action<Jint.Engine, JsonParser> setup)
+    /// <summary>
+    /// <c>$node</c>: <c>{ "Назва": { json, all } }</c> у Proxy, який на назву невиконаного вузла кидає помилку з назвою
+    /// (інакше користувач бачив би лише «Cannot read property 'json' of undefined»). Серіалізується, лише якщо код
+    /// згадує <c>$node</c>.
+    /// </summary>
+    private static void SetNodes(Jint.Engine engine, JsonParser parser, string code, IReadOnlyDictionary<string, IReadOnlyList<Item>> nodes, int itemIndex)
+    {
+        if (!code.Contains("$node", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var data = new JsonObject();
+        foreach (var (name, items) in nodes)
+        {
+            var item = itemIndex < items.Count ? items[itemIndex] : items.Count > 0 ? items[0] : null;
+            data[name] = new JsonObject
+            {
+                ["json"] = item?.Json.DeepClone() ?? new JsonObject(),
+                ["all"] = new JsonArray([.. items.Select(i => (JsonNode)i.Json.DeepClone())]),
+            };
+        }
+
+        var factory = engine.Evaluate(NodeProxyFactory);
+        engine.SetValue("$node", engine.Invoke(factory, parser.Parse(data.ToJsonString())));
+    }
+
+    private const string NodeProxyFactory = """
+        (function (nodes) {
+          return new Proxy(nodes, {
+            get(target, key) {
+              if (typeof key !== 'string' || key in target || key === 'toJSON' || key === 'then') return target[key];
+              const known = Object.keys(target);
+              throw new Error('Вузол «' + key + '» ще не виконувався в цьому запуску або не існує' +
+                (known.length ? '; доступні: ' + known.map(n => '«' + n + '»').join(', ') : '') + '.');
+            },
+            set() { return false; },
+            deleteProperty() { return false; },
+          });
+        })
+        """;
+
+    private static TimeZoneInfo ResolveTimeZone(string timezone)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timezone);
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            throw new CoreNodeException($"Невідомий часовий пояс сценарію «{timezone}».", ex);
+        }
+    }
+
+    private JsonNode? Run(string code, TimeZoneInfo timeZone, CancellationToken deadline, CancellationToken ct, Action<Jint.Engine, JsonParser> setup)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -116,7 +180,7 @@ public sealed class CodeNode : INode
             options.LimitRecursion(RecursionLimit);
             options.Host.StringCompilationAllowed = false;
             options.Culture = CultureInfo.InvariantCulture;
-            options.TimeZone = TimeZoneInfo.Utc;
+            options.TimeZone = timeZone;
         });
 
         try

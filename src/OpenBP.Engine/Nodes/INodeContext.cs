@@ -38,6 +38,15 @@ public interface INodeContext
     /// <exception cref="CredentialNotFoundException">Credential не існує або параметр з id порожній.</exception>
     Task<JsonObject> GetCredentialAsync(string name, CancellationToken ct = default);
 
+    /// <summary>
+    /// Виходи вже виконаних вузлів за <b>назвою</b> вузла: items основного виходу (порт 0) — те саме, що
+    /// <c>$node["Назва"]</c> у виразах. Лише для читання: вузол не змінює ці items.
+    /// </summary>
+    IReadOnlyDictionary<string, IReadOnlyList<Item>> NodeOutputs { get; }
+
+    /// <summary>Часовий пояс сценарію (IANA, <c>settings.timezone</c>), напр. <c>Europe/Kyiv</c>.</summary>
+    string Timezone { get; }
+
     /// <summary>Журнал виконання; <c>nodeId</c> підставляє вузол сам (<see cref="Node"/>).</summary>
     IExecutionLogger Logger { get; }
 
