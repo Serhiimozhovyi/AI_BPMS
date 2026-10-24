@@ -41,6 +41,26 @@ const DESCRIPTORS = [
   descriptor('core.code', 'Код (JavaScript)', 'transform', ['main'], ['main']),
 ];
 
+/** Шаблон «Почати з прикладу» (F3-59), як його віддає `GET /workflows/templates`. */
+const TEMPLATES = [
+  {
+    id: 'hello-manual',
+    name: 'Привіт, OpenBP',
+    description: 'Ручний запуск, Set і Code.',
+    definition: {
+      formatVersion: 1,
+      name: 'Привіт, OpenBP',
+      settings: { timezone: 'Europe/Kyiv', executionTimeoutSec: 60, errorWorkflowId: null, saveSuccessfulData: true },
+      nodes: [
+        { id: 'n_start', name: 'Старт', type: 'core.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} },
+        { id: 'n_greeting', name: 'Привітання', type: 'core.set', typeVersion: 1, position: [300, 0], parameters: { fields: [] } },
+      ],
+      connections: [{ from: { node: 'n_start', output: 0 }, to: { node: 'n_greeting', input: 0 } }],
+      pinData: {},
+    },
+  },
+];
+
 /** Фейковий Api: сценарій з версіями; кожен `PUT` — нова версія. */
 class FakeApi {
   version = 1;
@@ -72,6 +92,7 @@ class FakeApi {
       if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u1', email: 'e2e@openbp.test', role: 'admin' } });
       if (path === '/api/v1/nodes') return route.fulfill({ json: DESCRIPTORS });
       if (path === '/api/v1/connectors') return route.fulfill({ json: { items: [], page: 1, pageSize: 200, total: 0 } });
+      if (path === '/api/v1/workflows/templates') return route.fulfill({ json: TEMPLATES });
       if (path === '/api/v1/workflows') {
         const items = [this.detail(), { id: ERROR_WORKFLOW_ID, name: 'Сповіщення про помилки', active: true, version: 2, updatedAt: '' }];
         return route.fulfill({ json: { items, page: 1, pageSize: 200, total: items.length } });
@@ -408,4 +429,41 @@ test('F3-58: «Вирівняти» розставляє вузли зліва �
   await expect.poll(async () => (await card(page, 'Задати поля').boundingBox())!.width).toBeGreaterThan(before);
   await page.getByTestId('canvas-fit').click();
   for (const name of ['Ручний запуск', 'Задати поля', 'Код (JavaScript)']) await expect(card(page, name)).toBeInViewport();
+});
+
+test('F3-59: порожній сценарій — «Почати з прикладу» ставить вузли шаблону; «Додати тригер» і підказка на порту', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  const start = page.getByTestId('empty-start');
+  await expect(start).toBeVisible();
+
+  await page.getByTestId('start-template').click();
+  await page.locator('[data-template="hello-manual"]').click();
+  await expect(start).toHaveCount(0);
+  await expect(card(page, 'Старт')).toBeVisible();
+  await expect(card(page, 'Привітання')).toBeVisible();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await waitSaved(page);
+  expect(graph(api.definition)).toEqual({ nodes: ['Привітання:core.set', 'Старт:core.manualTrigger'], edges: ['Старт#0->Привітання#0'] });
+  expect(api.definition.name).toBe('E2E');
+  await expect(page.getByTestId('first-step-hint')).toHaveCount(0);
+
+  // Undo повертає порожній сценарій — картка знову на місці; «Додати тригер» → палітра лише з тригерами.
+  await page.keyboard.press('Control+z');
+  await expect(start).toBeVisible();
+  await page.getByTestId('start-trigger').click();
+  const popup = page.getByTestId('quick-add');
+  await expect(popup).toContainText('Додати тригер');
+  await expect(popup.locator('[data-item]')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(card(page, 'Ручний запуск')).toBeVisible();
+
+  // До першого з'єднання біля порту тригера — «Додайте наступний крок».
+  await expect(page.getByTestId('first-step-hint')).toHaveText('Додайте наступний крок');
+  await page.getByTestId('port-add').click();
+  await page.getByTestId('quick-add-search').fill('задати');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+  await expect(page.getByTestId('first-step-hint')).toHaveCount(0);
 });

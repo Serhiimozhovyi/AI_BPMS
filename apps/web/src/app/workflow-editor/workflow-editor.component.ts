@@ -24,6 +24,7 @@ import { DataFieldPick, DataPort, NodeDataViewComponent } from '../canvas/node-d
 import { PathSegment, expressionFor } from '../canvas/data-schema';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
 import { QuickAddComponent } from '../canvas/quick-add.component';
+import { EmptyStartComponent } from '../canvas/empty-start.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
@@ -37,7 +38,7 @@ import { ExpressionEditorService } from '../node-form/expression-editor-dialog.c
 import { MCP_TOOL_TYPES, updateNode } from '../node-form/node-form';
 import { NodePanelComponent } from '../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../nodes/nodes-api.service';
-import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowsApiService } from '../workflows/workflows-api.service';
+import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowTemplate, WorkflowsApiService } from '../workflows/workflows-api.service';
 import { WorkflowSettingsDialogComponent, WorkflowSettingsDialogData } from '../workflow-settings/workflow-settings-dialog.component';
 import { WorkflowSettings, settingsChanged } from '../workflow-settings/workflow-settings';
 
@@ -106,7 +107,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -229,6 +230,9 @@ export interface EditorErrorEvent {
               (renamed)="renamed($event)"
               (contextMenu)="openContextMenu($event)"
             />
+            @if (!def.nodes.length && !readonly() && !quickAdd()) {
+              <app-empty-start class="absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2" (addTrigger)="startWithTrigger($event)" (pick)="startFromTemplate($event)" />
+            }
             @if (notice(); as text) {
               <p class="absolute bottom-4 left-1/2 z-[2] m-0 -translate-x-1/2 rounded-md bg-ac-kit px-3 py-1.5 text-[13px] text-white" role="status" data-testid="editor-notice">{{ text }}</p>
             }
@@ -1070,6 +1074,19 @@ export class WorkflowEditorComponent implements OnInit {
       return;
     }
     this.showQuickAdd({ kind: 'free' }, 'step', center);
+  }
+
+  /** Порожній сценарій → «Додати тригер» (F3-59). */
+  protected startWithTrigger(anchor: ScreenPoint): void {
+    this.showQuickAdd({ kind: 'free' }, 'trigger', anchor);
+  }
+
+  /** Порожній сценарій → «Почати з прикладу»: визначення шаблону з назвою цього сценарію — звичайна правка з історією. */
+  protected startFromTemplate(template: WorkflowTemplate): void {
+    const def = this.definition();
+    if (!def) return;
+    this.selection.set(EMPTY_SELECTION);
+    this.changed({ ...template.definition, name: def.name });
   }
 
   private showQuickAdd(target: QuickAddTarget, mode: QuickAddMode, anchor: ScreenPoint): void {

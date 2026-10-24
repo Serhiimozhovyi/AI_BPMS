@@ -4,6 +4,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/ src/
+# Шаблони «Почати з прикладу» (F3-59) вбудовуються в збірку Api.
+COPY examples/ examples/
 RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages,sharing=locked \
     dotnet publish src/OpenBP.Api/OpenBP.Api.csproj -c Release -o /app /p:UseAppHost=false
 

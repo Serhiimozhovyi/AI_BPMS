@@ -194,6 +194,14 @@ export interface ExpressionPreview {
   error: string | null;
 }
 
+/** Шаблон «Почати з прикладу» (F3-59): приклад з `examples/` без `pinData`, конекторів і облікових даних. */
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  definition: WorkflowDefinition;
+}
+
 /** Клієнт `/api/v1/workflows` (docs/architecture.md §10.3). */
 @Injectable({ providedIn: 'root' })
 export class WorkflowsApiService {
@@ -206,6 +214,11 @@ export class WorkflowsApiService {
     if (search) params['search'] = search;
     if (filter.active !== undefined && filter.active !== null) params['active'] = filter.active;
     return this.http.get<PageResult<WorkflowSummary>>(this.base, { params });
+  }
+
+  /** `GET /workflows/templates` — шаблони для порожнього сценарію (F3-59). */
+  templates(): Observable<WorkflowTemplate[]> {
+    return this.http.get<WorkflowTemplate[]>(`${this.base}/templates`);
   }
 
   get(id: string): Observable<WorkflowDetail> {

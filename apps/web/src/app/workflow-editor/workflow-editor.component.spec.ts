@@ -1010,4 +1010,39 @@ describe('WorkflowEditorComponent', () => {
       expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
     });
   });
+  it('порожній сценарій (F3-59): картка «Додати тригер» відкриває палітру тригерів; «Почати з прикладу» підставляє шаблон', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush({ ...workflow, definition: emptyWorkflowDefinition('Заявки') });
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    flushConnectors(http);
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="empty-start"]')).not.toBeNull();
+    click(host, '[data-testid="start-trigger"]');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="empty-start"]')).toBeNull();
+    const items = Array.from(host.querySelectorAll('[data-testid="quick-add"] [data-item]')).map((i) => i.getAttribute('data-item'));
+    expect(items).toContain('core.webhook');
+    expect(items).not.toContain('core.set');
+    host.querySelector('[data-testid="quick-add-backdrop"]')?.dispatchEvent(new PointerEvent('pointerdown'));
+    await render(fixture);
+
+    click(host, '[data-testid="start-template"]');
+    const template = {
+      ...emptyWorkflowDefinition('Привіт, OpenBP'),
+      nodes: [{ id: 'n_start', name: 'Старт', type: 'core.manualTrigger', typeVersion: 1, position: [0, 0] as [number, number], parameters: {} }],
+    };
+    http.expectOne('/api/v1/workflows/templates').flush([{ id: 'hello-manual', name: 'Привіт, OpenBP', description: 'Найпростіший сценарій', definition: template }]);
+    await render(fixture);
+    expect(host.querySelector('[data-template="hello-manual"]')?.textContent).toContain('Найпростіший сценарій');
+    click(host, '[data-template="hello-manual"]');
+    await render(fixture);
+
+    expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_start']);
+    expect(host.querySelector('[data-testid="empty-start"]')).toBeNull();
+    expect(status(host)).not.toBe('saved');
+    key({ key: 'z', ctrlKey: true });
+    await render(fixture);
+    expect(canvasNodes(fixture)).toEqual([]);
+  });
 });

@@ -58,6 +58,8 @@ builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
 // Межа таймауту виконання (F4-05): валідатор відхиляє settings.executionTimeoutSec більше за неї.
 builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<IConfiguration>()[WorkflowLimits.MaxExecutionTimeoutKey]));
 builder.Services.AddOpenBpWorkflowServices();
+// «Почати з прикладу» (F3-59): examples/templates.json і файли прикладів вбудовані в збірку Api.
+builder.Services.AddSingleton(WorkflowTemplateCatalog.FromResources(typeof(Program).Assembly, "examples/"));
 builder.Services.AddOpenBpDataTableServices();
 // Журнал аудиту (F6-15): записи пишуть сервіси змін, читає admin.
 builder.Services.AddScoped<IAuditService, AuditService>();

@@ -1072,6 +1072,48 @@
         ]
       }
     },
+    "/api/v1/workflows/templates": {
+      "get": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Шаблони «Почати з прикладу»",
+        "description": "Приклади з `examples/` (каталог `examples/templates.json`): назва, опис і визначення без `pinData`, з порожніми `serverId`/`credentialId` і без сценарію помилок — конектори й облікові дані автор обирає сам.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTemplate"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/import": {
       "post": {
         "tags": [
@@ -6510,6 +6552,29 @@
               "string"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "WorkflowTemplate": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "definition"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
           }
         }
       },
