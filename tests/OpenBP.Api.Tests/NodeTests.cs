@@ -28,7 +28,13 @@ public class NodeTests(ApiFactory api)
 
         var nodes = await viewer.GetFromJsonAsync<JsonElement>("/api/v1/nodes");
 
-        var byType = nodes.EnumerateArray().ToDictionary(n => n.GetProperty("type").GetString()!);
+        // Тип може мати кілька версій (core.switch 1 і 2): стара лишається для збережених сценаріїв.
+        Assert.Equal(
+            [1, 2],
+            nodes.EnumerateArray().Where(n => n.GetProperty("type").GetString() == "core.switch").Select(n => n.GetProperty("version").GetInt32()));
+        var byType = nodes.EnumerateArray()
+            .GroupBy(n => n.GetProperty("type").GetString()!)
+            .ToDictionary(g => g.Key, g => g.MaxBy(n => n.GetProperty("version").GetInt32()));
         Assert.Contains("core.webhook", byType.Keys);
         Assert.Contains("mcp.tool", byType.Keys);
         Assert.Contains("ai.llm", byType.Keys);

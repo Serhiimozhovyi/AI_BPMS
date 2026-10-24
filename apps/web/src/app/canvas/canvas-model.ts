@@ -110,7 +110,7 @@ export function toCanvasModel(
   const canvasNodes = nodes.map((node): CanvasNode => {
     const descriptor = index.find(node.type, node.typeVersion);
     const inputs = descriptor ? [...descriptor.inputs] : [];
-    const outputs = descriptor ? [...descriptor.outputs] : [];
+    const outputs = descriptor ? visibleOutputs(node, descriptor, maxOutput.get(node.id) ?? -1) : [];
     if (node.continueOnFail === true) outputs.push(ERROR_OUTPUT);
     padPorts(inputs, maxInput.get(node.id) ?? -1, descriptor ? undefined : 'main');
     padPorts(outputs, maxOutput.get(node.id) ?? -1, descriptor ? undefined : 'main');
@@ -184,6 +184,19 @@ export function moveNodes(
     return p ? { ...n, x: p.x, y: p.y } : n;
   });
   return fromCanvasModel({ ...model, nodes }, definition);
+}
+
+/**
+ * `core.switch` версії 2 має виходи `fallback, rule0…rule15`: показуємо `fallback` і по порту на кожне задане правило.
+ * Порт, з якого вже йде ребро, показуємо завжди, щоб ребро не зникло. З `continueOnFail` порт `error`
+ * стоїть одразу після всіх виходів дескриптора, тож тоді показуємо всі.
+ */
+function visibleOutputs(node: WorkflowNode, descriptor: NodeTypeInfo, maxEdgeOutput: number): string[] {
+  const outputs = [...descriptor.outputs];
+  if (node.type !== 'core.switch' || descriptor.version < 2 || node.continueOnFail === true) return outputs;
+  const rules = node.parameters?.['rules'];
+  const count = Array.isArray(rules) ? rules.length : 0;
+  return outputs.slice(0, Math.max(1 + Math.max(1, count), maxEdgeOutput + 1));
 }
 
 function padPorts(ports: string[], maxIndex: number, prefix: string | undefined): void {
