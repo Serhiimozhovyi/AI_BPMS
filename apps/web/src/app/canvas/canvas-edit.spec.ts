@@ -1,5 +1,5 @@
 import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { PASTE_OFFSET, connectNodes, copySelection, deleteSelection, detachBusinessSteps, pasteClipboard } from './canvas-edit';
+import { PASTE_OFFSET, connectNodes, copySelection, deleteSelection, detachBusinessSteps, neighborNode, pasteClipboard, renameNode, toggleDisabled } from './canvas-edit';
 
 function demo(): WorkflowDefinition {
   return {
@@ -158,5 +158,71 @@ describe('copySelection / pasteClipboard', () => {
 
   it('нічого не виділено — null', () => {
     expect(copySelection(demo(), { nodes: [], edges: [0] })).toBeNull();
+  });
+});
+
+describe('toggleDisabled', () => {
+  it('вимикає, якщо хоч один увімкнений; повторно — вмикає і прибирає поле; інші вузли — ті самі об’єкти', () => {
+    const def = demo();
+    const off = toggleDisabled(def, ['a', 'b']);
+    expect(off.nodes.slice(0, 2).map((n) => n.disabled)).toEqual([true, true]);
+    expect(off.nodes[2]).toBe(def.nodes[2]);
+
+    const mixed = toggleDisabled(toggleDisabled(def, ['a']), ['a', 'b']);
+    expect(mixed.nodes.slice(0, 2).map((n) => n.disabled)).toEqual([true, true]);
+
+    const on = toggleDisabled(off, ['a', 'b']);
+    expect('disabled' in on.nodes[0]).toBe(false);
+    expect(on.nodes[1]).toMatchObject({ uiColor: 'red' });
+    expect(toggleDisabled(def, ['ghost'])).toBe(def);
+  });
+});
+
+describe('renameNode', () => {
+  function withRefs(): WorkflowDefinition {
+    const def = demo();
+    def.nodes[2] = {
+      ...def.nodes[2],
+      parameters: {
+        fields: [{ name: 'x', value: '{{ $node["Умова"].json.a }} і {{ $node[\'Умова\'].json.b }} і {{ $node["Умова 2"].json.c }}' }],
+        code: 'return $node["Умова"].json;',
+        n: 5,
+      },
+    };
+    return def;
+  }
+
+  it('нова назва й переписані посилання $node["…"] в усіх вузлах; інші назви не чіпаються', () => {
+    const def = withRefs();
+    const result = renameNode(def, 'b', '  Перевірка суми ');
+    expect(result.error).toBeNull();
+    const next = result.definition!;
+    expect(next.nodes[1]).toMatchObject({ name: 'Перевірка суми', uiColor: 'red' });
+    expect(next.nodes[2].parameters).toEqual({
+      fields: [{ name: 'x', value: '{{ $node["Перевірка суми"].json.a }} і {{ $node["Перевірка суми"].json.b }} і {{ $node["Умова 2"].json.c }}' }],
+      code: 'return $node["Перевірка суми"].json;',
+      n: 5,
+    });
+    expect(next.nodes[0]).toBe(def.nodes[0]);
+  });
+
+  it('порожня чи зайнята назва — помилка; та сама — без змін', () => {
+    const def = demo();
+    expect(renameNode(def, 'b', '   ')).toEqual({ definition: null, error: 'empty' });
+    expect(renameNode(def, 'b', 'Поля')).toEqual({ definition: null, error: 'taken' });
+    expect(renameNode(def, 'b', 'Умова').definition).toBe(def);
+  });
+});
+
+describe('neighborNode', () => {
+  it('праворуч/ліворуч — за ребрами, вгору/вниз — найближчий у колонці', () => {
+    const def = demo();
+    def.nodes.push({ id: 'd', name: 'Нижче', type: 'core.set', typeVersion: 1, position: [300, 200], parameters: {} });
+    expect(neighborNode(def, 'a', 'right')).toBe('b');
+    expect(neighborNode(def, 'c', 'left')).toBe('b');
+    expect(neighborNode(def, 'a', 'left')).toBeNull();
+    expect(neighborNode(def, 'b', 'down')).toBe('d');
+    expect(neighborNode(def, 'd', 'up')).toBe('b');
+    expect(neighborNode(def, 'b', 'up')).toBeNull();
   });
 });

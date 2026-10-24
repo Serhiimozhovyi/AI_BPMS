@@ -207,6 +207,34 @@ public sealed class RetryAndResumeTests
     }
 
     [Fact]
+    public async Task SubSteps_OfLastAttemptAreKept_OnSuccessAndOnError()
+    {
+        foreach (var failures in new[] { 1, int.MaxValue })
+        {
+            var g = new TestGraph { Time = new RecordingTimeProvider() };
+            var calls = 0;
+            g.Registry.Register(new FuncNode(Descriptor(Flaky, ["main"], ["main"]), (ctx, _) =>
+            {
+                calls++;
+                ctx.RecordSubStep(new SubStep(SubStepKinds.Tool, $"спроба {calls}", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+                return calls <= failures
+                    ? throw new InvalidOperationException($"Збій {calls}")
+                    : Task.FromResult<Item[][]>([[.. ctx.Items()]]);
+            }));
+            g.Node("t", Trigger)
+                .Node("f", Flaky, configure: n => n.Retry = new RetrySettings { MaxTries = 2 })
+                .Edge("t", "f");
+
+            var result = await g.RunAsync();
+
+            var step = result.StepOf("f")!;
+            Assert.Equal(failures == 1 ? StepStatus.Success : StepStatus.Error, step.Status);
+            Assert.Equal("спроба 2", Assert.Single(step.SubSteps).Name);
+            Assert.Empty(result.StepOf("t")!.SubSteps);
+        }
+    }
+
+    [Fact]
     public async Task SuccessfulContinueOnFailNodeLeavesErrorPortEmpty()
     {
         var g = new TestGraph()

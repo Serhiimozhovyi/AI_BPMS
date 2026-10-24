@@ -382,6 +382,7 @@ public sealed class ExecutionService(
                     Input = step.Input,
                     Output = step.Output,
                     Error = step.Error,
+                    SubSteps = step.SubSteps,
                     StartedAt = step.StartedAt,
                     FinishedAt = step.FinishedAt,
                 });

@@ -37,7 +37,7 @@
 | `src/OpenBP.Nodes.Core` | `core.*` вузли: тригери і логіка |
 | `src/OpenBP.Mcp` | MCP-клієнт: реєстр серверів, discovery, `mcp.tool`, `mcp.poll` |
 | `src/OpenBP.Mcp.Server` | MCP-сервер `/mcp` поверх application-шару (фаза 3) |
-| `src/OpenBP.Ai` | `ai.llm` — абстракція над провайдерами, structured output |
+| `src/OpenBP.Ai` | `ai.llm` — абстракція над провайдерами, structured output; `ai.agent` — агент з tools конекторів (F6-12) |
 | `src/OpenBP.Data` | EF Core: сутності, міграції, `PostgresExecutionStore`, `JobQueue` |
 | `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
 | `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
@@ -137,7 +137,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at |
 | `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08) |
-| `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at |
+| `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |
@@ -147,6 +147,11 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `worker_heartbeats` | worker_id (PK), started_at, seen_at — воркер оновлює раз на 30 с (F6-07) |
 | `backup_runs` | id, at, ok, message — пише сервіс `backup` після кожного `pg_dump` (F6-07) |
 | `execution_stats` | hour + workflow_id (PK), total, success, error, timed_out, cancelled, duration_sum_ms, duration_buckets (int[]: межі `ExecutionStatsBuckets.BoundsMs` + переповнення) — погодинні агрегати для «Огляду» і `/metrics` |
+
+Підкроки (F6-12): обрано колонку `execution_steps.sub_steps`, а не окремі рядки з `parent_step_id` — підкроки
+належать одній спробі вузла, читаються лише разом із кроком і не мають власного життєвого циклу (SSE, ретеншн,
+`resume` копіюють їх разом із кроком). Вузол додає їх через `INodeContext.RecordSubStep`; движок зберігає підкроки
+останньої спроби і при успіху, і при помилці; `saveSuccessfulData: false` очищує їх разом з input/output.
 
 Таблиці даних (F6-11): правила значень і фільтрів — одні на всіх (`OpenBP.Engine.Data.DataTableRules`): вузол
 `core.dataTable`, REST, UI і MCP. Сховище `PostgresDataTableStore` пише рядки під `pg_advisory_xact_lock` таблиці

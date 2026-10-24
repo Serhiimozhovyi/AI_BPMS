@@ -591,7 +591,7 @@
 - DoD: тести вузлів на нові тексти (перевірка, що `message` не містить stack trace і має підказку); Vitest — підрахунок незаповнених; Playwright — помилка на вузлі видна на картці; lint/test/build/e2e зелені.
 
 ### F3-58 · Канвас: тулбар вузла, контекстне меню, вирівнювання, minimap, клавіші (пропозиція I)
-- model: `sonnet` · status: `ready` · depends: F3-50
+- model: `sonnet` · status: `done` (1/2: тулбар + меню + клавіші; 2/2 — вирівнювання + minimap + fit) · depends: F3-50
 - Що: при наведенні на вузол — міні-тулбар над карткою: Виконати, Вимкнути/Увімкнути, Дублювати, Видалити, Перейменувати (inline у картці); ПКМ на вузлі/ребрі/канвасі — контекстне меню з тими ж діями плюс «Вставити», «Закріпити output». Кнопки канвасу внизу праворуч: Fit view, zoom ±, «Вирівняти» (layered layout зліва направо за ребрами, чиста функція в `canvas/`), minimap (ngx-vflow). Клавіші поза полями: `F2` перейменувати, `D` вимкнути, `Ctrl+Enter` виконати, `Ctrl+A` виділити все, `Ctrl+D` дублювати, стрілки — перехід між сусідніми вузлами. Формат сценарію не змінюється. Дозволяється різати на 2 PR (тулбар+меню+клавіші · вирівнювання+minimap+fit).
 - DoD: Vitest — layout детермінований і без накладань на прикладах `examples/*.json`; Playwright — ПКМ → Дублювати, `D` вимикає, Вирівняти не змінює ребра; lint/test/build/e2e зелені.
 
@@ -661,6 +661,11 @@
 - model: `sonnet` · status: `ready` · depends: F3-69, F4-13
 - Що: веб-компонент отримує атрибути `view` (`business` | `technical`, за замовчуванням `technical`) і `execution-id` (показати виконання на бізнес-вигляді, лише читання) і, за потреби, `correlation-key` (останнє виконання з цим ключем, коли буде F5-04). Режим `view="business"` без палітри й панелі вузла, перемикач приховано атрибутом `lock-view`. Права — як у `readonly` (viewer достатньо).
 - DoD: тест елемента — `view`, `execution-id`, `lock-view`; демо-сторінка елемента показує бізнес-вигляд виконання; розмір бандла елемента в межах бюджету; `docs/embedding.md` оновлено.
+
+### F3-71 · MCP-клієнт: проба `server/discover` чекає весь таймаут підключення
+- model: `sonnet` · status: `review` agent/F3-71-mcp-discover-timeout · depends: —
+- Що: SDK `ModelContextProtocol` 2.3.0 спершу надсилає `server/discover` і через 5 с (`DiscoverProbeTimeout`) відкочується на `initialize`. Сервер, що відповів на discover пізніше (повільний старт stdio-процесу, навантаження CI), уже на протоколі 2026-07-28 і відхиляє `initialize` — так нестабільно падав `PsySupportBotTests.Consult_Booking_AndConcurrentBookingOfSameSlot`. `McpServerRegistry` задає `DiscoverProbeTimeout = ConnectTimeout`.
+- DoD: тест реєстру — stdio-сервер, що стартує 6 с, підключається протоколом 2026-07-28 без відкату (без фіксу тест червоний); `dotnet build -warnaserror`, `dotnet test`, `dotnet format` зелені.
 
 ## Фаза 4 — Продуктова готовність
 
@@ -877,7 +882,7 @@
 - DoD: тести сервісу і вузла (Testcontainers): усі операції; `upsert` за ключем ідемпотентний; паралельні `upsert` одного ключа → один рядок; ліміт рядків → помилка вузла; типи колонок валідуються; viewer не пише; Vitest сторінки; `docs/workflow-format.md`, `architecture.md` §6, `docs/mcp-server.md` оновлено.
 
 ### F6-12 · Вузол ШІ-агента `ai.agent`
-- model: `opus` · status: `ready` · depends: F3-02, F6-11
+- model: `opus` · status: `done` · depends: F3-02, F6-11
 - Що: у `OpenBP.Ai` вузол `ai.agent { provider, model, credentialId, system, prompt, tools: [{ serverId, toolName }], memory?: { table, key: вираз, maxMessages }, maxIterations (типово 10), maxTokens, outputSchema? }`: цикл «модель → виклик tool → модель» виконується **всередині вузла** (DAG без циклів зберігається) через провайдерів F3-01/F3-02 з function calling (OpenAI tools, Anthropic tool use, OpenAI-compatible); інструменти — `tools/call` конекторів через `McpServerRegistry` зі схемами з кешу; пам'ять — рядки таблиці F6-11. Кожен виклад інструмента — підкрок у журналі (`execution_steps.sub_steps` або окремі записи з `parent_step_id`: вибрати і зафіксувати в `architecture.md`), секрети скрабляться як зараз; ліміт ітерацій/токенів → помилка вузла з частковим трасуванням. Опційно `approvalBeforeTools: [toolName]` — перед таким інструментом вузол створює задачу F6-02 (якщо F6-02 готова; інакше поле відсутнє і додається окремим PR).
 - DoD: тести проти фейкового HTTP моделі й FakeServer: агент викликає два tools і повертає відповідь за `outputSchema`; `maxIterations` → помилка з трасуванням; пам'ять зберігається між виконаннями за ключем; ключі API і credentials конекторів не потрапляють у підкроки; UI деталей кроку показує підкроки; `docs/connectors.md` §4, `describe_nodes` оновлено.
 

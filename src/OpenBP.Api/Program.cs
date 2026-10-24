@@ -54,7 +54,7 @@ builder.Services.AddOpenBpCors();
 // за його кешем tools валідуються mcp.* при збереженні.
 builder.Services.AddSingleton<IMcpServerRegistry>(_ => new McpServerRegistry());
 builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
-    CoreNodes.All().Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>())).Concat(AiNodes.All())));
+    CoreNodes.All().Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>())).Concat(AiNodes.All(servers: sp.GetRequiredService<IMcpServerRegistry>()))));
 // Межа таймауту виконання (F4-05): валідатор відхиляє settings.executionTimeoutSec більше за неї.
 builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<IConfiguration>()[WorkflowLimits.MaxExecutionTimeoutKey]));
 builder.Services.AddOpenBpWorkflowServices();

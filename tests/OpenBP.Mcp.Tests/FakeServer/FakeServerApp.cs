@@ -35,6 +35,13 @@ public static class FakeServerApp
             return 0;
         }
 
+        // Повільний старт (`--startup-delay <мс>`): клієнт встигає надіслати перший запит, поки сервер ще не читає stdin.
+        var delay = Array.IndexOf(args, "--startup-delay");
+        if (delay >= 0 && delay + 1 < args.Length && int.TryParse(args[delay + 1], out var delayMs))
+        {
+            await Task.Delay(delayMs);
+        }
+
         var mock = Array.IndexOf(args, "--mock");
         Type[] tools = mock < 0
             ? [typeof(FakeTools), typeof(CrashTools)]

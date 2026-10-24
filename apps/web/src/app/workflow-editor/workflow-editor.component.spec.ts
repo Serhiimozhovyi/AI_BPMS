@@ -256,6 +256,69 @@ describe('WorkflowEditorComponent', () => {
     put.flush(saved(4, put.request.body as WorkflowDefinition));
   });
 
+  it('F3-58: D вимикає, Ctrl+D дублює, Ctrl+A виділяє все, стрілки переходять, F2 перейменовує, ПКМ → Дублювати', async () => {
+    const { fixture, http, host } = await loaded();
+    const canvas = () => canvasComponent(fixture);
+    const nodes = () => canvasNodes(fixture);
+    canvas().selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+
+    key({ key: 'd' });
+    await render(fixture);
+    expect(nodes().find((n) => n.id === 'n_set')?.disabled).toBe(true);
+    canvas().nodeAction.emit({ nodeId: 'n_set', action: 'toggle' });
+    await render(fixture);
+    expect(nodes().find((n) => n.id === 'n_set')?.disabled).toBeUndefined();
+
+    key({ key: 'd', ctrlKey: true });
+    await render(fixture);
+    expect(nodes().map((n) => n.name)).toEqual(['Нова заявка', 'Поля', 'Поля 2']);
+    expect(canvas().selection().nodes).toEqual([nodes()[2].id]);
+
+    key({ key: 'a', ctrlKey: true });
+    await render(fixture);
+    expect(canvas().selection()).toEqual({ nodes: nodes().map((n) => n.id), edges: [0] });
+
+    canvas().selectionChange.emit({ nodes: ['n_hook'], edges: [] });
+    await render(fixture);
+    key({ key: 'ArrowRight' });
+    await render(fixture);
+    expect(canvas().selection().nodes).toEqual(['n_set']);
+
+    // F2: inline-поле; зайнята назва — повідомлення, нова — перейменування.
+    key({ key: 'F2' });
+    await render(fixture);
+    expect(canvas().renaming()).toBe('n_set');
+    canvas().renamed.emit({ nodeId: 'n_set', name: 'Нова заявка' });
+    await render(fixture);
+    expect(canvas().renaming()).toBeNull();
+    expect(host.querySelector('[data-testid="editor-notice"]')?.textContent).toContain('вже є');
+    key({ key: 'F2' });
+    canvas().renamed.emit({ nodeId: 'n_set', name: 'Поля заявки' });
+    await render(fixture);
+    expect(nodes().find((n) => n.id === 'n_set')?.name).toBe('Поля заявки');
+
+    // ПКМ на вузлі → меню; «Дублювати» додає копію.
+    canvas().contextMenu.emit({ target: { kind: 'node', nodeId: 'n_hook' }, anchor: { x: 40, y: 40 } });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="context-menu"]')?.getAttribute('data-kind')).toBe('node');
+    click(host, '[data-testid="menu-duplicate"]');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="context-menu"]')).toBeNull();
+    expect(nodes().map((n) => n.name)).toContain('Нова заявка 2');
+
+    // ПКМ на канвасі → «Виділити все».
+    canvas().contextMenu.emit({ target: { kind: 'canvas' }, anchor: { x: 40, y: 40 } });
+    await render(fixture);
+    click(host, '[data-testid="menu-select-all"]');
+    await render(fixture);
+    expect(canvas().selection().nodes).toHaveLength(4);
+
+    fixture.destroy();
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' });
+    put.flush(saved(4, put.request.body as WorkflowDefinition));
+  });
+
   it('гарячі клавіші не перехоплюються в полях введення і коли дія недоступна', async () => {
     const { fixture, http, host } = await loaded();
     click(host, '[data-item="core.set"]');

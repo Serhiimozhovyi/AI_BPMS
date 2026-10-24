@@ -10,10 +10,10 @@ import { BusinessViewComponent } from '../business-view/business-view.component'
 import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
 import { BusinessRun } from '../business-view/business-run';
 import { Autosave } from '../canvas/autosave';
-import { CanvasSelection, EMPTY_SELECTION, copySelection, deleteSelection, pasteClipboard } from '../canvas/canvas-edit';
+import { CanvasSelection, EMPTY_SELECTION, NeighborDirection, copySelection, deleteSelection, neighborNode, pasteClipboard, renameNode, toggleDisabled } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
 import { missingFieldsByNode } from '../canvas/missing-fields';
-import { MissingFieldRequest } from '../canvas/vflow/vflow-canvas.component';
+import { CanvasContextMenuRequest, CanvasContextTarget, MissingFieldRequest, NodeActionRequest, NodeRenameRequest } from '../canvas/vflow/vflow-canvas.component';
 import { CanvasComponent } from '../canvas/canvas.component';
 import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
@@ -24,6 +24,7 @@ import { DataFieldPick, DataPort, NodeDataViewComponent } from '../canvas/node-d
 import { PathSegment, expressionFor } from '../canvas/data-schema';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
 import { QuickAddComponent } from '../canvas/quick-add.component';
+import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
 import { TestRun, ancestorIds, applyEvent, isRunning, itemCounts, nodeRunErrors, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
@@ -64,6 +65,10 @@ interface QuickAddState {
 /** Розмір спливаючої палітри з відступом — щоб вона не виходила за край канвасу. */
 const QUICK_ADD_WIDTH = 308;
 const QUICK_ADD_HEIGHT = 388;
+const CONTEXT_MENU_WIDTH = 240;
+const CONTEXT_MENU_HEIGHT = 300;
+/** Скільки показується повідомлення над канвасом. */
+const NOTICE_MS = 4000;
 
 /** Ширина панелі вузла (F3-52): мінімум, з якої — три колонки, за замовчуванням; запам'ятовується в `localStorage`. */
 const MIN_PANEL_WIDTH = 360;
@@ -101,7 +106,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -219,7 +224,29 @@ export interface EditorErrorEvent {
               (selectionChange)="selection.set($event)"
               (quickAdd)="openQuickAdd($event)"
               (missingClick)="openMissing($event)"
+              [renaming]="renaming()"
+              (nodeAction)="nodeAction($event)"
+              (renamed)="renamed($event)"
+              (contextMenu)="openContextMenu($event)"
             />
+            @if (notice(); as text) {
+              <p class="absolute bottom-4 left-1/2 z-[2] m-0 -translate-x-1/2 rounded-md bg-ac-kit px-3 py-1.5 text-[13px] text-white" role="status" data-testid="editor-notice">{{ text }}</p>
+            }
+            @if (contextMenu(); as menu) {
+              <div class="editor__backdrop" data-testid="context-menu-backdrop" (pointerdown)="closeContextMenu()" (contextmenu)="$event.preventDefault(); closeContextMenu()"></div>
+              <app-canvas-context-menu
+                class="editor__menu"
+                [style.left.px]="menu.left"
+                [style.top.px]="menu.top"
+                [kind]="menu.target.kind"
+                [nodeDisabled]="menuNodeDisabled()"
+                [nodePinned]="menuNodePinned()"
+                [canPaste]="canPaste()"
+                [running]="running()"
+                (action)="menuAction($event)"
+                (closed)="closeContextMenu()"
+              />
+            }
             @if (quickAdd(); as qa) {
               <div class="editor__backdrop" data-testid="quick-add-backdrop" (pointerdown)="closeQuickAdd()"></div>
               <app-quick-add
@@ -335,12 +362,12 @@ export interface EditorErrorEvent {
                       <div dataNote class="editor__step-error" role="alert" data-testid="node-run-error">
                         <p class="m-0" data-testid="node-run-error-message">{{ error.message }}</p>
                         @if (error.itemIndex !== null && error.itemIndex !== undefined) {
-                          <p class="editor__step-error-item m-0" data-testid="node-run-error-item" i18n="@@workfloweditor.error.item">Вузол зупинився на item {{ error.itemIndex }} вхідних даних.</p>
+                          <p class="m-0 text-ac-cool-grey-4" data-testid="node-run-error-item" i18n="@@workfloweditor.error.item">Вузол зупинився на item {{ error.itemIndex }} вхідних даних.</p>
                         }
                         @if (error.details) {
-                          <details class="editor__step-error-details" data-testid="node-run-error-details">
+                          <details class="max-w-full text-ac-cool-grey-4" data-testid="node-run-error-details">
                             <summary i18n="@@workfloweditor.error.details">Технічні подробиці</summary>
-                            <pre class="m-0">{{ error.details }}</pre>
+                            <pre class="m-0 overflow-x-auto text-xs break-words whitespace-pre-wrap">{{ error.details }}</pre>
                           </details>
                         }
                         @if (selectedDescriptor()?.inputs?.length) {
@@ -532,6 +559,12 @@ export interface EditorErrorEvent {
       z-index: 3;
     }
 
+    .editor__menu {
+      position: absolute;
+      z-index: 3;
+    }
+
+
     /* Панель вузла (F3-52): ширина перетягується за ліву межу; від 1100 px — три колонки, вужче — вкладки. */
     .editor__panel {
       display: flex;
@@ -668,21 +701,6 @@ export interface EditorErrorEvent {
       color: var(--mat-sys-error);
     }
 
-    .editor__step-error-item {
-      color: var(--ac-cool-grey-4);
-    }
-
-    .editor__step-error-details {
-      max-width: 100%;
-      color: var(--ac-cool-grey-4);
-    }
-
-    .editor__step-error-details pre {
-      overflow-x: auto;
-      font-size: 12px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
   `,
 })
 export class WorkflowEditorComponent implements OnInit {
@@ -741,6 +759,14 @@ export class WorkflowEditorComponent implements OnInit {
   /** Запуск не вдалося почати (сценарій не збережено, помилка Api). */
   protected readonly runError = signal<string | null>(null);
   private runSubscription: Subscription | null = null;
+
+  /** Вузол з inline-полем назви на картці (F3-58); `null` — немає. */
+  protected readonly renaming = signal<string | null>(null);
+  /** Контекстне меню канвасу (F3-58); `null` — закрите. */
+  protected readonly contextMenu = signal<{ target: CanvasContextTarget; left: number; top: number } | null>(null);
+  /** Коротке повідомлення над канвасом (напр. назва вузла зайнята); зникає саме. */
+  protected readonly notice = signal<string | null>(null);
+  private noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Спливаюча палітра; `null` — закрита. */
   protected readonly quickAdd = signal<QuickAddState | null>(null);
@@ -1059,7 +1085,6 @@ export class WorkflowEditorComponent implements OnInit {
     writeRecent(recent);
   }
 
-  /** Інша дія конектора з панелі (F3-55): `arguments` скидаються, з'єднання й позиція лишаються; дія — у «Останніх». */
   /** «не заповнено: N» на картці: відкрити вузол на вкладці параметрів і поставити фокус на перше незаповнене поле. */
   protected openMissing(request: MissingFieldRequest): void {
     this.selection.set({ nodes: [request.nodeId], edges: [] });
@@ -1092,6 +1117,157 @@ export class WorkflowEditorComponent implements OnInit {
     col?.focus?.();
   }
 
+  /** Тулбар над карткою вузла (F3-58). */
+  protected nodeAction(request: NodeActionRequest): void {
+    if (this.readonly()) return;
+    switch (request.action) {
+      case 'run':
+        this.runNode(request.nodeId);
+        break;
+      case 'toggle':
+        this.toggleNodes([request.nodeId]);
+        break;
+      case 'duplicate':
+        this.duplicate([request.nodeId]);
+        break;
+      case 'rename':
+        this.startRename(request.nodeId);
+        break;
+      case 'delete':
+        this.selection.set({ nodes: [request.nodeId], edges: [] });
+        this.deleteSelected();
+        break;
+    }
+  }
+
+  /** Вимкнути/увімкнути вузли (`D`): вимкнений вузол не виконується, дані йдуть повз нього. */
+  protected toggleNodes(ids: readonly string[]): void {
+    const def = this.definition();
+    if (def) this.changed(toggleDisabled(def, ids));
+  }
+
+  /** Дублювати (`Ctrl+D`): копія поруч, з'єднання між дубльованими вузлами зберігаються; буфер обміну не змінюється. */
+  protected duplicate(ids: readonly string[]): void {
+    const def = this.definition();
+    const copied = def ? copySelection(def, { nodes: ids, edges: [] }) : null;
+    if (!def || !copied) return;
+    const { definition, nodeIds } = pasteClipboard(def, copied, randomNodeId);
+    this.changed(definition);
+    this.selection.set({ nodes: nodeIds, edges: [] });
+  }
+
+  protected startRename(nodeId: string): void {
+    if (this.readonly() || !this.definition()?.nodes.some((n) => n.id === nodeId)) return;
+    this.renaming.set(nodeId);
+  }
+
+  /** Inline-поле назви: нова назва (посилання `$node["…"]` переписуються) або скасування; зайнята назва — повідомлення. */
+  protected renamed(request: NodeRenameRequest): void {
+    if (this.renaming() !== request.nodeId) return;
+    this.renaming.set(null);
+    const def = this.definition();
+    if (!def || request.name === null) return;
+    const result = renameNode(def, request.nodeId, request.name);
+    if (result.error === 'taken') this.showNotice($localize`:@@workfloweditor.rename.taken:Вузол із такою назвою вже є. Оберіть іншу назву.`);
+    else if (result.error === 'empty') this.showNotice($localize`:@@workfloweditor.rename.empty:Назва не може бути порожньою.`);
+    else if (result.definition) this.changed(result.definition);
+  }
+
+  protected openContextMenu(request: CanvasContextMenuRequest): void {
+    if (this.readonly() || !this.definition()) return;
+    const { target } = request;
+    // Меню діє на те, що під вказівником: вузол поза виділенням стає виділеним.
+    if (target.kind === 'node' && !this.selection().nodes.includes(target.nodeId)) this.selection.set({ nodes: [target.nodeId], edges: [] });
+    if (target.kind === 'edge') this.selection.set({ nodes: [], edges: [target.edgeIndex] });
+    const box = this.canvasArea()?.nativeElement.getBoundingClientRect();
+    const left = box ? clamp(request.anchor.x - box.left, 8, box.width - CONTEXT_MENU_WIDTH) : request.anchor.x;
+    const top = box ? clamp(request.anchor.y - box.top, 8, box.height - CONTEXT_MENU_HEIGHT) : request.anchor.y;
+    this.contextMenu.set({ target, left, top });
+  }
+
+  protected closeContextMenu(): void {
+    this.contextMenu.set(null);
+  }
+
+  protected readonly menuNodeDisabled = computed(() => {
+    const target = this.contextMenu()?.target;
+    return target?.kind === 'node' && !!this.definition()?.nodes.find((n) => n.id === target.nodeId)?.disabled;
+  });
+
+  protected readonly menuNodePinned = computed(() => {
+    const target = this.contextMenu()?.target;
+    return target?.kind === 'node' && Object.hasOwn(this.definition()?.pinData ?? {}, target.nodeId);
+  });
+
+  protected menuAction(action: CanvasMenuAction): void {
+    const menu = this.contextMenu();
+    this.closeContextMenu();
+    if (!menu) return;
+    const { target } = menu;
+    const nodes = target.kind === 'node' ? this.selection().nodes : [];
+    switch (action) {
+      case 'run':
+        if (target.kind === 'node') this.runNode(target.nodeId);
+        break;
+      case 'toggle':
+        this.toggleNodes(nodes);
+        break;
+      case 'duplicate':
+        this.duplicate(nodes);
+        break;
+      case 'rename':
+        if (target.kind === 'node') this.startRename(target.nodeId);
+        break;
+      case 'pin':
+        if (target.kind === 'node') this.togglePin(target.nodeId);
+        break;
+      case 'copy':
+        this.copy();
+        break;
+      case 'paste':
+        this.paste();
+        break;
+      case 'delete':
+        this.deleteSelected();
+        break;
+      case 'insert':
+        if (target.kind === 'edge') this.showQuickAdd({ kind: 'edge', edgeIndex: target.edgeIndex }, 'step', this.menuAnchor(menu));
+        break;
+      case 'add':
+        this.showQuickAdd({ kind: 'free' }, this.definition()?.nodes.length ? 'step' : 'trigger', this.menuAnchor(menu));
+        break;
+      case 'selectAll':
+        this.selectAll();
+        break;
+    }
+  }
+
+  protected selectAll(): void {
+    const def = this.definition();
+    if (def) this.selection.set({ nodes: def.nodes.map((n) => n.id), edges: def.connections.map((_, i) => i) });
+  }
+
+  /** Точка меню в координатах вікна — туди ж відкривається спливаюча палітра. */
+  private menuAnchor(menu: { left: number; top: number }): ScreenPoint {
+    const box = this.canvasArea()?.nativeElement.getBoundingClientRect();
+    return { x: (box?.left ?? 0) + menu.left, y: (box?.top ?? 0) + menu.top };
+  }
+
+  /** Стрілки: перехід виділення на сусідній вузол. */
+  private moveSelection(direction: NeighborDirection): void {
+    const node = this.selectedNode();
+    const def = this.definition();
+    const next = node && def ? neighborNode(def, node.id, direction) : null;
+    if (next) this.selection.set({ nodes: [next], edges: [] });
+  }
+
+  private showNotice(text: string): void {
+    this.notice.set(text);
+    if (this.noticeTimer) clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => this.notice.set(null), NOTICE_MS);
+  }
+
+  /** Інша дія конектора з панелі (F3-55): `arguments` скидаються, з'єднання й позиція лишаються; дія — у «Останніх». */
   protected toolChanged(nodeId: string, tool: McpToolInfo): void {
     const def = this.definition();
     const node = def?.nodes.find((n) => n.id === nodeId);
@@ -1383,6 +1559,17 @@ export class WorkflowEditorComponent implements OnInit {
       const node = this.selectedNode();
       action = node ? () => this.togglePin(node.id) : null;
     }
+    else if (!mod && !event.altKey && event.key === 'F2') {
+      const node = this.selectedNode();
+      action = node ? () => this.startRename(node.id) : null;
+    } else if (!mod && !event.altKey && !event.shiftKey && key === 'd') action = this.hasNodeSelection() ? () => this.toggleNodes(this.selection().nodes) : null;
+    else if (mod && key === 'd') action = this.hasNodeSelection() ? () => this.duplicate(this.selection().nodes) : null;
+    else if (mod && key === 'a') action = () => this.selectAll();
+    else if (mod && event.key === 'Enter') action = this.running() || !this.definition()?.nodes.length ? null : () => this.runWorkflow();
+    else if (!mod && !event.altKey && !event.shiftKey && ARROWS[event.key]) {
+      const direction = ARROWS[event.key];
+      action = this.selectedNode() ? () => this.moveSelection(direction) : null;
+    }
     if (!action) return;
     event.preventDefault();
     action();
@@ -1435,6 +1622,9 @@ export class WorkflowEditorComponent implements OnInit {
 }
 
 /** Фокус ніде (`body`) або на канвасі: тоді `Tab` відкриває палітру, а не переводить фокус між кнопками. */
+/** Стрілки → напрямок переходу між вузлами (F3-58). */
+const ARROWS: Record<string, NeighborDirection> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+
 function onCanvas(target: EventTarget | null): boolean {
   if (target === document.body) return true;
   return target instanceof HTMLElement && !!target.closest('.editor__canvas');
