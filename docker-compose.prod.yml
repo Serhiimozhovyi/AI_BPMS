@@ -63,6 +63,8 @@ services:
       OPENBP_ADMIN_PASSWORD: ${OPENBP_ADMIN_PASSWORD:-}
       # Публічна адреса (як її бачить браузер і зовнішні сервіси): redirect URI OAuth2, адреси webhook-ів.
       OPENBP_PUBLIC_URL: ${OPENBP_PUBLIC_URL:-}
+      # Origin-и сторінок, що вбудовують редактор <openbp-canvas> (docs/embedding.md), через кому.
+      OPENBP_CORS_ORIGINS: ${OPENBP_CORS_ORIGINS:-}
       OPENBP_EXECUTION_RETENTION_DAYS: ${OPENBP_EXECUTION_RETENTION_DAYS:-30}
       OPENBP_EXECUTION_RETENTION_CRON: ${OPENBP_EXECUTION_RETENTION_CRON:-0 0 3 * * ?}
     depends_on:

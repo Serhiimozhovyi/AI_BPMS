@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <title>Демо &lt;openbp-canvas&gt;</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Демо вбудовування редактора OpenBP (F4-13, docs/embedding.md). Збірка: npm run build:element.
+      Параметри адреси: ?workflow-id=<id>&api-base=<корінь Api>&token=<ключ>&readonly
+      Стилі нижче навмисно «агресивні», як у чужому застосунку: канвас у Shadow DOM від них не ламається,
+      а стилі канвасу не потрапляють на сторінку.
+    -->
+    <style>
+      * {
+        box-sizing: content-box;
+      }
+      body {
+        margin: 0;
+        font: 18px/1.6 Georgia, serif;
+        color: rgb(0, 128, 0);
+        background: rgb(255, 250, 230);
+      }
+      div {
+        padding: 3px;
+      }
+      button {
+        background: rgb(255, 0, 0);
+        color: rgb(255, 255, 0);
+        border-radius: 0;
+      }
+      .node {
+        display: none;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 12px 16px;
+      }
+      #layout {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 8px;
+        height: calc(100vh - 60px);
+      }
+      openbp-canvas {
+        height: 100%;
+        border: 2px solid rgb(0, 0, 128);
+      }
+      #events {
+        margin: 0;
+        overflow: auto;
+        font: 12px/1.4 monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">Хост-застосунок із вбудованим редактором OpenBP</h1>
+    <div id="layout">
+      <openbp-canvas id="canvas"></openbp-canvas>
+      <pre id="events" data-testid="host-events"></pre>
+    </div>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const canvas = document.getElementById('canvas');
+      for (const name of ['workflow-id', 'api-base', 'token', 'locale']) {
+        if (params.has(name)) canvas.setAttribute(name, params.get(name));
+      }
+      if (params.has('readonly')) canvas.setAttribute('readonly', '');
+      const log = document.getElementById('events');
+      window.openbpEvents = [];
+      for (const type of ['openbp-saved', 'openbp-run', 'openbp-error']) {
+        canvas.addEventListener(type, (e) => {
+          window.openbpEvents.push({ type, detail: e.detail });
+          log.textContent += `${type} ${JSON.stringify(e.detail)}\n`;
+        });
+      }
+    </script>
+    <script src="../dist/element/openbp-canvas.js"></script>
+  </body>
+</html>

@@ -105,6 +105,16 @@ export class ConnectorsApiService {
 /**
  * Текст помилки для користувача: `detail` з ProblemDetails Api, інакше — загальне повідомлення за HTTP-статусом.
  */
+/** Машинний код помилки: `code` з problem+json Api, інакше `NETWORK_ERROR` (Api недоступний), `HTTP_<статус>` чи `UNKNOWN`. */
+export function apiErrorCode(error: unknown): string {
+  if (error instanceof HttpErrorResponse) {
+    const code = (error.error as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && code) return code;
+    return error.status === 0 ? 'NETWORK_ERROR' : `HTTP_${error.status}`;
+  }
+  return 'UNKNOWN';
+}
+
 export function apiErrorMessage(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
     const body = error.error as { detail?: unknown; title?: unknown } | null;
