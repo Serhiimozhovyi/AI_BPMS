@@ -17,6 +17,13 @@ const TYPES = [
     fields: [{ name: 'env', title: 'Змінні середовища', kind: 'secretMap', required: true }],
     schema: {},
   },
+  {
+    type: 'oauth2',
+    displayName: 'OAuth2 (authorization code)',
+    description: 'Вхід через провайдера.',
+    fields: [{ name: 'clientId', title: 'Client ID', kind: 'text', required: true }],
+    schema: {},
+  },
 ];
 
 test('конектор: створити облікові дані в діалозі → обрано → POST /connectors з credentialId', async ({ page }) => {
@@ -67,8 +74,8 @@ test('конектор: створити облікові дані в діало
 
   await page.getByTestId('create-credential').click();
   const dialog = page.getByTestId('credential-dialog');
-  // Тип один (за транспортом) — уже обрано, вибору типу немає.
-  await expect(dialog.getByTestId('credential-type')).toHaveCount(0);
+  // Тип за транспортом уже обрано (для HTTP — заголовки; OAuth2 — на вибір).
+  await expect(dialog.getByTestId('credential-type')).toContainText('Конектор HTTP: заголовки');
   await dialog.getByTestId('credential-name').fill('CRM токен');
   await dialog.getByTestId('pair-key').fill('Authorization');
   await dialog.getByTestId('pair-value').fill('Bearer secret-token');

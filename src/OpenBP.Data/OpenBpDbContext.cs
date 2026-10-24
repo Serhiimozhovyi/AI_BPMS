@@ -15,6 +15,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<JobEntity> Jobs => Set<JobEntity>();
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
+    public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -70,6 +71,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("node_state");
             e.HasKey(x => new { x.WorkflowId, x.NodeId });
             e.Property(x => x.State).HasColumnType("jsonb");
+        });
+
+        b.Entity<OAuthStateEntity>(e =>
+        {
+            e.ToTable("oauth_states");
+            e.HasKey(x => x.State);
+            e.HasIndex(x => x.CreatedAt);
         });
 
         // snake_case для колонок і індексів — відповідає architecture.md §6.

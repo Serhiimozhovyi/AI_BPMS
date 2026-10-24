@@ -111,6 +111,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `workflows` | id, name, active, current_version_id, created_by, updated_at |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
+| `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at |
 | `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at |
@@ -230,6 +231,7 @@ Quartz тримає власні таблиці для розкладів. Бі�
 | `POST /connectors` · `PUT /connectors/{id}` · `DELETE /connectors/{id}` · `POST /connectors/{id}/refresh-tools` | admin | `ConnectorDetail`; 409 при видаленні, якщо є активні сценарії з цим сервером |
 | `POST /connectors/{id}/tools/{tool}/call { arguments }` | editor | `ToolCallResult` |
 | `GET /credentials/options?type` | editor | `CredentialOption[]` `{ id, name, type }` — для вибору у вузлі й конекторі (F4-03) |
+| `POST /credentials/{id}/oauth2/start` · `GET /oauth2/callback?state&code&error` | admin | `{ authorizationUrl }` · 302 на `/credentials?oauth=connected\|error&code&credential` (F4-04; `state` одноразовий, 10 хв, прив'язаний до користувача, у таблиці `oauth_states` з PKCE-верифікатором) |
 | `GET /credentials/types` | admin | `CredentialTypeInfo[]`: тип, поля (`text`/`secret`/`url`/`secretMap`), JSON Schema (секрети — `writeOnly`) |
 | `GET /credentials` · `GET /credentials/{id}` | admin | `CredentialSummary[]` · `CredentialSummary`: `{ id, name, type, fields, createdBy, usedBy: { connectors, workflows }, error }` — `fields` лише шляхи заповнених полів (`apiKey`, `headers.Authorization`), значень немає ніколи |
 | `POST /credentials { name, type, data }` · `PATCH /credentials/{id} { name?, data? }` · `DELETE /credentials/{id}` | admin | 201 `CredentialSummary` · `CredentialSummary` (часткова заміна: ключ замінює, `null` видаляє, решта лишається; для `headers`/`env` — на рівні їхніх ключів) · 204; 400 `CREDENTIAL_INVALID` з `errors: [{ field, message }]`; 409 `CREDENTIAL_IN_USE`, якщо на credential посилається конектор або поточна версія будь-якого сценарію |

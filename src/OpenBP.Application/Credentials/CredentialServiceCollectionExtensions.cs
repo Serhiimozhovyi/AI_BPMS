@@ -10,8 +10,8 @@ namespace OpenBP.Application.Credentials;
 public static class CredentialServiceCollectionExtensions
 {
     /// <summary>
-    /// Додає <see cref="ICredentialService"/> (scoped). Хост реєструє <c>OpenBpDbContext</c>, фабрику контекстів,
-    /// <see cref="ICurrentUser"/> і <see cref="CredentialEncryptionKey"/>.
+    /// Додає <see cref="ICredentialService"/> і <see cref="OAuth2Service"/> (scoped). Хост реєструє <c>OpenBpDbContext</c>,
+    /// фабрику контекстів, <see cref="ICurrentUser"/>, <see cref="CredentialEncryptionKey"/> і <see cref="OAuth2Client"/>.
     /// </summary>
     /// <param name="services">Контейнер.</param>
     public static IServiceCollection AddOpenBpCredentialServices(this IServiceCollection services)
@@ -20,6 +20,11 @@ public static class CredentialServiceCollectionExtensions
             sp.GetRequiredService<OpenBpDbContext>(),
             sp.GetRequiredService<ICurrentUser>(),
             new CredentialStore(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
+        services.AddScoped(sp => new OAuth2Service(
+            sp.GetRequiredService<OpenBpDbContext>(),
+            sp.GetRequiredService<ICurrentUser>(),
+            new CredentialStore(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>()),
+            sp.GetRequiredService<OAuth2Client>()));
         return services;
     }
 }

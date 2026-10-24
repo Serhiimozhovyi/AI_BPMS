@@ -50,8 +50,10 @@ builder.Services.AddOpenBpExecutionServices();
 
 // Credentials для auth webhook-ів (F2-10): ключ OPENBP_ENCRYPTION_KEY читається при першому запиті до webhook-а з auth.
 builder.Services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
+// OAuth2 (F4-04): обмін коду і оновлення токенів при читанні credential'а (реєстрація конекторів).
+builder.Services.AddSingleton(_ => new OAuth2Client(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }));
 builder.Services.AddScoped<ICredentialProvider>(sp => new PostgresCredentialProvider(new CredentialStore(
-    sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
+    sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>(), sp.GetRequiredService<OAuth2Client>())));
 builder.Services.AddOpenBpWebhookServices();
 
 // Credentials (F4-01): CRUD без значень секретів, лише для admin.
@@ -78,6 +80,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
+app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);
 
 app.Run();

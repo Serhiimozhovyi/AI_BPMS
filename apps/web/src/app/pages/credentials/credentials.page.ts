@@ -5,7 +5,9 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { forkJoin } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { CredentialFormComponent } from '../../credentials/credential-form.component';
-import { usageLabel } from '../../credentials/credential-input';
+import { DOCUMENT } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
+import { oauthLabel, usageLabel } from '../../credentials/credential-input';
 import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '../../credentials/credentials-api.service';
 
 /** `/credentials`: облікові дані без значень секретів — список, створення за типом, редагування, видалення (F4-02). */
@@ -32,6 +34,18 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
           <h2 class="mb-2 font-semibold" i18n="@@credentials.form.newTitle">Нові облікові дані</h2>
           <app-credential-form [types]="types()" (saved)="onSaved($event)" (cancelled)="adding.set(false)" />
         </div>
+      }
+
+      @if (oauthResult(); as r) {
+        <p
+          role="status"
+          class="mb-4 max-w-3xl rounded-lg p-3"
+          [class.state-ok]="r.ok"
+          [class.state-bad]="!r.ok"
+          data-testid="oauth-result"
+        >
+          {{ r.message }}
+        </p>
       }
 
       @if (loading()) {
@@ -64,8 +78,18 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
                 <td class="p-2 text-sm">
                   @if (c.error) {
                     <span class="text-red-700" data-testid="decrypt-error">{{ c.error }}</span>
+                  } @else if (c.oauth; as o) {
+                    <span
+                      class="rounded px-2 py-0.5"
+                      [class.state-ok]="o.status === 'connected'"
+                      [class.state-bad]="o.status === 'expired' || o.status === 'error'"
+                      [class.state-muted]="o.status === 'notConnected'"
+                      data-testid="oauth-status"
+                      [attr.data-status]="o.status"
+                      >{{ oauthLabel(o.status) }}</span
+                    >
                   } @else {
-                    {{ c.fields.join(', ') || '—' }}
+                    {{ visibleFields(c).join(', ') || '—' }}
                   }
                 </td>
                 <td class="p-2 text-sm">{{ usage(c) }}</td>
@@ -75,6 +99,15 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
                     <button mat-flat-button type="button" data-testid="confirm-delete" (click)="remove(c)" i18n="@@credentials.delete.yes">Так</button>
                     <button mat-button type="button" data-testid="cancel-delete" (click)="confirming.set(null)" i18n="@@credentials.delete.no">Ні</button>
                   } @else {
+                    @if (c.type === 'oauth2') {
+                      <button mat-stroked-button type="button" data-testid="oauth-connect" [disabled]="connecting() === c.id" (click)="connect(c)">
+                        @if (c.oauth?.status === 'notConnected') {
+                          <span i18n="@@credentials.oauth.connect">Підключити</span>
+                        } @else {
+                          <span i18n="@@credentials.oauth.reconnect">Підключити знову</span>
+                        }
+                      </button>
+                    }
                     <button mat-button type="button" data-testid="edit" (click)="editing.set(c.id)" i18n="@@credentials.edit">Змінити</button>
                     <button mat-button type="button" data-testid="delete" (click)="confirming.set(c.id)" i18n="@@credentials.delete">Видалити</button>
                   }
@@ -95,10 +128,25 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
       }
     </section>
   `,
+  styles: `
+    .state-ok {
+      background: var(--ac-green-15);
+    }
+
+    .state-bad {
+      background: var(--ac-red-15);
+    }
+
+    .state-muted {
+      background: var(--ac-cool-grey);
+    }
+  `,
 })
 export class CredentialsPage implements OnInit {
   private readonly api = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly document = inject(DOCUMENT);
+  private readonly route = inject(ActivatedRoute);
 
   readonly credentials = signal<CredentialSummary[]>([]);
   readonly types = signal<CredentialTypeInfo[]>([]);
@@ -108,9 +156,31 @@ export class CredentialsPage implements OnInit {
   readonly editing = signal<string | null>(null);
   readonly confirming = signal<string | null>(null);
 
+  readonly connecting = signal<string | null>(null);
+  /** Результат повернення з OAuth-провайдера (`?oauth=connected|error&code=…`). */
+  readonly oauthResult = signal<{ ok: boolean; message: string } | null>(null);
+
   readonly usage = usageLabel;
+  readonly oauthLabel = oauthLabel;
 
   ngOnInit(): void {
+    const query = this.route.snapshot.queryParamMap;
+    const oauth = query.get('oauth');
+    if (oauth === 'connected') {
+      this.oauthResult.set({ ok: true, message: $localize`:@@credentials.oauth.done:Підключено: токен отримано, OpenBP оновлюватиме його сам.` });
+    } else if (oauth === 'error') {
+      const code = query.get('code') ?? '';
+      this.oauthResult.set({
+        ok: false,
+        message:
+          code === 'access_denied'
+            ? $localize`:@@credentials.oauth.denied:Підключення скасовано: доступ не надано.`
+            : code === 'invalid_state'
+              ? $localize`:@@credentials.oauth.invalidState:Посилання підключення застаріло або вже використане. Натисніть «Підключити» ще раз.`
+              : $localize`:@@credentials.oauth.failed:Не вдалося підключити (${code}:code:).`,
+      });
+    }
+
     this.loading.set(true);
     forkJoin([this.api.types(), this.api.list()])
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -123,6 +193,33 @@ export class CredentialsPage implements OnInit {
         error: (e: unknown) => {
           this.error.set(apiErrorMessage(e));
           this.loading.set(false);
+        },
+      });
+  }
+
+  /** Поля без службових (токени OAuth2 показуються станом). */
+  visibleFields(c: CredentialSummary): string[] {
+    const managed = new Set(
+      this.types()
+        .find((t) => t.type === c.type)
+        ?.fields.filter((f) => f.kind === 'managed')
+        .map((f) => f.name) ?? [],
+    );
+    return c.fields.filter((f) => !managed.has(f));
+  }
+
+  /** OAuth2: адреса провайдера від Api → перехід; повернення — на цю ж сторінку з `?oauth=…`. */
+  connect(c: CredentialSummary): void {
+    this.connecting.set(c.id);
+    this.error.set(null);
+    this.api
+      .startOAuth(c.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ authorizationUrl }) => this.document.location.assign(authorizationUrl),
+        error: (e: unknown) => {
+          this.connecting.set(null);
+          this.error.set(apiErrorMessage(e));
         },
       });
   }

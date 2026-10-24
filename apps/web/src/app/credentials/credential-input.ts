@@ -18,7 +18,9 @@ export interface CredentialFormValue {
 
 /** Поля, які показує форма: для `generic` — одна мапа без назви. */
 export function formFields(type: CredentialTypeInfo): CredentialFieldInfo[] {
-  return type.fields.length > 0 ? type.fields : [{ name: '', title: '', kind: 'secretMap', required: true }];
+  return type.fields.length > 0
+    ? type.fields.filter((f) => f.kind !== 'managed')
+    : [{ name: '', title: '', kind: 'secretMap', required: true }];
 }
 
 /** Порожнє значення форми; для редагування — наявні ключі мап зі збереженого credential'а (без значень). */
@@ -121,6 +123,20 @@ export function buildData(
 function mapKey(map: string, path: string): string | null {
   if (map === '') return path;
   return path.startsWith(`${map}.`) ? path.slice(map.length + 1) : null;
+}
+
+/** Підпис стану OAuth2-підключення. */
+export function oauthLabel(status: string): string {
+  switch (status) {
+    case 'connected':
+      return $localize`:@@credentials.oauth.connected:підключено`;
+    case 'expired':
+      return $localize`:@@credentials.oauth.expired:токен сплив — підключіть знову`;
+    case 'error':
+      return $localize`:@@credentials.oauth.error:помилка оновлення токена`;
+    default:
+      return $localize`:@@credentials.oauth.notConnected:не підключено`;
+  }
 }
 
 /** Опис використання для таблиці: «2 конектори, 1 сценарій» або «—». */

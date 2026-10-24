@@ -12,8 +12,14 @@ namespace OpenBP.Application.Credentials;
 /// Реалізація <see cref="ICredentialService"/> над <c>credentials</c> і <see cref="CredentialStore"/> (AES-256-GCM).
 /// Розшифровує дані лише щоб перелічити заповнені поля і злити часткову заміну; значення з сервісу не виходять.
 /// </summary>
-public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUser, CredentialStore store) : ICredentialService
+/// <param name="db">Контекст БД.</param>
+/// <param name="currentUser">Користувач запиту.</param>
+/// <param name="store">Сховище (без оновлення oauth2-токенів: перелік полів не має звертатися до провайдера).</param>
+/// <param name="time">Годинник для стану oauth2; <c>null</c> — системний.</param>
+public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUser, CredentialStore store, TimeProvider? time = null) : ICredentialService
 {
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+
     /// <summary>Код конфлікту: credential використовують конектори або сценарії.</summary>
     public const string CredentialInUseCode = "CREDENTIAL_IN_USE";
 
@@ -75,6 +81,7 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         }
 
         var data = input.Data ?? throw new CredentialValidationException([new("data", "Потрібні дані.")]);
+        RejectManaged(input.Type, data);
         CredentialTypes.Validate(input.Type, data);
         var id = await store.CreateAsync(name, input.Type, data, currentUser.UserId, ct);
         return await GetAsync(id, ct);
@@ -95,7 +102,17 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         if (input.Data is not null)
         {
             var current = await store.GetDataAsync(id, ct) ?? throw new NotFoundException(Entity, id);
+            RejectManaged(row.Type, input.Data);
             var merged = CredentialTypes.Merge(current, input.Data);
+            if (row.Type == OAuth2Credential.Type && OAuth2Credential.ClientFields.Any(input.Data.ContainsKey))
+            {
+                // Інший клієнт чи scopes — отримані токени вже не відповідають налаштуванням.
+                foreach (var managed in OAuth2Credential.ManagedFields)
+                {
+                    merged.Remove(managed);
+                }
+            }
+
             CredentialTypes.Validate(row.Type, merged);
             await store.UpdateDataAsync(id, merged, ct);
         }
@@ -123,12 +140,14 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
     {
         IReadOnlyList<string> fields = [];
         string? error = null;
+        CredentialOAuthStatus? oauth = null;
         try
         {
             var data = await store.GetDataAsync(id, ct);
             if (data is not null)
             {
                 fields = CredentialTypes.FilledFields(data);
+                oauth = type == OAuth2Credential.Type ? OAuthStatus(data, _time.GetUtcNow()) : null;
             }
         }
         catch (CredentialDecryptionException)
@@ -136,7 +155,43 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
             error = "Дані не розшифровуються: ймовірно, змінився ключ шифрування OPENBP_ENCRYPTION_KEY.";
         }
 
-        return new CredentialSummary(id, name, type, fields, createdBy, Of(usage, id), error);
+        return new CredentialSummary(id, name, type, fields, createdBy, Of(usage, id), error, oauth);
+    }
+
+    /// <summary>Стан oauth2-credential'а за його даними.</summary>
+    /// <param name="data">Розшифровані дані.</param>
+    /// <param name="now">Поточний час.</param>
+    public static CredentialOAuthStatus OAuthStatus(JsonObject data, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var expiresAt = OAuth2Credential.ExpiresAt(data);
+        var error = OAuth2Credential.Text(data, "oauthError");
+        if (string.IsNullOrEmpty(OAuth2Credential.Text(data, "accessToken")))
+        {
+            return new("notConnected", null, error);
+        }
+
+        if (!string.IsNullOrEmpty(error))
+        {
+            return new(expiresAt is { } e && e <= now ? "expired" : "error", expiresAt, error);
+        }
+
+        var refreshable = !string.IsNullOrEmpty(OAuth2Credential.Text(data, "refreshToken"));
+        return new(expiresAt is { } at && at <= now && !refreshable ? "expired" : "connected", expiresAt, null);
+    }
+
+    private static void RejectManaged(string type, JsonObject data)
+    {
+        if (type != OAuth2Credential.Type)
+        {
+            return;
+        }
+
+        var managed = data.Select(p => p.Key).Where(OAuth2Credential.ManagedFields.Contains).ToList();
+        if (managed.Count > 0)
+        {
+            throw new CredentialValidationException([.. managed.Select(f => new CredentialFieldError(f, "Поле заповнює OpenBP після «Підключити»."))]);
+        }
     }
 
     private static CredentialUsage Of(UsageIndex usage, Guid id) => new(
