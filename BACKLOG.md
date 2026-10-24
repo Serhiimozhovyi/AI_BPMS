@@ -435,6 +435,31 @@
 - Що: шапка як у AC-Kit «AgriChainKit» (логотип, головне меню, іконки пошуку/сповіщень/налаштувань/профілю), другий рівень навігації на тлі Mid, сторінки як білі картки; кроки-«стрілки» для майстрів, де вони є. Після мерджу F3-24 (вхід), бо він змінює `app.html`/`app.ts`.
 - DoD: lint/test/build зелені; скріншоти до і після в PR.
 
+### F3-27 · Конектор Telegram: клавіатури, редагування, кнопки
+- model: `sonnet` · status: `ready` · depends: F3-13
+- Що: у `connectors/telegram` — `reply_markup` (об'єкт Bot API: `inline_keyboard` | `keyboard` з `request_contact` | `remove_keyboard`) і `disable_link_preview` у `send_message`; нові tools `edit_message_text { chat_id, message_id, text, parse_mode?, reply_markup? }`, `answer_callback_query { callback_query_id, text?, show_alert? }`, `set_my_commands { commands[], scope? }`, `set_webhook { url, secret_token?, allowed_updates? }`, `delete_webhook`. README: webhook-бот на `core.webhook` з auth заголовком `X-Telegram-Bot-Api-Secret-Token`. Знайдено розбором n8n-сценарію «Астарта · Бот психологічної підтримки»: без кнопок і `answerCallbackQuery` бот-меню не зібрати.
+- DoD: тести проти фейку Bot API для кожного нового tool'а і `reply_markup` (inline, contact, remove); `400 message is not modified` → `isError` з описом Telegram; токен не з'являється у відповідях; `docs/connectors.md` оновлено.
+
+### F3-28 · Конектор Google Sheets
+- model: `opus` · status: `ready` · depends: F3-10
+- Що: `connectors/gsheets` на шаблоні. Автентифікація сервісним акаунтом: JSON-ключ лише у змінній `GOOGLE_SERVICE_ACCOUNT_JSON`, JWT (RS256) → OAuth-токен, кеш токена. Tools: `read_sheets { spreadsheet_id, sheets[] }` → `{ sheets: { <лист>: [ { row_number, <колонка>: значення } ] }, headers }` (UNFORMATTED_VALUE, порожні рядки пропускаються); `update_row { spreadsheet_id, sheet, row_number, values{} }` за назвами колонок живого заголовка (невідома колонка → `isError`); `append_row { spreadsheet_id, sheet, values{} }` у порядку заголовка → `{ row_number }`; `upsert_row { spreadsheet_id, sheet, key_column, values{} }`; `append_rows { spreadsheet_id, range, values[][] }` для журналів.
+- DoD: тести проти фейку Sheets API (успіх кожного tool'а, невідома колонка, 401/403/429 → `isError`, ключ і токен не потрапляють у відповіді й журнали); README «сервісний акаунт → доступ до таблиці → реєстрація в OpenBP»; `docs/connectors.md` оновлено.
+
+### F3-29 · `core.switch`: більше 4 правил
+- model: `sonnet` · status: `ready` · depends: F1-07
+- Що: підняти `maxItems` у `switch.schema.json` з 4 до 16, виходи `rule{i}` + `fallback`; канвас малює стільки портів, скільки правил. У n8n-боті маршрутизатор має 7 гілок.
+- DoD: тест вузла з 7 правилами і fallback; валідатор приймає ребра з виходів 4…N; старі сценарії сумісні (інакше `typeVersion` 2).
+
+### F3-30 · `core.code`: `$node["…"]` і часовий пояс сценарію
+- model: `opus` · status: `ready` · depends: F1-06, F1-07
+- Що: у `core.code` — `$node["Назва"].json` (лише читання, як у виразах) і `Date` у `settings.timezone` сценарію замість UTC (`options.TimeZone`). Зараз після кожного `mcp.tool` контекст доводиться відновлювати `core.set`, а дати `Europe/Kyiv` рахувати вручну.
+- DoD: тести: читання виходу попереднього вузла, неіснуючий вузол → помилка з назвою, `getHours()` у `Europe/Kyiv` узимку й улітку; `architecture.md` §5 і опис `describe_nodes` оновлено.
+
+### F3-31 · Приклад: бот психологічної підтримки (з n8n)
+- model: `opus` · status: `blocked` · depends: F3-27, F3-28, F3-29, F3-30
+- Що: `examples/psy-support-bot.json` за логікою n8n-сценарію «Астарта · Бот психологічної підтримки»: `core.webhook` → читання таблиці → маршрут → реєстрація, меню, матеріали, консультації, події, БСТ, кабінет психолога → одна точка відправки + журнал + лічильники. «Шедулер» (нагадування, розсилки) — окрема задача потім. Перевірка — окремим тестовим ботом, не бойовим токеном.
+- DoD: CLI-прогін з моками Telegram і Sheets: /start → номер → меню; запис на консультацію і одночасний запис двох людей (один отримує «час зайняли»); подія з місткістю 1; БСТ з листом очікування; кабінет відкривається лише психологу.
+
 ## Фаза 4 — Продуктова готовність
 
 - F4-A Credentials UI + OAuth2 authorization code — `sonnet`
