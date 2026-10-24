@@ -5,6 +5,7 @@ namespace OpenBP.Data;
 public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) : DbContext(options)
 {
     public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<UserLoginEntity> UserLogins => Set<UserLoginEntity>();
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
@@ -24,6 +25,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("users");
             e.HasIndex(x => x.Email).IsUnique();
+        });
+        b.Entity<UserLoginEntity>(e =>
+        {
+            e.ToTable("user_logins");
+            e.HasIndex(x => new { x.Provider, x.Subject }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.HasOne<UserEntity>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ApiKeyEntity>(e =>
         {

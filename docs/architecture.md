@@ -106,7 +106,8 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 
 | Таблиця | Ключові поля |
 |---|---|
-| `users` | id, email, password_hash, role, created_at |
+| `users` | id, email, password_hash (null — лише OIDC, F4-14), role, created_at |
+| `user_logins` | id, user_id → users (cascade), provider, subject (unique provider+subject), created_at, last_login_at (F4-14) |
 | `api_keys` | id, user_id, hash, name, last_used_at |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
 | `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням) |
@@ -329,6 +330,31 @@ job береться лише за вільного слота.
 - Обидві схеми дають `ClaimsPrincipal` з `sub` (id користувача), `email`, `role`; `ICurrentUser` в application-шарі
   будується з нього. Воркер і тригери працюють без користувача (`IExecutionLauncher` ролей не перевіряє).
 - Ролі впорядковані: `viewer < editor < admin`; `Require(UserRole.Editor)` пропускає й admin.
+- OIDC (F4-14): провайдери з `OpenBp:Oidc:Providers:<key>` (змінні `OpenBp__Oidc__Providers__<key>__<Поле>`; поля —
+  `OidcProviderOptions`: `DisplayName`, `Authority`, `ClientId`, `ClientSecret`, `Scopes`, `RoleClaim`, `RoleMap`,
+  `AutoProvision`, `AllowedEmailDomains`, `TrustEmail`, `AcceptBearer`, `BearerAudiences`, `RequireHttpsMetadata`).
+  Хибна конфігурація зупиняє старт Api з поясненням, без значень секретів.
+  - Вхід: `GET /api/v1/auth/oidc/<key>/login?returnUrl=` → провайдер (authorization code + PKCE, `response_mode=query`,
+    PAR, якщо провайдер його підтримує) → callback `/signin-oidc/<key>` (nginx і dev-proxy ведуть його в Api) → та сама
+    cookie `openbp.auth`, що й після пароля → `returnUrl` (лише шлях усередині застосунку). Redirect URI будується з
+    `OPENBP_PUBLIC_URL`, якщо задано. Токени провайдера не зберігаються (`SaveTokens = false`).
+  - Користувач (`IOidcLoginService`): claims беруться з payload-ів id_token і access token (`OidcClaimsMapper`; ролі за
+    шляхами `RoleClaim`, напр. `realm_access.roles`, `resource_access.<client>.roles`, `roles`; пошта — `email`, для
+    Entra ще `upn`/`preferred_username`; підтверджена — `email_verified`, `xms_edov` або `TrustEmail`). Пошук: за
+    `(provider, sub)` у `user_logins` → за підтвердженою поштою (обліковий запис прив'язується) → створення з `AutoProvision`
+    (без пароля) → інакше відмова. `AllowedEmailDomains` перевіряється на кожному вході. Якщо задано `RoleMap`, роль
+    виставляється з неї на кожному вході (найвища зі збігів, без збігу — `viewer`), крім аварійного адміністратора
+    `OPENBP_ADMIN_EMAIL`. Відмова — `/login?oidcError=<код>`: `OIDC_EMAIL_NOT_ALLOWED`, `OIDC_EMAIL_NOT_VERIFIED`,
+    `OIDC_USER_NOT_FOUND`, `OIDC_ACCOUNT_CONFLICT`, `OIDC_NO_SUBJECT`, `OIDC_FAILED` (решта помилок протоколу).
+  - Bearer: схема за замовчуванням дивиться на `iss` JWT; збіг з `Authority` провайдера з `AcceptBearer` → JwtBearer
+    цього провайдера (підпис за JWKS, `aud` або `azp` ∈ `BearerAudiences`, за замовчуванням `ClientId`), далі той самий
+    `IOidcLoginService`; інакше — API-ключ. `/mcp` і далі приймає лише API-ключі.
+  - `GET /api/v1/auth/providers` (без входу) → `{ passwordLogin, providers: [{ key, displayName, loginUrl }] }` для кнопок
+    «Увійти через …». `OPENBP_PASSWORD_LOGIN=false` ховає форму і відхиляє `POST /auth/login` кодом 403
+    `PASSWORD_LOGIN_DISABLED` для всіх, крім `OPENBP_ADMIN_EMAIL` (форма — `/login?password`). Користувач без пароля
+    формою не входить.
+  - Тести: `tests/OpenBP.Api.Tests/Oidc` — Keycloak у Testcontainers з realm `oidc-realm.json`; claims Entra —
+    `tests/OpenBP.Application.Tests/OidcClaimsMapperTests.cs`. Налаштування провайдерів — `docs/admin/oidc.md`.
 
 ### 10.7. MCP-сервери (конектори) між процесами
 

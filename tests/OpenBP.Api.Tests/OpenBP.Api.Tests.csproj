@@ -12,10 +12,16 @@
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <!-- F4-14: вхід через OIDC проти справжнього Keycloak з тестовим realm (oidc-realm.json). -->
+    <PackageReference Include="Testcontainers.Keycloak" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Oidc/oidc-realm.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

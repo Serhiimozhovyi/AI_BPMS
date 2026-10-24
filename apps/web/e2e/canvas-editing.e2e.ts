@@ -254,8 +254,9 @@ test('налаштування сценарію: зміни йдуть у settin
   expect(api.definition.settings).toEqual({ timezone: 'Europe/Kyiv', executionTimeoutSec: 1200, errorWorkflowId: ERROR_WORKFLOW_ID, saveSuccessfulData: false });
 
   await page.getByTestId('undo').click();
+  // Одразу після undo індикатор ще «збережено» (автозбереження з затримкою) — чекаємо саму збережену версію.
+  await expect.poll(() => api.definition.settings['executionTimeoutSec']).toBe(300);
   await waitSaved(page);
-  expect(api.definition.settings['executionTimeoutSec']).toBe(300);
 });
 
 test('F3-50: Tab → тригер, «+» біля порту → пошук → Enter — два з’єднані вузли', async ({ page }) => {

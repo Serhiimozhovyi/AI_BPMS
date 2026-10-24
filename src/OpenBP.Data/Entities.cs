@@ -6,9 +6,23 @@ public sealed class UserEntity
 {
     public Guid Id { get; set; }
     public string Email { get; set; } = "";
-    public string PasswordHash { get; set; } = "";
+    /// <summary><c>null</c> — користувач входить лише через OIDC (F4-14).</summary>
+    public string? PasswordHash { get; set; }
     public string Role { get; set; } = "viewer";
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>Зв'язок користувача з обліковим записом OIDC-провайдера (F4-14): <c>(provider, subject)</c> унікальні.</summary>
+public sealed class UserLoginEntity
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    /// <summary>Ключ провайдера з <c>OpenBp:Oidc:Providers:&lt;key&gt;</c>.</summary>
+    public string Provider { get; set; } = "";
+    /// <summary>Claim <c>sub</c> провайдера.</summary>
+    public string Subject { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? LastLoginAt { get; set; }
 }
 
 public sealed class ApiKeyEntity

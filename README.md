@@ -47,7 +47,8 @@ docker compose -f docker-compose.prod.yml up -d --build --wait   # postgres → 
 - Відкрито лише веб-інтерфейс на `OPENBP_HTTP_PORT` (типово 8080); Api, воркер і БД — у внутрішній мережі.
 - `migrate` застосовує міграції один раз і завершується; api і worker стартують лише після нього.
 - Більше воркерів: `docker compose -f docker-compose.prod.yml up -d --scale worker=3`.
-- Публічна адреса для OAuth2 і webhook-ів — `OPENBP_PUBLIC_URL`; усі змінні з поясненнями — у `.env.example`.
+- Публічна адреса для OAuth2, OIDC-входу і webhook-ів — `OPENBP_PUBLIC_URL`; усі змінні з поясненнями — у `.env.example`.
+- Вхід через Keycloak чи Microsoft Entra ID — `oidc.env` (зразок `oidc.env.example`), інструкція — [docs/admin/oidc.md](docs/admin/oidc.md).
 - Журнали Docker обмежено (json-file, 5 × 10 МБ на контейнер), формат журналів застосунку — JSON.
 - `scripts/smoke-prod.sh` перевіряє розгортання: `/health/ready`, вхід адміністратором, запуск `examples/hello-manual.json`.
 
@@ -77,7 +78,7 @@ scripts/restore.sh backups/openbp-openbp-<час>.dump  # зупиняє api/wor
 | api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
 | worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
 | migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
-| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), `/element/openbp-canvas.js` — веб-компонент редактора ([docs/embedding.md](docs/embedding.md)), решта — SPA |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/mcp`, `/webhook`, `/health`, `/signin-oidc` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), `/element/openbp-canvas.js` — веб-компонент редактора ([docs/embedding.md](docs/embedding.md)), решта — SPA |
 | backup | `docker/backup.Dockerfile` | `pg_dump` 16 і busybox `crond`: бекапи за `OPENBP_BACKUP_CRON` (див. «Бекапи і відновлення») |
 
 ```bash

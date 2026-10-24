@@ -100,9 +100,11 @@ public static class OpenApiSetup
             Description = """
                 REST API OpenBP: сценарії, виконання, конектори, облікові дані.
 
-                **Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login`; інтеграції — API-ключ
-                у заголовку `Authorization: Bearer <ключ>` (створюється в `POST /api/v1/api-keys`). Ролі (viewer,
-                editor, admin) перевіряються на кожному запиті: без входу — 401, без прав — 403.
+                **Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login` або входу через
+                OIDC-провайдера (`GET /api/v1/auth/oidc/{key}/login`); інтеграції — API-ключ у заголовку
+                `Authorization: Bearer <ключ>` (створюється в `POST /api/v1/api-keys`) або access token налаштованого
+                OIDC-провайдера. Ролі (viewer, editor, admin) перевіряються на кожному запиті: без входу — 401, без
+                прав — 403.
 
                 **Помилки.** `application/problem+json` (RFC 9457) з полями `code` (машинний код, напр. `NOT_FOUND`,
                 `WORKFLOW_INVALID`) і `detail` (текст для людини); помилки перевірки — ще й `errors[]`
@@ -123,13 +125,13 @@ public static class OpenApiSetup
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Cookie,
             Name = AuthSetup.CookieName,
-            Description = "Сесія UI: cookie після POST /api/v1/auth/login.",
+            Description = "Сесія UI: cookie після POST /api/v1/auth/login або входу через OIDC.",
         };
         document.Components.SecuritySchemes[BearerScheme] = new OpenApiSecurityScheme
         {
             Type = SecuritySchemeType.Http,
             Scheme = "bearer",
-            Description = "API-ключ OpenBP (POST /api/v1/api-keys).",
+            Description = "API-ключ OpenBP (POST /api/v1/api-keys) або access token OIDC-провайдера з OpenBp:Oidc:Providers.",
         };
 
         document.Components.Schemas ??= new Dictionary<string, IOpenApiSchema>();
@@ -169,6 +171,8 @@ public static class OpenApiSetup
         var path = "/" + (context.Description.RelativePath ?? "");
         var anonymous = !path.StartsWith("/api/v1/", StringComparison.Ordinal)
                         || path == "/api/v1/auth/login"
+                        || path == "/api/v1/auth/providers"
+                        || path.StartsWith("/api/v1/auth/oidc/", StringComparison.Ordinal)
                         || path == OAuth2Endpoints.CallbackPath;
         if (!anonymous)
         {

@@ -10,5 +10,9 @@
   "/mcp": {
     "target": "http://localhost:5080",
     "secure": false
+  },
+  "/signin-oidc": {
+    "target": "http://localhost:5080",
+    "secure": false
   }
 }

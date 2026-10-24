@@ -41,7 +41,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<OpenBpExceptionHandler>();
-builder.Services.AddOpenBpAuthentication();
+builder.Services.AddOpenBpAuthentication(builder.Configuration);
 // CORS для вбудованого редактора <openbp-canvas> (F4-13): OPENBP_CORS_ORIGINS.
 builder.Services.AddOpenBpCors();
 

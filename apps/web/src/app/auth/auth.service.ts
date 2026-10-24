@@ -10,6 +10,20 @@ export interface UserInfo {
   role: 'admin' | 'editor' | 'viewer';
 }
 
+/** Провайдер входу — елемент `GET /api/v1/auth/providers` (F4-14). */
+export interface AuthProvider {
+  key: string;
+  displayName: string;
+  /** Адреса Api, куди перейти браузером; `returnUrl` додає {@link oidcLoginHref}. */
+  loginUrl: string;
+}
+
+/** Способи входу: форма пароля і OIDC-провайдери. */
+export interface AuthProviders {
+  passwordLogin: boolean;
+  providers: AuthProvider[];
+}
+
 /** Вхід і вихід cookie-сесією (`/api/v1/auth/*`, docs/architecture.md §10.3); поточний користувач — сигнал для shell і guard. */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -34,7 +48,16 @@ export class AuthService {
 
   /** Входить і одразу читає користувача; невірний email чи пароль — `HttpErrorResponse` 401. */
   login(email: string, password: string): Observable<UserInfo | null> {
-    return this.http.post<void>(`${this.base}/login`, { email, password }).pipe(switchMap(() => this.me()));
+    return this.http
+      .post<void>(`${this.base}/login`, { email, password })
+      .pipe(switchMap(() => this.me()));
+  }
+
+  /** Способи входу для сторінки входу; Api недоступний — лише форма пароля, як до F4-14. */
+  providers(): Observable<AuthProviders> {
+    return this.http
+      .get<AuthProviders>(`${this.base}/providers`)
+      .pipe(catchError(() => of<AuthProviders>({ passwordLogin: true, providers: [] })));
   }
 
   logout(): Observable<void> {
@@ -52,8 +75,22 @@ export class AuthService {
  * `returnUrl` приходить з адресного рядка, тож зовнішнє посилання не має стати відкритим редиректом.
  */
 export function safeReturnUrl(value: string | null | undefined): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\') || value.startsWith('/login')) {
+  if (
+    !value ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.startsWith('/\\') ||
+    value.startsWith('/login')
+  ) {
     return '/';
   }
   return value;
+}
+
+/** Адреса входу через провайдера з поверненням на безпечний `returnUrl`. */
+export function oidcLoginHref(
+  provider: AuthProvider,
+  returnUrl: string | null | undefined,
+): string {
+  return `${provider.loginUrl}?returnUrl=${encodeURIComponent(safeReturnUrl(returnUrl))}`;
 }

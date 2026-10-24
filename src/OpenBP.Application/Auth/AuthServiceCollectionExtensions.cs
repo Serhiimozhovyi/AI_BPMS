@@ -18,4 +18,16 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IApiKeyService, ApiKeyService>();
         return services;
     }
+
+    /// <summary>Додає <see cref="Oidc.IOidcLoginService"/> (scoped, F4-14).</summary>
+    /// <param name="services">Контейнер.</param>
+    /// <param name="protectedAdminEmail">Аварійний адміністратор з <c>OPENBP_ADMIN_EMAIL</c>: OIDC не змінює його роль.</param>
+    public static IServiceCollection AddOpenBpOidcLoginService(this IServiceCollection services, string? protectedAdminEmail)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<Oidc.IOidcLoginService>(sp => new Oidc.OidcLoginService(
+            sp.GetRequiredService<OpenBP.Data.OpenBpDbContext>(), sp.GetRequiredService<TimeProvider>(),
+            string.IsNullOrWhiteSpace(protectedAdminEmail) ? null : protectedAdminEmail));
+        return services;
+    }
 }
