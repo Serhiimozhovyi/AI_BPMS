@@ -246,7 +246,16 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               >
             }
           }
-          @if (ctx.selected() && !readonly()) {
+          @if ((ctx.selected() || firstStepHint(ctx.data().node)) && !readonly()) {
+            @if (firstStepHint(ctx.data().node)) {
+              <span
+                class="pointer-events-none absolute left-[calc(100%+48px)] -translate-y-1/2 whitespace-nowrap text-[12px] text-ac-kit"
+                data-testid="first-step-hint"
+                [style.top.px]="portTop(0, ctx.data().node.outputs.length, ctx.data().height)"
+                i18n="@@canvas.firstStepHint"
+                >Додайте наступний крок</span
+              >
+            }
             @for (port of ctx.data().node.outputs; track $index; let i = $index) {
               <button
                 type="button"
@@ -793,6 +802,11 @@ export class VflowCanvasComponent {
     // Точка відпускання — на рівні входу нової картки (середина лівого краю), з кроком сітки.
     const at: [number, number] = [snap(point.x), snap(point.y - MIN_NODE_HEIGHT / 2)];
     this.quickAdd.emit({ target: { kind: 'port', from: { node: event.from.node.id, output }, at }, anchor: this.pointer });
+  }
+
+  /** Підказка «Додайте наступний крок» біля порту тригера (F3-59) — доки в сценарії немає жодного з'єднання. */
+  protected firstStepHint(node: CanvasNode): boolean {
+    return node.inputs.length === 0 && node.outputs.length > 0 && this.model().edges.length === 0;
   }
 
   protected addFromPort(event: MouseEvent, node: string, output: number): void {

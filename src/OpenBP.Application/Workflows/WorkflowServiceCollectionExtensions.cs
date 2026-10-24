@@ -13,10 +13,10 @@ namespace OpenBP.Application.Workflows;
 public static class WorkflowServiceCollectionExtensions
 {
     /// <summary>
-    /// Додає <see cref="IWorkflowService"/> і <see cref="IWorkflowGroupService"/>, <see cref="IVariableService"/>, <see cref="IWorkflowTransferService"/>, <see cref="IExpressionPreviewService"/> (scoped) і, якщо хост не зареєстрував свій, <see cref="INodeSchemaProvider"/>
+    /// Додає <see cref="IWorkflowService"/> і <see cref="IWorkflowGroupService"/>, <see cref="IVariableService"/>, <see cref="IWorkflowTransferService"/>, <see cref="IExpressionPreviewService"/>, <see cref="IWorkflowTemplateService"/> (scoped) і, якщо хост не зареєстрував свій, <see cref="INodeSchemaProvider"/>
     /// для валідації — ланцюжок <see cref="NodeRegistrySchemaProvider"/> → <see cref="McpNodeSchemaProvider"/>
     /// (docs/architecture.md §10.2). Хост реєструє <see cref="INodeRegistry"/>, <see cref="IMcpServerRegistry"/>,
-    /// <c>OpenBpDbContext</c>, <c>ICurrentUser</c> і <see cref="IExpressionEvaluator"/> (для попереднього перегляду виразів) сам.
+    /// <c>OpenBpDbContext</c>, <c>ICurrentUser</c>, <see cref="WorkflowTemplateCatalog"/> і <see cref="IExpressionEvaluator"/> (для попереднього перегляду виразів) сам.
     /// </summary>
     /// <param name="services">Контейнер.</param>
     public static IServiceCollection AddOpenBpWorkflowServices(this IServiceCollection services)
@@ -30,6 +30,7 @@ public static class WorkflowServiceCollectionExtensions
         services.AddScoped<IVariableService, VariableService>();
         services.AddScoped<IWorkflowTransferService, WorkflowTransferService>();
         services.AddScoped<IExpressionPreviewService, ExpressionPreviewService>();
+        services.AddScoped<IWorkflowTemplateService, WorkflowTemplateService>();
         return services;
     }
 }

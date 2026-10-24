@@ -291,4 +291,23 @@ describe('CanvasComponent', () => {
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="canvas-arrange"]')).toBeNull();
   });
+  it('підказка «Додайте наступний крок» (F3-59): біля порту тригера, доки немає з’єднань; у перегляді — немає', async () => {
+    const lone: WorkflowDefinition = { ...emptyWorkflowDefinition('Новий'), nodes: [demo().nodes[0], demo().nodes[1]] };
+    const fixture = await create(lone);
+    const host = fixture.nativeElement as HTMLElement;
+    const hint = () => host.querySelectorAll('[data-testid="first-step-hint"]');
+
+    expect(hint().length).toBe(1);
+    expect(hint()[0].closest('[data-node-id]')?.getAttribute('data-node-id')).toBe('n_webhook');
+    expect(host.querySelector('[data-node-id="n_webhook"] [data-testid="port-add"]')).not.toBeNull();
+
+    fixture.componentRef.setInput('definition', { ...lone, connections: [demo().connections[0]] });
+    fixture.detectChanges();
+    expect(hint().length).toBe(0);
+
+    fixture.componentRef.setInput('definition', lone);
+    fixture.componentRef.setInput('readonly', true);
+    fixture.detectChanges();
+    expect(hint().length).toBe(0);
+  });
 });

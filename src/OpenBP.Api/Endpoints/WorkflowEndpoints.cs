@@ -52,6 +52,11 @@ public static class WorkflowEndpoints
             service.ValidateAsync(Required(body.Definition), body.Active, ct))
             .WithSummary("Перевірити визначення без збереження");
 
+        workflows.MapGet("/templates", (IWorkflowTemplateService service, CancellationToken ct) => service.ListAsync(ct))
+            .WithSummary("Шаблони «Почати з прикладу»")
+            .WithDescription("Приклади з `examples/` (каталог `examples/templates.json`): назва, опис і визначення без `pinData`, " +
+                             "з порожніми `serverId`/`credentialId` і без сценарію помилок — конектори й облікові дані автор обирає сам.");
+
         workflows.MapPost("/import", async (WorkflowImportRequest body, IWorkflowTransferService service, CancellationToken ct) =>
         {
             var result = await service.ImportAsync(body, ct);

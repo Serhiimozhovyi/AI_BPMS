@@ -16,4 +16,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Шаблони «Почати з прикладу» (F3-59): каталог і приклади з examples/. -->
+    <EmbeddedResource Include="../../examples/*.json" Exclude="../../examples/servers.json;../../examples/credentials.*.json" LogicalName="examples/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
