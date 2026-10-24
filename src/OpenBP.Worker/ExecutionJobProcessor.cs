@@ -7,6 +7,7 @@ using Npgsql;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
+using OpenBP.Application.Notifications;
 using OpenBP.Application.Variables;
 using OpenBP.Application.Workflows;
 using OpenBP.Data;
@@ -14,6 +15,7 @@ using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Diagnostics;
 using OpenBP.Engine.Execution;
+using OpenBP.Mcp.Client;
 using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
 
@@ -50,6 +52,7 @@ public sealed partial class ExecutionJobProcessor
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
     private readonly WorkflowLimits _limits;
+    private readonly WorkerMetrics? _metrics;
 
     /// <summary>Створює обробник.</summary>
     /// <param name="contexts">Фабрика контекстів БД.</param>
@@ -63,6 +66,7 @@ public sealed partial class ExecutionJobProcessor
     /// <param name="logger">Системний лог.</param>
     /// <param name="time">Годинник; за замовчуванням системний.</param>
     /// <param name="limits">Серверні межі виконання; за замовчуванням типові (<see cref="WorkflowLimits"/>).</param>
+    /// <param name="metrics">Лічильники для <c>/metrics</c> воркера; <c>null</c> — не рахувати.</param>
     public ExecutionJobProcessor(
         IDbContextFactory<OpenBpDbContext> contexts,
         JobQueue queue,
@@ -74,7 +78,8 @@ public sealed partial class ExecutionJobProcessor
         WorkerOptions options,
         ILogger<ExecutionJobProcessor> logger,
         TimeProvider? time = null,
-        WorkflowLimits? limits = null)
+        WorkflowLimits? limits = null,
+        WorkerMetrics? metrics = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -89,7 +94,10 @@ public sealed partial class ExecutionJobProcessor
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _time = time ?? TimeProvider.System;
         _limits = limits ?? new WorkflowLimits();
+        _metrics = metrics;
     }
+
+    private const int MaxNotificationError = 500;
 
     private string WorkerId => _options.WorkerId;
 
@@ -248,6 +256,7 @@ public sealed partial class ExecutionJobProcessor
 
         ExecutionResult? result = null;
         string? engineError = null;
+        using var running = _metrics?.Running();
         try
         {
             if (resume)
@@ -295,9 +304,74 @@ public sealed partial class ExecutionJobProcessor
             await SaveNodeStatesAsync(payload.WorkflowId, loadedStates, result!.NodeStates).ConfigureAwait(false);
         }
 
+        _metrics?.Record(finalStatus, result is null ? null : result.FinishedAt - result.StartedAt);
+        await NotifyFailureAsync(payload, workflow, finalStatus, result, engineError is null ? result?.Error?.Message : engineError, scrubber).ConfigureAwait(false);
         await LaunchErrorWorkflowAsync(payload, workflow, result?.FailedNodeId).ConfigureAwait(false);
         await TripCircuitBreakerAsync(payload, workflow).ConfigureAwait(false);
         await CompleteJobAsync(job).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Події сповіщень адміністратору (F6-07): виконання не ручного запуску завершилось <c>error</c>/<c>timed_out</c> —
+    /// <see cref="NotificationEvents.ExecutionFailed"/>; вузол <c>mcp.*</c> впав, бо сервер недоступний, — ще й
+    /// <see cref="NotificationEvents.ConnectorUnavailable"/>. Текст помилки — після <see cref="SecretScrubber"/>. Збій запису
+    /// лише пишеться в журнал.
+    /// </summary>
+    private async Task NotifyFailureAsync(
+        ExecutionJobPayload payload, WorkflowDefinition workflow, string status, ExecutionResult? result, string? error, SecretScrubber scrubber)
+    {
+        if (payload.Mode == ExecutionMode.Manual || status is not (ExecutionStatuses.Error or ExecutionStatuses.TimedOut))
+        {
+            return;
+        }
+
+        try
+        {
+            await using var db = await _contexts.CreateDbContextAsync().ConfigureAwait(false);
+            var now = _time.GetUtcNow();
+            var failedNode = result?.FailedNodeId is { } nodeId ? workflow.Nodes.FirstOrDefault(n => n.Id == nodeId) : null;
+            var message = error is null ? null : scrubber.Scrub(error);
+            if (message is { Length: > MaxNotificationError })
+            {
+                message = message[..MaxNotificationError] + "…";
+            }
+
+            var details = new JsonObject
+            {
+                ["workflow"] = workflow.Name,
+                ["workflowId"] = payload.WorkflowId.ToString(),
+                ["executionId"] = payload.ExecutionId.ToString(),
+                ["status"] = status,
+            };
+            if (failedNode is not null)
+            {
+                details["node"] = failedNode.Name;
+            }
+
+            if (message is not null)
+            {
+                details["error"] = message;
+            }
+
+            db.Notify(now, NotificationEvents.ExecutionFailed, payload.WorkflowId.ToString(), $"Сценарій «{workflow.Name}»: {status}", details);
+
+            var failedStep = result?.Steps.LastOrDefault(s => s.NodeId == result.FailedNodeId);
+            if (failedNode is not null && failedStep?.Error?.Type == nameof(McpUnavailableException)
+                && failedNode.Parameters["serverId"] is JsonValue server && server.TryGetValue<string>(out var serverId))
+            {
+                var serverName = Guid.TryParse(serverId, out var serverGuid)
+                    ? await db.McpServers.AsNoTracking().Where(m => m.Id == serverGuid).Select(m => m.Name).FirstOrDefaultAsync().ConfigureAwait(false)
+                    : null;
+                db.Notify(now, NotificationEvents.ConnectorUnavailable, serverId, $"Конектор «{serverName ?? serverId}» недоступний",
+                    new JsonObject { ["connector"] = serverName ?? serverId, ["workflow"] = workflow.Name, ["executionId"] = payload.ExecutionId.ToString() });
+            }
+
+            await db.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or NpgsqlException or InvalidOperationException)
+        {
+            LogNotifyFailure(_logger, ex, payload.ExecutionId);
+        }
     }
 
     /// <summary>
@@ -611,6 +685,9 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Сценарій {WorkflowId}: не вдалося перевірити запобіжник disableAfterErrors.")]
     private static partial void LogCircuitBreakerFailure(ILogger logger, Exception exception, Guid workflowId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: не вдалося записати подію сповіщення.")]
+    private static partial void LogNotifyFailure(ILogger logger, Exception error, Guid executionId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Виконання {ExecutionId}: запущено сценарій помилок {ErrorWorkflowId} (виконання {ErrorExecutionId}).")]
     private static partial void LogErrorWorkflowLaunched(ILogger logger, Guid executionId, Guid errorWorkflowId, Guid errorExecutionId);

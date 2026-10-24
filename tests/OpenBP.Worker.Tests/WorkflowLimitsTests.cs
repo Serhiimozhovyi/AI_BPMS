@@ -184,6 +184,11 @@ public sealed class WorkflowLimitsTests(PostgresFixture postgres)
         Assert.Equal("workflow.deactivated", audit.Action);
         Assert.Null(audit.UserId);
         Assert.Contains("disableAfterErrors", audit.Details, StringComparison.Ordinal);
+
+        // F6-07: кожна помилка запуску з тригера — подія execution.failed (ручні — ні), деактивація — workflow.disabled.
+        var events = await db.Notifications.AsNoTracking().ToListAsync();
+        Assert.Equal(5, events.Count(e => e.Event == "execution.failed" && e.Subject == workflowId.ToString()));
+        Assert.Single(events, e => e.Event == "workflow.disabled" && e.Subject == workflowId.ToString());
     }
 
     [Fact]

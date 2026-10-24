@@ -269,6 +269,9 @@ scripts/restore.sh backups/openbp-openbp-<час>.dump   # відновленн�
 
 Копіюйте `./backups` за межі сервера (rsync, об'єктне сховище): бекап на тому самому диску не рятує від втрати диска.
 
+Кожен запуск сервіс записує в таблицю `backup_runs` (успіх чи текст помилки). Невдалий запуск, а також відсутність
+успішного бекапу понад 26 годин дають сповіщення «Помилка резервної копії» ([§10](#сповіщення-огляд-і-метрики)).
+
 Переїзд на новий сервер: встановіть OpenBP за [§2](#2-встановлення-з-нуля), але замість `scripts/gen-env.sh` покладіть
 старий `.env` (і `oidc.env`), підніміть сервіси й виконайте `scripts/restore.sh <останній дамп>`.
 
@@ -311,6 +314,48 @@ curl -fsS http://127.0.0.1:8080/health/ready            # Api: БД доступ
   `OPENBP_EXECUTION_RETENTION_CRON`.
 - Журнал аудиту (хто й коли змінював сценарії, облікові дані, конектори, ключі, змінні, таблиці) — Налаштування →
   «Журнал аудиту» або `GET /api/v1/audit`, лише admin. Записи зберігаються `OPENBP_AUDIT_RETENTION_DAYS` (типово 365 днів).
+
+### Сповіщення, «Огляд» і метрики
+
+**Сповіщення.** Налаштування → «Сповіщення» (лише admin): канали `Пошта` (через конектор Microsoft 365, tool
+`send_mail`), `Telegram` (конектор з tool `send_message`, `chat_id`) і `Вебхук` (POST JSON
+`{ event, subject, title, at, details }`, заголовки — з поля `headers` облікових даних). Кнопка «Перевірити» надсилає
+тестове повідомлення одразу. Події:
+
+| Подія | Коли |
+|---|---|
+| `execution.failed` | Виконання з тригера (не ручне) завершилось `error` чи `timed_out` |
+| `workflow.disabled` | Сценарій вимкнено запобіжником `disableAfterErrors` |
+| `connector.unavailable` | Discovery конектора не вдався або виклик tool упав через недоступний сервер |
+| `worker.stale` | Воркер не писав heartbeat понад 2 хв (раз за епізод) |
+| `backup.failed` | Запуск бекапу впав або успішного бекапу немає понад 26 год (раз за епізод) |
+
+Про ту саму подію того самого сценарію (конектора, воркера) канал пише не частіше, ніж раз на `cooldownSec`
+(типово 15 хв). Події стають у чергу `notifications` і розсилаються job'ом Api раз на `OPENBP_NOTIFICATIONS_INTERVAL_SEC`
+(типово 30 с); якщо канал не прийняв повідомлення, помилка лише пишеться в журнал Api. Значення облікових даних і дані
+items у повідомлення не потрапляють — лише назви, id, статус і текст помилки.
+
+**«Огляд»** — перша сторінка після входу: за 24 години, 7 чи 30 днів кількість виконань, частка успішних, медіана й
+95-й перцентиль тривалості, топ-5 сценаріїв за помилками і що зараз виконується, чекає чи стоїть у черзі. Лічильники
+беруться з погодинних агрегатів `execution_stats`, які job Api перераховує раз на 5 хвилин; тривалість оцінена за
+інтервалами гістограми (показано верхню межу). REST: `GET /api/v1/overview?range=24h|7d|30d`.
+
+**Prometheus.** `GET /metrics` в Api (через web: `https://<домен>/metrics`, якщо reverse proxy його пропускає) і у
+воркера на порту 8089 усередині мережі. Без `OPENBP_METRICS_ALLOW_ANONYMOUS=true` потрібен API-ключ admin'а:
+
+```yaml
+scrape_configs:
+  - job_name: openbp
+    authorization: { credentials: "<API-ключ admin'а>" }
+    static_configs: [{ targets: ["openbp.example.com"] }]
+    scheme: https
+```
+
+Метрики Api: `openbp_executions_total{status,workflow_id,workflow}`, `openbp_execution_duration_seconds` (гістограма),
+`openbp_executions_current{status}`, `openbp_queue_depth{kind}`, `openbp_queue_oldest_job_age_seconds`,
+`openbp_workers_alive`, `openbp_active_subscriptions{kind}`, `openbp_notifications_pending`. Воркера:
+`openbp_worker_executions_total{worker,status}`, `openbp_worker_execution_duration_seconds`,
+`openbp_worker_running_executions{worker}`. Секретів і даних виконань у метриках немає.
 
 ### Файли в S3
 

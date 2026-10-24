@@ -80,6 +80,7 @@ public static class WorkerServiceCollectionExtensions
         services.AddDbContextFactory<OpenBpDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("Default")));
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(sp => new WorkerLiveness(sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<WorkerMetrics>();
         services.AddSingleton(sp => new JobQueue(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<JobQueueOptions>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton(_ => CredentialEncryptionKey.FromEnvironment());
         // Оновлення oauth2-токенів при читанні credential'а (F4-04): власний HttpClient з таймаутом.
@@ -115,7 +116,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionJobProcessor>>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<WorkflowLimits>()));
+            sp.GetRequiredService<WorkflowLimits>(),
+            sp.GetRequiredService<WorkerMetrics>()));
         services.AddSingleton(sp => new PollJobProcessor(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),
@@ -135,6 +137,12 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<PollJobProcessor>(),
             sp.GetRequiredService<WorkerLiveness>()));
+        services.AddHostedService(sp => new WorkerHeartbeatService(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<WorkerLiveness>(),
+            sp.GetRequiredService<WorkerOptions>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<WorkerHeartbeatService>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddHostedService(sp => new ExecutionRecoveryService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

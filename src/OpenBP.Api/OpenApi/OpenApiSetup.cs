@@ -61,6 +61,12 @@ public static class OpenApiSetup
         /// <summary>Журнал аудиту.</summary>
         public const string Audit = "Аудит";
 
+        /// <summary>Канали сповіщень адміністратору.</summary>
+        public const string Notifications = "Сповіщення";
+
+        /// <summary>Сторінка «Огляд».</summary>
+        public const string Overview = "Огляд";
+
         /// <summary>Webhook-и.</summary>
         public const string Webhooks = "Webhook";
     }
@@ -77,6 +83,8 @@ public static class OpenApiSetup
         (Tags.DataTables, "Таблиці даних для сценаріїв (вузол core.dataTable): структура, рядки, імпорт CSV. Читають усі, змінює editor."),
         (Tags.Credentials, "Облікові дані без значень секретів (лише admin), OAuth2-вхід."),
         (Tags.Audit, "Журнал змін: хто й коли створив, змінив чи видалив сценарій, облікові дані, конектор, ключ, змінну чи таблицю. Лише admin."),
+        (Tags.Notifications, "Канали сповіщень адміністратору (email, Telegram, webhook) про помилки виконань, вимкнені сценарії, недоступні конектори, воркери й бекапи. Лише admin."),
+        (Tags.Overview, "Підсумки виконань за 24 год / 7 / 30 днів і поточний стан черги."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
     ];
 
