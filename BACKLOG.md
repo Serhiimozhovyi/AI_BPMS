@@ -401,7 +401,7 @@
 - DoD: визначається після рішення; мінімум — тести проти in-process фейку (успіх, помилка автентифікації → `isError`), секрети й токени не потрапляють у відповіді й помилки, README конектора оновлено.
 
 ### F3-21 · Каталог типів вузлів для агента (`describe_nodes`)
-- model: `opus` · status: `review #70` · depends: F3-03
+- model: `opus` · status: `done` · depends: F3-03
 - Що: MCP tool `describe_nodes` і resource `openbp://nodes` поверх `INodeService` (те саме, що REST `GET /nodes`): `type`, `version`, `displayName`, `group`, `description`, `trigger`, `inputs`, `outputs`, `parametersSchema`, `credentials`; в описі tool'а — як дані йдуть між вузлами (`$json`, `$node[…]`, `itemsPath`). Знайдено ручною перевіркою F3-17: живий агент підбирав типи вузлів навмання, бо дізнатися їх через `/mcp` було ніде.
 - DoD: тест — viewer отримує каталог (тригер `mcp.poll` без входів і з `keyField`, `core.if` з двома виходами, `mcp.tool` з `itemsPath`, `ai.llm` з credential'ом), склад збігається з REST `/nodes`, resource повертає те саме; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
 
@@ -415,10 +415,25 @@
 - Що: змінна `$binary` у `{{ }}` — посилання на файли поточного item'а (`BinaryRef` з `docs/workflow-format.md`: `fileName`, `mimeType`, `fileSize`…; байтів немає), і `$node["Назва"].binary` — файли відповідного item'а попереднього вузла. Знайдено ручною перевіркою F3-17: агент написав `{{ $binary.data.fileName }}` і отримав `$binary is not defined`.
 - DoD: тести обчислювача (`$binary.data.fileName`, item без файлів → `{}`, `$node[…].binary`); тест движка з вузлом, що повертає binary item; `architecture.md` (змінні виразів) і опис `describe_nodes` оновлено.
 
+### F3-24 · Сторінка входу в UI
+- model: `sonnet` · status: `done` · depends: F2-05
+- Що: `/login` у SPA (email + пароль → `POST /auth/login`, cookie-сесія); решта маршрутів під guard'ом (`GET /auth/me`, без сесії — на `/login?returnUrl=…`, лише шлях усередині застосунку); 401 від Api посеред роботи — на `/login` з поверненням; у тулбарі email користувача і «Вийти» (`POST /auth/logout`); тексти через i18n. Знайдено під час локального розгортання: Api вимагає входу з F2-05, а в UI сторінки входу не було, тож зайти в UI було неможливо. Форма мінімальна на Material + Tailwind; стиль AC-Kit — окрема задача редизайну.
+- DoD: Vitest — сервіс (me/login/logout, 401 → `null`), безпечний `returnUrl`, interceptor (401 → `/login`, крім `/auth/login|me`; 403/500 не чіпають сесію), сторінка (успіх, невірний пароль, недоступний сервер, порожні поля), маршрути під guard'ом; Playwright — сторінка без сесії → вхід → повернення → вихід; `architecture.md` §7 оновлено.
+
 ### F3-18 · Пілот: PRD №1–3 у реальній компанії
 - model: `fable` · status: `blocked потрібна компанія для пілоту і доступ до її 1С (PRD §9)` · depends: F3-16, F3-17
 - Що: розгорнути OpenBP у пілотної компанії, підключити справжні 1С/Telegram/Graph, зібрати PRD №1–2 без коду, PRD №3 — через Claude Desktop; зафіксувати, що зламалось, у беклозі фази 4. Вдень з власником.
 - DoD: три сценарії працюють у компанії ≥ 1 тиждень; звіт пілоту в `docs/`.
+
+### F3-25 · UI: тема AC-Kit (токени, шрифт, Material)
+- model: `sonnet` · status: `done` · depends: —
+- Що: перевести `apps/web` на дизайн-систему AC-Kit (Figma, лише читання): палітра (Kit #7A6FF0, Vivid #261F4B, Mid #372F6C, Highlight-кольори), шрифт Ubuntu і шкала H1–H7/P1–P4, системні токени Angular Material і `@theme` Tailwind, кнопки/поля/тулбар/таблиці/картки сторінок за атомами AC-Kit, кольори канвасу — з Highlight-палітри. Без змін у шаблонах shell (`app.html`), бо його змінює F3-24.
+- DoD: `npm run lint`, `npm test`, `npm run build` зелені; жодних захардкоджених кольорів поза токенами AC-Kit.
+
+### F3-26 · UI: shell за AC-Kit (шапка, навігація, вкладки)
+- model: `sonnet` · status: `todo` · depends: F3-24, F3-25
+- Що: шапка як у AC-Kit «AgriChainKit» (логотип, головне меню, іконки пошуку/сповіщень/налаштувань/профілю), другий рівень навігації на тлі Mid, сторінки як білі картки; кроки-«стрілки» для майстрів, де вони є. Після мерджу F3-24 (вхід), бо він змінює `app.html`/`app.ts`.
+- DoD: lint/test/build зелені; скріншоти до і після в PR.
 
 ## Фаза 4 — Продуктова готовність
 
