@@ -441,7 +441,7 @@
 - DoD: тести проти фейку Bot API для кожного нового tool'а і `reply_markup` (inline, contact, remove); `400 message is not modified` → `isError` з описом Telegram; токен не з'являється у відповідях; `docs/connectors.md` оновлено.
 
 ### F3-29 · `core.switch`: більше 4 правил
-- model: `sonnet` · status: `review #78` · depends: F1-07
+- model: `sonnet` · status: `done` · depends: F1-07
 - Що: підняти `maxItems` у `switch.schema.json` з 4 до 16, виходи `rule{i}` + `fallback`; канвас малює стільки портів, скільки правил. У n8n-боті маршрутизатор має 7 гілок.
 - DoD: тест вузла з 7 правилами і fallback; валідатор приймає ребра з виходів 4…N; старі сценарії сумісні (інакше `typeVersion` 2).
 
