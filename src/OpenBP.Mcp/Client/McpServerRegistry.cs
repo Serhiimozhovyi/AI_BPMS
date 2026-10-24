@@ -336,6 +336,10 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
             {
                 ClientInfo = new Implementation { Name = "OpenBP", Version = typeof(McpServerRegistry).Assembly.GetName().Version?.ToString() ?? "0.0.0" },
                 InitializationTimeout = _options.ConnectTimeout,
+                // Проба `server/discover` за замовчуванням чекає 5 с, потім клієнт відкочується на `initialize`. Сервер,
+                // що відповів на discover пізніше (повільний старт stdio-процесу, навантаження), уже на протоколі
+                // 2026-07-28 і відхиляє `initialize` — тож проба чекає стільки ж, скільки все підключення.
+                DiscoverProbeTimeout = _options.ConnectTimeout,
             };
             return await McpClient.CreateAsync(CreateTransport(config), options, _loggerFactory, cts.Token).ConfigureAwait(false);
         }
