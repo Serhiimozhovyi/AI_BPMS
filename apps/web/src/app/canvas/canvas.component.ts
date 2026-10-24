@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, computed, input, output } from '@angular/core';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workflows-api.service';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
@@ -21,6 +21,7 @@ import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow
     [runStatuses]="runStatuses()"
     [pinnedNodes]="pinnedNodes()"
     [selection]="selection()"
+    [readonly]="readonly()"
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
     (selectionChange)="selectionChange.emit($event)"
@@ -52,6 +53,9 @@ export class CanvasComponent {
   /** Виділені вузли й ребра. */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
+  /** Лише перегляд: вузли не перетягуються, ребра не створюються; виділення працює. */
+  readonly readonly = input(false, { transform: booleanAttribute });
+
   /** Нове визначення після змін на канвасі (переміщення вузлів, нове ребро). */
   readonly definitionChange = output<WorkflowDefinition>();
 
@@ -76,10 +80,12 @@ export class CanvasComponent {
   });
 
   protected moved(positions: NodePosition[]): void {
+    if (this.readonly()) return;
     this.definitionChange.emit(moveNodes(this.definition(), positions, this.index()));
   }
 
   protected connected(connection: NewConnection): void {
+    if (this.readonly()) return;
     const next = connectNodes(this.definition(), connection);
     if (next !== this.definition()) this.definitionChange.emit(next);
   }

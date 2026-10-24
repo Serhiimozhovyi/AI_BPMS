@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, output, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, input, output, untracked } from '@angular/core';
 import { Connection, ConnectionSettings, Edge, Node, Vflow, createEdges, createNodes } from 'ngx-vflow';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection } from '../canvas-edit';
 import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition } from '../canvas-model';
@@ -303,6 +303,9 @@ export class VflowCanvasComponent {
   /** Виділення (вузли за id, ребра за індексом у `connections`); змінюється і ззовні (вставка, видалення). */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
 
+  /** Лише перегляд: вузли не перетягуються, нові ребра не приймаються. */
+  readonly readonly = input(false, { transform: booleanAttribute });
+
   /** Вузли, які користувач перетягнув у нову позицію (після відпускання миші). */
   readonly nodesMoved = output<NodePosition[]>();
 
@@ -317,6 +320,7 @@ export class VflowCanvasComponent {
     curve: 'bezier',
     marker: { type: 'arrow-closed' },
     validator: (c) =>
+      !this.readonly() &&
       c.source !== c.target && handleIndex(c.sourceHandle, 'out') >= 0 && handleIndex(c.targetHandle, 'in') >= 0,
   };
 
@@ -324,6 +328,7 @@ export class VflowCanvasComponent {
     const errors = this.nodeErrors();
     const run = this.runStatuses();
     const pinned = this.pinnedNodes();
+    const draggable = !this.readonly();
     // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
     const selected = new Set(untracked(this.selection).nodes);
     return createNodes<NodeData>(
@@ -335,6 +340,7 @@ export class VflowCanvasComponent {
           point: { x: n.x, y: n.y },
           width: NODE_WIDTH,
           height,
+          draggable,
           selected: selected.has(n.id),
           data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id) },
         };
@@ -382,6 +388,7 @@ export class VflowCanvasComponent {
   }
 
   protected connected(c: Connection): void {
+    if (this.readonly()) return;
     const sourceOutput = handleIndex(c.sourceHandle, 'out');
     const targetInput = handleIndex(c.targetHandle, 'in');
     if (sourceOutput < 0 || targetInput < 0 || c.source === c.target) return;

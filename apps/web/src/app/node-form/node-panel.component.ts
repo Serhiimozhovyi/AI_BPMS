@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, input, linkedSignal, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, effect, input, linkedSignal, output } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 import { FormlyFieldConfig, FormlyForm, FormlyFormOptions } from '@ngx-formly/core';
 import { McpToolInfo } from '../connectors/connectors-api.service';
@@ -62,7 +62,7 @@ interface PanelState {
           <p class="panel__note" i18n="@@nodeform.noParameters">Параметрів немає.</p>
         }
         @for (k of [s]; track k.id) {
-          <div class="panel__form" data-testid="node-parameters">
+          <div class="panel__form" data-testid="node-parameters" [attr.inert]="readonly() ? '' : null">
             <formly-form [form]="k.paramsForm" [fields]="k.paramsFields" [model]="k.paramsModel" [options]="k.paramsOptions" (modelChange)="parametersChanged($event)" />
           </div>
         }
@@ -70,7 +70,7 @@ interface PanelState {
 
       <h3 class="panel__subtitle" i18n="@@nodeform.common">Налаштування вузла</h3>
       @for (k of [s]; track k.id) {
-        <div class="panel__form" data-testid="node-common">
+        <div class="panel__form" data-testid="node-common" [attr.inert]="readonly() ? '' : null">
           <formly-form [form]="k.commonForm" [fields]="k.commonFields" [model]="k.commonModel" (modelChange)="commonChanged($event)" />
         </div>
       }
@@ -125,6 +125,9 @@ export class NodePanelComponent {
   /** Що підказувати в полях виразів `{{ }}` (F2-19): інші вузли, поля останнього тестового output. */
   readonly expressionContext = input<ExpressionContext>(EMPTY_EXPRESSION_CONTEXT);
 
+  /** Лише перегляд: форми недоступні для введення (`inert`), змін немає. */
+  readonly readonly = input(false, { transform: booleanAttribute });
+
   /** Змінений вузол після кожної зміни у формі. */
   readonly nodeChange = output<WorkflowNode>();
 
@@ -164,6 +167,7 @@ export class NodePanelComponent {
   }
 
   private emit(node: WorkflowNode): void {
+    if (this.readonly()) return;
     this.lastEmitted = node;
     // Стан лишається тим самим (ті самі форми) — оновлюється лише поточний вузол.
     this.state.update((s) => ({ ...s, node }));

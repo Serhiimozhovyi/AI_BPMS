@@ -41,6 +41,12 @@ server {
         proxy_read_timeout 1h;
     }
 
+    # Веб-компонент редактора (F4-13): назва без хешу, тож браузер щоразу перевіряє свіжість (ETag).
+    location ^~ /element/ {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+    }
+
     # Статика з хешем у назві — назавжди; index.html — завжди свіжий.
     location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico|webp)$ {
         expires 1y;

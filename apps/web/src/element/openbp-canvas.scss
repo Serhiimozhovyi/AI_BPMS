@@ -1,0 +1,36 @@
+// Стилі <openbp-canvas> у Shadow DOM (F4-13): тема AC-Kit на :host замість :root/html, як у SPA (styles.scss).
+@use '../theme/openbp-theme' as theme;
+
+:host {
+  @include theme.tokens();
+  @include theme.material();
+
+  display: block;
+  position: relative;
+  height: 100%;
+  min-height: 480px;
+  overflow: hidden;
+  color-scheme: light;
+  background-color: var(--ac-cool-grey);
+  color: var(--ac-vivid);
+  font: 400 14px/20px Ubuntu, sans-serif;
+  text-align: start;
+  letter-spacing: normal;
+}
+
+.openbp {
+  height: 100%;
+}
+
+.openbp__empty {
+  margin: 16px;
+}
+
+.mat-font-headline-sm {
+  font: 700 24px/30px Ubuntu, sans-serif;
+  color: var(--ac-vivid);
+}
+
+a {
+  color: var(--ac-kit);
+}

@@ -42,6 +42,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<OpenBpExceptionHandler>();
 builder.Services.AddOpenBpAuthentication();
+// CORS для вбудованого редактора <openbp-canvas> (F4-13): OPENBP_CORS_ORIGINS.
+builder.Services.AddOpenBpCors();
 
 // Реєстр MCP-серверів процесу Api: синхронізується з mcp_servers через IConnectorService і при старті (architecture.md §10.7);
 // за його кешем tools валідуються mcp.* при збереженні.
@@ -89,6 +91,7 @@ builder.Services.AddOpenBpOpenApi();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 

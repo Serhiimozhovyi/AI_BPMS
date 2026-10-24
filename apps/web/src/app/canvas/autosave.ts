@@ -46,6 +46,7 @@ export class Autosave<T, R = unknown> {
     private readonly save: (value: T) => Observable<R>,
     private readonly onSaved: (result: R, value: T) => void = () => undefined,
     private readonly debounceMs = AUTOSAVE_DEBOUNCE_MS,
+    private readonly onError: (error: unknown, value: T) => void = () => undefined,
   ) {}
 
   /** Зміна від користувача: зберегти після паузи. */
@@ -98,6 +99,7 @@ export class Autosave<T, R = unknown> {
           this.errors.set(validationErrorsOf(e));
           this.message.set(apiErrorMessage(e));
         }
+        this.onError(e, value);
         // Нова зміна під час запиту — пробуємо зберегти її: вона могла виправити помилку.
         if (this.queued) this.continueQueued();
         else if (generation === this.generation) this.state.set('error');

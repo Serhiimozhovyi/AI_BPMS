@@ -1,0 +1,155 @@
+// Тема OpenBP за дизайн-системою AC-Kit (Figma «AC-Kit», лише читання): спільна для SPA (styles.scss)
+// і веб-компонента <openbp-canvas> (src/element, токени на :host у Shadow DOM).
+@use '@angular/material' as mat;
+
+/// CSS-змінні AC-Kit (--ac-*).
+@mixin tokens() {
+  // Primary colours
+  --ac-kit: #7a6ff0;
+  --ac-kit-hover: #5f53e0;
+  --ac-vivid: #261f4b;
+  --ac-mid: #372f6c;
+  --ac-button: #ebe9fd;
+  // Background and text / UI colour
+  --ac-stone: #f9f8f8;
+  --ac-white: #ffffff;
+  --ac-line: #c7c4cf;
+  --ac-line-2: #e3e0fc;
+  --ac-cool-grey: #f4f3f8;
+  --ac-cool-grey-2: #f2f1fd;
+  --ac-cool-grey-3: #bdbbd2;
+  --ac-cool-grey-4: #8d86a3;
+  // Highlight colours і їхні 15%-відтінки
+  --ac-teal: #27c7be;
+  --ac-blue: #20aaea;
+  --ac-green: #47cc8a;
+  --ac-green-15: #e3f7ed;
+  --ac-orange: #ff840a;
+  --ac-red: #ff6060;
+  --ac-red-15: #ffe7e7;
+  --ac-violet: #b36bd4;
+  --ac-plum: #73327a;
+  --ac-navy: #006298;
+  --ac-yellow: #fac701;
+
+  --ac-radius-sm: 4px;
+  --ac-radius: 8px;
+  --ac-radius-lg: 12px;
+  --ac-shadow: 0 4px 24px rgb(38 31 75 / 0.08);
+}
+
+/// Angular Material: системні токени і перевизначення компонентів під AC-Kit.
+@mixin material() {
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$violet-palette,
+        tertiary: mat.$magenta-palette,
+      ),
+      typography: (
+        plain-family: (Ubuntu, sans-serif),
+        brand-family: (Ubuntu, sans-serif),
+        bold-weight: 700,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
+      density: 0,
+    )
+  );
+
+  // Точні кольори AC-Kit поверх згенерованої палітри.
+  @include mat.theme-overrides(
+    (
+      primary: #7a6ff0,
+      on-primary: #ffffff,
+      primary-container: #ebe9fd,
+      on-primary-container: #372f6c,
+      secondary-container: #ebe9fd,
+      on-secondary-container: #372f6c,
+      background: #f4f3f8,
+      on-background: #261f4b,
+      surface: #ffffff,
+      on-surface: #261f4b,
+      surface-variant: #f2f1fd,
+      on-surface-variant: #8d86a3,
+      surface-container-lowest: #ffffff,
+      surface-container-low: #f9f8f8,
+      surface-container: #f4f3f8,
+      surface-container-high: #f2f1fd,
+      surface-container-highest: #ebe9fd,
+      outline: #c7c4cf,
+      outline-variant: #e3e0fc,
+      error: #ff6060,
+      on-error: #ffffff,
+    )
+  );
+
+  // Кнопки AC-Kit: радіус 8px, без тіні; tonal — «Buttun 15%».
+  @include mat.button-overrides(
+    (
+      filled-container-shape: var(--ac-radius),
+      outlined-container-shape: var(--ac-radius),
+      text-container-shape: var(--ac-radius),
+      protected-container-shape: var(--ac-radius),
+      tonal-container-shape: var(--ac-radius),
+      tonal-container-color: var(--ac-button),
+      tonal-label-text-color: var(--ac-kit),
+      outlined-outline-color: var(--ac-kit),
+      outlined-label-text-color: var(--ac-kit),
+      text-label-text-color: var(--ac-kit),
+    )
+  );
+
+  // Поля AC-Kit: обведення Line, радіус 4px.
+  @include mat.form-field-overrides(
+    (
+      outlined-container-shape: var(--ac-radius-sm),
+      outlined-outline-color: var(--ac-line),
+      outlined-hover-outline-color: var(--ac-cool-grey-4),
+      outlined-focus-outline-color: var(--ac-kit),
+      filled-container-color: var(--ac-cool-grey),
+    )
+  );
+
+  // Верхня панель: «Vivid» з білим текстом, як у шапці AgriChainKit.
+  @include mat.toolbar-overrides(
+    (
+      container-background-color: var(--ac-vivid),
+      container-text-color: var(--ac-white),
+    )
+  );
+
+  @include mat.card-overrides(
+    (
+      elevated-container-shape: var(--ac-radius-lg),
+      outlined-container-shape: var(--ac-radius-lg),
+      outlined-outline-color: var(--ac-line-2),
+    )
+  );
+
+  // Модальні вікна й випадні списки — непрозорі білі, радіус і тінь AC-Kit (Atoms / Modal).
+  @include mat.dialog-overrides(
+    (
+      container-color: var(--ac-white),
+      container-shape: var(--ac-radius-lg),
+    )
+  );
+
+  @include mat.select-overrides(
+    (
+      panel-background-color: var(--ac-white),
+    )
+  );
+
+  @include mat.autocomplete-overrides(
+    (
+      background-color: var(--ac-white),
+    )
+  );
+
+  @include mat.chips-overrides(
+    (
+      container-shape-radius: var(--ac-radius-sm),
+    )
+  );
+}

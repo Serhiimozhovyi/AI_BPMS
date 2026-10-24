@@ -95,6 +95,46 @@
               "src/**/*.html"
             ]
           }
+        },
+        "element": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/element/main.ts",
+            "index": false,
+            "outputPath": "dist/element",
+            "tsConfig": "tsconfig.element.json",
+            "inlineStyleLanguage": "scss",
+            "styles": [],
+            "polyfills": [
+              "@angular/localize/init"
+            ],
+            "outputHashing": "none",
+            "fileReplacements": [
+              {
+                "replace": "src/app/node-form/monaco-load.ts",
+                "with": "src/element/plain-code-editor.ts"
+              }
+            ],
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "1.5MB",
+                "maximumError": "2MB"
+              },
+              {
+                "type": "anyComponentStyle",
+                "maximumWarning": "200kB",
+                "maximumError": "300kB"
+              }
+            ]
+          },
+          "configurations": {
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          }
         }
       },
       "i18n": {

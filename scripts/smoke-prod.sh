@@ -40,6 +40,8 @@ wait_for "/health/ready через web" curl -fsS "$BASE/health/ready"
 echo "ok: /health/ready"
 curl -fsS "$BASE/openapi/v1.json" | jq -e '.paths["/api/v1/workflows"]' >/dev/null || fail "/openapi/v1.json через web"
 echo "ok: /openapi/v1.json"
+curl -fsS -o /dev/null "$BASE/element/openbp-canvas.js" || fail "/element/openbp-canvas.js"
+echo "ok: /element/openbp-canvas.js"
 
 curl -fsS -c "$COOKIES" -H 'content-type: application/json' \
   -d "{\"email\":\"${OPENBP_ADMIN_EMAIL}\",\"password\":\"${OPENBP_ADMIN_PASSWORD}\"}" \

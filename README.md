@@ -77,7 +77,7 @@ scripts/restore.sh backups/openbp-openbp-<час>.dump  # зупиняє api/wor
 | api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
 | worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
 | migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
-| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), решта — SPA |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), `/element/openbp-canvas.js` — веб-компонент редактора ([docs/embedding.md](docs/embedding.md)), решта — SPA |
 | backup | `docker/backup.Dockerfile` | `pg_dump` 16 і busybox `crond`: бекапи за `OPENBP_BACKUP_CRON` (див. «Бекапи і відновлення») |
 
 ```bash
