@@ -1,7 +1,7 @@
 import { WorkflowConnection, WorkflowDefinition } from '../workflows/workflows-api.service';
 import { connectNodes } from './canvas-edit';
 import { parsePosition } from './canvas-model';
-import { NEW_NODE_STEP_X, PaletteItem, PaletteSection, createNode, randomNodeId } from './palette';
+import { NEW_NODE_STEP_X, PaletteItem, PaletteSection, createNode, nextNodePosition, randomNodeId } from './palette';
 
 /**
  * Додавання вузла з контексту канвасу (F3-50): з вихідного порту, на ребрі, перетягуванням з'єднання в порожнє місце.
@@ -23,6 +23,24 @@ export interface QuickAddResult {
 
 /** Що показує спливаюча палітра: лише тригери (порожній сценарій) чи кроки після тригера. */
 export type QuickAddMode = 'trigger' | 'step';
+
+/** Точка на екрані (`clientX`/`clientY`), біля якої відкривається спливаюча палітра. */
+export interface ScreenPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Куди додається вузол: після порту (`at` — точка канвасу, куди відпустили з'єднання), на ребро за індексом у
+ * `connections` чи без з'єднання.
+ */
+export type QuickAddTarget = { kind: 'port'; from: PortRef; at?: [number, number] } | { kind: 'edge'; edgeIndex: number } | { kind: 'free' };
+
+/** Запит канвасу відкрити спливаючу палітру. */
+export interface QuickAddRequest {
+  target: QuickAddTarget;
+  anchor: ScreenPoint;
+}
 
 /** Ключ `localStorage` зі списком ключів останніх обраних елементів палітри (новіші — першими). */
 export const RECENT_KEY = 'openbp.palette.recent';
@@ -163,6 +181,23 @@ export function insertOnEdge(
   const outgoing: WorkflowConnection = { from: { node: node.id, output: 0 }, to: edge.to };
   const connections = [...definition.connections.slice(0, edgeIndex), incoming, outgoing, ...definition.connections.slice(edgeIndex + 1)];
   return { definition: { ...shifted, nodes: [...shifted.nodes, node], connections }, nodeId: node.id };
+}
+
+/** Додає вузол туди, куди вказує `target`; `null` — вставити не можна (тригер на ребро, ребра вже немає). */
+export function applyQuickAdd(
+  definition: WorkflowDefinition,
+  item: PaletteItem,
+  target: QuickAddTarget,
+  newId: () => string = randomNodeId,
+): QuickAddResult | null {
+  switch (target.kind) {
+    case 'port':
+      return addConnectedNode(definition, item, target.from, target.at, newId);
+    case 'edge':
+      return insertOnEdge(definition, item, target.edgeIndex, newId);
+    case 'free':
+      return addConnectedNode(definition, item, null, nextNodePosition(definition), newId);
+  }
 }
 
 /** Вузол `id` і всі, до кого від нього ведуть ребра. */

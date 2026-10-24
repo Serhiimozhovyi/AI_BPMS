@@ -7,6 +7,7 @@ import {
   RECENT_LIMIT,
   RECENT_SECTION_ID,
   addConnectedNode,
+  applyQuickAdd,
   freePosition,
   insertOnEdge,
   quickAddSections,
@@ -194,6 +195,29 @@ describe('quick-add', () => {
       expect(readRecent()).toEqual([]);
       localStorage.setItem(RECENT_KEY, '{"a":1}');
       expect(readRecent()).toEqual([]);
+    });
+  });
+
+  describe('applyQuickAdd', () => {
+    it('порт, ребро, без з’єднання — відповідні дії; тригер на ребро — null', () => {
+      const def = chain();
+      const fromPort = applyQuickAdd(def, setItem, { kind: 'port', from: { node: 'b', output: 0 } }, ids())!;
+      expect(fromPort.definition.connections.at(-1)).toEqual({ from: { node: 'b', output: 0 }, to: { node: fromPort.nodeId, input: 0 } });
+
+      const onEdge = applyQuickAdd(def, setItem, { kind: 'edge', edgeIndex: 0 }, ids())!;
+      expect(onEdge.definition.connections).toHaveLength(3);
+
+      const free = applyQuickAdd(def, setItem, { kind: 'free' }, ids())!;
+      expect(free.definition.connections).toBe(def.connections);
+      expect(free.definition.nodes).toHaveLength(4);
+
+      expect(applyQuickAdd(def, triggerItem, { kind: 'edge', edgeIndex: 0 }, ids())).toBeNull();
+    });
+
+    it('порт з точкою відпускання: вузол там, де відпустили', () => {
+      const def = chain();
+      const { definition, nodeId } = applyQuickAdd(def, setItem, { kind: 'port', from: { node: 'b', output: 0 }, at: [900, 600] }, ids())!;
+      expect(parsePosition(definition.nodes.find((n) => n.id === nodeId)!.position)).toMatchObject({ x: 900, y: 600 });
     });
   });
 });
