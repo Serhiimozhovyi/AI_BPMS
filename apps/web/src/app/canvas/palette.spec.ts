@@ -1,5 +1,5 @@
 import { emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { MCP_TOOL, PaletteServer, addNode, buildPalette, createNode, filterPalette, nextNodePosition } from './palette';
+import { CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, PaletteServer, addNode, buildPalette, createNode, filterPalette, itemHint, nextNodePosition } from './palette';
 import { SAMPLE_DESCRIPTORS } from './sample-workflows';
 
 const servers: PaletteServer[] = [
@@ -20,27 +20,31 @@ const servers: PaletteServer[] = [
 ];
 
 describe('palette', () => {
-  it('групує core.* за групами у фіксованому порядку, сервери — за назвою, без узагальненого mcp.tool', () => {
+  it('групує core.* за групами у фіксованому порядку; конектори — по одному елементу за назвою, без узагальненого mcp.tool (F3-55)', () => {
     const sections = buildPalette(SAMPLE_DESCRIPTORS, servers);
 
-    expect(sections.map((s) => s.id)).toEqual([
-      'group:trigger',
-      'group:logic',
-      'group:transform',
-      'group:ai',
-      'server:c-1c',
-      'server:c-tg',
-    ]);
+    expect(sections.map((s) => s.id)).toEqual(['group:trigger', 'group:logic', 'group:transform', 'group:ai', CONNECTORS_SECTION]);
     expect(sections.flatMap((s) => s.items).filter((i) => i.type === MCP_TOOL && !i.serverId)).toEqual([]);
     expect(sections[0].items.map((i) => i.type)).toContain('core.webhook');
-    expect(sections[4].items.map((i) => i.label)).toEqual(['create_order', 'find_customer']);
-    expect(sections[5].items[0]).toMatchObject({
-      label: 'Надіслати повідомлення',
-      type: MCP_TOOL,
-      serverId: 'c-tg',
-      toolName: 'send_message',
-      group: 'integration',
-    });
+    const connectors = sections[4].items;
+    // Конектор без tools не показується; дія за замовчуванням — перша в групах «Ресурс → Операція».
+    expect(connectors.map((i) => [i.key, i.label, i.toolName, i.nodeName])).toEqual([
+      ['connector:c-1c', '1С', 'create_order', 'create_order'],
+      ['connector:c-tg', 'Telegram', 'send_message', 'Надіслати повідомлення'],
+    ]);
+    expect(connectors[0].actions?.map((a) => a.key)).toEqual(['c-1c/create_order', 'c-1c/find_customer']);
+    expect(itemHint(connectors[0])).toBe('2 дій');
+    expect(connectors[1].actions?.[0]).toMatchObject({ label: 'Telegram → Надіслати повідомлення', type: MCP_TOOL, serverId: 'c-tg', toolName: 'send_message', group: 'integration' });
+  });
+
+  it('«Часті дії» — до 5 дій з «Останніх» у їхньому порядку; невідомі ключі пропускаються', () => {
+    const many: PaletteServer = { id: 'm', name: 'M', tools: Array.from({ length: 7 }, (_, i) => ({ name: `t${i}`, inputSchema: {} })) };
+    const recent = ['core.set', 'c-tg/send_message', 'gone/x', ...many.tools.map((t) => `m/${t.name}`)];
+
+    const frequent = buildPalette(SAMPLE_DESCRIPTORS, [...servers, many], recent).find((s) => s.id === FREQUENT_SECTION)!;
+
+    expect(frequent.items.map((i) => i.key)).toEqual(['c-tg/send_message', 'm/t0', 'm/t1', 'm/t2', 'm/t3']);
+    expect(buildPalette(SAMPLE_DESCRIPTORS, servers, ['core.set']).some((s) => s.id === FREQUENT_SECTION)).toBe(false);
   });
 
   it('для кожного типу лишає лише найновішу версію', () => {
@@ -52,15 +56,20 @@ describe('palette', () => {
     expect(set[0].typeVersion).toBe(3);
   });
 
-  it('пошук — за назвою, типом, tool-ом і описом без урахування регістру; збіг із сервером лишає всі його tools', () => {
+  it('пошук — кожне слово в назві, типі, tool-і чи описі без регістру; дії конекторів — на місці конектора', () => {
     const sections = buildPalette(SAMPLE_DESCRIPTORS, servers);
+    const keys = (q: string) => filterPalette(sections, q).flatMap((s) => s.items.map((i) => i.key));
 
-    expect(filterPalette(sections, 'УМОВ').flatMap((s) => s.items.map((i) => i.type))).toEqual(['core.if']);
-    expect(filterPalette(sections, 'core.merge').flatMap((s) => s.items.map((i) => i.type))).toEqual(['core.merge']);
-    expect(filterPalette(sections, 'find_').flatMap((s) => s.items.map((i) => i.toolName))).toEqual(['find_customer']);
-    expect(filterPalette(sections, 'в чат').flatMap((s) => s.items.map((i) => i.toolName))).toEqual(['send_message']);
-    expect(filterPalette(sections, '1с').map((s) => s.id)).toEqual(['server:c-1c']);
-    expect(filterPalette(sections, '1с')[0].items).toHaveLength(2);
+    expect(keys('УМОВ')).toEqual(['core.if']);
+    expect(keys('core.merge')).toEqual(['core.merge']);
+    // «надіслати повідомлення» → Telegram → send_message (за title), слова в будь-якому порядку.
+    expect(keys('повідомлення надіслати')).toEqual(['c-tg/send_message']);
+    expect(keys('в чат')).toEqual(['c-tg/send_message']);
+    expect(keys('find_')).toEqual(['c-1c/find_customer']);
+    // Збіг із назвою конектора — сам конектор; «telegram надіслати» — дія (назва конектора — у її підписі).
+    expect(keys('1с')).toEqual(['connector:c-1c']);
+    expect(keys('telegram надіслати')).toEqual(['c-tg/send_message']);
+    expect(keys('конектори')).toEqual(['connector:c-1c', 'connector:c-tg']);
     expect(filterPalette(sections, 'немає такого')).toEqual([]);
     expect(filterPalette(sections, '  ')).toEqual(sections);
   });
@@ -78,18 +87,18 @@ describe('palette', () => {
     expect(second.name).toBe('Умова 2');
   });
 
-  it('новий вузол з tool-а — mcp.tool з serverId, toolName і порожніми arguments', () => {
-    const item = buildPalette(SAMPLE_DESCRIPTORS, servers).find((s) => s.id === 'server:c-1c')!.items[0];
+  it('новий вузол з конектора чи дії — mcp.tool з serverId, toolName, порожніми arguments і назвою дії', () => {
+    const connectors = buildPalette(SAMPLE_DESCRIPTORS, servers).find((s) => s.id === CONNECTORS_SECTION)!.items;
 
-    const node = createNode(item, emptyWorkflowDefinition('С'));
-
+    const node = createNode(connectors[1], emptyWorkflowDefinition('С'));
     expect(node).toMatchObject({
       type: MCP_TOOL,
       typeVersion: 1,
-      name: 'create_order',
-      parameters: { serverId: 'c-1c', toolName: 'create_order', arguments: {} },
+      name: 'Надіслати повідомлення',
+      parameters: { serverId: 'c-tg', toolName: 'send_message', arguments: {} },
     });
     expect(node.id).toMatch(/^n_[0-9a-f]{12}$/);
+    expect(createNode(connectors[0].actions![1], emptyWorkflowDefinition('С'))).toMatchObject({ name: 'find_customer', parameters: { toolName: 'find_customer' } });
   });
 
   it('новий вузол стає праворуч від крайнього; addNode не змінює решту визначення', () => {

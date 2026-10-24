@@ -130,8 +130,8 @@ describe('WorkflowEditorComponent', () => {
     expect(host.querySelector('[data-testid="workflow-name"]')?.textContent).toContain('Заявки');
     expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
     expect(host.querySelector('[data-testid="counts"]')?.textContent).toContain('2');
-    expect(host.querySelector('[data-section="server:c1"]')?.textContent).toContain('create_order');
-    expect(host.querySelector('[data-section="server:c2"]')).toBeNull();
+    expect(host.querySelector('[data-section="connectors"] [data-item="connector:c1"]')?.textContent).toContain('1С');
+    expect(host.querySelector('[data-item="connector:c2"]')).toBeNull();
     expect(host.querySelector('[data-testid="dirty"]')).toBeNull();
   });
 
@@ -141,14 +141,14 @@ describe('WorkflowEditorComponent', () => {
     expect(link.getAttribute('href')).toBe('/executions?workflowId=w1');
   });
 
-  it('клік по tool-у в палітрі додає вузол mcp.tool на канвас', async () => {
+  it('клік по конектору в палітрі додає вузол mcp.tool з дією за замовчуванням', async () => {
     const { fixture, http, host } = setup();
     http.expectOne('/api/v1/workflows/w1').flush(workflow);
     http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
     flushConnectors(http);
     await render(fixture);
 
-    (host.querySelector('[data-item="c1/create_order"]') as HTMLButtonElement).click();
+    (host.querySelector('[data-item="connector:c1"]') as HTMLButtonElement).click();
     await render(fixture);
 
     const nodes = canvasNodes(fixture);

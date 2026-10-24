@@ -164,7 +164,7 @@ describe('quick-add', () => {
 
       const steps = quickAddSections(sections, 'step');
       expect(steps.flatMap((s) => s.items).some((i) => i.group === 'trigger')).toBe(false);
-      expect(steps.map((s) => s.id)).toContain('server:c1');
+      expect(steps.map((s) => s.id)).toContain('connectors');
     });
 
     it('«Останні» першою секцією, лише дозволені й наявні, у порядку списку', () => {

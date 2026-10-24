@@ -295,4 +295,85 @@ describe('NodePanelComponent', () => {
     expect(host.querySelector('[data-testid="node-parameters"]')).toBeNull();
     expect(host.querySelector('[data-testid="field-timeoutSec"]')).not.toBeNull();
   });
+
+  describe('«Дія» конектора (F3-55)', () => {
+    const TOOLS: McpToolInfo[] = [
+      FAKE_ORDER_TOOL,
+      { name: 'list_orders', title: 'Замовлення', description: 'Список замовлень', inputSchema: { type: 'object' } },
+      { name: 'get_orders', inputSchema: { type: 'object' } },
+    ];
+    const mcpNode = (args: Record<string, unknown>): WorkflowNode => ({
+      id: 'n_mcp',
+      name: 'order',
+      type: 'mcp.tool',
+      typeVersion: 1,
+      position: [0, 0],
+      parameters: { serverId: 'c1', toolName: 'order', arguments: args },
+    });
+
+    async function setupAction(args: Record<string, unknown>) {
+      const ctx = await setup(mcpNode(args), MCP_TOOL_DESCRIPTOR, FAKE_ORDER_TOOL);
+      ctx.fixture.componentRef.setInput('serverTools', TOOLS);
+      await render(ctx.fixture);
+      const changes: McpToolInfo[] = [];
+      ctx.fixture.componentInstance.toolChange.subscribe((t) => changes.push(t));
+      const input = el<HTMLInputElement>(ctx.host, 'action-select');
+      const open = async (text = '') => {
+        input.blur();
+        input.focus();
+        input.dispatchEvent(new Event('focusin'));
+        if (text) type(input, text);
+        await render(ctx.fixture);
+        return [...document.querySelectorAll<HTMLElement>('[data-testid="action-option"]')];
+      };
+      return { ...ctx, input, open, changes };
+    }
+
+    it('поле показує поточну дію; список згрупований «Ресурс → Операція» з описом; пошук звужує', async () => {
+      const { input, open } = await setupAction({});
+      expect(input.value).toBe('order');
+
+      const options = await open();
+      expect(options.map((o) => o.getAttribute('data-tool'))).toEqual(['list_orders', 'get_orders', 'order']);
+      // Групи: ресурс «orders» і «Інші дії».
+      const groups = [...document.querySelectorAll('mat-optgroup')].map((g) => g.textContent ?? '');
+      expect(groups).toHaveLength(2);
+      expect(groups[0]).toContain('orders');
+      expect(groups[1]).toContain('Інші дії');
+      expect(options[0].textContent).toContain('Список замовлень');
+
+      expect((await open('замовлень')).map((o) => o.getAttribute('data-tool'))).toEqual(['list_orders']);
+    });
+
+    it('порожні аргументи — дія змінюється одразу', async () => {
+      const { open, changes, fixture } = await setupAction({});
+      (await open()).find((o) => o.getAttribute('data-tool') === 'get_orders')!.click();
+      await render(fixture);
+      expect(changes.map((t) => t.name)).toEqual(['get_orders']);
+    });
+
+    it('непорожні аргументи — попередження: «Скасувати» лишає дію, «Змінити» — змінює', async () => {
+      const { host, input, open, changes, fixture } = await setupAction({ id: 7 });
+      (await open()).find((o) => o.getAttribute('data-tool') === 'list_orders')!.click();
+      await render(fixture);
+      expect(changes).toEqual([]);
+      expect(el(host, 'action-reset-warning').textContent).toContain('Замовлення');
+
+      el<HTMLButtonElement>(host, 'action-cancel').click();
+      await render(fixture);
+      expect(host.querySelector('[data-testid="action-reset-warning"]')).toBeNull();
+      expect(input.value).toBe('order');
+
+      (await open()).find((o) => o.getAttribute('data-tool') === 'list_orders')!.click();
+      await render(fixture);
+      el<HTMLButtonElement>(host, 'action-confirm').click();
+      await render(fixture);
+      expect(changes.map((t) => t.name)).toEqual(['list_orders']);
+    });
+
+    it('без tools конектора поля «Дія» немає', async () => {
+      const { host } = await setup(mcpNode({}), MCP_TOOL_DESCRIPTOR, FAKE_ORDER_TOOL);
+      expect(host.querySelector('[data-testid="action-select"]')).toBeNull();
+    });
+  });
 });

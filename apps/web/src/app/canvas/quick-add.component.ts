@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
-import { PaletteItem, PaletteSection, filterPalette } from './palette';
+import { PaletteItem, PaletteSection, filterPalette, itemHint } from './palette';
 
 /**
  * Спливаюча палітра біля вузла чи ребра (F3-50): пошук з фокусом одразу, секції без згортання, клавіші
@@ -43,7 +43,7 @@ import { PaletteItem, PaletteSection, filterPalette } from './palette';
             (click)="pick.emit(item)"
           >
             <span class="quick__label">{{ item.label }}</span>
-            <span class="quick__type">{{ item.toolName ?? item.type }}</span>
+            <span class="quick__type">{{ hint(item) }}</span>
           </button>
         }
       } @empty {
@@ -145,6 +145,7 @@ export class QuickAddComponent implements AfterViewInit {
   protected readonly activeIndex = signal(0);
 
   protected readonly visible = computed(() => filterPalette(this.sections(), this.query()));
+  protected readonly hint = itemHint;
 
   /** Плаский список видимих елементів у порядку показу — для клавіш і `Enter`. */
   private readonly flat = computed(() => this.visible().flatMap((s) => s.items.map((item) => ({ section: s.id, item }))));

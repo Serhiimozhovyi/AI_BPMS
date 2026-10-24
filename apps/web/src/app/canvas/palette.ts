@@ -2,11 +2,13 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeGroup, NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowNode } from '../workflows/workflows-api.service';
 import { DescriptorIndex, parsePosition } from './canvas-model';
+import { actionLabel, defaultAction, matchesWords, searchWords } from './connector-actions';
 
 /**
- * Палітра канвасу: вузли `core.*`/`ai.*` з `GET /nodes`, згруповані за `NodeGroup`, і tools MCP-серверів
- * із `tools_cache` (`GET /connectors/{id}`), згруповані за сервером. Узагальнений `mcp.tool` у палітрі
- * не показується — його замінюють конкретні tools.
+ * Палітра канвасу: вузли `core.*`/`ai.*` з `GET /nodes`, згруповані за `NodeGroup`, і конектори (MCP-сервери з
+ * `tools_cache`, `GET /connectors/{id}`) — кожен одним елементом; дія (tool) обирається в панелі вузла (F3-55).
+ * Окремо — до 5 часто вживаних дій з «Останніх»; пошук знаходить і дії конекторів (за назвою, ім'ям, описом).
+ * Узагальнений `mcp.tool` у палітрі не показується.
  */
 
 export interface PaletteItem {
@@ -20,6 +22,10 @@ export interface PaletteItem {
   /** Для tools: id конектора (`mcp_servers.id`) і назва tool'а. */
   serverId?: string;
   toolName?: string;
+  /** Назва нового вузла, якщо інша за `label` (дія конектора: назва tool'а без назви конектора). */
+  nodeName?: string;
+  /** Конектор: його дії — не показуються, але знаходяться пошуком. */
+  actions?: PaletteItem[];
 }
 
 export interface PaletteSection {
@@ -58,8 +64,28 @@ export function groupLabel(group: NodeGroup | 'unknown'): string {
   }
 }
 
-/** Будує секції палітри: спершу групи `core.*`/`ai.*` (лише найновіша версія типу), потім сервери за назвою. */
-export function buildPalette(descriptors: readonly NodeTypeInfo[], servers: readonly PaletteServer[]): PaletteSection[] {
+/** Id секцій конекторів і часто вживаних дій. */
+export const CONNECTORS_SECTION = 'connectors';
+export const FREQUENT_SECTION = 'frequent';
+
+/** Скільки часто вживаних дій показує палітра. */
+export const FREQUENT_LIMIT = 5;
+
+/** Ключ елемента-конектора. */
+export function connectorKey(serverId: string): string {
+  return `connector:${serverId}`;
+}
+
+/** Ключ дії конектора (його пам'ятають «Останні»). */
+export function actionKey(serverId: string, toolName: string): string {
+  return `${serverId}/${toolName}`;
+}
+
+/**
+ * Будує секції палітри: спершу групи `core.*`/`ai.*` (лише найновіша версія типу), потім «Конектори» (за назвою)
+ * і «Часті дії» — дії з `recent` (новіші першими), не більше {@link FREQUENT_LIMIT}.
+ */
+export function buildPalette(descriptors: readonly NodeTypeInfo[], servers: readonly PaletteServer[], recent: readonly string[] = []): PaletteSection[] {
   const index = new DescriptorIndex(descriptors);
   const latest = [...new Set(descriptors.map((d) => d.type))]
     .map((type) => index.latest(type)!)
@@ -84,48 +110,87 @@ export function buildPalette(descriptors: readonly NodeTypeInfo[], servers: read
   }
 
   const toolVersion = index.latest(MCP_TOOL)?.version ?? 1;
+  const connectors: PaletteItem[] = [];
+  const actions = new Map<string, PaletteItem>();
   for (const server of [...servers].sort((a, b) => a.name.localeCompare(b.name, 'uk'))) {
-    if (server.tools.length === 0) continue;
-    sections.push({
-      id: `server:${server.id}`,
+    const first = defaultAction(server.tools);
+    if (!first) continue;
+    const serverActions = server.tools.map(
+      (t): PaletteItem => ({
+        key: actionKey(server.id, t.name),
+        label: `${server.name} → ${actionLabel(t)}`,
+        nodeName: actionLabel(t),
+        description: t.description ?? null,
+        type: MCP_TOOL,
+        typeVersion: toolVersion,
+        group: 'integration',
+        serverId: server.id,
+        toolName: t.name,
+      }),
+    );
+    for (const a of serverActions) actions.set(a.key, a);
+    connectors.push({
+      key: connectorKey(server.id),
       label: server.name,
-      kind: 'server',
-      items: server.tools.map(
-        (t): PaletteItem => ({
-          key: `${server.id}/${t.name}`,
-          label: t.title || t.name,
-          description: t.description ?? null,
-          type: MCP_TOOL,
-          typeVersion: toolVersion,
-          group: 'integration',
-          serverId: server.id,
-          toolName: t.name,
-        }),
-      ),
+      nodeName: actionLabel(first),
+      description: $localize`:@@canvas.palette.connectorActions:Дій: ${server.tools.length}:count:. Дія обирається в панелі вузла.`,
+      type: MCP_TOOL,
+      typeVersion: toolVersion,
+      group: 'integration',
+      serverId: server.id,
+      toolName: first.name,
+      actions: serverActions,
     });
+  }
+  if (connectors.length > 0) {
+    sections.push({ id: CONNECTORS_SECTION, label: $localize`:@@canvas.palette.connectors:Конектори`, kind: 'core', items: connectors });
+  }
+  const frequent = recent
+    .map((k) => actions.get(k))
+    .filter((a): a is PaletteItem => !!a)
+    .slice(0, FREQUENT_LIMIT);
+  if (frequent.length > 0) {
+    sections.push({ id: FREQUENT_SECTION, label: $localize`:@@canvas.palette.frequent:Часті дії`, kind: 'core', items: frequent });
   }
   return sections;
 }
 
 /**
- * Пошук у палітрі без урахування регістру: за назвою, типом, назвою tool'а, описом; збіг із назвою секції
- * (наприклад, сервера) лишає всю секцію. Порожні секції прибираються.
+ * Пошук у палітрі без урахування регістру: кожне слово запиту — у назві, типі, назві tool'а чи описі; збіг із назвою
+ * секції лишає всю секцію. Дії конекторів, що збігаються, показуються на місці свого конектора (F3-55): «надіслати
+ * повідомлення» → «Telegram → Надіслати повідомлення»; сам конектор — лише якщо збігається його назва. Порожні секції
+ * прибираються.
  */
 export function filterPalette(sections: readonly PaletteSection[], query: string): PaletteSection[] {
-  const q = query.trim().toLocaleLowerCase('uk');
-  if (!q) return [...sections];
+  const words = searchWords(query);
+  if (words.length === 0) return [...sections];
+  const matches = (i: PaletteItem) => matchesWords([i.label, i.type, i.toolName, i.description], words);
   const result: PaletteSection[] = [];
   for (const section of sections) {
-    if (section.label.toLocaleLowerCase('uk').includes(q)) {
+    if (matchesWords([section.label], words)) {
       result.push(section);
       continue;
     }
-    const items = section.items.filter((i) =>
-      [i.label, i.type, i.toolName, i.description].some((v) => v?.toLocaleLowerCase('uk').includes(q)),
-    );
-    if (items.length > 0) result.push({ ...section, items });
+    const items: PaletteItem[] = [];
+    for (const item of section.items) {
+      if (item.actions) {
+        // Збіг із назвою конектора — сам конектор (його дії — в панелі вузла); інакше — дії, що збігаються.
+        if (matchesWords([item.label], words)) items.push(item);
+        else items.push(...item.actions.filter((a) => matchesWords([a.label, a.toolName, a.description], words)));
+      } else if (matches(item)) {
+        items.push(item);
+      }
+    }
+    const unique = items.filter((i, n) => items.findIndex((x) => x.key === i.key) === n);
+    if (unique.length > 0) result.push({ ...section, items: unique });
   }
   return result;
+}
+
+/** Підказка праворуч від назви елемента: кількість дій конектора, ім'я tool'а або тип вузла. */
+export function itemHint(item: PaletteItem): string {
+  if (item.actions) return $localize`:@@canvas.palette.actionsCount:${item.actions.length}:count: дій`;
+  return item.toolName ?? item.type;
 }
 
 /** Відступ нового вузла праворуч від крайнього (ширина картки + проміжок). */
@@ -154,8 +219,9 @@ export function createNode(
   while (ids.has(id)) id = newId();
 
   const names = new Set(definition.nodes.map((n) => n.name));
-  let name = item.label;
-  for (let i = 2; names.has(name); i++) name = `${item.label} ${i}`;
+  const label = item.nodeName ?? item.label;
+  let name = label;
+  for (let i = 2; names.has(name); i++) name = `${label} ${i}`;
 
   const parameters: Record<string, unknown> =
     item.type === MCP_TOOL ? { serverId: item.serverId, toolName: item.toolName, arguments: {} } : {};

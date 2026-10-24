@@ -267,3 +267,50 @@ test('telegram-1c: chat_id обирається зі списку чатів get
   await showOutputJson(page);
   await expect(page.getByTestId('node-run-output')).toContainText('2002');
 });
+
+test('конектор одним вузлом: додати Telegram, обрати дію «Надіслати повідомлення», запустити (F3-55)', async ({ page }) => {
+  const api = page.request;
+  expect((await api.post('/api/v1/auth/login', { data: E2E_ADMIN })).status()).toBe(204);
+  const connectorName = `Telegram (мок) ${Date.now()}`;
+  await mockConnector(api, connectorName, 'telegram');
+  const workflow = await json<{ id: string }>(
+    await api.post('/api/v1/workflows', { data: { schemaVersion: 1, name: `Конектор-вузол ${Date.now()}`, nodes: [], connections: [] } }),
+  );
+  await page.goto(`/workflows/${workflow.id}`);
+
+  // Тригер, далі «+» біля порту → конектор одним елементом.
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
+  await page.keyboard.press('Tab');
+  await page.getByTestId('quick-add-search').fill('ручний');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 1');
+  await page.getByTestId('port-add').click();
+  await page.getByTestId('quick-add-search').fill(connectorName);
+  await expect(page.getByTestId('quick-add').locator('[data-item^="connector:"]')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+
+  // Дія за замовчуванням — перша в групах (get_updates); обираємо «Надіслати повідомлення» зі списку з пошуком.
+  const action = page.getByTestId('action-select');
+  await expect(action).toHaveValue('Оновлення');
+  await action.click();
+  await action.fill('надіслати');
+  await page.locator('[data-testid="action-option"][data-tool="send_message"]').click();
+  await expect(action).toHaveValue('Надіслати повідомлення');
+  await expect(page.getByTestId('node-panel-name')).toHaveText('Надіслати повідомлення');
+
+  await page.getByTestId('field-text').fill('Вітаємо з OpenBP');
+  await page.getByTestId('field-chat_id').click();
+  await page.getByTestId('option-chat_id').filter({ hasText: 'Олена' }).click();
+
+  await runAndWait(page, 'run');
+  await showOutputJson(page);
+  await expect(page.getByTestId('node-run-output')).toContainText('Вітаємо з OpenBP');
+  await expect(page.getByTestId('node-run-output')).toContainText('1001');
+  // Ребро тригер → вузол конектора збереглося після зміни дії.
+  const saved = await json<{ definition: { connections: unknown[]; nodes: { name: string; parameters: Record<string, unknown> }[] } }>(
+    await api.get(`/api/v1/workflows/${workflow.id}`),
+  );
+  expect(saved.definition.connections).toHaveLength(1);
+  expect(saved.definition.nodes[1]).toMatchObject({ name: 'Надіслати повідомлення', parameters: { toolName: 'send_message', arguments: { text: 'Вітаємо з OpenBP', chat_id: 1001 } } });
+});
