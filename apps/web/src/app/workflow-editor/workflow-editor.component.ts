@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -13,16 +13,18 @@ import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
 import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../canvas/palette';
 import { PaletteComponent } from '../canvas/palette.component';
-import { NodeRunDataComponent } from '../canvas/node-run-data.component';
+import { DataFieldPick, DataPort, NodeDataViewComponent } from '../canvas/node-data-view.component';
+import { PathSegment, expressionFor } from '../canvas/data-schema';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
-import { TestRun, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
-import { ExecutionItem, ExecutionsApiService, StartExecutionRequest } from '../executions/executions-api.service';
+import { TestRun, ancestorIds, applyEvent, isRunning, itemCounts, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
+import { ExecutionItem, ExecutionsApiService, StartExecutionRequest, StepStatus } from '../executions/executions-api.service';
 import { ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../node-form/expression-suggest';
+import { ExpressionTargetService } from '../node-form/expression-target';
 import { MCP_TOOL_TYPES, updateNode } from '../node-form/node-form';
 import { NodePanelComponent } from '../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../nodes/nodes-api.service';
@@ -55,6 +57,17 @@ interface QuickAddState {
 const QUICK_ADD_WIDTH = 308;
 const QUICK_ADD_HEIGHT = 388;
 
+/** Ширина панелі вузла (F3-52): мінімум, з якої — три колонки, за замовчуванням; запам'ятовується в `localStorage`. */
+const MIN_PANEL_WIDTH = 360;
+const WIDE_PANEL_WIDTH = 1100;
+const DEFAULT_PANEL_WIDTH = 480;
+const PANEL_WIDTH_KEY = 'openbp.editor.panelWidth';
+/** Скільки місця лишається канвасу, коли панель розтягнуто; ширина палітри ліворуч. */
+const CANVAS_RESERVE = 240;
+const PALETTE_WIDTH = 260;
+
+type PanelTab = 'input' | 'params' | 'output';
+
 /** Почато виконання сценарію (тестовий запуск). */
 export interface EditorRunEvent {
   executionId: string;
@@ -73,13 +86,15 @@ export interface EditorErrorEvent {
  * «Виконати» з живим статусом вузлів через SSE та input/output вузла в панелі (F2-20); «Виконати вузол» на даних
  * останнього запуску і закріплення output вузла в `pinData` (F2-21); спливаюча палітра з «+» біля порту, на ребрі,
  * з відпущеного в порожнє з'єднання і з `Tab`/`N` (F3-50); тест кроку й pin у заголовку панелі, редагування закріпленого output,
- * «Виконати до цього вузла», клавіша `P` (F3-51).
+ * «Виконати до цього вузла», клавіша `P` (F3-51); панель «Вхід | Параметри | Вихід» зі схемою даних, мапінгом полів кліком і
+ * перетягуванням, змінною шириною і лічильниками items на ребрах (F3-52).
  */
 @Component({
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeRunDataComponent, PinnedDataEditorComponent],
+  imports: [RouterLink, MatButtonModule, MatProgressBarModule, CanvasComponent, PaletteComponent, QuickAddComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent],
+  providers: [ExpressionTargetService],
   template: `
     <section class="editor">
       <header class="editor__bar">
@@ -178,6 +193,7 @@ export interface EditorErrorEvent {
               [descriptors]="descriptors()"
               [errors]="validationErrors()"
               [runStatuses]="runStatuses()"
+              [itemCounts]="itemCounts()"
               [selection]="selection()"
               [readonly]="readonly()"
               (definitionChange)="changed($event)"
@@ -199,34 +215,108 @@ export interface EditorErrorEvent {
             }
           </div>
           @if (selectedNode(); as node) {
-            <aside class="editor__panel">
-              <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)">
-                @if (!readonly()) {
-                  <div panelActions class="editor__node-actions" data-testid="node-actions">
-                    <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
-                      @if (running()) {
-                        <ng-container i18n="@@workfloweditor.runNode.running">Виконується…</ng-container>
-                      } @else {
-                        <ng-container i18n="@@workfloweditor.runNode">Тестувати крок</ng-container>
-                      }
+            <aside class="editor__panel" data-testid="editor-panel" [class.editor__panel--wide]="wide()" [style.width.px]="panelWidth()">
+              <div
+                class="editor__resize"
+                role="separator"
+                tabindex="0"
+                aria-orientation="vertical"
+                data-testid="panel-resize"
+                [attr.aria-valuenow]="panelWidth()"
+                [attr.aria-valuemin]="minPanelWidth"
+                i18n-aria-label="@@workfloweditor.panel.resize"
+                aria-label="Ширина панелі"
+                i18n-title="@@workfloweditor.panel.resizeHint"
+                title="Перетягніть, щоб змінити ширину; ширше 1100 px — три колонки"
+                (pointerdown)="startResize($event)"
+                (keydown)="resizeKey($event)"
+              ></div>
+              @if (!wide()) {
+                <nav class="editor__tabs" role="tablist">
+                  @for (t of panelTabs; track t.id) {
+                    <button type="button" role="tab" class="editor__tab" [class.editor__tab--on]="panelTab() === t.id" [attr.aria-selected]="panelTab() === t.id" [attr.data-testid]="'panel-tab-' + t.id" (click)="panelTab.set(t.id)">
+                      {{ t.label }}
                     </button>
-                    <button mat-button type="button" data-testid="run-until" [disabled]="running()" (click)="runUntil(node.id)" i18n-title="@@workfloweditor.runUntil.hint" title="Виконати цей вузол і всі попередні; решта сценарію не виконується" i18n="@@workfloweditor.runUntil">До цього вузла</button>
-                    @if (selectedPinned()) {
-                      <button mat-button type="button" data-testid="unpin-output" (click)="unpin(node.id)" i18n-title="@@workfloweditor.unpin.hint" title="Відкріпити output (P)" i18n="@@workfloweditor.unpin">Відкріпити</button>
-                    } @else if (selectedStep()?.status === 'success') {
-                      <button mat-button type="button" data-testid="pin-output" (click)="pin(node.id)" i18n-title="@@workfloweditor.pin.hint" title="Тестові запуски віддаватимуть цей output, не виконуючи вузол (P)" i18n="@@workfloweditor.pin">Закріпити output</button>
-                    } @else {
-                      <button mat-button type="button" data-testid="pin-manual" (click)="pinManual(node.id)" i18n-title="@@workfloweditor.pinManual.hint" title="Закріпити output, введений вручну: тестові запуски не виконуватимуть вузол (P)" i18n="@@workfloweditor.pinManual">Ввести дані вручну</button>
-                    }
-                  </div>
-                }
-                @if (selectedPinItems(); as items) {
-                  <app-pinned-data-editor panelPinned class="editor__pinned" [items]="items" [readonly]="readonly()" (save)="savePinned(node.id, $event)" />
-                }
-              </app-node-panel>
-              @if (selectedStep(); as step) {
-                <app-node-run-data [step]="step" [inputNames]="selectedDescriptor()?.inputs ?? []" [outputNames]="selectedDescriptor()?.outputs ?? []" />
+                  }
+                </nav>
               }
+              <div class="editor__io">
+                <div class="editor__col editor__col--data" data-testid="panel-input" [hidden]="!wide() && panelTab() !== 'input'">
+                  <app-node-data-view side="input" [title]="inputTitle" [ports]="inputPorts()" [mappable]="!readonly()" [expression]="inputExpression()" (pick)="mapField($event)">
+                    @if (inputSources().length > 0) {
+                      <label dataHeader class="editor__source">
+                        <span i18n="@@workfloweditor.input.node">Вузол:</span>
+                        <select class="border" data-testid="input-source" [value]="inputSource()" (change)="inputSource.set($any($event.target).value)">
+                          <option value="" i18n="@@workfloweditor.input.direct">Вхід ($json)</option>
+                          @for (o of inputSources(); track o.id) {
+                            <option [value]="o.id">{{ o.name }}</option>
+                          }
+                        </select>
+                      </label>
+                    }
+                    @if (!readonly() && inputPorts().length > 0) {
+                      <p dataNote class="editor__map-note" [class.editor__map-note--warn]="mapHint()" data-testid="map-hint" role="status">
+                        @if (mapHint()) {
+                          <ng-container i18n="@@workfloweditor.map.noTarget">Спершу клацніть у поле параметра — туди вставиться вираз.</ng-container>
+                        } @else if (activeTarget(); as field) {
+                          <ng-container i18n="@@workfloweditor.map.target">Клік по полю вставляє вираз у «{{ field }}»; поле можна й перетягнути.</ng-container>
+                        } @else {
+                          <ng-container i18n="@@workfloweditor.map.hint">Клацніть у поле параметра, потім — на поле даних, або перетягніть поле даних у параметр.</ng-container>
+                        }
+                      </p>
+                    }
+                    <div dataEmpty class="editor__empty" data-testid="input-empty">
+                      @if (selectedDescriptor()?.inputs?.length === 0) {
+                        <p class="m-0" i18n="@@workfloweditor.input.trigger">Тригер не має вхідних даних — він починає сценарій.</p>
+                      } @else {
+                        <p class="m-0" i18n="@@workfloweditor.input.empty">Виконайте попередній вузол, щоб побачити дані</p>
+                        @if (!readonly()) {
+                          <button mat-stroked-button type="button" data-testid="input-run-until" [disabled]="running()" (click)="runUntil(node.id)" i18n="@@workfloweditor.input.runUntil">Виконати до цього вузла</button>
+                        }
+                      }
+                    </div>
+                  </app-node-data-view>
+                </div>
+                <div class="editor__col editor__col--params" data-testid="panel-params" [hidden]="!wide() && panelTab() !== 'params'">
+                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)">
+                    @if (!readonly()) {
+                      <div panelActions class="editor__node-actions" data-testid="node-actions">
+                        <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
+                          @if (running()) {
+                            <ng-container i18n="@@workfloweditor.runNode.running">Виконується…</ng-container>
+                          } @else {
+                            <ng-container i18n="@@workfloweditor.runNode">Тестувати крок</ng-container>
+                          }
+                        </button>
+                        <button mat-button type="button" data-testid="run-until" [disabled]="running()" (click)="runUntil(node.id)" i18n-title="@@workfloweditor.runUntil.hint" title="Виконати цей вузол і всі попередні; решта сценарію не виконується" i18n="@@workfloweditor.runUntil">До цього вузла</button>
+                        @if (selectedPinned()) {
+                          <button mat-button type="button" data-testid="unpin-output" (click)="unpin(node.id)" i18n-title="@@workfloweditor.unpin.hint" title="Відкріпити output (P)" i18n="@@workfloweditor.unpin">Відкріпити</button>
+                        } @else if (selectedStep()?.status === 'success') {
+                          <button mat-button type="button" data-testid="pin-output" (click)="pin(node.id)" i18n-title="@@workfloweditor.pin.hint" title="Тестові запуски віддаватимуть цей output, не виконуючи вузол (P)" i18n="@@workfloweditor.pin">Закріпити output</button>
+                        } @else {
+                          <button mat-button type="button" data-testid="pin-manual" (click)="pinManual(node.id)" i18n-title="@@workfloweditor.pinManual.hint" title="Закріпити output, введений вручну: тестові запуски не виконуватимуть вузол (P)" i18n="@@workfloweditor.pinManual">Ввести дані вручну</button>
+                        }
+                      </div>
+                    }
+                    @if (selectedPinItems(); as items) {
+                      <app-pinned-data-editor panelPinned class="editor__pinned" [items]="items" [readonly]="readonly()" (save)="savePinned(node.id, $event)" />
+                    }
+                  </app-node-panel>
+                </div>
+                <div class="editor__col editor__col--data" data-testid="node-run" [attr.data-status]="selectedStep()?.status ?? null" [hidden]="!wide() && panelTab() !== 'output'">
+                  <app-node-data-view side="output" [title]="outputTitle" [ports]="outputPorts()">
+                    @if (selectedStep(); as step) {
+                      <span dataHeader class="editor__step editor__step--{{ step.status }}" data-testid="node-run-status">{{ stepStatusLabel(step.status) }}</span>
+                    } @else if (selectedPinItems()) {
+                      <span dataHeader class="editor__step" data-testid="node-run-status" i18n="@@workfloweditor.output.pinned">закріплено</span>
+                    }
+                    @if (selectedStep()?.error; as error) {
+                      <p dataNote class="editor__step-error" role="alert" data-testid="node-run-error">{{ error.message }}</p>
+                    }
+                    <p dataEmpty class="editor__empty m-0" data-testid="output-empty" i18n="@@workfloweditor.output.empty">Виконайте вузол («Тестувати крок»), щоб побачити вихід.</p>
+                  </app-node-data-view>
+                </div>
+              </div>
             </aside>
           }
         </div>
@@ -339,7 +429,7 @@ export interface EditorErrorEvent {
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
-      width: 260px;
+      width: 260px; /* PALETTE_WIDTH */
       border-right: 1px solid var(--mat-sys-outline-variant);
       overflow-y: auto;
     }
@@ -376,12 +466,136 @@ export interface EditorErrorEvent {
       z-index: 3;
     }
 
+    /* Панель вузла (F3-52): ширина перетягується за ліву межу; від 1100 px — три колонки, вужче — вкладки. */
     .editor__panel {
+      display: flex;
+      flex-direction: column;
       flex-shrink: 0;
-      width: 360px;
+      max-width: calc(100% - 240px);
       border-left: 1px solid var(--mat-sys-outline-variant);
       box-shadow: var(--ac-shadow);
+    }
+
+    .editor__resize {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -3px;
+      z-index: 2;
+      width: 6px;
+      cursor: col-resize;
+    }
+
+    .editor__resize:hover,
+    .editor__resize:focus-visible {
+      background: var(--ac-kit);
+      opacity: 0.4;
+      outline: none;
+    }
+
+    .editor__tabs {
+      display: flex;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--ac-line);
+    }
+
+    .editor__tab {
+      flex: 1;
+      padding: 8px 4px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: none;
+      color: var(--ac-cool-grey-4);
+      font: 400 14px/20px Ubuntu, sans-serif;
+      cursor: pointer;
+    }
+
+    .editor__tab--on {
+      border-bottom-color: var(--ac-kit);
+      color: var(--ac-kit);
+    }
+
+    .editor__io {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .editor__col {
+      flex: 1;
+      min-width: 0;
       overflow-y: auto;
+    }
+
+    .editor__col[hidden] {
+      display: none;
+    }
+
+    .editor__panel--wide .editor__col--data {
+      background: var(--ac-cool-grey-2);
+    }
+
+    .editor__panel--wide .editor__col--params {
+      flex: 1.2;
+      border-right: 1px solid var(--ac-line);
+      border-left: 1px solid var(--ac-line);
+    }
+
+    .editor__source {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .editor__source select {
+      min-height: 28px;
+      padding: 0 6px;
+      border: 1px solid var(--ac-line);
+      border-radius: var(--ac-radius-sm);
+      background: var(--ac-white);
+      font-size: 12px;
+    }
+
+    .editor__map-note {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--ac-cool-grey-4);
+    }
+
+    .editor__map-note--warn {
+      color: var(--mat-sys-error);
+    }
+
+    .editor__empty {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--ac-cool-grey-4);
+    }
+
+    .editor__step {
+      padding: 0 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #fff;
+      background: var(--ac-cool-grey-4);
+    }
+
+    .editor__step--success {
+      background: var(--ac-green);
+    }
+
+    .editor__step--error {
+      background: var(--ac-red);
+    }
+
+    .editor__step-error {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mat-sys-error);
     }
   `,
 })
@@ -495,6 +709,81 @@ export class WorkflowEditorComponent implements OnInit {
     const pinData = this.definition()?.pinData ?? {};
     return node && Object.hasOwn(pinData, node.id) ? pinData[node.id] : null;
   });
+  // ---------- панель «Вхід | Параметри | Вихід» (F3-52) ----------
+
+  private readonly expressionTargets = inject(ExpressionTargetService);
+  protected readonly minPanelWidth = MIN_PANEL_WIDTH;
+  protected readonly inputTitle = $localize`:@@workfloweditor.input.title:Вхід`;
+  protected readonly outputTitle = $localize`:@@workfloweditor.output.title:Вихід`;
+  protected readonly panelTabs: readonly { id: PanelTab; label: string }[] = [
+    { id: 'input', label: this.inputTitle },
+    { id: 'params', label: $localize`:@@workfloweditor.params.title:Параметри` },
+    { id: 'output', label: this.outputTitle },
+  ];
+  /** Ширина панелі вузла, px. */
+  protected readonly panelWidth = signal(clamp(readPanelWidth(), MIN_PANEL_WIDTH, window.innerWidth - CANVAS_RESERVE - PALETTE_WIDTH));
+  /** Досить місця для трьох колонок; інакше — вкладки. */
+  protected readonly wide = computed(() => this.panelWidth() >= WIDE_PANEL_WIDTH);
+  protected readonly panelTab = signal<PanelTab>('params');
+  /** Клік по полю входу, а поля параметра з фокусом ще не було. */
+  protected readonly mapHint = signal(false);
+  protected readonly activeTarget = this.expressionTargets.activeLabel;
+
+  /** Джерело даних входу: `''` — вхід вузла (`$json`), інакше id попередника (`$node["…"]`); новий вузол — знову вхід. */
+  protected readonly inputSource = linkedSignal({ source: () => this.selectedNode()?.id, computation: () => '' });
+
+  /** Попередники виділеного вузла з даними (останній запуск або `pinData`) — для перемикача «Вузол: …». */
+  protected readonly inputSources = computed(() => {
+    const node = this.selectedNode();
+    const def = this.definition();
+    if (!node || !def) return [];
+    const ancestors = ancestorIds(def, node.id);
+    return def.nodes.filter((n) => ancestors.has(n.id) && this.outputPortsOf(n.id).length > 0).map((n) => ({ id: n.id, name: n.name }));
+  });
+
+  /** Items входу: вхід кроку вузла з останнього запуску, інакше — виходи попередників за вхідними ребрами; або output обраного вузла. */
+  protected readonly inputPorts = computed<DataPort[]>(() => {
+    const node = this.selectedNode();
+    const def = this.definition();
+    if (!node || !def) return [];
+    const source = this.inputSource();
+    if (source) return this.outputPortsOf(source);
+    const names = this.selectedDescriptor()?.inputs ?? [];
+    const step = this.selectedStep();
+    if (step && step.input.some((items) => items.length > 0)) return portsOf(step.input, names);
+    const ports: DataPort[] = [];
+    names.forEach((name, input) => {
+      for (const c of def.connections) {
+        if (c.to.node !== node.id || c.to.input !== input) continue;
+        const items = this.outputItems(c.from.node, c.from.output);
+        if (items) {
+          ports.push({ label: name, items });
+          return;
+        }
+      }
+    });
+    return ports;
+  });
+
+  /** Вираз для поля входу: `$json…` або `$node["Назва"].json…` для обраного попередника. */
+  protected readonly inputExpression = computed(() => {
+    const source = this.inputSource();
+    const name = source ? this.definition()?.nodes.find((n) => n.id === source)?.name : undefined;
+    return (path: PathSegment[]) => expressionFor(path, name);
+  });
+
+  /** Вихід: порти кроку останнього запуску; без запуску — закріплені items. */
+  protected readonly outputPorts = computed<DataPort[]>(() => {
+    const step = this.selectedStep();
+    const names = this.selectedDescriptor()?.outputs ?? [];
+    if (step) return portsOf(step.output, names);
+    const pinned = this.selectedPinItems();
+    return pinned ? [{ label: names[0] ?? 'main', items: pinned as ExecutionItem[] }] : [];
+  });
+
+  /** Підписи «N items» на ребрах після запуску. */
+  protected readonly itemCounts = computed(() => itemCounts(this.testRun()));
+
   protected readonly runStatuses = computed(() => nodeStatuses(this.testRun()));
   protected readonly running = computed(() => isRunning(this.testRun()));
   protected readonly canUndo = this.history.canUndo;
@@ -824,6 +1113,76 @@ export class WorkflowEditorComponent implements OnInit {
     this.runSubscription = null;
   }
 
+  /** Клік по полю входу: вираз — у поле параметра, що останнім мало фокус; у вкладках — показати параметри. */
+  protected mapField(pick: DataFieldPick): void {
+    const inserted = this.expressionTargets.insert(this.inputExpression()(pick.path));
+    this.mapHint.set(!inserted);
+    if (inserted && !this.wide()) this.panelTab.set('params');
+  }
+
+  /** Перетягування лівої межі панелі; ширина запам'ятовується після відпускання. */
+  protected startResize(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const start = this.panelWidth();
+    const move = (e: PointerEvent) => this.setPanelWidth(start + startX - e.clientX, false);
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      writePanelWidth(this.panelWidth());
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  }
+
+  /** Стрілки на межі панелі: ширше/вужче на 40 px. */
+  protected resizeKey(event: KeyboardEvent): void {
+    const delta = event.key === 'ArrowLeft' ? 40 : event.key === 'ArrowRight' ? -40 : 0;
+    if (!delta) return;
+    event.preventDefault();
+    this.setPanelWidth(this.panelWidth() + delta, true);
+  }
+
+  private setPanelWidth(width: number, save: boolean): void {
+    // Панель ділить місце з канвасом; не виміряно (немає розмітки) — вікно.
+    const canvas = this.canvasArea()?.nativeElement.getBoundingClientRect().width ?? 0;
+    const shared = canvas > 0 ? canvas + this.panelWidth() : window.innerWidth;
+    this.panelWidth.set(Math.round(clamp(width, MIN_PANEL_WIDTH, shared - CANVAS_RESERVE)));
+    if (save) writePanelWidth(this.panelWidth());
+  }
+
+  protected stepStatusLabel(status: StepStatus): string {
+    switch (status) {
+      case 'success':
+        return $localize`:@@noderun.status.success:успішно`;
+      case 'error':
+        return $localize`:@@noderun.status.error:помилка`;
+      case 'skipped':
+        return $localize`:@@noderun.status.skipped:пропущено`;
+      case 'cancelled':
+        return $localize`:@@noderun.status.cancelled:скасовано`;
+    }
+  }
+
+  /** Items виходу `port` вузла: успішний крок останнього запуску, інакше `pinData` (лише вихід 0). */
+  private outputItems(nodeId: string, port: number): ExecutionItem[] | undefined {
+    const step = this.testRun()?.steps.get(nodeId);
+    if (step?.status === 'success') return step.output[port];
+    const pinned = this.definition()?.pinData?.[nodeId];
+    return port === 0 && Array.isArray(pinned) ? (pinned as ExecutionItem[]) : undefined;
+  }
+
+  /** Усі виходи вузла з даними — коли вхід береться з обраного попередника. */
+  private outputPortsOf(nodeId: string): DataPort[] {
+    const node = this.definition()?.nodes.find((n) => n.id === nodeId);
+    const names = node ? (this.descriptorIndex().find(node.type, node.typeVersion)?.outputs ?? []) : [];
+    const step = this.testRun()?.steps.get(nodeId);
+    if (step?.status === 'success') return portsOf(step.output, names);
+    const pinned = this.outputItems(nodeId, 0);
+    return pinned ? [{ label: names[0] ?? 'main', items: pinned }] : [];
+  }
+
   /** Гарячі клавіші редактора; у полях введення не перехоплюються. */
   protected keydown(event: KeyboardEvent): void {
     // У Shadow DOM (`<openbp-canvas>`) `event.target` — сам елемент; справжня ціль — перша в composedPath.
@@ -913,7 +1272,29 @@ function quickAddTitle(target: QuickAddTarget, mode: QuickAddMode): string {
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  // Панель вузла (прапорці, списки, кнопки) — клавіші належать формі, а не канвасу.
-  if (target.closest('app-node-panel')) return true;
+  // Панель вузла (форма, дані входу/виходу, межа ширини) — клавіші належать їй, а не канвасу.
+  if (target.closest('app-node-panel, .editor__panel')) return true;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+/** Порти з назвами з дескриптора; порт одразу за описаними — `error` вузла з `continueOnFail` (docs/workflow-format.md). */
+function portsOf(ports: ExecutionItem[][], names: readonly string[]): DataPort[] {
+  return ports.map((items, i) => ({ label: names[i] ?? (i === names.length ? 'error' : `#${i}`), items }));
+}
+
+function readPanelWidth(): number {
+  try {
+    const value = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_PANEL_WIDTH;
+  } catch {
+    return DEFAULT_PANEL_WIDTH;
+  }
+}
+
+function writePanelWidth(width: number): void {
+  try {
+    localStorage.setItem(PANEL_WIDTH_KEY, String(width));
+  } catch {
+    // Сховище недоступне — ширина не запам'ятається.
+  }
 }

@@ -111,3 +111,14 @@ export function runOutputs(run: TestRun | null): Record<string, ExecutionItem[]>
   }
   return result;
 }
+
+/** Кількість items на кожному виході успішно виконаних вузлів: `вузол:порт` → кількість (підписи на ребрах, F3-52). */
+export function itemCounts(run: TestRun | null): Map<string, number> {
+  const result = new Map<string, number>();
+  if (!run) return result;
+  for (const [nodeId, step] of run.steps) {
+    if (step.status !== 'success') continue;
+    step.output.forEach((items, port) => result.set(`${nodeId}:${port}`, items.length));
+  }
+  return result;
+}

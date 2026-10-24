@@ -21,6 +21,7 @@ import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow
     [nodeErrors]="nodeErrors()"
     [runStatuses]="runStatuses()"
     [pinnedNodes]="pinnedNodes()"
+    [itemCounts]="itemCounts()"
     [selection]="selection()"
     [readonly]="readonly()"
     (nodesMoved)="moved($event)"
@@ -51,6 +52,9 @@ export class CanvasComponent {
 
   /** Статуси вузлів тестового запуску (F2-20). */
   readonly runStatuses = input<NodeRunStatuses>(new Map());
+
+  /** Кількість items на виході вузла після запуску за `вузол:порт` — підпис на ребрах (F3-52). */
+  readonly itemCounts = input<ReadonlyMap<string, number>>(new Map());
 
   /** Виділені вузли й ребра. */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);

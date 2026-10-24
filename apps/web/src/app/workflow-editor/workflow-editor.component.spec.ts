@@ -421,8 +421,9 @@ describe('WorkflowEditorComponent', () => {
       const run = host.querySelector('[data-testid="node-run"]');
       expect(run?.getAttribute('data-status')).toBe('error');
       expect(run?.textContent).toContain('Вузол упав');
-      expect(run?.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('"from": "input"');
-      expect(run?.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"from": "n_set"');
+      // Вхід і вихід — схемою: поле і приклад значення.
+      expect(host.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('"input"');
+      expect(run?.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"n_set"');
 
       source.emit('status', { executionId: 'e1', state: 'error', error: 'Вузол упав' });
       await render(fixture);
@@ -519,7 +520,7 @@ describe('WorkflowEditorComponent', () => {
       expect(Object.fromEntries(canvasComponent(fixture).runStatuses())).toEqual({ n_hook: 'success', n_set: 'success' });
       FakeEventSource.last!.emit('step', step('n_set', 's4'));
       await render(fixture);
-      expect(host.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"id": "s4"');
+      expect(host.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"s4"');
     });
 
     it('«Закріпити output» пише вихід 0 у pinData (бейдж на канвасі, зберігається); «Відкріпити» прибирає', async () => {
@@ -604,6 +605,138 @@ describe('WorkflowEditorComponent', () => {
       key({ key: 'p' });
       await render(fixture);
       expect(canvasComponent(fixture).definition().pinData).toEqual({});
+    });
+  });
+
+  describe('панель «Вхід | Параметри | Вихід» (F3-52)', () => {
+    /** `core.set` з текстовим параметром `value` — ціль вставки виразів. */
+    const descriptors = SAMPLE_DESCRIPTORS.map((d) =>
+      d.type === 'core.set' ? { ...d, parametersSchema: { type: 'object', properties: { value: { type: 'string', title: 'Значення' } } } } : d,
+    );
+    const pinned: WorkflowDetail = {
+      ...workflow,
+      definition: { ...workflow.definition, pinData: { n_hook: [{ json: { body: { Клієнт: 'Петренко', id: 7 } } }, { json: { body: { id: 'x' } } }] } },
+    };
+
+    beforeEach(() => localStorage.clear());
+
+    async function opened(detail = pinned) {
+      const ctx = setup();
+      ctx.http.expectOne('/api/v1/workflows/w1').flush(detail);
+      ctx.http.expectOne('/api/v1/nodes').flush(descriptors);
+      flushConnectors(ctx.http);
+      await render(ctx.fixture);
+      canvasComponent(ctx.fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(ctx.fixture);
+      return ctx;
+    }
+
+    function field(host: HTMLElement, path: string): HTMLButtonElement {
+      return host.querySelector(`[data-testid="schema-field"][data-path='${path}']`) as HTMLButtonElement;
+    }
+
+    it('вузька панель — вкладки; вхід — схема з pinData попередника з типами й прикладами, лічильник items', async () => {
+      const { fixture, host } = await opened();
+      expect(host.querySelector('[data-testid="panel-tab-params"]')?.getAttribute('aria-selected')).toBe('true');
+      expect((host.querySelector('[data-testid="panel-input"]') as HTMLElement).hidden).toBe(true);
+
+      click(host, '[data-testid="panel-tab-input"]');
+      await render(fixture);
+      expect((host.querySelector('[data-testid="panel-input"]') as HTMLElement).hidden).toBe(false);
+      expect(host.querySelector('[data-testid="input-port"]')?.textContent).toContain('2 items');
+      expect(field(host, '.body["Клієнт"]').textContent?.trim()).toBe('Клієнт');
+      // Різні типи між items — обидва.
+      expect(field(host, '.body.id').parentElement?.textContent).toContain('number | string');
+      expect(host.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('"Петренко"');
+    });
+
+    it('клік по полю схеми вставляє вираз у позицію курсора останнього поля з фокусом і повертає на «Параметри»', async () => {
+      const { fixture, host } = await opened();
+      const input = host.querySelector('[data-testid="field-value"]') as HTMLInputElement;
+      input.value = 'Клієнт: ';
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('focus'));
+      input.setSelectionRange(8, 8);
+      click(host, '[data-testid="panel-tab-input"]');
+      await render(fixture);
+
+      field(host, '.body["Клієнт"]').click();
+      await render(fixture);
+      expect(input.value).toBe('Клієнт: {{ $json.body["Клієнт"] }}');
+      expect(host.querySelector('[data-testid="panel-tab-params"]')?.getAttribute('aria-selected')).toBe('true');
+      const def = canvasComponent(fixture).definition();
+      expect(def.nodes.find((n) => n.id === 'n_set')?.parameters).toEqual({ value: 'Клієнт: {{ $json.body["Клієнт"] }}' });
+    });
+
+    it('без поля з фокусом — підказка, нічого не змінюється; «Вузол: …» дає $node["Назва"]', async () => {
+      const { fixture, host } = await opened();
+      click(host, '[data-testid="panel-tab-input"]');
+      await render(fixture);
+      field(host, '.body.id').click();
+      await render(fixture);
+      expect(host.querySelector('[data-testid="map-hint"]')?.textContent).toContain('Спершу клацніть у поле параметра');
+
+      const select = host.querySelector('[data-testid="input-source"]') as HTMLSelectElement;
+      select.value = 'n_hook';
+      select.dispatchEvent(new Event('change'));
+      await render(fixture);
+      expect(field(host, '.body.id').title).toBe('{{ $node["Нова заявка"].json.body.id }}');
+    });
+
+    it('немає даних — «Виконайте попередній вузол…» і «Виконати до цього вузла»; вид даних запам’ятовується', async () => {
+      const { fixture, host, http } = await opened(workflow);
+      click(host, '[data-testid="panel-tab-input"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="input-empty"]')?.textContent).toContain('Виконайте попередній вузол, щоб побачити дані');
+      click(host, '[data-testid="input-run-until"]');
+      await render(fixture);
+      const start = http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' });
+      expect(start.request.body).toEqual({ destinationNodeId: 'n_set' });
+      start.flush({ id: 'e1', workflowId: 'w1', versionId: 'v3', mode: 'manual', state: 'queued', startedAt: null, finishedAt: null, error: null });
+      await render(fixture);
+      FakeEventSource.last!.emit('step', {
+        id: 's1',
+        nodeId: 'n_hook',
+        runIndex: 0,
+        status: 'success',
+        input: [],
+        output: [[{ json: { a: 1 } }, { json: { a: 2 } }, { json: { a: 3 } }]],
+        error: null,
+        startedAt: '',
+        finishedAt: '',
+      } satisfies ExecutionStep);
+      await render(fixture);
+      // Лічильник на ребрі з виходу n_hook.
+      expect(canvasComponent(fixture).itemCounts().get('n_hook:0')).toBe(3);
+
+      click(host, '[data-testid="input-view-json"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="node-run-input"]')?.textContent).toContain('"a": 3');
+      expect(localStorage.getItem('openbp.nodeData.view.input')).toBe('json');
+    });
+
+    describe('ширина панелі', () => {
+      const innerWidth = window.innerWidth;
+      beforeEach(() => Object.defineProperty(window, 'innerWidth', { value: 1800, configurable: true }));
+      afterEach(() => Object.defineProperty(window, 'innerWidth', { value: innerWidth, configurable: true }));
+
+      it('стрілки на межі змінюють і запам’ятовують ширину', async () => {
+        const { fixture, host } = await opened();
+        const handle = host.querySelector('[data-testid="panel-resize"]') as HTMLElement;
+        handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+        await render(fixture);
+        expect(localStorage.getItem('openbp.editor.panelWidth')).toBe('520');
+        expect(handle.getAttribute('aria-valuenow')).toBe('520');
+      });
+
+      it('від 1100 px — три колонки без вкладок', async () => {
+        localStorage.setItem('openbp.editor.panelWidth', '1200');
+        const { host } = await opened();
+        expect(host.querySelector('[data-testid="panel-tab-input"]')).toBeNull();
+        expect((host.querySelector('[data-testid="panel-input"]') as HTMLElement).hidden).toBe(false);
+        expect((host.querySelector('[data-testid="panel-params"]') as HTMLElement).hidden).toBe(false);
+        expect((host.querySelector('[data-testid="node-run"]') as HTMLElement).hidden).toBe(false);
+      });
     });
   });
 
