@@ -10,6 +10,7 @@ MCP-native BPMS-конструктор: процеси на канвасі, ін
 - Формат сценарію: [docs/workflow-format.md](docs/workflow-format.md)
 - Вузли і конектори: [docs/connectors.md](docs/connectors.md)
 - OpenBP як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
+- Адміністратору: встановлення, HTTPS, користувачі, бекапи, оновлення — [docs/admin/README.md](docs/admin/README.md) · змінні середовища — [docs/admin/env.md](docs/admin/env.md)
 - Фази: [docs/roadmap.md](docs/roadmap.md) · Задачі: [BACKLOG.md](BACKLOG.md)
 - Нічний агент: [docs/night-agent.md](docs/night-agent.md)
 - Правила для Claude Code: [CLAUDE.md](CLAUDE.md)
@@ -36,6 +37,8 @@ dotnet format --verify-no-changes
   `Logging__LogLevel__Default=Warning`, `Logging__LogLevel__OpenBP=Information` тощо.
 
 ### Продакшн (Docker Compose)
+
+Покроково для адміністратора, з HTTPS, OIDC, бекапами й оновленнями — [docs/admin/README.md](docs/admin/README.md).
 
 Потрібен Docker з Compose v2 і `openssl`.
 
