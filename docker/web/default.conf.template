@@ -1,10 +1,16 @@
-# nginx для образу web (docker/web.Dockerfile). ${OPENBP_API_UPSTREAM} підставляється при старті контейнера.
+# nginx для образу web (docker/web.Dockerfile). ${OPENBP_API_UPSTREAM} і ${OPENBP_DNS_RESOLVER} підставляються
+# при старті контейнера.
 server {
     listen 8080;
     server_name _;
     root /usr/share/nginx/html;
 
     client_max_body_size 50m;
+
+    # Адресу Api резолвимо під час запиту (DNS Docker), а не раз при старті: після перезапуску api
+    # (scripts/restore.sh, оновлення) контейнер отримує нову IP-адресу, і статичний upstream давав би 502.
+    resolver ${OPENBP_DNS_RESOLVER} valid=10s ipv6=off;
+    set $openbp_api ${OPENBP_API_UPSTREAM};
     server_tokens off;
 
     gzip on;
@@ -20,9 +26,10 @@ server {
         return 200 "ok";
     }
 
-    # Api: REST (/api, зокрема SSE журналу виконань), MCP-сервер (/mcp), webhook-и, health-checks.
-    location ~ ^/(api|mcp|webhook|health)(/|$) {
-        proxy_pass http://${OPENBP_API_UPSTREAM};
+    # Api: REST (/api, зокрема SSE журналу виконань), опис OpenAPI (/openapi), MCP-сервер (/mcp), webhook-и, health-checks,
+    # повернення від OIDC-провайдера (/signin-oidc/<key>, F4-14).
+    location ~ ^/(api|openapi|mcp|webhook|health|signin-oidc)(/|$) {
+        proxy_pass http://$openbp_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -33,6 +40,12 @@ server {
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 1h;
+    }
+
+    # Веб-компонент редактора (F4-13): назва без хешу, тож браузер щоразу перевіряє свіжість (ETag).
+    location ^~ /element/ {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
     }
 
     # Статика з хешем у назві — назавжди; index.html — завжди свіжий.

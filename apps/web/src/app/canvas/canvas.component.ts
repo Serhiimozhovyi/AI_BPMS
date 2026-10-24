@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, computed, input, output } from '@angular/core';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workflows-api.service';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
+import { QuickAddRequest } from './quick-add';
 import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow-canvas.component';
 
 /**
@@ -20,10 +21,13 @@ import { NodeErrors, NodeRunStatuses, VflowCanvasComponent } from './vflow/vflow
     [nodeErrors]="nodeErrors()"
     [runStatuses]="runStatuses()"
     [pinnedNodes]="pinnedNodes()"
+    [itemCounts]="itemCounts()"
     [selection]="selection()"
+    [readonly]="readonly()"
     (nodesMoved)="moved($event)"
     (connectionCreated)="connected($event)"
     (selectionChange)="selectionChange.emit($event)"
+    (quickAdd)="quickAdd.emit($event)"
   />`,
   styles: `
     :host {
@@ -49,14 +53,23 @@ export class CanvasComponent {
   /** Статуси вузлів тестового запуску (F2-20). */
   readonly runStatuses = input<NodeRunStatuses>(new Map());
 
+  /** Кількість items на виході вузла після запуску за `вузол:порт` — підпис на ребрах (F3-52). */
+  readonly itemCounts = input<ReadonlyMap<string, number>>(new Map());
+
   /** Виділені вузли й ребра. */
   readonly selection = input<CanvasSelection>(EMPTY_SELECTION);
+
+  /** Лише перегляд: вузли не перетягуються, ребра не створюються; виділення працює. */
+  readonly readonly = input(false, { transform: booleanAttribute });
 
   /** Нове визначення після змін на канвасі (переміщення вузлів, нове ребро). */
   readonly definitionChange = output<WorkflowDefinition>();
 
   /** Нове виділення після дій користувача на канвасі. */
   readonly selectionChange = output<CanvasSelection>();
+
+  /** Відкрити спливаючу палітру (F3-50); у режимі перегляду не надходить. */
+  readonly quickAdd = output<QuickAddRequest>();
 
   private readonly index = computed(() => new DescriptorIndex(this.descriptors()));
 
@@ -76,10 +89,12 @@ export class CanvasComponent {
   });
 
   protected moved(positions: NodePosition[]): void {
+    if (this.readonly()) return;
     this.definitionChange.emit(moveNodes(this.definition(), positions, this.index()));
   }
 
   protected connected(connection: NewConnection): void {
+    if (this.readonly()) return;
     const next = connectNodes(this.definition(), connection);
     if (next !== this.definition()) this.definitionChange.emit(next);
   }

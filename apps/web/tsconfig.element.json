@@ -1,0 +1,8 @@
+/* Збірка веб-компонента <openbp-canvas> (F4-13, angular.json → element): лише його точка входу і те, що вона імпортує. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@angular/localize"]
+  },
+  "files": ["src/element/main.ts"]
+}

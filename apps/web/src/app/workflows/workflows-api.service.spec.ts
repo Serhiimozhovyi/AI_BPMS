@@ -91,6 +91,24 @@ describe('WorkflowsApiService', () => {
   });
 
   it('toSummary бере поля рядка з деталей', () => {
-    expect(toSummary(detail)).toEqual({ id: 'w1', name: 'Заявки', active: false, version: 1, updatedAt: '2026-10-23T10:00:00Z' });
+    expect(toSummary(detail)).toEqual({ id: 'w1', name: 'Заявки', active: false, version: 1, updatedAt: '2026-10-23T10:00:00Z', groupId: null });
+    expect(toSummary({ ...detail, groupId: 'g1' }).groupId).toBe('g1');
+  });
+
+  it('групи (F3-64): CRUD, порядок, перенесення і створення в групі', () => {
+    api.listGroups().subscribe();
+    http.expectOne({ method: 'GET', url: '/api/v1/workflow-groups' }).flush([]);
+    api.createGroup('Продажі').subscribe();
+    expect(http.expectOne({ method: 'POST', url: '/api/v1/workflow-groups' }).request.body).toEqual({ name: 'Продажі' });
+    api.renameGroup('g 1', 'Опт').subscribe();
+    expect(http.expectOne({ method: 'PATCH', url: '/api/v1/workflow-groups/g%201' }).request.body).toEqual({ name: 'Опт' });
+    api.deleteGroup('g1').subscribe();
+    http.expectOne({ method: 'DELETE', url: '/api/v1/workflow-groups/g1' }).flush(null);
+    api.reorderGroups(['g2', 'g1']).subscribe();
+    expect(http.expectOne({ method: 'PUT', url: '/api/v1/workflow-groups/order' }).request.body).toEqual({ ids: ['g2', 'g1'] });
+    api.move('w1', null).subscribe();
+    expect(http.expectOne({ method: 'PATCH', url: '/api/v1/workflows/w1' }).request.body).toEqual({ groupId: null });
+    api.create('Новий', 'g1').subscribe();
+    expect(http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/workflows').request.params.get('groupId')).toBe('g1');
   });
 });

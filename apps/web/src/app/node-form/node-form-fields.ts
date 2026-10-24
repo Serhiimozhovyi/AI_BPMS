@@ -22,6 +22,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { FieldArrayType, FieldType, FieldTypeConfig, FieldWrapper, FormlyField, FormlyFieldConfig, provideFormlyCore } from '@ngx-formly/core';
 import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext, Suggestion, applySuggestion, suggestExpression } from './expression-suggest';
+import { insertAt } from '../canvas/data-schema';
+import { ExpressionTarget, ExpressionTargetService } from './expression-target';
 import { CodeEditorHandle, MONACO_LOADER } from './monaco-loader';
 import { ValueRules, formatValue, isExpression, parseValue, valueError, valueErrorMessage } from './node-value';
 import { ARRAY_FIELD, CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
@@ -88,6 +90,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
               (input)="updateSuggestions(textEl)"
               (click)="updateSuggestions(textEl)"
               (keyup)="caretMoved($event, textEl)"
+              (focus)="activateTarget()"
             ></textarea>
           } @else {
             <input
@@ -103,6 +106,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
               (input)="updateSuggestions(textEl)"
               (click)="updateSuggestions(textEl)"
               (keyup)="caretMoved($event, textEl)"
+              (focus)="activateTarget()"
             />
           }
           <mat-autocomplete #suggest="matAutocomplete" class="expr-suggest" (optionSelected)="suggestionPicked($event)">
@@ -176,6 +180,12 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
 })
 export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
+  /** Ціль вставки виразів з панелі входу (F3-52); поза редактором — немає. */
+  private readonly targets = inject(ExpressionTargetService, { optional: true });
+  private readonly target: ExpressionTarget = {
+    label: () => this.label,
+    insert: (expression) => this.insertExpression(expression),
+  };
 
   /** Текст поля (для всіх видів, крім прапорця і списку поза режимом виразу). */
   protected readonly text = new FormControl('', { nonNullable: true });
@@ -239,6 +249,25 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
       this.formControl.markAsTouched();
     });
     this.formControl.statusChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.errorVersion.update((v) => v + 1));
+    this.destroyRef.onDestroy(() => this.targets?.release(this.target));
+  }
+
+  /** Поле з фокусом стає ціллю вставки виразів з панелі входу. */
+  protected activateTarget(): void {
+    if (this.canSuggest) this.targets?.activate(this.target);
+  }
+
+  /** Вставка виразу з панелі входу в позицію курсора (замість виділення); курсор — за вставкою. */
+  private insertExpression(expression: string): void {
+    const el = this.textEl()?.nativeElement;
+    const text = this.text.value;
+    const start = el?.selectionStart ?? text.length;
+    const result = insertAt(text, start, el?.selectionEnd ?? start, expression);
+    this.text.setValue(result.text);
+    if (!el) return;
+    // Поле видно (три колонки) — фокус повертається в нього; сховане вкладкою — лише курсор за вставкою.
+    if (el.offsetParent !== null) el.focus({ preventScroll: true });
+    el.setSelectionRange(result.cursor, result.cursor);
   }
 
   /** Підказки — у полях, що приймають `{{ }}`. */

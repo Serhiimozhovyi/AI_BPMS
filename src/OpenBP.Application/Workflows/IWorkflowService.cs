@@ -35,9 +35,11 @@ public interface IWorkflowService
     /// неактивне (правила 1–3, 5–6 <c>workflow-format.md</c>).
     /// </summary>
     /// <param name="definition">Визначення.</param>
+    /// <param name="groupId">Група нового сценарію (F3-63); <c>null</c> — без групи.</param>
     /// <param name="ct">Скасування.</param>
     /// <exception cref="WorkflowValidationException">Визначення некоректне; нічого не створено.</exception>
-    Task<WorkflowDetail> CreateAsync(WorkflowDefinition definition, CancellationToken ct);
+    /// <exception cref="NotFoundException">Групи <paramref name="groupId"/> немає.</exception>
+    Task<WorkflowDetail> CreateAsync(WorkflowDefinition definition, Guid? groupId, CancellationToken ct);
 
     /// <summary>
     /// Зберігає визначення як нову версію і робить її поточною. Для активного сценарію валідація з
@@ -56,6 +58,13 @@ public interface IWorkflowService
     /// <param name="ct">Скасування.</param>
     /// <exception cref="NotFoundException">Сценарію немає.</exception>
     Task<WorkflowDetail> RenameAsync(Guid id, string name, CancellationToken ct);
+
+    /// <summary>Переносить сценарій у групу або прибирає з групи (F3-63) без нової версії.</summary>
+    /// <param name="id"><c>workflows.id</c>.</param>
+    /// <param name="groupId">Група; <c>null</c> — без групи.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Сценарію або групи немає.</exception>
+    Task<WorkflowDetail> MoveAsync(Guid id, Guid? groupId, CancellationToken ct);
 
     /// <summary>Перевіряє визначення без збереження (MCP <c>validate_workflow</c>); помилки — у результаті, не винятком.</summary>
     /// <param name="definition">Визначення.</param>

@@ -5,7 +5,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/ src/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages,sharing=locked \
     dotnet publish src/OpenBP.Worker/OpenBP.Worker.csproj -c Release -o /app /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
@@ -21,6 +21,7 @@ ENV OPENBP_WORKER_HEALTH_PORT=8089 \
     Storage__LocalPath=/data/files \
     DOTNET_NOLOGO=1 \
     Logging__LogLevel__Microsoft.AspNetCore=Warning \
+    Logging__LogLevel__Microsoft.EntityFrameworkCore=Warning \
     DOTNET_CLI_TELEMETRY_OPTOUT=1
 VOLUME ["/data/files"]
 EXPOSE 8089

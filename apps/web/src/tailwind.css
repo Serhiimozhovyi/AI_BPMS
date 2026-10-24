@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Збірка й демо веб-компонента (F4-13) — не джерела класів: утиліти SPA від них не залежать. */
+@source not "./element";
+@source not "../element-demo";
+@source not "../e2e-element";
+@source not "../scripts";
+
 /* Токени дизайн-системи AC-Kit (Figma, лише читання) для утиліт Tailwind: bg-ac-kit, text-ac-vivid тощо. */
 @theme {
   --font-sans: "Ubuntu", ui-sans-serif, system-ui, sans-serif;

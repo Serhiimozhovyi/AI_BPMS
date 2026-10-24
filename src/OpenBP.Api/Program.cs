@@ -8,6 +8,7 @@ using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
 using OpenBP.Api.Health;
 using OpenBP.Api.Nodes;
+using OpenBP.Api.OpenApi;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
 using OpenBP.Application.Executions;
@@ -40,7 +41,9 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<OpenBpExceptionHandler>();
-builder.Services.AddOpenBpAuthentication();
+builder.Services.AddOpenBpAuthentication(builder.Configuration);
+// CORS для вбудованого редактора <openbp-canvas> (F4-13): OPENBP_CORS_ORIGINS.
+builder.Services.AddOpenBpCors();
 
 // Реєстр MCP-серверів процесу Api: синхронізується з mcp_servers через IConnectorService і при старті (architecture.md §10.7);
 // за його кешем tools валідуються mcp.* при збереженні.
@@ -82,15 +85,20 @@ builder.Services.AddOpenBpMcpServer();
 // Health-checks (F4-08): /health/live і /health/ready (БД і міграції).
 builder.Services.AddOpenBpHealthChecks();
 
+// Опис REST (F4-12): /openapi/v1.json, знімок — docs/openapi.json.
+builder.Services.AddOpenBpOpenApi();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapOpenBpHealth();
+app.MapOpenBpOpenApi();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

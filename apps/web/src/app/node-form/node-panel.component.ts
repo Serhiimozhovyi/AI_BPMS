@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, input, linkedSignal, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, effect, input, linkedSignal, output } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 import { FormlyFieldConfig, FormlyForm, FormlyFormOptions } from '@ngx-formly/core';
 import { McpToolInfo } from '../connectors/connectors-api.service';
@@ -31,6 +31,8 @@ interface PanelState {
  * Панель вузла (F2-18): форма параметрів з `ParametersSchema` дескриптора (`core.*`) або з `inputSchema` tool'а
  * (`mcp.tool`) і загальні поля вузла. Кожна зміна — новий `WorkflowNode` у `nodeChange`; невідомі поля вузла й
  * параметрів зберігаються. Зовнішня зміна вузла (undo/redo, інший вузол) перебудовує форму, власна — ні.
+ * Дії редактора над вузлом (тест кроку, pin) проєктуються в заголовок поруч із назвою: `[panelActions]`,
+ * редактор закріпленого output — одразу під заголовком: `[panelPinned]` (F3-51).
  */
 @Component({
   selector: 'app-node-panel',
@@ -41,12 +43,16 @@ interface PanelState {
     @let s = state();
     <section class="panel" data-testid="node-panel" [attr.data-node]="s.node.id">
       <header class="panel__header">
-        <h2 class="mat-font-title-sm m-0" data-testid="node-panel-name">{{ s.node.name }}</h2>
+        <div class="panel__title-row">
+          <h2 class="mat-font-title-sm m-0 panel__name" data-testid="node-panel-name">{{ s.node.name }}</h2>
+          <ng-content select="[panelActions]" />
+        </div>
         <span class="panel__type">{{ s.node.type }}</span>
         @if (isMcp(s.node)) {
           <span class="panel__type" data-testid="node-panel-tool">{{ s.node.parameters['serverId'] }} · {{ s.node.parameters['toolName'] }}</span>
         }
       </header>
+      <ng-content select="[panelPinned]" />
 
       @if (!s.descriptor) {
         <p class="panel__note" role="status" data-testid="node-panel-unknown" i18n="@@nodeform.unknownType">
@@ -62,7 +68,7 @@ interface PanelState {
           <p class="panel__note" i18n="@@nodeform.noParameters">Параметрів немає.</p>
         }
         @for (k of [s]; track k.id) {
-          <div class="panel__form" data-testid="node-parameters">
+          <div class="panel__form" data-testid="node-parameters" [attr.inert]="readonly() ? '' : null">
             <formly-form [form]="k.paramsForm" [fields]="k.paramsFields" [model]="k.paramsModel" [options]="k.paramsOptions" (modelChange)="parametersChanged($event)" />
           </div>
         }
@@ -70,7 +76,7 @@ interface PanelState {
 
       <h3 class="panel__subtitle" i18n="@@nodeform.common">Налаштування вузла</h3>
       @for (k of [s]; track k.id) {
-        <div class="panel__form" data-testid="node-common">
+        <div class="panel__form" data-testid="node-common" [attr.inert]="readonly() ? '' : null">
           <formly-form [form]="k.commonForm" [fields]="k.commonFields" [model]="k.commonModel" (modelChange)="commonChanged($event)" />
         </div>
       }
@@ -90,6 +96,19 @@ interface PanelState {
       flex-direction: column;
       gap: 2px;
       margin-bottom: 12px;
+    }
+
+    .panel__title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel__name {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .panel__type {
@@ -124,6 +143,9 @@ export class NodePanelComponent {
 
   /** Що підказувати в полях виразів `{{ }}` (F2-19): інші вузли, поля останнього тестового output. */
   readonly expressionContext = input<ExpressionContext>(EMPTY_EXPRESSION_CONTEXT);
+
+  /** Лише перегляд: форми недоступні для введення (`inert`), змін немає. */
+  readonly readonly = input(false, { transform: booleanAttribute });
 
   /** Змінений вузол після кожної зміни у формі. */
   readonly nodeChange = output<WorkflowNode>();
@@ -164,6 +186,7 @@ export class NodePanelComponent {
   }
 
   private emit(node: WorkflowNode): void {
+    if (this.readonly()) return;
     this.lastEmitted = node;
     // Стан лишається тим самим (ті самі форми) — оновлюється лише поточний вузол.
     this.state.update((s) => ({ ...s, node }));

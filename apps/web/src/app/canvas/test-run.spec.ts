@@ -1,6 +1,6 @@
 import { ExecutionStep } from '../executions/executions-api.service';
 import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { ancestorIds, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed } from './test-run';
+import { ancestorIds, applyEvent, isRunning, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from './test-run';
 
 function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success', runIndex = 0, output: ExecutionStep['output'] = [[{ json: { node: nodeId } }]]): ExecutionStep {
   return { id, nodeId, runIndex, status, input: [], output, error: status === 'error' ? { message: 'збій' } : null, startedAt: '', finishedAt: '' };
@@ -85,5 +85,9 @@ describe('test-run', () => {
       runData: { a: [[{ json: { node: 'a' } }]], b: [[], [{ json: { yes: true } }]] },
     });
     expect(singleNodeRequest(definition, null, 'c')).toEqual({ destinationNodeId: 'c', runData: {} });
+  });
+
+  it('untilNodeRequest: лише вузол-призначення, без виходів попереднього запуску', () => {
+    expect(untilNodeRequest('c')).toEqual({ destinationNodeId: 'c' });
   });
 });

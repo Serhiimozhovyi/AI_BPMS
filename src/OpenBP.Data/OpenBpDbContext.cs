@@ -5,9 +5,11 @@ namespace OpenBP.Data;
 public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) : DbContext(options)
 {
     public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<UserLoginEntity> UserLogins => Set<UserLoginEntity>();
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
+    public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<CredentialEntity> Credentials => Set<CredentialEntity>();
     public DbSet<McpServerEntity> McpServers => Set<McpServerEntity>();
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
@@ -24,12 +26,29 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("users");
             e.HasIndex(x => x.Email).IsUnique();
         });
+        b.Entity<UserLoginEntity>(e =>
+        {
+            e.ToTable("user_logins");
+            e.HasIndex(x => new { x.Provider, x.Subject }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.HasOne<UserEntity>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<ApiKeyEntity>(e =>
         {
             e.ToTable("api_keys");
             e.HasIndex(x => x.Hash).IsUnique();
         });
-        b.Entity<WorkflowEntity>().ToTable("workflows");
+        b.Entity<WorkflowEntity>(e =>
+        {
+            e.ToTable("workflows");
+            e.HasIndex(x => x.GroupId);
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<WorkflowGroupEntity>(e =>
+        {
+            e.ToTable("workflow_groups");
+            e.HasIndex(x => x.NormalizedName).IsUnique();
+        });
         b.Entity<WorkflowVersionEntity>(e =>
         {
             e.ToTable("workflow_versions");

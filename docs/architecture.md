@@ -91,7 +91,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 - Виконання (F3-05): `run_workflow { id, startNodeId?, startItems?, wait = true, timeoutSec = 60 }` — ручний запуск через `IExecutionService.StartAsync`; з `wait` чекає фінального стану через `IExecutionEventSource` (не довше `timeoutSec`, максимум 600 с) і віддає `ExecutionDetail` з кроками; якщо час вийшов — `ExecutionDetail` як є (`queued`/`running`), без помилки; без `wait` — одразу `queued`. `get_execution`, `list_executions { workflowId?, status?, page? }` (`status` — snake_case, як у REST; невідомий → `BAD_REQUEST`), `cancel_execution`; `openbp://executions/{id}` — знімок `ExecutionDetail`. Стани в JSON — snake_case (`timed_out`), кроки — вже очищені від секретів (§8).
 - Один вузол (F3-06): `test_node { workflowId, nodeId, items?, timeoutSec = 60 }` — обгортка над `IExecutionService.StartNodeAsync` (той самий запуск одного вузла, що й UI F2-21: `destinationNodeId` + `runData`, §10.3). Вхід: з `items` — вони на вході 0 вузла (як output першого попередника на цьому вході; інші предки — порожні, решта графа не виконується; вузол без входу → `BAD_REQUEST`); без `items` — output предків з останнього ручного виконання у фінальному стані, а де його немає — `pinData`. Сам вузол виконується, навіть якщо закріплений. Чекає завершення і віддає `{ executionId, status, input, output }` (`Item[][]`); помилка вузла → `isError` з кодом `NODE_FAILED` і текстом помилки (вже очищеним від секретів, §8); вузол не виконався (зокрема не встиг за `timeoutSec`) → теж `NODE_FAILED` зі станом виконання; невідомий вузол → `WORKFLOW_INVALID` (`DESTINATION_NODE_UNKNOWN`).
 - Тести `/mcp` — `tests/OpenBP.Mcp.Server.Tests`: `McpServerFactory` (Api над Testcontainers + MCP-клієнт SDK з API-ключем потрібної ролі; `EnsureWorkerAsync()` — воркер у процесі тестів над тією ж БД, `CreateMockConnectorAsync()` — stdio-моки 1С/Telegram через REST) — спільний хелпер F3-03…F3-06, F3-17.
-- Tools (ADR-002): `describe_connectors`, `describe_nodes` (F3-21: типи вузлів, порти, схеми параметрів — те саме, що REST `/nodes`), `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `run_workflow` (з `wait`), `get_execution`, `list_executions`, `cancel_execution`, `test_node`. Resources: `openbp://schema/workflow-format`, `openbp://connectors`, `openbp://nodes`, `openbp://workflows/{id}`, `openbp://executions/{id}` (знімок; підписки — поза MVP). Детальний опис — `docs/mcp-server.md` (F3-17).
+- Tools (ADR-002): `describe_connectors`, `describe_nodes` (F3-21: типи вузлів, порти, схеми параметрів — те саме, що REST `/nodes`), `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `list_workflow_groups`, `create_workflow_group`, `move_workflow` (F3-63), `run_workflow` (з `wait`), `get_execution`, `list_executions`, `cancel_execution`, `test_node`. Resources: `openbp://schema/workflow-format`, `openbp://connectors`, `openbp://nodes`, `openbp://workflows/{id}`, `openbp://executions/{id}` (знімок; підписки — поза MVP). Детальний опис — `docs/mcp-server.md` (F3-17).
 
 ## 5. Вирази і Code-вузол
 
@@ -106,9 +106,11 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 
 | Таблиця | Ключові поля |
 |---|---|
-| `users` | id, email, password_hash, role, created_at |
+| `users` | id, email, password_hash (null — лише OIDC, F4-14), role, created_at |
+| `user_logins` | id, user_id → users (cascade), provider, subject (unique provider+subject), created_at, last_login_at (F4-14) |
 | `api_keys` | id, user_id, hash, name, last_used_at |
-| `workflows` | id, name, active, current_version_id, created_by, updated_at |
+| `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
+| `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
@@ -208,15 +210,19 @@ Quartz тримає власні таблиці для розкладів. Бі�
 
 Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}` і `/mcp` — поза префіксом.
 
+Машиночитний опис — OpenAPI 3.1 за адресою `/openapi/v1.json` (без входу, лише схеми); знімок у репозиторії —
+[`docs/openapi.json`](openapi.json), тест `OpenApiTests` звіряє його з живим документом (F4-12).
+
 | Метод і шлях | Роль | Відповідь |
 |---|---|---|
 | `POST /auth/login` `{ email, password }` · `POST /auth/logout` · `GET /auth/me` | — / будь-яка | 204 + cookie · 204 · `UserInfo` |
 | `GET /api-keys` · `POST /api-keys { name }` · `DELETE /api-keys/{id}` | будь-яка (свої), admin (усі) | `ApiKeyInfo[]` · `ApiKeyCreated` (ключ показується один раз) · 204 |
-| `GET /workflows?page&pageSize&search&active` | viewer | `PageResult<WorkflowSummary>` |
-| `POST /workflows` (тіло — визначення) | editor | 201 `WorkflowDetail` |
+| `GET /workflows?page&pageSize&search&active&groupId` | viewer | `PageResult<WorkflowSummary>`; `groupId` — id групи або `none` (без групи) |
+| `POST /workflows?groupId` (тіло — визначення) | editor | 201 `WorkflowDetail` |
 | `GET /workflows/{id}` | viewer | `WorkflowDetail` (визначення поточної версії) |
 | `PUT /workflows/{id}` (тіло — визначення) | editor | `WorkflowDetail` нової версії |
-| `PATCH /workflows/{id} { name }` | editor | `WorkflowDetail` |
+| `PATCH /workflows/{id} { name?, groupId? }` | editor | `WorkflowDetail`; змінюються лише передані поля, `groupId: null` — прибрати з групи (без нової версії) |
+| `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання), editor | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії лишаються без групи) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[] }` (200 навіть з помилками) |
 | `DELETE /workflows/{id}` | editor | 204; 409 якщо активний |
@@ -324,6 +330,31 @@ job береться лише за вільного слота.
 - Обидві схеми дають `ClaimsPrincipal` з `sub` (id користувача), `email`, `role`; `ICurrentUser` в application-шарі
   будується з нього. Воркер і тригери працюють без користувача (`IExecutionLauncher` ролей не перевіряє).
 - Ролі впорядковані: `viewer < editor < admin`; `Require(UserRole.Editor)` пропускає й admin.
+- OIDC (F4-14): провайдери з `OpenBp:Oidc:Providers:<key>` (змінні `OpenBp__Oidc__Providers__<key>__<Поле>`; поля —
+  `OidcProviderOptions`: `DisplayName`, `Authority`, `ClientId`, `ClientSecret`, `Scopes`, `RoleClaim`, `RoleMap`,
+  `AutoProvision`, `AllowedEmailDomains`, `TrustEmail`, `AcceptBearer`, `BearerAudiences`, `RequireHttpsMetadata`).
+  Хибна конфігурація зупиняє старт Api з поясненням, без значень секретів.
+  - Вхід: `GET /api/v1/auth/oidc/<key>/login?returnUrl=` → провайдер (authorization code + PKCE, `response_mode=query`,
+    PAR, якщо провайдер його підтримує) → callback `/signin-oidc/<key>` (nginx і dev-proxy ведуть його в Api) → та сама
+    cookie `openbp.auth`, що й після пароля → `returnUrl` (лише шлях усередині застосунку). Redirect URI будується з
+    `OPENBP_PUBLIC_URL`, якщо задано. Токени провайдера не зберігаються (`SaveTokens = false`).
+  - Користувач (`IOidcLoginService`): claims беруться з payload-ів id_token і access token (`OidcClaimsMapper`; ролі за
+    шляхами `RoleClaim`, напр. `realm_access.roles`, `resource_access.<client>.roles`, `roles`; пошта — `email`, для
+    Entra ще `upn`/`preferred_username`; підтверджена — `email_verified`, `xms_edov` або `TrustEmail`). Пошук: за
+    `(provider, sub)` у `user_logins` → за підтвердженою поштою (обліковий запис прив'язується) → створення з `AutoProvision`
+    (без пароля) → інакше відмова. `AllowedEmailDomains` перевіряється на кожному вході. Якщо задано `RoleMap`, роль
+    виставляється з неї на кожному вході (найвища зі збігів, без збігу — `viewer`), крім аварійного адміністратора
+    `OPENBP_ADMIN_EMAIL`. Відмова — `/login?oidcError=<код>`: `OIDC_EMAIL_NOT_ALLOWED`, `OIDC_EMAIL_NOT_VERIFIED`,
+    `OIDC_USER_NOT_FOUND`, `OIDC_ACCOUNT_CONFLICT`, `OIDC_NO_SUBJECT`, `OIDC_FAILED` (решта помилок протоколу).
+  - Bearer: схема за замовчуванням дивиться на `iss` JWT; збіг з `Authority` провайдера з `AcceptBearer` → JwtBearer
+    цього провайдера (підпис за JWKS, `aud` або `azp` ∈ `BearerAudiences`, за замовчуванням `ClientId`), далі той самий
+    `IOidcLoginService`; інакше — API-ключ. `/mcp` і далі приймає лише API-ключі.
+  - `GET /api/v1/auth/providers` (без входу) → `{ passwordLogin, providers: [{ key, displayName, loginUrl }] }` для кнопок
+    «Увійти через …». `OPENBP_PASSWORD_LOGIN=false` ховає форму і відхиляє `POST /auth/login` кодом 403
+    `PASSWORD_LOGIN_DISABLED` для всіх, крім `OPENBP_ADMIN_EMAIL` (форма — `/login?password`). Користувач без пароля
+    формою не входить.
+  - Тести: `tests/OpenBP.Api.Tests/Oidc` — Keycloak у Testcontainers з realm `oidc-realm.json`; claims Entra —
+    `tests/OpenBP.Application.Tests/OidcClaimsMapperTests.cs`. Налаштування провайдерів — `docs/admin/oidc.md`.
 
 ### 10.7. MCP-сервери (конектори) між процесами
 

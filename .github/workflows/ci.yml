@@ -161,11 +161,15 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      # F4-13: веб-компонент <openbp-canvas> — збірка в один файл і Playwright на демо-сторінці.
+      - run: npm run e2e:element
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
-          path: apps/web/playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/playwright-report-element
           retention-days: 7
 
   e2e-live:
@@ -237,7 +241,7 @@ jobs:
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          for image in api worker migrate web; do
+          for image in api worker migrate web backup; do
             docker build -f "docker/${image}.Dockerfile" -t "openbp-${image}:ci" .
           done
 
@@ -248,3 +252,17 @@ jobs:
             echo '|---|---|'
             docker images --format '| {{.Repository}}:{{.Tag}} | {{.Size}} |' | grep 'openbp-'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  prod-smoke:
+    name: Продакшн Compose (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # F4-10: docker-compose.prod.yml з випадковими секретами → /health/ready → вхід адміном → приклад success.
+      - run: scripts/gen-env.sh
+      - run: scripts/smoke-prod.sh
+      # F4-11: сценарій + credential → бекап → видалення → відновлення → сценарій є, credential розшифровується.
+      - run: scripts/smoke-backup.sh
+      - if: always()
+        run: docker compose -f docker-compose.prod.yml down -v

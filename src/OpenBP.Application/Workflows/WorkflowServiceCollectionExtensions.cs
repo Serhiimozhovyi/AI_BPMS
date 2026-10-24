@@ -12,7 +12,7 @@ namespace OpenBP.Application.Workflows;
 public static class WorkflowServiceCollectionExtensions
 {
     /// <summary>
-    /// Додає <see cref="IWorkflowService"/> (scoped) і, якщо хост не зареєстрував свій, <see cref="INodeSchemaProvider"/>
+    /// Додає <see cref="IWorkflowService"/> і <see cref="IWorkflowGroupService"/> (scoped) і, якщо хост не зареєстрував свій, <see cref="INodeSchemaProvider"/>
     /// для валідації — ланцюжок <see cref="NodeRegistrySchemaProvider"/> → <see cref="McpNodeSchemaProvider"/>
     /// (docs/architecture.md §10.2). Хост реєструє <see cref="INodeRegistry"/>, <see cref="IMcpServerRegistry"/>,
     /// <c>OpenBpDbContext</c> і <c>ICurrentUser</c> сам.
@@ -25,6 +25,7 @@ public static class WorkflowServiceCollectionExtensions
             sp.GetRequiredService<IMcpServerRegistry>(),
             new NodeRegistrySchemaProvider(sp.GetRequiredService<INodeRegistry>())));
         services.AddScoped<IWorkflowService, WorkflowService>();
+        services.AddScoped<IWorkflowGroupService, WorkflowGroupService>();
         return services;
     }
 }

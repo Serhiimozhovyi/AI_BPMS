@@ -10,6 +10,7 @@ MCP-native BPMS-конструктор: процеси на канвасі, ін
 - Формат сценарію: [docs/workflow-format.md](docs/workflow-format.md)
 - Вузли і конектори: [docs/connectors.md](docs/connectors.md)
 - OpenBP як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
+- Адміністратору: встановлення, HTTPS, користувачі, бекапи, оновлення — [docs/admin/README.md](docs/admin/README.md) · змінні середовища — [docs/admin/env.md](docs/admin/env.md)
 - Фази: [docs/roadmap.md](docs/roadmap.md) · Задачі: [BACKLOG.md](BACKLOG.md)
 - Нічний агент: [docs/night-agent.md](docs/night-agent.md)
 - Правила для Claude Code: [CLAUDE.md](CLAUDE.md)
@@ -35,6 +36,42 @@ dotnet format --verify-no-changes
   `workflowId` для записів виконання; значення credentials у журнал не потрапляють. Рівні — як завжди,
   `Logging__LogLevel__Default=Warning`, `Logging__LogLevel__OpenBP=Information` тощо.
 
+### Продакшн (Docker Compose)
+
+Покроково для адміністратора, з HTTPS, OIDC, бекапами й оновленнями — [docs/admin/README.md](docs/admin/README.md).
+
+Потрібен Docker з Compose v2 і `openssl`.
+
+```bash
+scripts/gen-env.sh                                            # .env з випадковими секретами (пароль БД, ключ, адмін)
+docker compose -f docker-compose.prod.yml up -d --build --wait   # postgres → migrate → api, worker → web
+```
+
+- Відкрито лише веб-інтерфейс на `OPENBP_HTTP_PORT` (типово 8080); Api, воркер і БД — у внутрішній мережі.
+- `migrate` застосовує міграції один раз і завершується; api і worker стартують лише після нього.
+- Більше воркерів: `docker compose -f docker-compose.prod.yml up -d --scale worker=3`.
+- Публічна адреса для OAuth2, OIDC-входу і webhook-ів — `OPENBP_PUBLIC_URL`; усі змінні з поясненнями — у `.env.example`.
+- Вхід через Keycloak чи Microsoft Entra ID — `oidc.env` (зразок `oidc.env.example`), інструкція — [docs/admin/oidc.md](docs/admin/oidc.md).
+- Журнали Docker обмежено (json-file, 5 × 10 МБ на контейнер), формат журналів застосунку — JSON.
+- `scripts/smoke-prod.sh` перевіряє розгортання: `/health/ready`, вхід адміністратором, запуск `examples/hello-manual.json`.
+
+#### Бекапи і відновлення
+
+Сервіс `backup` щодня робить `pg_dump -Fc` у `./backups` на хості (`OPENBP_BACKUP_DIR`) і видаляє файли, старші
+за `OPENBP_BACKUP_KEEP_DAYS` днів (типово 14). Розклад — `OPENBP_BACKUP_CRON`, 5 полів crontab у часовому поясі `TZ`
+(типово `0 2 * * *`, о 02:00). Результат кожного запуску — рядок у `docker compose -f docker-compose.prod.yml logs backup`.
+
+```bash
+scripts/backup.sh                                   # разовий бекап; друкує шлях до файлу
+scripts/restore.sh backups/openbp-openbp-<час>.dump  # зупиняє api/worker, замінює базу, migrate, піднімає назад
+```
+
+- Файли мають права 600 і належать користувачу, який запускав `scripts/gen-env.sh` (`OPENBP_BACKUP_UID/GID`).
+- **Ключ `OPENBP_ENCRYPTION_KEY` у бекап не потрапляє.** Зберігайте його окремо (менеджер паролів, сейф): без нього
+  credentials із бекапу не розшифруються, а з ним і копією `.env` розгортання відновлюється на новому сервері.
+- Копіюйте `./backups` за межі сервера (rsync, об'єктне сховище): бекап на тому самому диску не рятує від втрати диска.
+- `scripts/smoke-backup.sh` (CI) перевіряє весь цикл: сценарій і credential → бекап → видалення → відновлення.
+
 ### Docker-образи
 
 Образи збираються з кореня репозиторію (контекст — `.`, див. `.dockerignore`):
@@ -44,10 +81,21 @@ dotnet format --verify-no-changes
 | api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
 | worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
 | migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
-| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`), решта — SPA |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/mcp`, `/webhook`, `/health`, `/signin-oidc` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), `/element/openbp-canvas.js` — веб-компонент редактора ([docs/embedding.md](docs/embedding.md)), решта — SPA |
+| backup | `docker/backup.Dockerfile` | `pg_dump` 16 і busybox `crond`: бекапи за `OPENBP_BACKUP_CRON` (див. «Бекапи і відновлення») |
 
 ```bash
 docker build -f docker/api.Dockerfile -t openbp-api .
+```
+
+### REST API і OpenAPI
+
+Опис REST — OpenAPI 3.1 за адресою `/openapi/v1.json` (відкритий без входу, лише схеми й описи українською);
+знімок — [docs/openapi.json](docs/openapi.json). Клієнт можна згенерувати будь-яким генератором OpenAPI.
+Після зміни маршрутів чи DTO оновіть знімок (тест `OpenApiTests` інакше впаде):
+
+```bash
+OPENBP_UPDATE_OPENAPI=1 dotnet test tests/OpenBP.Api.Tests --filter OpenApi
 ```
 
 ### Запуск сценарію з CLI

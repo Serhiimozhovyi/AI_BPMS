@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using OpenBP.Api.OpenApi;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Paging;
 using HttpJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
@@ -30,30 +31,42 @@ public static class ExecutionEndpoints
         {
             var started = await service.StartAsync(id, body, ct);
             return Results.Accepted($"/api/v1/executions/{started.Id}", started);
-        });
+        })
+            .WithTags(OpenApiSetup.Tags.Executions).WithSummary("Запустити сценарій вручну")
+            .WithDescription("Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`).")
+            .Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
 
-        var executions = api.MapGroup("/executions");
+        var executions = api.MapGroup("/executions").WithTags(OpenApiSetup.Tags.Executions);
 
         executions.MapGet("/", (IExecutionService service, CancellationToken ct,
                 Guid? workflowId, string? status, DateTimeOffset? from, DateTimeOffset? to, int? page, int? pageSize) =>
             service.ListAsync(
                 new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), from, to),
                 new PageRequest { Page = page ?? 1, PageSize = pageSize ?? PageRequest.DefaultPageSize },
-                ct));
+                ct))
+            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`.");
 
         executions.MapGet("/{id:guid}", (Guid id, IExecutionService service, CancellationToken ct) =>
-            service.GetAsync(id, ct));
+            service.GetAsync(id, ct))
+            .WithSummary("Виконання з кроками (входи й виходи вузлів)");
 
         executions.MapPost("/{id:guid}/cancel", async (Guid id, IExecutionService service, CancellationToken ct) =>
-            Results.Accepted($"/api/v1/executions/{id}", await service.CancelAsync(id, ct)));
+            Results.Accepted($"/api/v1/executions/{id}", await service.CancelAsync(id, ct)))
+            .WithSummary("Скасувати виконання").Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
 
         executions.MapPost("/{id:guid}/retry", async (Guid id, IExecutionService service, CancellationToken ct) =>
         {
             var retried = await service.RetryAsync(id, ct);
             return Results.Accepted($"/api/v1/executions/{retried.Id}", retried);
-        });
+        })
+            .WithSummary("Повторити виконання з тією ж версією і даними тригера")
+            .WithDescription("Успішне виконання без збережених даних (`saveSuccessfulData: false`) повторити не можна — 409 EXECUTION_DATA_NOT_SAVED.")
+            .Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
 
-        executions.MapGet("/{id:guid}/events", StreamEventsAsync);
+        executions.MapGet("/{id:guid}/events", StreamEventsAsync)
+            .WithSummary("Потік подій виконання (SSE)")
+            .WithDescription("`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану.")
+            .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
 
         return api;
     }

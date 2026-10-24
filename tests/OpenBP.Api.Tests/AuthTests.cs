@@ -231,4 +231,43 @@ public class AuthTests(ApiFactory api)
 
         await AssertProblemAsync(response, HttpStatusCode.BadRequest, "BAD_REQUEST");
     }
+
+    [Fact]
+    public async Task Providers_without_oidc_offer_only_password()
+    {
+        var body = await JsonAsync(await NewClient().GetAsync("/api/v1/auth/providers"));
+
+        Assert.True(body.GetProperty("passwordLogin").GetBoolean());
+        Assert.Equal(0, body.GetProperty("providers").GetArrayLength());
+        Assert.Equal(HttpStatusCode.NotFound, (await NewClient().GetAsync("/api/v1/auth/oidc/entra/login")).StatusCode);
+    }
+
+    [Fact]
+    public async Task User_without_password_cannot_log_in_with_password()
+    {
+        var user = await api.CreateUserAsync(UserRole.Editor, Pass);
+        await using (var db = api.CreateDbContext())
+        {
+            (await db.Users.SingleAsync(u => u.Id == user.Id)).PasswordHash = null;
+            await db.SaveChangesAsync();
+        }
+
+        var response = await NewClient().PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Pass });
+
+        await AssertProblemAsync(response, HttpStatusCode.Unauthorized, "UNAUTHENTICATED");
+    }
+
+    [Theory]
+    [InlineData("/workflows?x=1", "/workflows?x=1")]
+    [InlineData("/", "/")]
+    [InlineData(null, "/")]
+    [InlineData("", "/")]
+    [InlineData("//evil.example", "/")]
+    [InlineData("/\\evil.example", "/")]
+    [InlineData("https://evil.example", "/")]
+    [InlineData("/a\nb", "/")]
+    public void Return_url_stays_inside_app(string? returnUrl, string expected)
+    {
+        Assert.Equal(expected, OpenBP.Api.Endpoints.AuthEndpoints.SafeReturnUrl(returnUrl));
+    }
 }

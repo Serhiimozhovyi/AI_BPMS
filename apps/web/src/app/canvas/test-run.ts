@@ -86,6 +86,14 @@ export function singleNodeRequest(definition: WorkflowDefinition, run: TestRun |
   return { destinationNodeId: nodeId, runData };
 }
 
+/**
+ * Запит «Виконати до цього вузла» (F3-51): вузол і всі його попередники виконуються заново (закріплені — з `pinData`),
+ * інші вузли сценарію — ні; виходи останнього запуску не використовуються.
+ */
+export function untilNodeRequest(nodeId: string): StartExecutionRequest {
+  return { destinationNodeId: nodeId };
+}
+
 /** Статуси вузлів для канвасу. */
 export function nodeStatuses(run: TestRun | null): ReadonlyMap<string, NodeRunStatus> {
   const result = new Map<string, NodeRunStatus>();
@@ -100,6 +108,17 @@ export function runOutputs(run: TestRun | null): Record<string, ExecutionItem[]>
   if (!run) return result;
   for (const [nodeId, step] of run.steps) {
     if (step.status === 'success') result[nodeId] = step.output[0] ?? [];
+  }
+  return result;
+}
+
+/** Кількість items на кожному виході успішно виконаних вузлів: `вузол:порт` → кількість (підписи на ребрах, F3-52). */
+export function itemCounts(run: TestRun | null): Map<string, number> {
+  const result = new Map<string, number>();
+  if (!run) return result;
+  for (const [nodeId, step] of run.steps) {
+    if (step.status !== 'success') continue;
+    step.output.forEach((items, port) => result.set(`${nodeId}:${port}`, items.length));
   }
   return result;
 }

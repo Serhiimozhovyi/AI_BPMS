@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using OpenBP.Api.OpenApi;
 using OpenBP.Application.Webhooks;
 
 namespace OpenBP.Api.Endpoints;
@@ -23,7 +24,10 @@ public static class WebhookEndpoints
     /// <param name="app">Маршрутизатор застосунку.</param>
     public static IEndpointRouteBuilder MapWebhookEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapMethods("/webhook/{**path}", Methods, HandleAsync).AllowAnonymous();
+        app.MapMethods("/webhook/{**path}", Methods, HandleAsync).AllowAnonymous()
+            .WithTags(OpenApiSetup.Tags.Webhooks).WithSummary("Запустити активний сценарій з тригером core.webhook")
+            .WithDescription("`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.")
+            .Produces<WebhookAccepted>(StatusCodes.Status202Accepted);
         return app;
     }
 

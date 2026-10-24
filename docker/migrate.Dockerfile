@@ -7,7 +7,7 @@ WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY .config/ .config/
 COPY src/ src/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages,sharing=locked \
     dotnet tool restore \
     && RID="linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64)" \
     && dotnet restore src/OpenBP.Data --runtime "$RID" \
