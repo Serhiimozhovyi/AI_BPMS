@@ -1,0 +1,64 @@
+{
+  "formatVersion": 1,
+  "name": "Бот психологічної підтримки: сповіщення про збої",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 60,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": false
+  },
+  "nodes": [
+    {
+      "id": "n_error",
+      "name": "Помилка сценарію",
+      "type": "core.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": {},
+      "notes": "Укажіть id цього сценарію в settings.errorWorkflowId бота й розкладу (діалог «Налаштування» в редакторі)."
+    },
+    {
+      "id": "n_admin",
+      "name": "Адміністратор",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "fields": [{ "name": "admin_chat_id", "value": 0 }]
+      },
+      "notes": "Замініть 0 на chat_id адміністратора в Telegram (напишіть боту /start і подивіться id у журналі виконань)."
+    },
+    {
+      "id": "n_text",
+      "name": "Текст сповіщення",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [520, 200],
+      "parameters": {
+        "code": "// Без персональних даних: лише назва сценарію, вузол, текст помилки (його рушій уже очищує від credentials).\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst e = $json.error || {};\nconst w = $json.workflow || {};\nconst x = $json.execution || {};\nlet message = String(e.message || 'без опису');\nif (message.length > 500) message = message.slice(0, 499) + '…';\nconst status = x.status === 'timed_out' ? 'перевищено час виконання' : 'помилка';\nreturn {\n  chat_id: $json.admin_chat_id,\n  parse_mode: 'HTML',\n  text: '🚨 <b>Збій сценарію «' + esc(w.name) + '»</b> (' + status + ')\\n\\n' +\n        (e.nodeName ? 'Вузол: ' + esc(e.nodeName) + '\\n' : '') +\n        esc(message) + '\\n\\nВиконання: <code>' + esc(x.id) + '</code>',\n};"
+      }
+    },
+    {
+      "id": "n_send",
+      "name": "Надіслати адміністратору",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [780, 200],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": {
+          "chat_id": "{{ $json.chat_id }}",
+          "text": "{{ $json.text }}",
+          "parse_mode": "HTML"
+        }
+      }
+    }
+  ],
+  "connections": [
+    { "from": { "node": "n_error", "output": 0 }, "to": { "node": "n_admin", "input": 0 } },
+    { "from": { "node": "n_admin", "output": 0 }, "to": { "node": "n_text", "input": 0 } },
+    { "from": { "node": "n_text", "output": 0 }, "to": { "node": "n_send", "input": 0 } }
+  ],
+  "pinData": {}
+}

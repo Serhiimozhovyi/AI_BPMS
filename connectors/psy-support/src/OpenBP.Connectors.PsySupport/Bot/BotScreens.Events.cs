@@ -17,7 +17,13 @@ public sealed partial class BotScreens
         {
             case ["m", "ev"]:
                 var list = await events.ListOpenAsync(ct).ConfigureAwait(false);
-                var buttons = list.Select(e => new Button(Short($"{clock.Day(e.StartsAt)} · {e.Title}", 60), $"e:{e.Id}")).ToList();
+                var buttons = new List<Button>();
+                foreach (var e in list)
+                {
+                    var mine = (await events.RegistrationAsync(e.Id, telegramId, ct).ConfigureAwait(false))?.Status == RegistrationStatuses.Active;
+                    buttons.Add(new Button(Short($"{(mine ? "✅ " : "")}{clock.Day(e.StartsAt)} · {e.Title}", 60), $"e:{e.Id}"));
+                }
+
                 buttons.Add(MenuButton);
                 return Done(Codes.Ok, list.Count == 0 ? "<b>Події</b>\n\nНайближчих подій поки немає." : "<b>Події</b>\n\nОберіть подію:", Keyboard.Column(buttons));
             case ["e", var id] when Long(id) is { } eid:
@@ -243,7 +249,10 @@ public sealed partial class BotScreens
         else if (waitlist == WaitlistStatuses.Waiting)
         {
             lines.Add("");
-            lines.Add("Ви в листі очікування.");
+            var position = await bst.WaitlistPositionAsync(sessionId, telegramId, ct).ConfigureAwait(false);
+            lines.Add(position is { } p
+                ? $"⏳ Ви в листі очікування, позиція {p}. Якщо місце звільниться — бот напише."
+                : "Ви в листі очікування.");
             rows.Add([new Button("Вийти з листа очікування", $"b:wx:{s.Id}")]);
         }
         else if (open && full)

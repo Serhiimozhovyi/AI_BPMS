@@ -6,6 +6,7 @@ MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), 
 | Tool | Метод Bot API | Аргументи | Результат |
 |---|---|---|---|
 | `send_message` | `sendMessage` | `chat_id`, `text`, `parse_mode?` (`HTML`, `MarkdownV2`), `reply_markup?`, `disable_link_preview?` | надіслане повідомлення (`message_id`, `chat`, `date`, `text`) |
+| `send_messages` | `sendMessage` по черзі | `messages[]` — до 100 об'єктів з полями `send_message` | `{ results: [{ index, ok, message_id?, error?, permanent }] }`: невдале повідомлення не зупиняє решту і не робить виклик `isError`; `permanent` — бота заблоковано чи чату немає, повтор не допоможе |
 | `edit_message_text` | `editMessageText` | `chat_id`, `message_id`, `text`, `parse_mode?`, `reply_markup?` | змінене повідомлення |
 | `answer_callback_query` | `answerCallbackQuery` | `callback_query_id`, `text?`, `show_alert?` | `{ "ok": true }` |
 | `set_my_commands` | `setMyCommands` | `commands` (`[{ command, description }]`), `scope?`, `language_code?` | `{ "ok": true }` |

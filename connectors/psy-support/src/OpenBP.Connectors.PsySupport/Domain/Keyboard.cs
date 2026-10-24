@@ -55,6 +55,20 @@ public static class Keyboard
         ["one_time_keyboard"] = true,
     };
 
+    /// <summary>Текст постійної reply-кнопки під полем вводу; бот розпізнає його як «головне меню».</summary>
+    public const string HomeText = "🏠 Головне меню";
+
+    /// <summary>
+    /// Постійна reply-клавіатура «🏠 Головне меню»: замінює «Поділитися номером» після реєстрації і відкриває меню, навіть
+    /// коли повідомлення з меню загубилось угорі чату (як у n8n-боті).
+    /// </summary>
+    public static JsonObject Home() => new()
+    {
+        ["keyboard"] = new JsonArray(new JsonArray(new JsonObject { ["text"] = HomeText })),
+        ["resize_keyboard"] = true,
+        ["is_persistent"] = true,
+    };
+
     /// <summary>Розбиває кнопки на рядки по <paramref name="perRow"/>.</summary>
     public static IEnumerable<IEnumerable<Button>> Rows(IEnumerable<Button> buttons, int perRow) => buttons.Chunk(perRow);
 }

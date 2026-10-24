@@ -18,7 +18,7 @@ public sealed partial class BotScreens
 
         return Parts(data) switch
         {
-            ["m", "cons"] => await PsychologistsAsync(ct).ConfigureAwait(false),
+            ["m", "cons"] => await PsychologistsAsync(telegramId, ct).ConfigureAwait(false),
             ["c", "p", var pid] when Long(pid) is { } p => await DatesAsync(p, null, ct).ConfigureAwait(false),
             ["c", "d", var pid, var date] when Long(pid) is { } p && Date(date) is { } d => await TimesAsync(p, d, null, ct).ConfigureAwait(false),
             ["c", "t", var slot] when Long(slot) is { } s => await ConfirmAsync(s, null, ct).ConfigureAwait(false),
@@ -34,11 +34,16 @@ public sealed partial class BotScreens
         };
     }
 
-    private async Task<BotResult> PsychologistsAsync(CancellationToken ct)
+    private async Task<BotResult> PsychologistsAsync(long telegramId, CancellationToken ct)
     {
         var list = await consult.PsychologistsWithSlotsAsync(ct).ConfigureAwait(false);
         var buttons = list.Select(p => new Button(p.Name, $"c:p:{p.Id}")).ToList();
-        buttons.Add(new Button("📋 Мої записи", "c:my"));
+        var mine = (await consult.UpcomingAsync(telegramId, ct).ConfigureAwait(false)).Count;
+        if (mine > 0)
+        {
+            buttons.Add(new Button($"📋 Мої записи ({mine})", "c:my"));
+        }
+
         buttons.Add(MenuButton);
         var text = list.Count == 0
             ? "<b>Консультація психолога</b>\n\nЗараз вільного часу немає. Загляньте, будь ласка, пізніше."
@@ -72,8 +77,9 @@ public sealed partial class BotScreens
             return Fail(Codes.SlotUnavailable, "На цю дату вільного часу вже немає.", Keyboard.Column([back, MenuButton]));
         }
 
-        var buttons = slots.Select(s => new Button(clock.Time(s.StartsAt), moving is { } b ? $"c:mt:{b}:{s.Id}" : $"c:t:{s.Id}"));
-        var rows = Keyboard.Rows(buttons, 4).ToList();
+        // Формат — на кнопці часу, окремим екраном не питаємо (як у n8n-боті).
+        var buttons = slots.Select(s => new Button($"{clock.Time(s.StartsAt)} · {s.Format}", moving is { } b ? $"c:mt:{b}:{s.Id}" : $"c:t:{s.Id}"));
+        var rows = Keyboard.Rows(buttons, 2).ToList();
         rows.Add([back, MenuButton]);
         return Done(Codes.Ok, $"<b>{Html.Escape(slots[0].PsychologistName)}</b>, {clock.WeekdayDay(date)}\n\nОберіть час:", Keyboard.Inline(rows));
     }
@@ -140,7 +146,7 @@ public sealed partial class BotScreens
         {
             Codes.SlotTaken => Fail(code, "😔 Цей час щойно зайняли. Оберіть, будь ласка, інший.", Keyboard.Column([back, MenuButton])),
             Codes.LimitReached => Fail(code,
-                $"У вас уже {await settings.GetIntAsync(SettingsService.MaxActiveConsults, ct).ConfigureAwait(false)} активні записи. Щоб записатися ще, скасуйте або перенесіть один з них.",
+                $"У вас уже {Active(await settings.GetIntAsync(SettingsService.MaxActiveConsults, ct).ConfigureAwait(false))}. Щоб записатися ще, скасуйте або перенесіть один з них.",
                 Keyboard.Column([new Button("📋 Мої записи", "c:my"), MenuButton])),
             Codes.AlreadyRegistered => Fail(code, "Ви вже записані на цей час.", Keyboard.Column([new Button("📋 Мої записи", "c:my"), MenuButton])),
             Codes.TooLate => Fail(code, "До консультації лишилось замало часу, перенести її через бота вже не можна. Напишіть, будь ласка, психологу.",
@@ -149,6 +155,14 @@ public sealed partial class BotScreens
             Codes.NotFound => await MyBookingsAsync(telegramId, "Цього запису вже немає.", ct).ConfigureAwait(false),
             _ => Fail(Codes.SlotUnavailable, "Цей час уже недоступний. Оберіть, будь ласка, інший.", Keyboard.Column([back, MenuButton])),
         };
+    }
+
+    /// <summary>1 активний запис, 2–4 активні записи, 5+ активних записів.</summary>
+    private static string Active(int n)
+    {
+        var (a, b) = (n % 10, n % 100);
+        var form = a == 1 && b != 11 ? "активний запис" : a is >= 2 and <= 4 && b is < 12 or > 14 ? "активні записи" : "активних записів";
+        return $"{n} {form}";
     }
 
     private async Task<BotResult> MyBookingsAsync(long telegramId, string? note, CancellationToken ct)

@@ -228,6 +228,15 @@ public sealed class BstService(PsyDbContext db, PsyClock clock, CounterService c
         ];
     }
 
+    /// <summary>Позиція людини серед тих, хто чекає (від 1, за часом додавання); <c>null</c> — не чекає.</summary>
+    public async Task<int?> WaitlistPositionAsync(long sessionId, long telegramId, CancellationToken ct = default)
+    {
+        var queue = await db.Waitlist.AsNoTracking().Where(w => w.SessionId == sessionId && w.Status == WaitlistStatuses.Waiting)
+            .OrderBy(w => w.AddedAt).ThenBy(w => w.Id).Select(w => w.TelegramId).ToListAsync(ct).ConfigureAwait(false);
+        var index = queue.IndexOf(telegramId);
+        return index < 0 ? null : index + 1;
+    }
+
     /// <summary>Лист очікування: лише коли місць немає і людина ще не записана й не в черзі.</summary>
     public async Task<DomainResult> JoinWaitlistAsync(long telegramId, long sessionId, CancellationToken ct = default)
     {

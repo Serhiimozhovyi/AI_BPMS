@@ -67,10 +67,15 @@ public sealed class PsySupportFixture : IAsyncLifetime
     }
 
     /// <summary>Прогін прикладу з <paramref name="update"/> у pinData webhook'а.</summary>
-    public async Task<(int Code, string Stdout, string Stderr)> RunAsync(JsonObject update)
+    public Task<(int Code, string Stdout, string Stderr)> RunAsync(JsonObject update) =>
+        RunAsync(ExamplePath, workflow =>
+            workflow.PinData["n_webhook"] = [new Item { Json = new JsonObject { ["headers"] = new JsonObject(), ["body"] = update } }]);
+
+    /// <summary>Прогін сценарію <paramref name="examplePath"/>; <paramref name="pin"/> задає pinData.</summary>
+    public async Task<(int Code, string Stdout, string Stderr)> RunAsync(string examplePath, Action<WorkflowDefinition> pin)
     {
-        var workflow = WorkflowJson.Deserialize(await File.ReadAllTextAsync(ExamplePath));
-        workflow.PinData["n_webhook"] = [new Item { Json = new JsonObject { ["headers"] = new JsonObject(), ["body"] = update } }];
+        var workflow = WorkflowJson.Deserialize(await File.ReadAllTextAsync(examplePath));
+        pin(workflow);
         var path = Path.Combine(Directory, $"{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(path, WorkflowJson.Serialize(workflow));
 
@@ -91,6 +96,12 @@ public sealed class PsySupportFixture : IAsyncLifetime
 
     /// <summary>Шлях до прикладу.</summary>
     public static string ExamplePath => Path.Combine(RepoRoot, "examples", "psy-support-bot.json");
+
+    /// <summary>Шлях до сценарію сповіщень про збої (F3-40).</summary>
+    public static string AlertsPath => Path.Combine(RepoRoot, "examples", "psy-support-alerts.json");
+
+    /// <summary>Шлях до сценарію розкладу (F3-38).</summary>
+    public static string SchedulerPath => Path.Combine(RepoRoot, "examples", "psy-support-scheduler.json");
 
     private static string RepoRoot
     {
@@ -215,6 +226,23 @@ public sealed class PsySupportBotTests(PsySupportFixture psy) : IClassFixture<Ps
     }
 
     [Fact]
+    public async Task HomeButton_OpensMenu_AndButtonInNotificationSendsNewMessage()
+    {
+        var id = await Registered();
+
+        var home = await Run(Update.Message(id, "🏠 Головне меню"));
+        Assert.Contains("▶ psy-support: меню [mcp.tool] — Success", home, StringComparison.Ordinal);
+        Assert.Contains("▶ Надіслати відповідь [mcp.tool] — Success", home, StringComparison.Ordinal);
+
+        var update = Update.Callback(id, "m:psy");
+        update["callback_query"]!["message"]!["text"] = "⏰ Нагадування: консультація з психологом — завтра о 10:00.";
+        var fromReminder = await Run(update);
+        Assert.Contains("▶ Підтвердити натискання [mcp.tool] — Success", fromReminder, StringComparison.Ordinal);
+        Assert.Contains("▶ Надіслати відповідь [mcp.tool] — Success", fromReminder, StringComparison.Ordinal);
+        Assert.DoesNotContain("▶ Змінити повідомлення [mcp.tool] — Success", fromReminder, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Consult_Booking_AndConcurrentBookingOfSameSlot()
     {
         var slot = await psy.ScalarAsync<long>(
@@ -289,6 +317,75 @@ public sealed class PsySupportBotTests(PsySupportFixture psy) : IClassFixture<Ps
         Assert.Contains("▶ psy-support: кабінет [mcp.tool] — Success", cabinet, StringComparison.Ordinal);
         Assert.Contains("\"ok\": true", cabinet, StringComparison.Ordinal);
         Assert.DoesNotContain("not_psychologist", cabinet, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Scheduler_IsValidWorkflow() =>
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(await File.ReadAllTextAsync(PsySupportFixture.SchedulerPath)));
+
+    [Fact]
+    public async Task Scheduler_SendsQueue_KeepsTemporaryFailuresForNextRun()
+    {
+        // Чати: 501 — доставлено, -502 — «бота заблоковано» (остаточно), 0 — тимчасова помилка 429 у моку.
+        var ok = await psy.ScalarAsync<long>("INSERT INTO outbox (chat_id, text, created_at) VALUES (501, 'Запис скасовано', now()) RETURNING id");
+        var blocked = await psy.ScalarAsync<long>("INSERT INTO outbox (chat_id, text, created_at) VALUES (-502, 'Запис скасовано', now()) RETURNING id");
+        var temporary = await psy.ScalarAsync<long>("INSERT INTO outbox (chat_id, text, created_at) VALUES (0, 'Запис скасовано', now()) RETURNING id");
+
+        var run = await RunScheduler();
+        Assert.Contains("▶ Надіслати в Telegram [mcp.tool] — Success", run, StringComparison.Ordinal);
+        Assert.Contains("▶ Позначити надісланими [mcp.tool] — Success", run, StringComparison.Ordinal);
+        Assert.Contains("▶ Слоти з шаблонів [mcp.tool] — Success", run, StringComparison.Ordinal);
+        Assert.Contains("▶ Знеособити старі записи [mcp.tool] — Success", run, StringComparison.Ordinal);
+        Assert.True(await psy.ScalarAsync<bool>($"SELECT sent_at IS NOT NULL FROM outbox WHERE id = {ok}"));
+        Assert.True(await psy.ScalarAsync<bool>($"SELECT sent_at IS NOT NULL FROM outbox WHERE id = {blocked}"));
+        Assert.True(await psy.ScalarAsync<bool>($"SELECT sent_at IS NULL FROM outbox WHERE id = {temporary}"));
+
+        // Тимчасову помилку прибрано — наступний запуск досилає лише її, вже надіслане не повторюється.
+        var sentBefore = await psy.ScalarAsync<DateTime>($"SELECT sent_at FROM outbox WHERE id = {ok}");
+        await psy.ScalarAsync<int>($"UPDATE outbox SET chat_id = 503 WHERE id = {temporary} RETURNING 1");
+        await RunScheduler();
+        Assert.True(await psy.ScalarAsync<bool>($"SELECT sent_at IS NOT NULL FROM outbox WHERE id = {temporary}"));
+        Assert.Equal(sentBefore, await psy.ScalarAsync<DateTime>($"SELECT sent_at FROM outbox WHERE id = {ok}"));
+
+        var idle = await RunScheduler();
+        Assert.Contains("▶ Надіслати в Telegram [mcp.tool] — Skipped", idle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Alerts_IsValidWorkflow() =>
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(await File.ReadAllTextAsync(PsySupportFixture.AlertsPath)));
+
+    [Fact]
+    public async Task Alerts_SendOneMessageToAdministrator()
+    {
+        var (code, stdout, stderr) = await psy.RunAsync(PsySupportFixture.AlertsPath, workflow =>
+        {
+            workflow.Nodes.Single(n => n.Id == "n_admin").Parameters["fields"] = new JsonArray(new JsonObject { ["name"] = "admin_chat_id", ["value"] = 777 });
+            workflow.PinData["n_error"] = [new Item
+            {
+                Json = new JsonObject
+                {
+                    ["execution"] = new JsonObject { ["id"] = "ex-1", ["status"] = "error", ["mode"] = "trigger" },
+                    ["workflow"] = new JsonObject { ["id"] = "wf-1", ["name"] = "Бот психологічної підтримки" },
+                    ["error"] = new JsonObject { ["message"] = "Telegram sendMessage: HTTP 400 <b>", ["nodeId"] = "n_send", ["nodeName"] = "Надіслати відповідь" },
+                },
+            }];
+        });
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("▶ Надіслати адміністратору [mcp.tool] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"chatId\": 777", stdout, StringComparison.Ordinal);
+        Assert.Contains("Збій сценарію «Бот психологічної підтримки»", stdout, StringComparison.Ordinal);
+        Assert.Contains("Вузол: Надіслати відповідь", stdout, StringComparison.Ordinal);
+        Assert.Contains("HTTP 400 &lt;b&gt;", stdout, StringComparison.Ordinal);
+    }
+
+    private async Task<string> RunScheduler()
+    {
+        var (code, stdout, stderr) = await psy.RunAsync(PsySupportFixture.SchedulerPath, _ => { });
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("Результат: Success", stdout, StringComparison.Ordinal);
+        return stdout;
     }
 
     private static long NewUser() => Interlocked.Increment(ref _nextUser);

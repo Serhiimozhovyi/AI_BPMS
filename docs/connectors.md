@@ -168,7 +168,8 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 власними sln і `Directory.*.props`, поза `OpenBP.sln`; CI job «Конектори» збирає, форматує й тестує кожен.
 
 - `connectors/telegram` — Telegram Bot API (F3-13, F3-27): `send_message` (з `reply_markup`: `inline_keyboard`,
-  `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_document` (URL або base64),
+  `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_messages` (до 100 повідомлень
+  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
   `get_chat`; токен — лише змінна

@@ -41,6 +41,33 @@ public sealed class UserService(PsyDbContext db, PsyClock clock, AuditService au
         db.Psychologists.AsNoTracking().FirstOrDefaultAsync(p => p.TelegramId == telegramId && p.Active, ct);
 
     /// <summary>
+    /// Прив'язка вже зареєстрованої людини до психолога, якого додали в адмінку пізніше (як на <c>/start</c> у n8n-боті):
+    /// номер людини збігається з номером активного психолога без цього <c>telegram_id</c>. Повертає id психолога, якщо
+    /// прив'язано зараз; людину, вже прив'язану до іншого активного психолога, не чіпає.
+    /// </summary>
+    public async Task<long?> LinkPsychologistAsync(long telegramId, CancellationToken ct = default)
+    {
+        var phone = await db.Users.AsNoTracking().Where(u => u.TelegramId == telegramId && u.DeletedAt == null).Select(u => u.Phone)
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (NormalizePhone(phone) is not { } normalized)
+        {
+            return null;
+        }
+
+        var psychologists = await db.Psychologists.Where(p => p.Active && p.Phone != null && p.TelegramId != telegramId).ToListAsync(ct).ConfigureAwait(false);
+        var match = psychologists.FirstOrDefault(p => NormalizePhone(p.Phone) == normalized);
+        if (match is null || await db.Psychologists.AnyAsync(p => p.TelegramId == telegramId && p.Active, ct).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        match.TelegramId = telegramId;
+        audit.Add("bot", "psychologist.linked", "psychologist", match.Id);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return match.Id;
+    }
+
+    /// <summary>
     /// Реєстрація за контактом: приймається лише власний (<paramref name="contactUserId"/> = <paramref name="telegramId"/>).
     /// Якщо номер збігається з номером активного психолога — <c>telegram_id</c> прив'язується до нього. <see cref="DomainResult.Id"/>
     /// — id психолога, якщо прив'язано.

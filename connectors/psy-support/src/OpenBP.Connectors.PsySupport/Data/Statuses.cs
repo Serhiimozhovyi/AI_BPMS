@@ -75,4 +75,13 @@ public static class ReminderKinds
     public const string Booking = "booking";
     public const string Event = "event";
     public const string Bst = "bst";
+
+    /// <summary>Опитування після події: <c>target_id</c> — реєстрація, <c>offset_min</c> — 0.</summary>
+    public const string Feedback = "feedback";
+
+    /// <summary>Ранковий список психологу: <c>target_id</c> — психолог, <c>offset_min</c> — дата <c>yyyyMMdd</c>.</summary>
+    public const string Digest = "digest";
+
+    /// <summary>Новий матеріал: <c>target_id</c> — <c>telegram_id</c> людини, <c>offset_min</c> — id матеріалу.</summary>
+    public const string Material = "material";
 }

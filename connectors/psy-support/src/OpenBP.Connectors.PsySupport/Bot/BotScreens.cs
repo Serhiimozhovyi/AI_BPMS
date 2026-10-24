@@ -38,18 +38,7 @@ public sealed partial class BotScreens(
                 return new BotResult(false, registered.Code, new Screen(hint, Keyboard.RequestContact("📱 Поділитися номером"), NewMessage: true), []);
             }
 
-            var menu = await MainMenuAsync(telegramId, ct).ConfigureAwait(false);
-            if (registered.Id is null)
-            {
-                return Done(Codes.Registered, $"Дякуємо, ви зареєстровані.\n\n{menu.Text}", menu.ReplyMarkup);
-            }
-
-            var commands = new BotCommandsArgs(
-                [new BotCommandItem("start", "Головне меню"), new BotCommandItem("psy", "Кабінет психолога")],
-                new JsonObject { ["type"] = "chat", ["chat_id"] = telegramId });
-            return new BotResult(true, Codes.Registered,
-                new Screen($"Дякуємо, ви зареєстровані. Вас підключено як психолога: кабінет — команда /psy.\n\n{menu.Text}", menu.ReplyMarkup),
-                [], commands);
+            return await WelcomeAsync(telegramId, Codes.Registered, "✅ Номер збережено. Дякуємо, ви зареєстровані.", registered.Id is not null, ct).ConfigureAwait(false);
         }
 
         if (await users.FindAsync(telegramId, ct).ConfigureAwait(false) is null)
@@ -57,8 +46,30 @@ public sealed partial class BotScreens(
             return await RegistrationAsync(ct).ConfigureAwait(false);
         }
 
-        var screen = await MainMenuAsync(telegramId, ct).ConfigureAwait(false);
-        return Done(Codes.Ok, screen.Text, screen.ReplyMarkup);
+        var linked = await users.LinkPsychologistAsync(telegramId, ct).ConfigureAwait(false);
+        return await WelcomeAsync(telegramId, Codes.Ok, "Вітаємо знову 👋", linked is not null, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Як у n8n-боті: коротке повідомлення ставить під полем вводу постійну кнопку «🏠 Головне меню» замість «Поділитися
+    /// номером» (Telegram міняє цю клавіатуру лише новим повідомленням, а inline-кнопок у ньому бути не може), а меню
+    /// приходить наступним повідомленням — сповіщенням самій людині. Щойно прив'язаному психологу — ще й пояснення й /psy.
+    /// </summary>
+    private async Task<BotResult> WelcomeAsync(long telegramId, string code, string greeting, bool psychologistLinked, CancellationToken ct)
+    {
+        var menu = await MainMenuAsync(telegramId, ct).ConfigureAwait(false);
+        var notifications = new List<Notification> { new(telegramId, menu.Text, menu.ReplyMarkup) };
+        BotCommandsArgs? commands = null;
+        if (psychologistLinked)
+        {
+            notifications.Add(new Notification(telegramId,
+                "👋 Вас підключено як психолога. Сюди приходитимуть сповіщення про нові записи на консультації та про скасування.\n\nКабінет психолога — команда /psy: записи, учасники подій і БСТ, оголошення."));
+            commands = new BotCommandsArgs(
+                [new BotCommandItem("start", "Головне меню"), new BotCommandItem("psy", "Кабінет психолога")],
+                new JsonObject { ["type"] = "chat", ["chat_id"] = telegramId });
+        }
+
+        return new BotResult(true, code, new Screen(greeting, Keyboard.Home(), NewMessage: true), notifications, commands);
     }
 
     // ---------- bot_menu ----------
@@ -80,7 +91,14 @@ public sealed partial class BotScreens(
             case "m:help":
                 await counters.IncrementAsync(CounterService.HelpOpened, ct).ConfigureAwait(false);
                 return Done(Codes.Ok, Html.Escape(await settings.GetAsync(SettingsService.TextHelp, ct).ConfigureAwait(false)),
-                    Keyboard.Column([new Button("🗓 Записатися на консультацію", "m:cons"), new Button("🆘 SOS", "m:sos"), MenuButton]));
+                    Keyboard.Column(
+                    [
+                        new Button("🗣 Поговорити з психологом наодинці", "m:cons"),
+                        new Button("👥 Подивитися найближчі зустрічі й вебінари", "m:ev"),
+                        new Button("🧩 Знайти практики самодопомоги", "m:mat"),
+                        new Button("☎️ Мені потрібна допомога зараз", "m:sos"),
+                        new Button("← Назад до меню", "m:psy"),
+                    ]));
             case "m:sos":
                 await counters.IncrementAsync(CounterService.SosOpened, ct).ConfigureAwait(false);
                 return Done(Codes.Ok, Html.Escape(await settings.GetAsync(SettingsService.TextSos, ct).ConfigureAwait(false)), Keyboard.Column([MenuButton]));
@@ -165,16 +183,16 @@ public sealed partial class BotScreens(
     {
         var buttons = new List<Button>
         {
-            new("🗓 Консультація психолога", "m:cons"),
-            new("👥 Групові сеанси БСТ", "m:bst"),
-            new("📅 Події", "m:ev"),
-            new("📚 Матеріали", "m:mat"),
-            new("💬 Мені потрібна допомога", "m:help"),
-            new("🆘 SOS", "m:sos"),
+            new("🆘 Мені потрібна психологічна допомога", "m:help"),
+            new("📅 Записатися на консультацію", "m:cons"),
+            new("🧘 Біосугестивна терапія", "m:bst"),
+            new("📣 Події та вебінари", "m:ev"),
+            new("📚 Корисні матеріали", "m:mat"),
+            new("☎️ Термінова допомога", "m:sos"),
         };
         if (await users.FindPsychologistAsync(telegramId, ct).ConfigureAwait(false) is not null)
         {
-            buttons.Add(new Button("🧑‍⚕️ Кабінет психолога", "p:h"));
+            buttons.Add(new Button("👩‍⚕️ Кабінет психолога", "p:h"));
         }
 
         return new Screen(Html.Escape(await settings.GetAsync(SettingsService.TextMenu, ct).ConfigureAwait(false)), Keyboard.Column(buttons));

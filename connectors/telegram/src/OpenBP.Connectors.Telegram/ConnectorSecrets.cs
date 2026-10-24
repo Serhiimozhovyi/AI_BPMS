@@ -26,4 +26,9 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
 
 /// <summary>Помилка конектора, текст якої безпечно показати агенту (без токена): tool повертає її як <c>isError</c>.</summary>
 /// <param name="message">Повідомлення.</param>
-public sealed class ConnectorException(string message) : Exception(message);
+/// <param name="statusCode">HTTP-статус відповіді Bot API, якщо вона була.</param>
+public sealed class ConnectorException(string message, int? statusCode = null) : Exception(message)
+{
+    /// <summary>HTTP-статус відповіді Bot API; <c>null</c> — помилка до запиту або мережі.</summary>
+    public int? StatusCode { get; } = statusCode;
+}

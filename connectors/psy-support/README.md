@@ -62,6 +62,22 @@ HTTP-сервер у реєстрі MCP OpenBP: URL `http://psy-support:8090/mcp
 Помилки домену (`slot_taken`, `too_late`, `limit_reached`, `full`, `not_psychologist`, `stale`…) — успішний результат з
 `ok: false`; `isError` — лише некоректні аргументи або збій.
 
+## Розклад: нагадування і черга сповіщень
+
+Сценарій `examples/psy-support-scheduler.json` (F3-38) замінює n8n-«Шедулер»: кожні 5 хв бере `due_notifications`
+(нагадування за 24 год, 1 год і 10 хв і рядки `outbox` з дій адмінки), надсилає їх одним викликом `send_messages`
+конектора Telegram і позначає `mark_notifications_sent` лише доставлені й остаточно відхилені (бота заблоковано) —
+тимчасова помилка (429, мережа) лишає сповіщення до наступного запуску. Щодня о 06:00 — `generate_slots` (21 день),
+о 03:00 — `anonymize_old_records`. Імпортуйте його поруч із ботом із тими самими конекторами (`srv_psy_support`,
+`srv_telegram`) і активуйте.
+
+## Сповіщення про збої
+
+`examples/psy-support-alerts.json` (F3-40) замінює n8n-`12-alerts`: тригер `core.errorTrigger` → текст (назва
+сценарію, вузол, помилка — без персональних даних) → `send_message` адміністратору. Перед активацією замініть
+`admin_chat_id` у вузлі «Адміністратор» на свій chat_id, активуйте сценарій і вкажіть його в «Налаштуваннях» бота й
+розкладу як сценарій помилок (`settings.errorWorkflowId`).
+
 ## Імпорт з Google Sheets
 
 Вивантажте кожен лист таблиці в CSV (`settings.csv`, `users.csv`, `psychologists.csv`, `slots.csv`, `bookings.csv`,
