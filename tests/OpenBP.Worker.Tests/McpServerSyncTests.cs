@@ -97,7 +97,7 @@ public sealed class McpServerSyncTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public void ReferencedServers_SkipsExpressionsAndNonMcpNodes()
+    public void ReferencedServers_SkipsExpressionsAndNonMcpNodes_IncludesAgentTools()
     {
         var workflow = WorkflowJson.Deserialize("""
             {
@@ -107,13 +107,14 @@ public sealed class McpServerSyncTests(PostgresFixture postgres)
                 { "id": "a", "name": "a", "type": "mcp.tool", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "s1", "toolName": "t" } },
                 { "id": "b", "name": "b", "type": "mcp.poll", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "s2", "toolName": "t" } },
                 { "id": "c", "name": "c", "type": "mcp.tool", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "{{ $json.s }}", "toolName": "t" } },
-                { "id": "d", "name": "d", "type": "core.set", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "s3" } }
+                { "id": "d", "name": "d", "type": "core.set", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "s3" } },
+                { "id": "e", "name": "e", "type": "ai.agent", "typeVersion": 1, "position": [0, 0], "parameters": { "tools": [ { "serverId": "s4", "toolName": "t" }, { "serverId": "s1", "toolName": "u" }, { "serverId": "{{ $json.s }}", "toolName": "t" } ] } }
               ],
               "connections": []
             }
             """);
 
-        Assert.Equal(["s1", "s2"], McpServerSync.ReferencedServers(workflow).Order());
+        Assert.Equal(["s1", "s2", "s4"], McpServerSync.ReferencedServers(workflow).Order());
     }
 
     private static async Task<McpServerEntity> AddServerAsync(

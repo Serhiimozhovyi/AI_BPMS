@@ -41,6 +41,21 @@ export interface StepError {
   itemIndex?: number | null;
 }
 
+/** `SubStep` — підкрок вузла (F6-12): запит до моделі (`llm`) або виклик інструмента агентом (`tool`). */
+export interface SubStep {
+  kind: 'llm' | 'tool' | string;
+  /** Модель або «конектор / дія». */
+  name: string;
+  startedAt: string;
+  finishedAt: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string | null;
+  itemIndex?: number;
+  iteration?: number;
+  usage?: { input?: number | null; output?: number | null } | null;
+}
+
 /** `ExecutionStepDto` — крок виконання (вже очищений від секретів). */
 export interface ExecutionStep {
   id: string;
@@ -54,6 +69,8 @@ export interface ExecutionStep {
   error: StepError | null;
   startedAt: string;
   finishedAt: string;
+  /** Підкроки агента (F6-12); зазвичай немає. */
+  subSteps?: SubStep[] | null;
 }
 
 /** `ExecutionDetail` — `GET /executions/{id}`. */

@@ -130,7 +130,7 @@ public sealed class PostgresExecutionStore(
             // разом із записом підсумку — однією транзакцією.
             await db.ExecutionSteps
                 .Where(st => st.ExecutionId == result.ExecutionId)
-                .ExecuteUpdateAsync(u => u.SetProperty(st => st.Input, (string?)null).SetProperty(st => st.Output, (string?)null), ct)
+                .ExecuteUpdateAsync(u => u.SetProperty(st => st.Input, (string?)null).SetProperty(st => st.Output, (string?)null).SetProperty(st => st.SubSteps, (string?)null), ct)
                 .ConfigureAwait(false);
         }
 
@@ -221,6 +221,7 @@ public sealed class PostgresExecutionStore(
             Input = JsonSerializer.Serialize(step.Input, WorkflowJson.Options),
             Output = JsonSerializer.Serialize(step.Output, WorkflowJson.Options),
             Error = step.Error is null ? null : JsonSerializer.Serialize(step.Error, WorkflowJson.Options),
+            SubSteps = step.SubSteps.Count == 0 ? null : JsonSerializer.Serialize(step.SubSteps, WorkflowJson.Options),
             StartedAt = step.StartedAt.ToUniversalTime(),
             FinishedAt = step.FinishedAt.ToUniversalTime(),
         };
@@ -235,6 +236,7 @@ public sealed class PostgresExecutionStore(
         Input = ReadItems(e.Input),
         Output = ReadItems(e.Output),
         Error = e.Error is null ? null : JsonSerializer.Deserialize<StepError>(e.Error, WorkflowJson.Options),
+        SubSteps = e.SubSteps is null ? [] : JsonSerializer.Deserialize<SubStep[]>(e.SubSteps, WorkflowJson.Options) ?? [],
         StartedAt = e.StartedAt ?? DateTimeOffset.MinValue,
         FinishedAt = e.FinishedAt ?? DateTimeOffset.MinValue,
     };

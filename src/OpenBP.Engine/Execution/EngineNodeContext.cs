@@ -64,6 +64,18 @@ internal sealed class EngineNodeContext : INodeContext
 
     public JsonObject NodeState { get; set; }
 
+    /// <summary>Підкроки цієї спроби в порядку запису.</summary>
+    public List<SubStep> SubSteps { get; } = [];
+
+    public void RecordSubStep(SubStep step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        lock (SubSteps)
+        {
+            SubSteps.Add(step);
+        }
+    }
+
     public IReadOnlyList<Item> Items(int input = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(input);

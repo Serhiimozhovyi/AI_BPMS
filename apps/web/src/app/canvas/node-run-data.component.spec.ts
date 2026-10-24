@@ -92,4 +92,53 @@ describe('NodeRunDataComponent', () => {
     expect(host.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('#0 · 1');
     expect(host.textContent).not.toContain('error');
   });
+  it('кроки агента: модель і дії з аргументами, результатом, помилкою й токенами', () => {
+    const host = render({
+      id: 's2',
+      nodeId: 'n_agent',
+      runIndex: 0,
+      status: 'error',
+      input: [[{ json: {} }]],
+      output: [[]],
+      error: { message: 'Агент не дав відповіді за 2 ітерацій (maxIterations).' },
+      startedAt: '2026-10-24T10:00:00Z',
+      finishedAt: '2026-10-24T10:00:03Z',
+      subSteps: [
+        {
+          kind: 'llm',
+          name: 'qwen',
+          startedAt: '2026-10-24T10:00:00.000Z',
+          finishedAt: '2026-10-24T10:00:01.500Z',
+          output: { toolCalls: [{ name: 'find', arguments: { q: 'Агро' } }] },
+          iteration: 1,
+          usage: { input: 30, output: 12 },
+        },
+        {
+          kind: 'tool',
+          name: 'CRM / find',
+          startedAt: '2026-10-24T10:00:01.500Z',
+          finishedAt: '2026-10-24T10:00:01.700Z',
+          input: { q: 'Агро' },
+          error: 'Дія «find» не виконалась: timeout',
+          iteration: 1,
+        },
+      ],
+    });
+    const list = host.querySelector('[data-testid="node-run-substeps"]')!;
+    const items = list.querySelectorAll('li');
+    expect(items).toHaveLength(2);
+    expect(items[0].textContent).toContain('модель');
+    expect(items[0].textContent).toContain('qwen');
+    expect(items[0].textContent).toContain('1,5 с');
+    expect(items[0].textContent).toContain('42 токенів');
+    expect(items[1].getAttribute('data-kind')).toBe('tool');
+    expect(items[1].textContent).toContain('200 мс');
+    expect(items[1].textContent).toContain('"q": "Агро"');
+    expect(items[1].querySelector('[data-testid="node-run-substep-error"]')?.textContent).toContain('timeout');
+  });
+
+  it('без підкроків блоку кроків агента немає', () => {
+    const host = render({ id: 's3', nodeId: 'n', runIndex: 0, status: 'success', input: [], output: [], error: null, startedAt: '', finishedAt: '' });
+    expect(host.querySelector('[data-testid="node-run-substeps"]')).toBeNull();
+  });
 });

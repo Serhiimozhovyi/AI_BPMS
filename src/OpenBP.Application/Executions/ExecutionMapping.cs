@@ -29,7 +29,8 @@ internal static class ExecutionMapping
         ReadItems(e.Output),
         e.Error is null ? null : JsonSerializer.Deserialize<StepError>(e.Error, WorkflowJson.Options),
         e.StartedAt ?? DateTimeOffset.MinValue,
-        e.FinishedAt ?? DateTimeOffset.MinValue);
+        e.FinishedAt ?? DateTimeOffset.MinValue,
+        e.SubSteps is null ? null : JsonSerializer.Deserialize<SubStep[]>(e.SubSteps, WorkflowJson.Options));
 
     private static Item[][] ReadItems(string? json) =>
         json is null ? [] : JsonSerializer.Deserialize<Item[][]>(json, WorkflowJson.Options) ?? [];

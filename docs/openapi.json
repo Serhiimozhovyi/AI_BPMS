@@ -4956,6 +4956,15 @@
           "finishedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "subSteps": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SubStep"
+            }
           }
         }
       },
@@ -5950,6 +5959,80 @@
           "cancelled"
         ],
         "description": "Результат одного запуску вузла (поле `execution_steps.status`)."
+      },
+      "SubStep": {
+        "required": [
+          "kind",
+          "name",
+          "startedAt",
+          "finishedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Вид: string SubStepKinds.Llm або string SubStepKinds.Tool."
+          },
+          "name": {
+            "type": "string",
+            "description": "Що саме: модель або «конектор / дія»."
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "Початок (UTC).",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": "string",
+            "description": "Завершення (UTC).",
+            "format": "date-time"
+          },
+          "input": {
+            "description": "Вхід (аргументи інструмента); `null` — не зберігається."
+          },
+          "output": {
+            "description": "Результат (відповідь моделі чи інструмента, скорочений)."
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Текст помилки; `null` — успіх."
+          },
+          "itemIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Індекс вхідного item'а вузла.",
+            "format": "int32",
+            "default": 0
+          },
+          "iteration": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Номер ітерації циклу агента, від 1.",
+            "format": "int32",
+            "default": 1
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Токени запиту до моделі (`{ input, output }`), якщо провайдер їх повернув.",
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          }
+        },
+        "description": "Підкрок усередині запуску вузла (F6-12): запит до моделі чи виклик інструмента агентом. Зберігається разом із кроком\nу `execution_steps.sub_steps` (jsonb, docs/architecture.md §6) і проходить той самий scrubbing секретів."
       },
       "ToolCallResult": {
         "required": [

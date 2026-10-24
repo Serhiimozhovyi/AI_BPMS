@@ -80,13 +80,13 @@ public sealed class AiLlmNode : INode
             ?? throw new InvalidOperationException($"Ресурс {resource} не є JSON-об'єктом.");
     }
 
-    private static string Redact(string message, JsonObject credential)
+    internal static string Redact(string message, JsonObject credential)
     {
         var apiKey = credential["apiKey"]?.GetValue<string>();
         return string.IsNullOrEmpty(apiKey) ? message : message.Replace(apiKey, "***", StringComparison.Ordinal);
     }
 
-    private static Item ToItem(string content, JsonObject? outputSchema)
+    internal static Item ToItem(string content, JsonObject? outputSchema)
     {
         if (outputSchema is null)
         {
@@ -181,7 +181,7 @@ public sealed class AiLlmNode : INode
     }
 
     /// <summary>Та сама помилка без секретів credential'а у повідомленні й подробицях.</summary>
-    private static LlmException Redacted(LlmException ex, JsonObject credential) =>
+    internal static LlmException Redacted(LlmException ex, JsonObject credential) =>
         new(Redact(ex.Message, credential), ex.InnerException) { Details = ex.Details is null ? null : Redact(ex.Details, credential) };
 
     private sealed class LlmParameters

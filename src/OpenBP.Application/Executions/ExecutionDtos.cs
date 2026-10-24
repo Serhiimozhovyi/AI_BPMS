@@ -106,6 +106,7 @@ public sealed record ExecutionDetail(ExecutionSummary Summary, IReadOnlyList<Exe
 /// <param name="Error">Помилка кроку.</param>
 /// <param name="StartedAt">Початок.</param>
 /// <param name="FinishedAt">Завершення.</param>
+/// <param name="SubSteps">Підкроки вузла (F6-12: запити до моделі й виклики інструментів агентом); зазвичай порожньо.</param>
 public sealed record ExecutionStepDto(
     Guid Id,
     string NodeId,
@@ -115,7 +116,8 @@ public sealed record ExecutionStepDto(
     Item[][] Output,
     StepError? Error,
     DateTimeOffset StartedAt,
-    DateTimeOffset FinishedAt);
+    DateTimeOffset FinishedAt,
+    IReadOnlyList<SubStep>? SubSteps = null);
 
 /// <summary>Фільтр списку виконань.</summary>
 /// <param name="WorkflowId">Лише цього сценарію; <c>null</c> — усіх.</param>

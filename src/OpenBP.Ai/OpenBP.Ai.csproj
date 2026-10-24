@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../OpenBP.Engine/OpenBP.Engine.csproj" />
+    <!-- ai.agent (F6-12): інструменти агента — tools конекторів через реєстр MCP-серверів. -->
+    <ProjectReference Include="../OpenBP.Mcp/OpenBP.Mcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

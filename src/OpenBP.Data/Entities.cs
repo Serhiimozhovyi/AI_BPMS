@@ -250,6 +250,8 @@ public sealed class ExecutionStepEntity
     /// <summary>jsonb.</summary>
     public string? Output { get; set; }
     public string? Error { get; set; }
+    /// <summary>jsonb: підкроки (F6-12, <c>SubStep[]</c>); <c>null</c> — немає.</summary>
+    public string? SubSteps { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
 }

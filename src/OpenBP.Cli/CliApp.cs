@@ -104,7 +104,7 @@ public static class CliApp
         // Таймаутом запиту до моделі керує сам вузол (timeoutSec), тож HttpClient без власного таймауту.
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         var registry = new InMemoryNodeRegistry();
-        foreach (var node in CoreNodes.All().Concat(McpNodes.All(mcp)).Concat(AiNodes.All(http)))
+        foreach (var node in CoreNodes.All().Concat(McpNodes.All(mcp)).Concat(AiNodes.All(http, mcp)))
         {
             registry.Register(node);
         }

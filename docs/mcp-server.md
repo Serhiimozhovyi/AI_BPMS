@@ -83,7 +83,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
 | `list_tables` | viewer | — | `{ items: [{ id, name, columns: [{ name, type, key? }], rowCount, updatedAt }] }` — таблиці даних (F6-11) |
 | `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN` |
-| `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла) |
+| `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла; для `ai.agent` — ще `subSteps`, F6-12) |
 | `test_node` | editor | `workflowId`, `nodeId`, `items?`, `timeoutSec?` | вхід і вихід одного вузла; помилка вузла — `NODE_FAILED` |
 | `get_execution` | viewer | `id` | те саме, що `run_workflow` |
 | `list_executions` | viewer | `workflowId?`, `status?`, `page?` | сторінка виконань без кроків |
