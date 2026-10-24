@@ -137,7 +137,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
-| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08) |
+| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
@@ -377,6 +377,10 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)
 отримує статус `error`. Паралельність воркера — `MaxConcurrentExecutions` (50 за замовчуванням, PRD §7):
 job береться лише за вільного слота.
+
+Ключ кореляції (F5-04, docs/workflow-format.md «Ключ кореляції»): `ExecutionLauncher` пише `correlation_key`; з
+`settings.correlation.skipIfActive` запуск із ключем іде під тим самим advisory lock, що й ліміти, і за активного
+(`queued`/`running`/`cancelling`) виконання з тим самим ключем записується як `cancelled` без job.
 
 Ліміти сценарію (F6-06, docs/workflow-format.md «Ліміти навантаження»); не діють на `manual`:
 - **Рішення при запуску.** `ExecutionLauncher` бере `pg_advisory_xact_lock(hashtextextended('launch:' + workflowId, 0))`

@@ -190,6 +190,8 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.HasIndex(x => x.FinishedAt);
             e.HasIndex(x => new { x.WorkflowId, x.StartedAt });
             e.HasIndex(x => new { x.WorkflowId, x.ScheduledAt }).HasFilter("scheduled_at IS NOT NULL");
+            e.Property(x => x.CorrelationKey).HasMaxLength(200);
+            e.HasIndex(x => new { x.WorkflowId, x.CorrelationKey }).HasFilter("correlation_key IS NOT NULL");
         });
         b.Entity<ExecutionStepEntity>(e =>
         {

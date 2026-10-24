@@ -53,6 +53,18 @@ describe('workflow-settings', () => {
     });
     expect(limitErrors({ ...form, throttleLimit: '', throttlePeriodSec: 'abc' })).toEqual({});
   });
+
+  it('кореляція: перемикач додає correlation.skipIfActive, вимкнений прибирає, невідомі поля зберігаються', () => {
+    expect(settingsFormValue(settings).skipIfActive).toBe(false);
+    const on = applySettings(settings, { ...settingsFormValue(settings), skipIfActive: true });
+    expect(on.correlation).toEqual({ skipIfActive: true });
+    expect(settingsChanged(settings, on)).toBe(true);
+    expect(settingsFormValue(on).skipIfActive).toBe(true);
+    expect(applySettings(on, { ...settingsFormValue(on), skipIfActive: false })).toEqual(settings);
+
+    const extra: WorkflowSettings = { ...settings, correlation: { skipIfActive: true, note: 'x' } };
+    expect(applySettings(extra, { ...settingsFormValue(extra), skipIfActive: false }).correlation).toEqual({ note: 'x', skipIfActive: false });
+  });
 });
 
 describe('WorkflowSettingsDialogComponent', () => {

@@ -24,10 +24,19 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
     /// <summary>Код помилки валідації: <c>destinationNodeId</c> не знайдено в поточній версії сценарію.</summary>
     public const string DestinationNodeUnknownCode = "DESTINATION_NODE_UNKNOWN";
 
+    /// <summary>Найдовший ключ кореляції (<c>executions.correlation_key</c>).</summary>
+    public const int MaxCorrelationKeyLength = 200;
+
     /// <inheritdoc />
     public async Task<ExecutionSummary> LaunchAsync(ExecutionLaunch launch, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(launch);
+        var correlationKey = string.IsNullOrWhiteSpace(launch.CorrelationKey) ? null : launch.CorrelationKey.Trim();
+        if (correlationKey is { Length: > MaxCorrelationKeyLength })
+        {
+            throw new ArgumentException($"correlationKey довший за {MaxCorrelationKeyLength} символів.", nameof(launch));
+        }
+
         if (launch.StartItems is not null && launch.StartNodeId is null)
         {
             throw new ArgumentException("startItems задаються лише разом із startNodeId.", nameof(launch));
@@ -62,7 +71,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
         // Ліміти сценарію (F6-06) діють на все, крім ручного тестового запуску з канвасу.
         var limited = launch.Mode != ExecutionMode.Manual;
         WorkflowDefinition? definition = null;
-        if (limited || launch.StartNodeId is not null || launch.DestinationNodeId is not null)
+        if (limited || correlationKey is not null || launch.StartNodeId is not null || launch.DestinationNodeId is not null)
         {
             definition = WorkflowJson.Deserialize(await db.WorkflowVersions.AsNoTracking()
                 .Where(v => v.Id == versionId && v.WorkflowId == launch.WorkflowId)
@@ -96,15 +105,18 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
         var settings = limited ? definition!.Settings : null;
         var concurrency = settings?.Concurrency;
         var throttle = settings?.Throttle;
+        // Ключ кореляції (F5-04) діє на будь-який запуск, де його задано, зокрема ручний через REST/MCP.
+        var skipIfActive = correlationKey is not null && definition!.Settings.Correlation?.SkipIfActive == true;
+        var locked = concurrency is not null || throttle is not null || skipIfActive;
 
         // Рішення за лімітами і запис виконання — під замком сценарію, щоб паралельні запуски бачили один одного.
         // Якщо викликач уже відкрив транзакцію (mcp.poll ставить запуск разом із node_state), замок береться в ній.
-        var ownTx = (concurrency is not null || throttle is not null) && db.Database.CurrentTransaction is null
+        var ownTx = locked && db.Database.CurrentTransaction is null
             ? await db.Database.BeginTransactionAsync(ct)
             : null;
         try
         {
-            if (concurrency is not null || throttle is not null)
+            if (locked)
             {
                 await db.Database.ExecuteSqlInterpolatedAsync(
                     $"SELECT pg_advisory_xact_lock(hashtextextended({"launch:" + launch.WorkflowId}, 0))", ct);
@@ -112,9 +124,14 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
 
             var runAt = now;
             DateTimeOffset? scheduledAt = null;
-            var dropReason = concurrency is { OnLimit: LimitActions.Drop }
-                ? await ConcurrencyDropReasonAsync(launch.WorkflowId, concurrency, ct)
+            var dropReason = skipIfActive
+                ? await DuplicateReasonAsync(launch.WorkflowId, correlationKey!, ct)
                 : null;
+            if (dropReason is null && concurrency is { OnLimit: LimitActions.Drop })
+            {
+                dropReason = await ConcurrencyDropReasonAsync(launch.WorkflowId, concurrency, ct);
+            }
+
             if (dropReason is null && throttle is not null)
             {
                 (scheduledAt, dropReason) = await ThrottleSlotAsync(launch.WorkflowId, throttle, now, ct);
@@ -130,6 +147,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
                 Status = ExecutionStatuses.Queued,
                 ScheduledAt = scheduledAt,
                 ResumedFromExecutionId = launch.ResumedFromExecutionId,
+                CorrelationKey = correlationKey,
             };
             if (dropReason is not null)
             {
@@ -181,6 +199,23 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
                 await ownTx.DisposeAsync();
             }
         }
+    }
+
+    /// <summary>
+    /// <c>settings.correlation.skipIfActive</c>: причина пропуску, якщо в сценарію вже є активне (у черзі, в роботі,
+    /// скасовується) виконання з тим самим ключем; інакше <c>null</c>.
+    /// </summary>
+    private async Task<string?> DuplicateReasonAsync(Guid workflowId, string correlationKey, CancellationToken ct)
+    {
+        var active = await db.Executions.AsNoTracking()
+            .Where(e => e.WorkflowId == workflowId && e.CorrelationKey == correlationKey
+                && (e.Status == ExecutionStatuses.Queued || e.Status == ExecutionStatuses.Running || e.Status == ExecutionStatuses.Cancelling))
+            .OrderBy(e => e.Id)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(ct);
+        return active is { } id
+            ? $"Запуск пропущено: уже йде виконання {id} з ключем кореляції «{correlationKey}» (settings.correlation.skipIfActive)."
+            : null;
     }
 
     /// <summary>

@@ -29,6 +29,8 @@ export interface ExecutionSummary {
   error: string | null;
   /** Для `resume` — виконання, яке це продовжує. */
   resumedFromExecutionId?: string | null;
+  /** Ключ кореляції (F5-04): бізнес-ідентифікатор запуску, напр. id угоди. */
+  correlationKey?: string | null;
 }
 
 /** `StepError` — помилка вузла (F3-57): `message` — що сталося і що зробити, `details` — технічні подробиці. */
@@ -87,6 +89,8 @@ export interface StartExecutionRequest {
   destinationNodeId?: string | null;
   /** Виходи вузлів (по портах) з попереднього запуску: такі вузли не виконуються. */
   runData?: Record<string, ExecutionItem[][]> | null;
+  /** Ключ кореляції запуску (F5-04). */
+  correlationKey?: string | null;
 }
 
 /** Подія SSE `/executions/{id}/events` (docs/architecture.md §10.5). */
@@ -107,6 +111,8 @@ export interface ExecutionFilter {
   from?: string | null;
   /** ISO 8601: `started_at <= to`. */
   to?: string | null;
+  /** Точний збіг ключа кореляції (F5-04). */
+  correlationKey?: string | null;
 }
 
 /** Мінімум `EventSource`, який потрібен клієнту; у тестах підміняється. */
@@ -136,7 +142,7 @@ export class ExecutionsApiService {
   /** `GET /executions` — журнал, новіші першими (для `queued` — за id). */
   list(filter: ExecutionFilter = {}, page = 1, pageSize = 50): Observable<PageResult<ExecutionSummary>> {
     const params: Record<string, string | number> = { page, pageSize };
-    for (const key of ['workflowId', 'status', 'from', 'to'] as const) {
+    for (const key of ['workflowId', 'status', 'from', 'to', 'correlationKey'] as const) {
       const value = filter[key];
       if (value) params[key] = value;
     }

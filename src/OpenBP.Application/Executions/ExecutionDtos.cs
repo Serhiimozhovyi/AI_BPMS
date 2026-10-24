@@ -80,6 +80,7 @@ public static class ExecutionStates
 /// <param name="FinishedAt">Завершення; <c>null</c>, поки не фінальний стан.</param>
 /// <param name="Error">Повідомлення помилки для <see cref="ExecutionState.Error"/>/<see cref="ExecutionState.TimedOut"/>.</param>
 /// <param name="ResumedFromExecutionId">Для <see cref="ExecutionMode.Resume"/> — виконання, яке це продовжує (F6-08).</param>
+/// <param name="CorrelationKey">Ключ кореляції (F5-04): Id угоди, контрагента тощо; <c>null</c> — не задано.</param>
 public sealed record ExecutionSummary(
     Guid Id,
     Guid WorkflowId,
@@ -89,7 +90,8 @@ public sealed record ExecutionSummary(
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt,
     string? Error,
-    Guid? ResumedFromExecutionId = null);
+    Guid? ResumedFromExecutionId = null,
+    string? CorrelationKey = null);
 
 /// <summary>Виконання з кроками (<c>GET /executions/{id}</c>); кроки вже очищені від секретів (F2-04).</summary>
 /// <param name="Summary">Заголовок виконання.</param>
@@ -124,7 +126,13 @@ public sealed record ExecutionStepDto(
 /// <param name="State">Лише в цьому стані; <c>null</c> — у будь-якому.</param>
 /// <param name="From">Початок не раніше.</param>
 /// <param name="To">Початок не пізніше.</param>
-public sealed record ExecutionFilter(Guid? WorkflowId = null, ExecutionState? State = null, DateTimeOffset? From = null, DateTimeOffset? To = null);
+/// <param name="CorrelationKey">Лише з цим ключем кореляції (точний збіг).</param>
+public sealed record ExecutionFilter(
+    Guid? WorkflowId = null,
+    ExecutionState? State = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null,
+    string? CorrelationKey = null);
 
 /// <summary>Параметри ручного запуску (<c>POST /workflows/{id}/executions</c>, MCP <c>run_workflow</c>, <c>test_node</c>).</summary>
 /// <param name="StartNodeId">Тригер, з якого стартувати; <c>null</c> — усі вузли без вхідних ребер.</param>
@@ -136,11 +144,13 @@ public sealed record ExecutionFilter(Guid? WorkflowId = null, ExecutionState? St
 /// Виходи вузлів з попереднього тестового запуску (id вузла → items по портах): такі вузли не виконуються, їхній
 /// вихід береться звідси (поверх <c>pinData</c>). Зазвичай — попередники <paramref name="DestinationNodeId"/>.
 /// </param>
+/// <param name="CorrelationKey">Ключ кореляції виконання (F5-04), до 200 символів.</param>
 public sealed record StartExecutionRequest(
     string? StartNodeId = null,
     IReadOnlyList<Item>? StartItems = null,
     string? DestinationNodeId = null,
-    IReadOnlyDictionary<string, Item[][]>? RunData = null);
+    IReadOnlyDictionary<string, Item[][]>? RunData = null,
+    string? CorrelationKey = null);
 
 /// <summary>Тіло <c>POST /executions/{id}/resume</c> (F6-08).</summary>
 /// <param name="Items">Нові items на вхід 0 вузла, що впав; <c>null</c> — ті самі, що були у вихідному виконанні.</param>
@@ -156,6 +166,10 @@ public sealed record ResumeExecutionRequest(IReadOnlyList<Item>? Items = null);
 /// <param name="VersionId">Конкретна версія сценарію (повтор, <see cref="ExecutionMode.Retry"/>); <c>null</c> — поточна.</param>
 /// <param name="ResumedFromExecutionId">Лише <see cref="ExecutionMode.Resume"/>: виконання, яке продовжується.</param>
 /// <param name="InputOverrides">Лише <see cref="ExecutionMode.Resume"/>: нові items на вхід 0 вузла, що впав.</param>
+/// <param name="CorrelationKey">
+/// Ключ кореляції (F5-04); порожній — немає. З <c>settings.correlation.skipIfActive</c> запуск при активному виконанні з тим
+/// самим ключем пишеться як <see cref="ExecutionState.Cancelled"/> без job.
+/// </param>
 public sealed record ExecutionLaunch(
     Guid WorkflowId,
     ExecutionMode Mode,
@@ -165,7 +179,8 @@ public sealed record ExecutionLaunch(
     IReadOnlyDictionary<string, Item[][]>? RunData = null,
     Guid? VersionId = null,
     Guid? ResumedFromExecutionId = null,
-    IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null);
+    IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null,
+    string? CorrelationKey = null);
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

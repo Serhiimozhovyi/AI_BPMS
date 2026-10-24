@@ -135,6 +135,14 @@ export interface WorkflowSettingsDialogData {
               <mat-hint i18n="@@workflowsettings.disableAfterErrors.hint">Скільки помилкових запусків тригера поспіль деактивують сценарій; порожньо — ніколи</mat-hint>
             }
           </mat-form-field>
+
+        <mat-slide-toggle
+          data-testid="settings-skip-if-active"
+          [checked]="value().skipIfActive"
+          (change)="patch({ skipIfActive: $event.checked })"
+          i18n="@@workflowsettings.skipIfActive"
+          >Не запускати дубль, поки йде виконання з тим самим ключем кореляції</mat-slide-toggle
+        >
       </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">

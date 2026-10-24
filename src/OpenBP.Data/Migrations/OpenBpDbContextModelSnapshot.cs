@@ -410,6 +410,11 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CorrelationKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("correlation_key");
+
                     b.Property<string>("Error")
                         .HasColumnType("text")
                         .HasColumnName("error");
@@ -455,6 +460,9 @@ namespace OpenBP.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FinishedAt");
+
+                    b.HasIndex("WorkflowId", "CorrelationKey")
+                        .HasFilter("correlation_key IS NOT NULL");
 
                     b.HasIndex("WorkflowId", "ScheduledAt")
                         .HasFilter("scheduled_at IS NOT NULL");
