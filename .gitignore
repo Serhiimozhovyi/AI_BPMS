@@ -17,3 +17,6 @@ coverage/
 *.log
 .DS_Store
 .idea/
+# backups / files (docker-compose.prod.yml)
+/backups/
+/data/

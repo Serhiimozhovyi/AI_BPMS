@@ -100,6 +100,31 @@ services:
         condition: service_healthy
     logging: *logging
 
+  # Щоденний pg_dump -Fc у ./backups (OPENBP_BACKUP_DIR) з ротацією (F4-11). Разовий бекап: scripts/backup.sh,
+  # відновлення: scripts/restore.sh <файл>. Ключ OPENBP_ENCRYPTION_KEY бекапте окремо — у дампі його немає.
+  backup:
+    build:
+      context: .
+      dockerfile: docker/backup.Dockerfile
+    image: openbp/backup:${OPENBP_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-openbp}
+      PGUSER: ${POSTGRES_USER:-openbp}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD у .env}
+      OPENBP_BACKUP_CRON: ${OPENBP_BACKUP_CRON:-0 2 * * *}
+      OPENBP_BACKUP_KEEP_DAYS: ${OPENBP_BACKUP_KEEP_DAYS:-14}
+      OPENBP_BACKUP_UID: ${OPENBP_BACKUP_UID:-0}
+      OPENBP_BACKUP_GID: ${OPENBP_BACKUP_GID:-0}
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - ${OPENBP_BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
 volumes:
   postgres-data:
   files:

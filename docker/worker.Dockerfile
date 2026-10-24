@@ -21,6 +21,7 @@ ENV OPENBP_WORKER_HEALTH_PORT=8089 \
     Storage__LocalPath=/data/files \
     DOTNET_NOLOGO=1 \
     Logging__LogLevel__Microsoft.AspNetCore=Warning \
+    Logging__LogLevel__Microsoft.EntityFrameworkCore=Warning \
     DOTNET_CLI_TELEMETRY_OPTOUT=1
 VOLUME ["/data/files"]
 EXPOSE 8089
