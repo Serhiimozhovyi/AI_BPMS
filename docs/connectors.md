@@ -181,6 +181,12 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
   артикулом, запис документа → `{ number }`), `sales_report` (`{ result }`: проведені продажі за період з назвами
   контрагентів), плюс згенеровані з `$metadata` tools (`Connector:Source`); імена об'єктів 1С — налаштування
   `Connector:OneC:*`, логін і пароль — лише змінні `ONEC_USERNAME`/`ONEC_PASSWORD`.
+- `connectors/psy-support` — застосунок психологічної підтримки з власною БД і адмінкою (F3-34, `docs/psy-support.md`):
+  сім tools бота `bot_*` повертають `{ ok, code, screen { text, parse_mode, reply_markup, new_message }, notifications,
+  commands }` для Telegram-конектора; доменні tools (`book_slot`, `register_event`, `book_bst`, `join_waitlist`,
+  `due_notifications`/`mark_notifications_sent`, `generate_slots`, `anonymize_old_records`…). Помилки домену — `ok: false`
+  з `code`, а не `isError`. HTTP `/mcp` — лише з `Authorization: Bearer` (`PSY_MCP_TOKEN`; `PSY_MCP_TOKEN_PII` — з
+  телефонами), stdio — без токена й без телефонів. JSON — snake_case, поля зі значенням `null` пропускаються.
 
 ## 6. Тригери
 

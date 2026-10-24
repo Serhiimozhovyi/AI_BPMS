@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        connector: [telegram, msgraph, onec]
+        connector: [telegram, msgraph, onec, psy-support]
     defaults:
       run:
         working-directory: connectors/${{ matrix.connector }}

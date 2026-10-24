@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Застосунок психологічної підтримки (docs/psy-support.md): БД, правила, MCP-tools для бота (stdio або Streamable HTTP),
+    REST і вхід для адмінки, імпорт CSV з Google Sheets.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>OpenBP.Connectors.PsySupport</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Міграції EF Core згенеровані інструментом: XML-коментарі до них не пишемо. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpenBP.Connectors.PsySupport.Tests" />
+  </ItemGroup>
+
+</Project>

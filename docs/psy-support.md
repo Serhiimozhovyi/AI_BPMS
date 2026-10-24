@@ -126,13 +126,15 @@ F3-34; що зміниться в такому разі, там теж запи�
 {
   "ok": true,
   "code": "booked",
-  "screen": { "text": "<b>Записано</b> на 12.11, 10:00…", "parse_mode": "HTML", "reply_markup": { "inline_keyboard": [[…]] } },
+  "screen": { "text": "<b>Записано</b> на 12.11, 10:00…", "parse_mode": "HTML", "reply_markup": { "inline_keyboard": [[…]] }, "new_message": false },
   "notifications": [ { "chat_id": 123456, "text": "Новий запис: 12.11, 10:00", "reply_markup": null } ],
   "commands": null
 }
 ```
 
-`screen` іде прямо в `send_message`/`edit_message_text` Telegram-конектора (F3-27). `notifications` сценарій надсилає
+`screen` іде прямо в `send_message`/`edit_message_text` Telegram-конектора (F3-27). `new_message: true` означає, що екран
+треба надіслати новим повідомленням навіть у відповідь на кнопку: reply-клавіатуру з `request_contact` не можна поставити
+через `edit_message_text`. JSON tools — snake_case; поля зі значенням `null` пропускаються. `notifications` сценарій надсилає
 по одному. `commands` (лише після реєстрації психолога) — аргументи для `set_my_commands` зі `scope` його чату (`/psy`).
 
 ### 5.1. Для бота: екрани за розділами
@@ -193,6 +195,17 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
 (`m:`, `mt:`, `c:`, `e:`, `b:`, `p:`), а `<key>` замінюється на id: `c:ok:1834`, перенесення `c:mo:1834:2051`, дата —
 `yyyyMMdd`. Найдовший код займає менше 30 байт.
 
+| Розділ | Коди |
+|---|---|
+| меню | `m:psy` (головне меню), `m:help`, `m:sos` |
+| матеріали | `m:mat`, `mt:p:<сторінка>`, `mt:arch:<сторінка>`, `mt:r:<id>` |
+| консультації | `m:cons`, `c:p:<психолог>`, `c:d:<психолог>:<дата>`, `c:t:<слот>`, `c:ok:<слот>`, `c:my`, `c:x:<запис>`, `c:xx:<запис>`, `c:mv:<запис>`, `c:md:<запис>:<дата>`, `c:mt:<запис>:<слот>`, `c:mo:<запис>:<слот>` |
+| події | `m:ev`, `e:<id>`, `e:ok:<id>`, `e:x:<id>`, `e:fb:<id>:<1–5>` |
+| БСТ | `m:bst`, `b:s:<сеанс>`, `b:ok:<сеанс>`, `b:x:<сеанс>`, `b:w:<сеанс>`, `b:wx:<сеанс>`, `b:mv:<A>`, `b:mt:<A>:<B>`, `b:mo:<A>:<B>` |
+| кабінет | `/psy`, `p:h`, `p:bk`, `p:ev`, `p:e:<id>`, `p:ne:<id>`, `p:se:<id>`, `p:bst`, `p:b:<сеанс>`, `p:nb:<сеанс>`, `p:sb:<сеанс>` |
+
+Перенесення консультації — лише в межах того самого психолога, як у n8n.
+
 ## 7. Ролі, вхід і доступ
 
 ### 7.1. Адмінка (люди)
@@ -208,6 +221,16 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
   Посилання показується координатору в адмінці, бо пошти застосунок не надсилає.
 - Перший координатор створюється під час старту з `PSY_ADMIN_EMAIL`/`PSY_ADMIN_PASSWORD`, якщо облікових записів немає.
 - 5 невдалих входів поспіль блокують вхід на 15 хв. Сесія закінчується через 12 год бездіяльності.
+- Cookie `psy_session`: `HttpOnly`, `SameSite=Strict` (захист від CSRF для REST), `Secure` за HTTPS.
+- REST `/api/v1` (F3-34), дати — ISO 8601 з поясом, JSON — snake_case:
+  - вхід: `POST auth/login`, `POST auth/logout`, `GET auth/me`, `POST auth/invite` (пароль за посиланням, ≥ 10 символів);
+  - обидві ролі: `GET psychologists`, `GET|POST slots`, `PUT slots/{id}/status`, `DELETE slots/{id}`,
+    `GET|POST|DELETE slot-templates`, `GET bookings`, `POST bookings/{id}/cancel`, `GET events`,
+    `GET events/{id}/registrations`, `POST events/{id}/notice`, `GET|POST|PUT bst`, `GET bst/{id}/participants`,
+    `POST bst/{id}/notice`, `GET materials` (психолог — лише свої слоти, шаблони й сеанси БСТ);
+  - координатор: `POST|PUT psychologists`, `GET|POST staff`, `POST staff/{id}/invite`, `POST staff/{id}/disabled`,
+    `POST slots/generate`, `POST|PUT events`, `POST|PUT materials`, `GET|PUT settings`, `GET counters`, `GET audit`,
+    `GET users?q=` (пошук за телефоном чи ім'ям, пишеться в журнал), `POST users/{telegram_id}/delete`.
 
 ### 7.2. Кабінет у боті
 
@@ -220,7 +243,9 @@ Telegram підтверджує `from.id`. Обліковий запис в ад
   `{ "headers": { "Authorization": "Bearer …" } }` (`architecture.md` §10.7). Без токена — 401 до MCP-обміну.
 - Токенів два: `PSY_MCP_TOKEN` (бот, ШІ-агенти; телефони лише в межах правила 4.8) і `PSY_MCP_TOKEN_PII` (повний
   доступ до телефонів; для адмін-сценаріїв, за замовчуванням не задано).
-- stdio не потребує токена: процес запускає той, хто має доступ до конфігурації OpenBP.
+- stdio не потребує токена: процес запускає той, хто має доступ до конфігурації OpenBP. Телефонів stdio не віддає (як
+  `PSY_MCP_TOKEN`); кабінет психолога в боті працює незалежно від цього (правило 4.8).
+- Якщо жоден токен не задано, `/mcp` відповідає 401 на всі запити.
 
 ## 8. Персональні дані
 
@@ -252,6 +277,8 @@ Telegram підтверджує `from.id`. Обліковий запис в ад
 - переводить статуси (`вільний` → `open`, `активний` → `active`, `так`/`ні` → bool…);
 - зв'язує `slot_key`/`session_key` з новими id і переносить лічильники й тексти `settings`;
 - пропускає `log` (історію дій не переносимо);
+- з кількох активних спроб запису на слот бере першу за порядком рядків (як переможця в n8n), решту пропускає з причиною
+  `duplicate_active_attempt`; слот `зайнятий` без активного рядка в `bookings` отримує запис з `booked_by`;
 - ідемпотентний: повторний запуск на тих самих CSV нічого не дублює (ключі зі старих id зберігаються в
   `import_map`);
 - виводить звіт «скільки рядків, скільки пропущено й чому» без персональних даних.
