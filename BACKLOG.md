@@ -406,7 +406,7 @@
 - DoD: тест — viewer отримує каталог (тригер `mcp.poll` без входів і з `keyField`, `core.if` з двома виходами, `mcp.tool` з `itemsPath`, `ai.llm` з credential'ом), склад збігається з REST `/nodes`, resource повертає те саме; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
 
 ### F3-22 · `outputSchema` tools у `describe_connectors`
-- model: `sonnet` · status: `review #74` · depends: F3-03
+- model: `sonnet` · status: `done` · depends: F3-03
 - Що: `describe_connectors` і `openbp://connectors` віддають і `outputSchema` tool'а з кешу discovery (конектори на шаблоні її публікують), щоб агент знав форму відповіді (`{ result: [{ id, name }] }`) і писав правильні вирази в наступних вузлах. Знайдено ручною перевіркою F3-17: агент написав `{{ $json.attachmentId }}` замість `{{ $json.id }}` і дізнався про це лише під час запуску. Статично валідатор такого не зловить: вирази обчислюються під час виконання.
 - DoD: тест — tool з `outputSchema` у кеші віддає її, без неї — `null`; конфіг і credentials, як і раніше, не потрапляють у відповідь; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
 
