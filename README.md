@@ -35,6 +35,21 @@ dotnet format --verify-no-changes
   `workflowId` для записів виконання; значення credentials у журнал не потрапляють. Рівні — як завжди,
   `Logging__LogLevel__Default=Warning`, `Logging__LogLevel__OpenBP=Information` тощо.
 
+### Docker-образи
+
+Образи збираються з кореня репозиторію (контекст — `.`, див. `.dockerignore`):
+
+| Образ | Dockerfile | Що всередині |
+|---|---|---|
+| api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
+| worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
+| migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/mcp`, `/webhook`, `/health` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`), решта — SPA |
+
+```bash
+docker build -f docker/api.Dockerfile -t openbp-api .
+```
+
 ### Запуск сценарію з CLI
 
 `openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
