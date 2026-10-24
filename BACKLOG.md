@@ -682,7 +682,7 @@
 - DoD: Playwright на демо: завантажити сценарій, змінити, зберегти → подія `openbp-saved`; `readonly` не дає редагувати; стилі хоста не ламають канвас і навпаки; розмір бандла — у PR; SPA-збірка не змінилась.
 
 ### F4-14 · Вхід через OIDC: Entra ID і Keycloak
-- model: `opus` · status: `review #107` · depends: F3-24
+- model: `opus` · status: `done` · depends: F3-24
 - Що: провайдери з конфігурації `OpenBp:Oidc:Providers:<key>` (`DisplayName`, `Authority`, `ClientId`, `ClientSecret`, `Scopes`, `RoleClaim` — для Keycloak `realm_access.roles`/`resource_access.<client>.roles`, для Entra `roles`, `RoleMap { admin: [...], editor: [...] }`, `AutoProvision`, `AllowedEmailDomains`). Authorization code + PKCE, cookie-сесія та сама, що в паролю; користувач шукається за `(provider, sub)`, далі за підтвердженою поштою, створюється (якщо `AutoProvision`) з роллю з `RoleMap`, інакше `viewer`; роль оновлюється при кожному вході. Міграція: `users.password_hash` nullable, таблиця `user_logins (user_id, provider, subject)`. `GET /api/v1/auth/providers` для сторінки входу (кнопки «Увійти через …» у стилі AC-Kit); `OPENBP_PASSWORD_LOGIN=false` ховає й вимикає вхід паролем (крім аварійного адміна з env). Keycloak «Кіт 2» (realm `astarta`): документуємо, який клієнт має створити власник (confidential, redirect `https://<openbp>/signin-oidc/<key>`), у Кіті нічого не змінюємо.
 - DoD: тести проти Keycloak у Testcontainers (імпорт тестового realm: вхід, авто-створення, мапінг ролей з realm і client roles, заборонений домен); юніт-тести мапінгу claims Entra; logout; Playwright на кнопки входу (з фейковим провайдером); `architecture.md` §10.6 і доки адміна оновлено.
 
