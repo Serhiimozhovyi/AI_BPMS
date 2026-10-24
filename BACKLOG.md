@@ -852,7 +852,7 @@
 - DoD: тести (Testcontainers): `max: 1` — 5 вебхуків виконуються послідовно в порядку надходження; `drop`; `throttle` 2 за 10 с з фейковим часом; `disableAfterErrors: 3` деактивує після третьої помилки, успіх скидає лічильник; інші сценарії не блокуються; Vitest діалогу; `docs/workflow-format.md`, `architecture.md` §10.4 оновлено.
 
 ### F6-07 · Сповіщення адміністратору, сторінка «Огляд», `/metrics`
-- model: `sonnet` · status: `ready` · depends: F4-08, F3-09, F6-06
+- model: `sonnet` · status: `review` · depends: F4-08, F3-09, F6-06
 - Що: таблиця `notification_channels` (admin, `/settings`): тип `email` (через конектор msgraph `send_mail`), `telegram` (конектор, `chat_id`), `webhook` (URL + заголовки з credential); події: виконання `error`/`timed_out` (не частіше ніж раз на `cooldownSec` на сценарій), сценарій вимкнено запобіжником (F6-06), конектор недоступний після discovery/виклику, воркер без heartbeat > 2 хв, помилка бекапу (F4-11, через health). Сторінка «Огляд» (`/`, перша після входу): за 24 год / 7 / 30 днів — кількість виконань, частка успішних, p50/p95 тривалості, топ-5 сценаріїв за помилками, зараз `running`/`waiting`/`queued`; дані з таблиці погодинних агрегатів `execution_stats`, яку заповнює Quartz-job (не сканувати `executions` з UI). `GET /metrics` (Prometheus text, без auth лише з `OPENBP_METRICS_ALLOW_ANONYMOUS`) в Api і Worker: виконання за статусом/сценарієм, тривалість (гістограма), глибина черги, вік найстаршого job'а, активні підписки.
 - DoD: тести: подія помилки → повідомлення у фейковий конектор, cooldown працює; вимкнення сценарію → повідомлення; агрегати збігаються з `executions` на тестових даних; `/metrics` містить метрики й не містить секретів; Vitest «Огляд» і налаштувань каналів; README/доки адміна оновлено.
 
@@ -907,7 +907,7 @@
 - DoD: тести: прогін з 3 кейсами проти фейкового HTTP моделі дає 2/3; `expression`-перевірка; результати зберігаються за версією; viewer не запускає; Vitest вкладки; `docs/mcp-server.md` оновлено.
 
 ### F6-18 · S3-сховище файлів і трейси OpenTelemetry
-- model: `sonnet` · status: `review` · depends: F3-19, F4-08
+- model: `sonnet` · status: `done` · depends: F3-19, F4-08
 - Що: `IBinaryStore` для S3-сумісного сховища (`Storage:S3` — endpoint, bucket, ключі зі змінних середовища; `AWSSDK.S3` або `Minio` — записати вибір і ліцензію в `THIRD_PARTY_NOTICES.md`), `BinaryRef.storage = s3`, читання лише своїх посилань; `minio` як опційний сервіс у `docker-compose.prod.yml` (профіль). OpenTelemetry (`OpenTelemetry.Extensions.Hosting`, OTLP exporter): span на виконання, вузол, виклик MCP tool, HTTP до моделі; `executionId`/`workflowId` у атрибутах; увімкнення через `OTEL_EXPORTER_OTLP_ENDPOINT`; секрети в атрибути не потрапляють.
 - DoD: тести сховища проти MinIO у Testcontainers (запис/читання/хеш/підроблений ref); воркер з двома екземплярами бачить спільні файли (інтеграційний); тест, що спans мають потрібні атрибути й не містять credentials; README/доки адміна оновлено.
 

@@ -132,6 +132,12 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |
+| `notification_channels` | id, name, type (`email`/`telegram`/`webhook`), config (jsonb: посилання на конектор чи credential, без секретів), events (jsonb), cooldown_sec, enabled, created_at, updated_at (F6-07) |
+| `notifications` | id, created_at, event, subject (id сценарію, конектора, воркера або `backup`), title, details (jsonb без секретів), processed_at (null — ще не розіслано; частковий індекс) — черга сповіщень F6-07 |
+| `notification_sends` | channel_id → notification_channels (cascade), key (`подія:subject`), sent_at — для `cooldown_sec` |
+| `worker_heartbeats` | worker_id (PK), started_at, seen_at — воркер оновлює раз на 30 с (F6-07) |
+| `backup_runs` | id, at, ok, message — пише сервіс `backup` після кожного `pg_dump` (F6-07) |
+| `execution_stats` | hour + workflow_id (PK), total, success, error, timed_out, cancelled, duration_sum_ms, duration_buckets (int[]: межі `ExecutionStatsBuckets.BoundsMs` + переповнення) — погодинні агрегати для «Огляду» і `/metrics` |
 
 Таблиці даних (F6-11): правила значень і фільтрів — одні на всіх (`OpenBP.Engine.Data.DataTableRules`): вузол
 `core.dataTable`, REST, UI і MCP. Сховище `PostgresDataTableStore` пише рядки під `pg_advisory_xact_lock` таблиці
@@ -160,7 +166,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ## 7. Frontend (Angular)
 
-- Standalone-компоненти, Signals, роутинг: `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tables` (таблиці даних, F6-11), `/connectors`, `/credentials`, `/settings`.
+- Standalone-компоненти, Signals, роутинг: `/` («Огляд», F6-07), `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tables` (таблиці даних, F6-11), `/connectors`, `/credentials`, `/settings`.
 - Вхід (F3-24): `/login` (email + пароль, `POST /auth/login`, cookie-сесія); решта маршрутів — під guard'ом, який перевіряє сесію через `GET /auth/me` і без неї веде на `/login?returnUrl=…` (лише шлях усередині застосунку). 401 від Api посеред роботи — теж на `/login` з поверненням; «Вийти» — `POST /auth/logout`.
 - Канвас — обраний у спайку фази 2 (ngx-vflow або Rete.js); обгорнутий у власний компонент `CanvasComponent`, щоб бібліотеку можна було замінити.
 - Форма вузла — ngx-formly з JSON Schema; для `mcp.tool` схема береться з `tools_cache`.
@@ -183,6 +189,16 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   несе claim `api_key_id`, тож у записі видно, через який ключ (REST чи MCP) зроблено зміну. Читає лише admin
   (`GET /audit`, блок у `/settings`); записи старші за `OPENBP_AUDIT_RETENTION_DAYS` (типово 365) видаляє job F4-07.
   Користувачів, ролей, проєктів і задач F6-02 ще немає — їхні дії додаються разом із цими функціями.
+- Сповіщення адміністратору (F6-07): подію пише той, хто її помітив, через `db.Notify(...)` у тій самій транзакції
+  (воркер — помилку виконання з тригера; запобіжник `disableAfterErrors` — вимкнення сценарію; `ConnectorService` —
+  перехід конектора в `error`; `OpsWatchdog` у Api — воркер без heartbeat понад 2 хв і невдалий чи застарілий бекап,
+  раз за епізод). Quartz-job `notifications` в Api (кожні `OPENBP_NOTIFICATIONS_INTERVAL_SEC`, типово 30 с) забирає
+  нерозіслані рядки `UPDATE … FOR UPDATE SKIP LOCKED RETURNING` і шле в канали з підпискою на подію з урахуванням
+  `cooldown_sec` на ключ `подія:subject`. Пошта й Telegram ідуть через `ConnectorService.CallToolAsync` від імені
+  системи, вебхук — POST JSON з заголовками з credential (`headers`). У `details` — лише назви, id, статус і текст
+  помилки (вже після scrubbing'у). Розіслані сповіщення старші за `OPENBP_EXECUTION_RETENTION_DAYS` видаляє job F4-07.
+- `GET /metrics` (Prometheus text 0.0.4) в Api і на порту health воркера: без `OPENBP_METRICS_ALLOW_ANONYMOUS=true`
+  лише з API-ключем admin'а (або сесією admin'а в Api); у метриках лише лічильники, id і назви сценаріїв.
 
 ## 9. Готові компоненти
 
@@ -266,6 +282,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `GET /workflows/{id}/export` | editor | `{ definition, manifest: { connectors: [{ ref, name, transport }], credentials: [{ ref, name, type }], variables: [key], workflows: [{ ref, name }] } }` — без секретів і значень змінних (F6-09) |
 | `POST /workflows/import { definition, manifest?, mapping?, groupId? }` | editor | 201 `{ workflow, mapping, missingVariables }` — новий неактивний сценарій; `serverId`/`credentialId`/`settings.errorWorkflowId` перемаплюються (`mapping` → єдиний об'єкт з тією самою назвою і транспортом/типом); незмаплене — 422 `IMPORT_UNMAPPED` з `unmapped: [{ kind, ref, name, type, reason }]`, нічого не створено |
 | `GET /audit?userId&action&entityType&entityId&from&to&page&pageSize` | admin | `PageResult<AuditEntry>` (`{ id, at, userId, userEmail, apiKeyId, apiKeyName, action, entityType, entityId, details }`), нові першими; `action` — точна дія або префікс із крапкою (`workflow.`) — F6-15 |
+| `GET /overview?range=24h\|7d\|30d` | viewer | `{ range, from, total, success, failed, cancelled, successRate, p50Ms, p95Ms, topFailing: [{ workflowId, name, failed, total }], queued, running, waiting }` — з `execution_stats` і черги, без сканування `executions` (F6-07) |
+| `GET /notification-channels` · `POST /notification-channels` · `PUT /notification-channels/{id}` · `DELETE /notification-channels/{id}` · `POST /notification-channels/{id}/test` | admin | `NotificationChannel[]` · 201 `NotificationChannel` · `NotificationChannel` · 204 · 204 (тестове повідомлення без cooldown; 502 `NOTIFICATION_DELIVERY_FAILED`); невалідне тіло — 400 (F6-07) |
 | `GET /variables` · `PUT /variables/{key} { value, description? }` · `DELETE /variables/{key}` | viewer (читання), admin | `VariableDto[]` · `VariableDto` (створює або змінює) · 204 |
 | `GET /tables` · `GET /tables/{id або назва}` · `POST /tables { name, columns }` · `PUT /tables/{id} { name, columns }` · `DELETE /tables/{id}` | viewer (читання), editor | `DataTableSummary[]` (`{ id, name, columns, rowCount, updatedAt }`) · `DataTableSummary` · 201 · `DataTableSummary` · 204; повтор назви — 409 `DATA_TABLE_NAME_TAKEN`, зміна ключа таблиці з рядками — 409 `DATA_TABLE_KEY_CHANGE`, колонки — 422 `DATA_TABLE_COLUMNS_INVALID` (F6-11) |
 | `GET /tables/{id}/rows?search&page&pageSize` · `POST /tables/{id}/rows { values }` · `PATCH /tables/{id}/rows/{key} { values }` · `DELETE /tables/{id}/rows/{key}` · `POST /tables/{id}/import { csv }` | viewer (читання), editor | `PageResult<DataRowDto>` (`{ key, data, createdAt, updatedAt }`) · 201 · `DataRowDto` · 204 · `{ inserted, updated }`; помилки значень — 422 `DATA_TABLE_*`, дубль ключа — 409 `DATA_TABLE_KEY_DUPLICATE`; CSV перевіряється повністю до запису |
@@ -381,6 +399,11 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
   видаляє завершені виконання з кроками, що закінчились раніше ніж `OPENBP_EXECUTION_RETENTION_DAYS` днів тому
   (типово 30; `0` — не видаляти). Видалення йде пачками по 500 виконань, кожна пачка — окрема транзакція;
   `queued`/`running`/`cancelling` не чіпаються. Кількість видаленого пишеться в журнал.
+- Quartz-job `execution-stats` в Api (`ExecutionStatsJob`, кожні 5 хв) перераховує `execution_stats` за останні 3 години
+  одним `INSERT … SELECT … ON CONFLICT DO UPDATE` над `executions.finished_at` (індекс); порожня таблиця — за всю історію.
+  Тривалість — у кошиках гістограми, тож p50/p95 у «Огляді» — верхня межа кошика. Видалення старих виконань
+  ретеншном агрегати не зменшує.
+- Quartz-job `notifications` в Api — див. §8 (сповіщення адміністратору).
 
 ### 10.5. SSE
 

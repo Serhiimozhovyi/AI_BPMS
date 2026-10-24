@@ -11,16 +11,17 @@ import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
 import { AuthService } from '../../auth/auth.service';
 import { AuditSection } from '../../settings/audit-section.component';
+import { NotificationChannelsSection } from '../../settings/notification-channels-section.component';
 import { VariablesSection } from '../../settings/variables-section.component';
 
 /**
  * `/settings`: свої API-ключі (створення, відкликання), підключення ШІ-агента до `/mcp` (F3-07), змінні інстансу (F6-09)
- * і журнал аудиту для admin (F6-15).
+ * канали сповіщень (F6-07) і журнал аудиту (F6-15) для admin.
  */
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection, AuditSection],
+  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection, NotificationChannelsSection, AuditSection],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
@@ -120,6 +121,9 @@ import { VariablesSection } from '../../settings/variables-section.component';
       </div>
 
       @if (isAdmin()) {
+        <div class="mt-8" data-testid="notifications-section">
+          <app-notification-channels-section />
+        </div>
         <div class="mt-8" data-testid="audit-section">
           <app-audit-section />
         </div>
