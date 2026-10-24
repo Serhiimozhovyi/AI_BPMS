@@ -687,7 +687,7 @@
 - DoD: тести проти Keycloak у Testcontainers (імпорт тестового realm: вхід, авто-створення, мапінг ролей з realm і client roles, заборонений домен); юніт-тести мапінгу claims Entra; logout; Playwright на кнопки входу (з фейковим провайдером); `architecture.md` §10.6 і доки адміна оновлено.
 
 ### F4-15 · Документація адміністратора
-- model: `haiku` · status: `review #109` · depends: F4-10, F4-11, F4-14
+- model: `haiku` · status: `done` · depends: F4-10, F4-11, F4-14
 - Що: `docs/admin/`: вимоги до сервера, інсталяція з нуля за `docker-compose.prod.yml` (крок за кроком, з `scripts/gen-env.sh`), HTTPS (reverse proxy: Caddy/nginx — приклад), перший вхід, користувачі й ролі, OIDC (Entra ID і Keycloak — з прикладами реєстрації клієнта), конектори і credentials, бекап/відновлення, оновлення версії, журнали і health-checks, усі змінні середовища таблицею, типові проблеми.
 - DoD: кожна змінна з `.env.example` описана; посилання з README; перевірено, що команди в доках збігаються зі скриптами.
 
