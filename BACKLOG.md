@@ -411,7 +411,7 @@
 - DoD: тест — tool з `outputSchema` у кеші віддає її, без неї — `null`; конфіг і credentials, як і раніше, не потрапляють у відповідь; `docs/mcp-server.md` і `architecture.md` §4 оновлено.
 
 ### F3-23 · `$binary` у виразах
-- model: `opus` · status: `review #75` · depends: F2-07
+- model: `opus` · status: `done` · depends: F2-07
 - Що: змінна `$binary` у `{{ }}` — посилання на файли поточного item'а (`BinaryRef` з `docs/workflow-format.md`: `fileName`, `mimeType`, `fileSize`…; байтів немає), і `$node["Назва"].binary` — файли відповідного item'а попереднього вузла. Знайдено ручною перевіркою F3-17: агент написав `{{ $binary.data.fileName }}` і отримав `$binary is not defined`.
 - DoD: тести обчислювача (`$binary.data.fileName`, item без файлів → `{}`, `$node[…].binary`); тест движка з вузлом, що повертає binary item; `architecture.md` (змінні виразів) і опис `describe_nodes` оновлено.
 
