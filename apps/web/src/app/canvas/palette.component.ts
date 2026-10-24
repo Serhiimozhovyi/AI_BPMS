@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { PaletteItem, PaletteSection, filterPalette } from './palette';
+import { PaletteItem, PaletteSection, filterPalette, itemHint } from './palette';
 
 /** Ключ `localStorage` зі станом згортання секцій: `{ [sectionId]: true — згорнута, false — розгорнута }`. */
 export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
@@ -47,7 +47,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
             (click)="pick.emit(item)"
           >
             <span class="palette__label">{{ item.label }}</span>
-            <span class="palette__type">{{ item.toolName ?? item.type }}</span>
+            <span class="palette__type">{{ hint(item) }}</span>
           </button>
         }
         </div>
@@ -158,6 +158,7 @@ export class PaletteComponent {
   protected readonly query = signal('');
 
   protected readonly visible = computed(() => filterPalette(this.sections(), this.query()));
+  protected readonly hint = itemHint;
 
   /** Явний вибір користувача; секції без запису — за замовчуванням (`kind`). */
   private readonly collapsed = signal<Record<string, boolean>>(readCollapsed());

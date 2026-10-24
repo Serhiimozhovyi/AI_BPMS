@@ -11,7 +11,8 @@ import { DescriptorIndex } from '../canvas/canvas-model';
 import { CanvasComponent } from '../canvas/canvas.component';
 import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
-import { PaletteItem, PaletteServer, addNode, buildPalette, randomNodeId } from '../canvas/palette';
+import { PaletteItem, PaletteServer, actionKey, addNode, buildPalette, randomNodeId } from '../canvas/palette';
+import { changeNodeTool } from '../canvas/connector-actions';
 import { PaletteComponent } from '../canvas/palette.component';
 import { DataFieldPick, DataPort, NodeDataViewComponent } from '../canvas/node-data-view.component';
 import { PathSegment, expressionFor } from '../canvas/data-schema';
@@ -278,7 +279,7 @@ export interface EditorErrorEvent {
                   </app-node-data-view>
                 </div>
                 <div class="editor__col editor__col--params" data-testid="panel-params" [hidden]="!wide() && panelTab() !== 'params'">
-                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)">
+                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)">
                     @if (!readonly()) {
                       <div panelActions class="editor__node-actions" data-testid="node-actions">
                         <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
@@ -666,7 +667,7 @@ export class WorkflowEditorComponent implements OnInit {
     (e) => this.failed.emit({ code: apiErrorCode(e), message: apiErrorMessage(e) }),
   );
 
-  protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers()));
+  protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers(), this.recent()));
   protected readonly quickAddSections = computed(() => quickAddSections(this.palette(), this.quickAdd()?.mode ?? 'step', this.recent()));
   private readonly descriptorIndex = computed(() => new DescriptorIndex(this.descriptors()));
 
@@ -935,10 +936,21 @@ export class WorkflowEditorComponent implements OnInit {
     this.quickAdd.set({ target, mode, title: quickAddTitle(target, mode), left, top });
   }
 
-  private remember(item: PaletteItem): void {
+  private remember(item: Pick<PaletteItem, 'key'>): void {
     const recent = rememberRecent(this.recent(), item.key);
     this.recent.set(recent);
     writeRecent(recent);
+  }
+
+  /** Інша дія конектора з панелі (F3-55): `arguments` скидаються, з'єднання й позиція лишаються; дія — у «Останніх». */
+  protected toolChanged(nodeId: string, tool: McpToolInfo): void {
+    const def = this.definition();
+    const node = def?.nodes.find((n) => n.id === nodeId);
+    if (!def || !node) return;
+    const serverId = String(node.parameters?.['serverId'] ?? '');
+    const previous = this.servers().find((s) => s.id === serverId)?.tools.find((t) => t.name === node.parameters?.['toolName']) ?? null;
+    this.changed(changeNodeTool(def, nodeId, tool, previous));
+    this.remember({ key: actionKey(serverId, tool.name) });
   }
 
   /** Зміна вузла з панелі. */

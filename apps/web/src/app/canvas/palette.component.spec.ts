@@ -24,14 +24,15 @@ describe('PaletteComponent', () => {
     return fixture;
   }
 
-  it('показує секції груп і серверів; клік по елементу віддає його', () => {
+  it('показує секції груп і конекторів; клік по конектору віддає його з дією за замовчуванням', () => {
     const fixture = create();
     const host = fixture.nativeElement as HTMLElement;
     const picked: PaletteItem[] = [];
     fixture.componentInstance.pick.subscribe((i) => picked.push(i));
 
-    expect(Array.from(host.querySelectorAll('[data-section]')).map((s) => s.getAttribute('data-section'))).toContain('server:c1');
-    (host.querySelector('[data-item="c1/create_order"]') as HTMLButtonElement).click();
+    expect(Array.from(host.querySelectorAll('[data-section]')).map((s) => s.getAttribute('data-section'))).toContain('connectors');
+    expect(host.querySelector('[data-item="connector:c1"]')?.textContent).toContain('1 дій');
+    (host.querySelector('[data-item="connector:c1"]') as HTMLButtonElement).click();
 
     expect(picked.map((i) => [i.type, i.serverId, i.toolName])).toEqual([['mcp.tool', 'c1', 'create_order']]);
   });
@@ -54,33 +55,34 @@ describe('PaletteComponent', () => {
     expect(host.querySelector('[data-testid="palette-empty"]')).not.toBeNull();
   });
 
-  it('конектори за замовчуванням згорнуті до назви, групи core — розгорнуті; клік перемикає', () => {
+  it('секції розгорнуті за замовчуванням; клік згортає і пам’ятається', () => {
     const fixture = create();
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(items(host, 'server:c1').hidden).toBe(true);
-    expect(toggle(host, 'server:c1').getAttribute('aria-expanded')).toBe('false');
-    expect(toggle(host, 'server:c1').textContent).toContain('1С');
+    expect(items(host, 'connectors').hidden).toBe(false);
+    expect(toggle(host, 'connectors').textContent).toContain('Конектори');
     expect(items(host, 'group:logic').hidden).toBe(false);
 
-    toggle(host, 'server:c1').click();
+    toggle(host, 'connectors').click();
     toggle(host, 'group:logic').click();
     fixture.detectChanges();
 
-    expect(items(host, 'server:c1').hidden).toBe(false);
+    expect(items(host, 'connectors').hidden).toBe(true);
+    expect(toggle(host, 'connectors').getAttribute('aria-expanded')).toBe('false');
     expect(items(host, 'group:logic').hidden).toBe(true);
-    expect(JSON.parse(localStorage.getItem(PALETTE_COLLAPSE_KEY)!)).toEqual({ 'server:c1': false, 'group:logic': true });
+    expect(JSON.parse(localStorage.getItem(PALETTE_COLLAPSE_KEY)!)).toEqual({ connectors: true, 'group:logic': true });
   });
 
   it('стан згортання відновлюється з localStorage', () => {
-    localStorage.setItem(PALETTE_COLLAPSE_KEY, JSON.stringify({ 'server:c1': false, 'group:trigger': true }));
+    localStorage.setItem(PALETTE_COLLAPSE_KEY, JSON.stringify({ connectors: true, 'group:trigger': true }));
     const host = create().nativeElement as HTMLElement;
 
-    expect(items(host, 'server:c1').hidden).toBe(false);
+    expect(items(host, 'connectors').hidden).toBe(true);
     expect(items(host, 'group:trigger').hidden).toBe(true);
   });
 
-  it('пошук розгортає знайдені секції, зокрема згорнуті конектори', async () => {
+  it('пошук розгортає знайдені секції і показує дії конектора', async () => {
+    localStorage.setItem(PALETTE_COLLAPSE_KEY, JSON.stringify({ connectors: true }));
     const fixture = create();
     const host = fixture.nativeElement as HTMLElement;
     const input = host.querySelector('[data-testid="palette-search"]') as HTMLInputElement;
@@ -90,7 +92,8 @@ describe('PaletteComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(items(host, 'server:c1').hidden).toBe(false);
-    expect(toggle(host, 'server:c1').getAttribute('aria-expanded')).toBe('true');
+    expect(items(host, 'connectors').hidden).toBe(false);
+    expect(toggle(host, 'connectors').getAttribute('aria-expanded')).toBe('true');
+    expect(Array.from(host.querySelectorAll('[data-section="connectors"] [data-item]')).map((b) => b.getAttribute('data-item'))).toEqual(['c1/create_order']);
   });
 });

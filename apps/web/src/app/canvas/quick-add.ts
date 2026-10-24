@@ -76,7 +76,8 @@ export function quickAddSections(sections: readonly PaletteSection[], mode: Quic
     .map((s) => ({ ...s, items: s.items.filter(allowed) }))
     .filter((s) => s.items.length > 0);
 
-  const byKey = new Map(filtered.flatMap((s) => s.items).map((i) => [i.key, i]));
+  // Дії конекторів (F3-55) не показуються окремо, але потрапляють в «Останні», якщо їх обирали.
+  const byKey = new Map(filtered.flatMap((s) => s.items).flatMap((i) => [i, ...(i.actions ?? [])]).map((i) => [i.key, i]));
   const recentItems = recent.map((k) => byKey.get(k)).filter((i): i is PaletteItem => !!i);
   if (recentItems.length === 0) return filtered;
   const label = $localize`:@@canvas.quickAdd.recent:Останні`;
