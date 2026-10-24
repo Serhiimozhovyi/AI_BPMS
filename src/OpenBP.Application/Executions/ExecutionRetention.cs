@@ -9,7 +9,8 @@ namespace OpenBP.Application.Executions;
 
 /// <summary>
 /// Очищення історії виконань (F4-07): <c>OPENBP_EXECUTION_RETENTION_DAYS</c> (типово 30; <c>0</c> — не видаляти) і
-/// <c>OPENBP_EXECUTION_RETENTION_CRON</c> (Quartz cron у поясі сервера, типово щодня о 03:00).
+/// <c>OPENBP_EXECUTION_RETENTION_CRON</c> (Quartz cron у поясі сервера, типово щодня о 03:00). Тим самим job'ом
+/// чиститься журнал аудиту (F6-15): <c>OPENBP_AUDIT_RETENTION_DAYS</c> (типово 365; <c>0</c> — не видаляти).
 /// </summary>
 public sealed record ExecutionRetentionOptions
 {
@@ -19,8 +20,14 @@ public sealed record ExecutionRetentionOptions
     /// <summary>Змінна: коли запускати очищення (Quartz cron).</summary>
     public const string CronKey = "OPENBP_EXECUTION_RETENTION_CRON";
 
+    /// <summary>Змінна: скільки днів зберігати журнал аудиту.</summary>
+    public const string AuditDaysKey = "OPENBP_AUDIT_RETENTION_DAYS";
+
     /// <summary>Скільки днів зберігати завершені виконання; <c>0</c> — не видаляти.</summary>
     public int Days { get; init; } = 30;
+
+    /// <summary>Скільки днів зберігати записи журналу аудиту; <c>0</c> — не видаляти.</summary>
+    public int AuditDays { get; init; } = 365;
 
     /// <summary>Quartz cron, напр. <c>0 0 3 * * ?</c> (змінна приймає і 5 полів crontab: <c>0 3 * * *</c>).</summary>
     public string Cron { get; init; } = "0 0 3 * * ?";
@@ -30,17 +37,17 @@ public sealed record ExecutionRetentionOptions
 
     /// <summary>Налаштування зі значень змінних; порожні — типові.</summary>
     /// <exception cref="ArgumentException">Днів не ціле ≥ 0 або cron некоректний.</exception>
-    public static ExecutionRetentionOptions Parse(string? days, string? cron)
+    public static ExecutionRetentionOptions Parse(string? days, string? cron, string? auditDays = null)
     {
         var options = new ExecutionRetentionOptions();
-        if (!string.IsNullOrWhiteSpace(days))
+        if (ParseDays(DaysKey, days) is { } value)
         {
-            if (!int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
-            {
-                throw new ArgumentException($"{DaysKey} має бути цілим числом днів ≥ 0, отримано «{days}».");
-            }
-
             options = options with { Days = value };
+        }
+
+        if (ParseDays(AuditDaysKey, auditDays) is { } audit)
+        {
+            options = options with { AuditDays = audit };
         }
 
         if (!string.IsNullOrWhiteSpace(cron))
@@ -64,6 +71,21 @@ public sealed record ExecutionRetentionOptions
         }
 
         return options;
+    }
+
+    private static int? ParseDays(string key, string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
+        {
+            throw new ArgumentException($"{key} має бути цілим числом днів ≥ 0, отримано «{text}».");
+        }
+
+        return value;
     }
 }
 
@@ -115,6 +137,41 @@ public sealed class ExecutionRetentionService(OpenBpDbContext db, ExecutionReten
             }
         }
     }
+
+    /// <summary>
+    /// Видаляє записи журналу аудиту, старші за <see cref="ExecutionRetentionOptions.AuditDays"/> днів, пачками.
+    /// Повертає кількість видалених записів.
+    /// </summary>
+    public async Task<int> PurgeAuditAsync(CancellationToken ct)
+    {
+        if (options.AuditDays <= 0)
+        {
+            return 0;
+        }
+
+        var cutoff = time.GetUtcNow().AddDays(-options.AuditDays);
+        var total = 0;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var ids = await db.AuditLog.AsNoTracking()
+                .Where(a => a.At < cutoff)
+                .OrderBy(a => a.At)
+                .Select(a => a.Id)
+                .Take(options.BatchSize)
+                .ToListAsync(ct);
+            if (ids.Count == 0)
+            {
+                return total;
+            }
+
+            total += await db.AuditLog.Where(a => ids.Contains(a.Id)).ExecuteDeleteAsync(ct);
+            if (ids.Count < options.BatchSize)
+            {
+                return total;
+            }
+        }
+    }
 }
 
 /// <summary>Quartz-job очищення історії: у власному scope викликає <see cref="ExecutionRetentionService"/>.</summary>
@@ -129,12 +186,18 @@ public sealed partial class ExecutionRetentionJob(IServiceScopeFactory scopes, I
     {
         await using var scope = scopes.CreateAsyncScope();
         var options = scope.ServiceProvider.GetRequiredService<ExecutionRetentionOptions>();
-        var deleted = await scope.ServiceProvider.GetRequiredService<ExecutionRetentionService>().PurgeAsync(cancellationToken);
+        var service = scope.ServiceProvider.GetRequiredService<ExecutionRetentionService>();
+        var deleted = await service.PurgeAsync(cancellationToken);
         LogPurged(logger, deleted, options.Days);
+        var audit = await service.PurgeAuditAsync(cancellationToken);
+        LogAuditPurged(logger, audit, options.AuditDays);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Очищення історії: видалено {Deleted} виконань, старших за {Days} дн.")]
     private static partial void LogPurged(ILogger logger, int deleted, int days);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Очищення журналу аудиту: видалено {Deleted} записів, старших за {Days} дн.")]
+    private static partial void LogAuditPurged(ILogger logger, int deleted, int days);
 }
 
 /// <summary>Реєстрація очищення історії виконань.</summary>
@@ -142,7 +205,7 @@ public static class ExecutionRetentionServiceCollectionExtensions
 {
     /// <summary>
     /// Додає <see cref="ExecutionRetentionService"/> і Quartz-job <see cref="ExecutionRetentionJob"/> за
-    /// <see cref="ExecutionRetentionOptions.Cron"/> (пояс сервера). З <c>Days = 0</c> тригер не додається, а вже
+    /// <see cref="ExecutionRetentionOptions.Cron"/> (пояс сервера). З <c>Days = 0</c> і <c>AuditDays = 0</c> тригер не додається, а вже
     /// збережений у БД — лише нічого не видаляє. Хост сам додає Quartz зі сховищем (<c>AddOpenBpScheduleServices</c>).
     /// </summary>
     public static IServiceCollection AddOpenBpExecutionRetention(this IServiceCollection services, ExecutionRetentionOptions options)
@@ -153,7 +216,7 @@ public static class ExecutionRetentionServiceCollectionExtensions
         services.AddQuartz(q =>
         {
             q.AddJob<ExecutionRetentionJob>(j => j.WithIdentity(ExecutionRetentionJob.Key).StoreDurably());
-            if (options.Days > 0)
+            if (options.Days > 0 || options.AuditDays > 0)
             {
                 q.AddTrigger(t => t
                     .ForJob(ExecutionRetentionJob.Key)

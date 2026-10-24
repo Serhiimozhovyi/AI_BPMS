@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Errors;
 using OpenBP.Data;
 
@@ -58,6 +60,8 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
             Hash = Hash(key),
         };
         db.ApiKeys.Add(entity);
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.ApiKeyCreated, AuditEntities.ApiKey, entity.Id.ToString(),
+            new JsonObject { ["name"] = entity.Name, ["ownerId"] = entity.UserId.ToString() });
         await db.SaveChangesAsync(ct);
         return new ApiKeyCreated(entity.Id, entity.Name, key);
     }
@@ -74,6 +78,8 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
         }
 
         db.ApiKeys.Remove(entity);
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.ApiKeyRevoked, AuditEntities.ApiKey, id.ToString(),
+            new JsonObject { ["name"] = entity.Name, ["ownerId"] = entity.UserId.ToString() });
         await db.SaveChangesAsync(ct);
     }
 
@@ -105,7 +111,7 @@ public sealed class ApiKeyService(OpenBpDbContext db, ICurrentUser currentUser, 
                 .ExecuteUpdateAsync(s => s.SetProperty(k => k.LastUsedAt, now), ct);
         }
 
-        return new UserInfo(found.UserId, found.Email, role.Value);
+        return new UserInfo(found.UserId, found.Email, role.Value, found.Id);
     }
 
     private static string Base64UrlEncode(byte[] bytes) =>

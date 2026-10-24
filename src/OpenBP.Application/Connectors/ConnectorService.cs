@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
@@ -69,6 +70,7 @@ public sealed class ConnectorService(
             Status = ConnectorRegistration.StatusValue(ConnectorStatus.New),
         };
         db.McpServers.Add(row);
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.ConnectorCreated, AuditEntities.Connector, row.Id.ToString(), AuditDetails(row));
         await db.SaveChangesAsync(ct);
 
         // Недоступний сервер — не помилка створення: конектор лишається зі станом error.
@@ -89,6 +91,7 @@ public sealed class ConnectorService(
         row.Status = ConnectorRegistration.StatusValue(ConnectorStatus.New);
         row.ToolsCache = null;
         row.ToolsCachedAt = null;
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.ConnectorUpdated, AuditEntities.Connector, id.ToString(), AuditDetails(row));
         await db.SaveChangesAsync(ct);
 
         await DiscoverAsync(row, ct);
@@ -114,9 +117,18 @@ public sealed class ConnectorService(
         }
 
         db.McpServers.Remove(row);
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.ConnectorDeleted, AuditEntities.Connector, serverId, AuditDetails(row));
         await db.SaveChangesAsync(ct);
         await registry.UnregisterAsync(serverId);
     }
+
+    /// <summary>Подробиці для журналу аудиту: без конфігурації (у ній можуть бути заголовки й змінні оточення з секретами).</summary>
+    private static JsonObject AuditDetails(McpServerEntity row) => new()
+    {
+        ["name"] = row.Name,
+        ["transport"] = row.Transport,
+        ["credentialId"] = row.CredentialId?.ToString(),
+    };
 
     /// <inheritdoc />
     public async Task<ConnectorDetail> RefreshToolsAsync(Guid id, CancellationToken ct)

@@ -892,7 +892,7 @@
 - DoD: тести (Testcontainers): editor проєкту A не бачить і не змінює сценарії проєкту B (REST і MCP); спільний конектор доступний усім; валідатор; API-ключ проєкту; Vitest вибору проєкту та членів; `architecture.md` §10.6 оновлено.
 
 ### F6-15 · Audit log
-- model: `sonnet` · status: `ready` · depends: F2-05
+- model: `sonnet` · status: `review` · depends: F2-05
 - Що: таблиця `audit_log (at, user_id, api_key_id?, action, entity_type, entity_id, details jsonb без секретів)`; запис з application-шару для: сценарій створено/збережено/активовано/деактивовано/видалено/опубліковано, credential створено/перейменовано/замінено/видалено, конектор створено/змінено/видалено, користувач/роль/проєкт змінено, API-ключ створено/відкликано, задачу F6-02 завершено; REST `GET /api/v1/audit` (admin, фільтри, пагінація); сторінка в `/settings`; ретеншн `OPENBP_AUDIT_RETENTION_DAYS` (типово 365) у job F4-07.
 - DoD: тести: кожна дія дає запис з правильними полями; в `details` немає значень credentials; viewer → 403; ретеншн; Vitest сторінки; `architecture.md` §6/§8 оновлено.
 

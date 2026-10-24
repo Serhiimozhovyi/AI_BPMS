@@ -9,6 +9,7 @@ using OpenBP.Api.Errors;
 using OpenBP.Api.Health;
 using OpenBP.Api.Nodes;
 using OpenBP.Api.OpenApi;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
 using OpenBP.Application.DataTables;
@@ -55,6 +56,8 @@ builder.Services.AddSingleton<INodeRegistry>(sp => new NodeCatalog(
 builder.Services.AddSingleton(sp => WorkflowLimits.Parse(sp.GetRequiredService<IConfiguration>()[WorkflowLimits.MaxExecutionTimeoutKey]));
 builder.Services.AddOpenBpWorkflowServices();
 builder.Services.AddOpenBpDataTableServices();
+// Журнал аудиту (F6-15): записи пишуть сервіси змін, читає admin.
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddOpenBpNodeServices();
 builder.Services.AddOpenBpExecutionServices();
 
@@ -78,7 +81,8 @@ builder.Services.AddOpenBpScheduleServices();
 
 // Очищення історії виконань (F4-07): Quartz-job раз на добу, пачками.
 builder.Services.AddOpenBpExecutionRetention(ExecutionRetentionOptions.Parse(
-    builder.Configuration[ExecutionRetentionOptions.DaysKey], builder.Configuration[ExecutionRetentionOptions.CronKey]));
+    builder.Configuration[ExecutionRetentionOptions.DaysKey], builder.Configuration[ExecutionRetentionOptions.CronKey],
+    builder.Configuration[ExecutionRetentionOptions.AuditDaysKey]));
 builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
 // MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
@@ -100,7 +104,7 @@ app.UseAuthorization();
 app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

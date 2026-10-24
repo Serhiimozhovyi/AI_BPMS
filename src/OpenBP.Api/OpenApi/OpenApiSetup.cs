@@ -58,6 +58,9 @@ public static class OpenApiSetup
         /// <summary>Облікові дані.</summary>
         public const string Credentials = "Облікові дані";
 
+        /// <summary>Журнал аудиту.</summary>
+        public const string Audit = "Аудит";
+
         /// <summary>Webhook-и.</summary>
         public const string Webhooks = "Webhook";
     }
@@ -73,6 +76,7 @@ public static class OpenApiSetup
         (Tags.Variables, "Змінні інстансу для `$vars.key` у виразах і core.code: читають усі, змінює admin. Не для секретів."),
         (Tags.DataTables, "Таблиці даних для сценаріїв (вузол core.dataTable): структура, рядки, імпорт CSV. Читають усі, змінює editor."),
         (Tags.Credentials, "Облікові дані без значень секретів (лише admin), OAuth2-вхід."),
+        (Tags.Audit, "Журнал змін: хто й коли створив, змінив чи видалив сценарій, облікові дані, конектор, ключ, змінну чи таблицю. Лише admin."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
     ];
 

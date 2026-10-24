@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Data;
@@ -55,6 +57,7 @@ public sealed partial class VariableService(OpenBpDbContext db, ICurrentUser cur
         }
 
         var row = await db.Variables.SingleOrDefaultAsync(v => v.Key == key, ct);
+        var created = row is null;
         if (row is null)
         {
             row = new VariableEntity { Key = key };
@@ -64,6 +67,8 @@ public sealed partial class VariableService(OpenBpDbContext db, ICurrentUser cur
         row.Value = value;
         row.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         row.UpdatedAt = time.GetUtcNow();
+        db.Audit(currentUser, row.UpdatedAt, AuditActions.VariableSet, AuditEntities.Variable, key,
+            new JsonObject { ["key"] = key, ["created"] = created });
         await db.SaveChangesAsync(ct);
         return ToDto(row);
     }
@@ -77,6 +82,9 @@ public sealed partial class VariableService(OpenBpDbContext db, ICurrentUser cur
         {
             throw new NotFoundException(Entity, key);
         }
+
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.VariableDeleted, AuditEntities.Variable, key, new JsonObject { ["key"] = key });
+        await db.SaveChangesAsync(ct);
     }
 
     private static VariableDto ToDto(VariableEntity v) => new(v.Key, v.Value, v.Description, v.UpdatedAt);

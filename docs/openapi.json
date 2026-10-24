@@ -610,6 +610,116 @@
         ]
       }
     },
+    "/api/v1/audit": {
+      "get": {
+        "tags": [
+          "Аудит"
+        ],
+        "summary": "Журнал аудиту",
+        "description": "Лише admin; нові записи першими. Фільтри: `userId`, `action` (точна дія або префікс із крапкою, напр. `workflow.`), `entityType`, `entityId`, період `from`–`to`. У `details` — назви й типи, без значень секретів.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResultOfAuditEntry"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/{id}/executions": {
       "post": {
         "tags": [
@@ -3553,6 +3663,72 @@
           }
         }
       },
+      "AuditEntry": {
+        "required": [
+          "id",
+          "at",
+          "userId",
+          "userEmail",
+          "apiKeyId",
+          "apiKeyName",
+          "action",
+          "entityType",
+          "entityId",
+          "details"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "userId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "userEmail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "apiKeyId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "apiKeyName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "details": {
+            "$ref": "#/components/schemas/JsonObject"
+          }
+        }
+      },
       "AuthProviderInfo": {
         "required": [
           "key",
@@ -4737,6 +4913,47 @@
           }
         }
       },
+      "PageResultOfAuditEntry": {
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            }
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "PageResultOfConnectorSummary": {
         "required": [
           "items",
@@ -5692,6 +5909,10 @@
     {
       "name": "Облікові дані",
       "description": "Облікові дані без значень секретів (лише admin), OAuth2-вхід."
+    },
+    {
+      "name": "Аудит",
+      "description": "Журнал змін: хто й коли створив, змінив чи видалив сценарій, облікові дані, конектор, ключ, змінну чи таблицю. Лише admin."
     },
     {
       "name": "Webhook",

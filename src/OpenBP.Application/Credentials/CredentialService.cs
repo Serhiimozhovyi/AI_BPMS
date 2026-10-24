@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Data;
@@ -84,6 +85,10 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         RejectManaged(input.Type, data);
         CredentialTypes.Validate(input.Type, data);
         var id = await store.CreateAsync(name, input.Type, data, currentUser.UserId, ct);
+        // Значення секретів у журнал не потрапляють: лише назва, тип і імена полів.
+        db.Audit(currentUser, _time.GetUtcNow(), AuditActions.CredentialCreated, AuditEntities.Credential, id.ToString(),
+            new JsonObject { ["name"] = name, ["type"] = input.Type, ["fields"] = FieldNames(data) });
+        await db.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
     }
 
@@ -95,7 +100,14 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         var row = await db.Credentials.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new NotFoundException(Entity, id);
         if (input.Name is not null)
         {
+            var previous = row.Name;
             row.Name = RequireName(input.Name);
+            if (previous != row.Name)
+            {
+                db.Audit(currentUser, _time.GetUtcNow(), AuditActions.CredentialRenamed, AuditEntities.Credential, id.ToString(),
+                    new JsonObject { ["name"] = row.Name, ["previousName"] = previous, ["type"] = row.Type });
+            }
+
             await db.SaveChangesAsync(ct);
         }
 
@@ -115,6 +127,9 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
 
             CredentialTypes.Validate(row.Type, merged);
             await store.UpdateDataAsync(id, merged, ct);
+            db.Audit(currentUser, _time.GetUtcNow(), AuditActions.CredentialReplaced, AuditEntities.Credential, id.ToString(),
+                new JsonObject { ["name"] = row.Name, ["type"] = row.Type, ["fields"] = FieldNames(input.Data) });
+            await db.SaveChangesAsync(ct);
         }
 
         return await GetAsync(id, ct);
@@ -133,8 +148,13 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         }
 
         db.Credentials.Remove(row);
+        db.Audit(currentUser, _time.GetUtcNow(), AuditActions.CredentialDeleted, AuditEntities.Credential, id.ToString(),
+            new JsonObject { ["name"] = row.Name, ["type"] = row.Type });
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>Імена переданих полів (без значень) — для журналу аудиту.</summary>
+    private static JsonArray FieldNames(JsonObject data) => [.. data.Select(p => (JsonNode?)JsonValue.Create(p.Key)).OrderBy(n => (string)n!, StringComparer.Ordinal)];
 
     private async Task<CredentialSummary> SummaryAsync(Guid id, string name, string type, Guid? createdBy, UsageIndex usage, CancellationToken ct)
     {
