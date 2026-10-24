@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
+using OpenBP.Engine.Diagnostics;
 using OpenBP.Engine.Expressions;
 using OpenBP.Engine.Nodes;
 using OpenBP.Expressions;
@@ -35,6 +37,10 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
         var timeout = Timeout(ctx.Node);
         var serverName = servers.TryGetServer(serverId, out var config) ? config.Name : serverId;
 
+        // Span виклику (F6-18): сервер і tool без аргументів і результату.
+        using var span = OpenBpTelemetry.StartChild(OpenBpTelemetry.McpToolSpan, ActivityKind.Client);
+        span?.SetTag(OpenBpTelemetry.McpServerId, serverId);
+        span?.SetTag(OpenBpTelemetry.McpTool, toolName);
         CallToolResult result;
         try
         {
@@ -44,13 +50,14 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
                 timeout,
                 ct).ConfigureAwait(false);
         }
-        catch (McpProtocolException ex)
+        catch (Exception ex) when (OpenBpTelemetry.Fail(span, ex) && ex is McpProtocolException)
         {
             throw new McpToolException($"Tool «{toolName}» на сервері «{serverName}» відхилив виклик: {ex.Message}", ex);
         }
 
         if (result.IsError == true)
         {
+            span?.SetStatus(ActivityStatusCode.Error, "isError");
             var details = string.Join("\n", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
             throw new McpToolException(
                 $"Tool «{toolName}» на сервері «{serverName}» повернув помилку{(details.Length == 0 ? "." : $": {details}")}");

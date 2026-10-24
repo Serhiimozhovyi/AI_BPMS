@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
+using OpenBP.Engine.Diagnostics;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Engine.Execution;
@@ -299,6 +301,13 @@ public sealed class WorkflowExecutor
                 definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
                 run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state);
 
+            // Span спроби (F6-18): без параметрів і items — лише ідентифікатори вузла.
+            var span = OpenBpTelemetry.StartChild(OpenBpTelemetry.NodeSpan);
+            span?.SetTag(OpenBpTelemetry.ExecutionId, request.ExecutionId.ToString());
+            span?.SetTag(OpenBpTelemetry.NodeId, definition.Id);
+            span?.SetTag(OpenBpTelemetry.NodeName, definition.Name);
+            span?.SetTag(OpenBpTelemetry.NodeType, definition.Type);
+            span?.SetTag(OpenBpTelemetry.NodeAttempt, attempt);
             try
             {
                 var output = await node.Impl.ExecuteAsync(ctx, token).ConfigureAwait(false);
@@ -309,16 +318,21 @@ public sealed class WorkflowExecutor
                 }
 
                 _services.Logger.Log(LogLevel.Info, definition.Id, $"Вузол «{definition.Name}» виконано.");
+                span?.SetTag(OpenBpTelemetry.Status, "success");
+                span?.SetStatus(ActivityStatusCode.Ok);
                 return Step(StepStatus.Success, output);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+                span?.SetTag(OpenBpTelemetry.Status, "cancelled");
                 return Cancelled(attempt);
             }
 #pragma warning disable CA1031 // Будь-яка помилка вузла стає кроком Error, а не падінням движка.
             catch (Exception ex)
 #pragma warning restore CA1031
             {
+                span?.SetTag(OpenBpTelemetry.Status, "error");
+                _ = OpenBpTelemetry.Fail(span, ex);
                 var error = new StepError(ex.Message, ex.GetType().Name, attempt);
                 if (attempt >= maxTries)
                 {
@@ -329,6 +343,10 @@ public sealed class WorkflowExecutor
                     LogLevel.Warning,
                     definition.Id,
                     $"Вузол «{definition.Name}»: спроба {attempt} з {maxTries} невдала ({ex.Message}); повтор.");
+            }
+            finally
+            {
+                span?.Dispose();
             }
 
             var wait = Backoff(waitMs, attempt);

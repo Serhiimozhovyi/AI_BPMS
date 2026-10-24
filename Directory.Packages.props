@@ -38,6 +38,12 @@
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Файли і трейси">
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.6" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Тести">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

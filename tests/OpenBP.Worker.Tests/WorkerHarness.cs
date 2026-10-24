@@ -195,6 +195,26 @@ internal sealed class WorkerHarness : IAsyncDisposable
         return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey, Binary, Limits, Loggers);
     }
 
+    /// <summary>
+    /// Другий екземпляр воркера над тією самою БД (F6-18): власні процеси MCP-серверів і власне файлове сховище
+    /// <paramref name="binary"/>. Цей harness лишається робочим; обидва звільняє тест.
+    /// </summary>
+    public WorkerHarness SecondWorker(IBinaryStore? binary) =>
+        new(
+            ConnectionString,
+            new WorkerOptions
+            {
+                WorkerId = Options.WorkerId + "-2",
+                MaxConcurrentExecutions = Options.MaxConcurrentExecutions,
+                HeartbeatInterval = Options.HeartbeatInterval,
+                PollInterval = Options.PollInterval,
+            },
+            QueueOptions,
+            EncryptionKey,
+            binary,
+            Limits,
+            Loggers);
+
     /// <summary>Запускає <see cref="ExecutionWorker"/> як hosted service; з <paramref name="withRecovery"/> — і <see cref="ExecutionRecoveryService"/>.</summary>
     public async Task StartAsync(bool withRecovery = false)
     {

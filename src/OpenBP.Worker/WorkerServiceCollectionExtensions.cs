@@ -26,7 +26,8 @@ public static class WorkerServiceCollectionExtensions
     /// <c>OPENBP_ENCRYPTION_KEY</c> — без нього старт неможливий), реєстри MCP-серверів і вузлів, Jint і
     /// <see cref="ExecutionWorker"/> (виконання і опитування <c>mcp.poll</c>, <see cref="PollJobProcessor"/>) з налаштуваннями секції <see cref="WorkerOptions.Section"/>, а також
     /// <see cref="ExecutionRecoveryService"/> (відновлення після падіння воркера) з налаштуваннями черги з підсекції
-    /// <see cref="QueueSection"/>; файли — у <see cref="LocalBinaryStore"/>, якщо задано <c>Storage:LocalPath</c>.
+    /// <see cref="QueueSection"/>; файли — у <see cref="S3BinaryStore"/> (<c>Storage:S3:Bucket</c>) або <see cref="LocalBinaryStore"/>
+    /// (<c>Storage:LocalPath</c>); трейси — <see cref="WorkerTelemetry.AddOpenBpTracing"/>.
     /// </summary>
     /// <param name="services">Колекція сервісів.</param>
     /// <param name="configuration">Конфігурація.</param>
@@ -54,10 +55,27 @@ public static class WorkerServiceCollectionExtensions
 
         var storage = new BinaryStorageOptions();
         configuration.GetSection(BinaryStorageOptions.Section).Bind(storage);
-        if (!string.IsNullOrWhiteSpace(storage.LocalPath))
+        if (!string.IsNullOrWhiteSpace(storage.S3.Bucket))
+        {
+            services.AddSingleton(sp => S3BinaryStore.Create(storage.S3, sp.GetRequiredService<TimeProvider>()));
+            services.AddSingleton<IBinaryStore>(sp =>
+            {
+                var s3 = sp.GetRequiredService<S3BinaryStore>();
+                var readers = new Dictionary<string, IBinaryStore>(StringComparer.Ordinal) { [S3BinaryStore.StorageName] = s3 };
+                if (!string.IsNullOrWhiteSpace(storage.LocalPath))
+                {
+                    readers[LocalBinaryStore.StorageName] = new LocalBinaryStore(storage.LocalPath, sp.GetRequiredService<TimeProvider>());
+                }
+
+                return new RoutingBinaryStore(s3, readers);
+            });
+        }
+        else if (!string.IsNullOrWhiteSpace(storage.LocalPath))
         {
             services.AddSingleton<IBinaryStore>(sp => new LocalBinaryStore(storage.LocalPath, sp.GetRequiredService<TimeProvider>()));
         }
+
+        services.AddOpenBpTracing(configuration);
 
         services.AddDbContextFactory<OpenBpDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("Default")));
         services.AddSingleton(TimeProvider.System);

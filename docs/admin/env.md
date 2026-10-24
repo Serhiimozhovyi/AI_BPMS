@@ -43,6 +43,13 @@ OIDC-провайдери задаються не в `.env`, а в `oidc.env` з
 | Змінна | Типово | Хто читає | Опис |
 |---|---|---|---|
 | `Storage__LocalPath` | `./data/files` (розробка), `/data/files` (образ worker) | worker | Файлове сховище воркера: вкладення, файли з MCP-tools. У продакшні — том `files`. |
+| `OPENBP_S3_BUCKET` (`Storage__S3__Bucket`) | — | worker | Бакет S3-сумісного сховища (F6-18). Задано — нові файли пишуться в S3, файли з `Storage__LocalPath` лишаються на читання. Див. [README §10](README.md#файли-в-s3). |
+| `OPENBP_S3_ENDPOINT` (`Storage__S3__Endpoint`) | — (AWS S3) | worker | Адреса S3-сумісного сервісу, напр. `http://minio:9000`. |
+| `OPENBP_S3_REGION` (`Storage__S3__Region`) | `us-east-1` | worker | Регіон підпису запитів. |
+| `OPENBP_S3_ACCESS_KEY` / `OPENBP_S3_SECRET_KEY` (`Storage__S3__AccessKey` / `__SecretKey`) | — | worker, minio | Ключі доступу; не задано — ланцюжок AWS SDK (`AWS_ACCESS_KEY_ID`, роль інстансу). Для профілю `s3` — також логін і пароль MinIO. |
+| `OPENBP_MINIO_IMAGE` | `bitnamilegacy/minio:2025.7.23` | compose | Образ MinIO для профілю `s3`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | — (вимкнено) | worker | Адреса OTLP-колектора для трейсів OpenTelemetry (F6-18), напр. `http://otel-collector:4317`. |
+| `OTEL_SERVICE_NAME` | `openbp-worker` | worker | Назва сервісу в трейсах. |
 | `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` | `3600` | api, worker | Межа таймауту виконання сценарію, с. Таймаут у налаштуваннях сценарію не може її перевищити. |
 | `OPENBP_DATA_TABLE_MAX_ROWS` | `100000` | api, worker | Найбільше рядків в одній таблиці даних (F6-11). Понад ліміт — помилка `DATA_TABLE_ROW_LIMIT`. |
 | `OPENBP_DATA_TABLE_MAX_ROW_BYTES` | `65536` | api, worker | Найбільший розмір рядка таблиці даних у JSON, байт. |

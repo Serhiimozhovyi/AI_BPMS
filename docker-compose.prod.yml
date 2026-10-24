@@ -89,11 +89,44 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
+      # S3-сумісне сховище файлів (F6-18, docs/admin/README.md §10): задано бакет — нові файли йдуть у S3,
+      # старі з тому files лишаються доступними. Порожньо — лише том files.
+      Storage__S3__Endpoint: ${OPENBP_S3_ENDPOINT:-}
+      Storage__S3__Bucket: ${OPENBP_S3_BUCKET:-}
+      Storage__S3__Region: ${OPENBP_S3_REGION:-us-east-1}
+      Storage__S3__AccessKey: ${OPENBP_S3_ACCESS_KEY:-}
+      Storage__S3__SecretKey: ${OPENBP_S3_SECRET_KEY:-}
+      # Трейси OpenTelemetry (OTLP); порожньо — вимкнено.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-openbp-worker}
     volumes:
       - files:/data/files
     depends_on:
       migrate:
         condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+        required: false
+    logging: *logging
+
+  # Власне S3-сховище (F6-18), лише з профілем s3:  docker compose -f docker-compose.prod.yml --profile s3 up -d --wait
+  # Воркеру в .env: OPENBP_S3_ENDPOINT=http://minio:9000, OPENBP_S3_BUCKET, OPENBP_S3_ACCESS_KEY, OPENBP_S3_SECRET_KEY.
+  # Офіційного образу minio/minio на Docker Hub більше немає — типово збірка MinIO від Bitnami (OPENBP_MINIO_IMAGE).
+  minio:
+    image: ${OPENBP_MINIO_IMAGE:-bitnamilegacy/minio:2025.7.23}
+    profiles: ["s3"]
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${OPENBP_S3_ACCESS_KEY:-openbp}
+      MINIO_ROOT_PASSWORD: ${OPENBP_S3_SECRET_KEY:-}
+    volumes:
+      - minio-data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     logging: *logging
 
   web:
@@ -139,3 +172,4 @@ services:
 volumes:
   postgres-data:
   files:
+  minio-data:
