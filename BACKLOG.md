@@ -596,7 +596,7 @@
 - DoD: Vitest — diff на прикладах; Playwright — змінити, відкрити історію, відновити попередню → канвас як до зміни; lint/test/build/e2e зелені.
 
 ### F3-63 · Групи сценаріїв: модель, REST і MCP
-- model: `opus` · status: `ready` · depends: F2-06, F3-04
+- model: `opus` · status: `done` · depends: F2-06, F3-04
 - Що: запит власника (2026-10-24): сценарії складаються в групи. Групи — плоский список (без вкладеності) поза визначенням сценарію, формат workflow не змінюється. Міграція EF: таблиця `workflow_groups (id, name унікальна без урахування регістру, sort_order, created_at)`, `workflows.group_id` nullable FK (`ON DELETE SET NULL`). Application-шар (правило 4): `WorkflowGroupService` — список з лічильником сценаріїв, створити, перейменувати, змінити порядок, видалити (сценарії лишаються «Без групи»), перемістити сценарій у групу/з групи. REST: `GET/POST /api/v1/workflow-groups`, `PATCH/DELETE /api/v1/workflow-groups/{id}`, `PUT /api/v1/workflow-groups/order { ids }`, `PATCH /workflows/{id} { groupId }` (поруч із `name`), `GET /workflows?groupId=<id>|none`, `WorkflowSummary`/`WorkflowDetail` отримують `groupId`; ролі як у сценаріїв (viewer читає, editor змінює). `/mcp`: `list_workflow_groups`, `create_workflow_group`, `move_workflow { workflowId, groupId|null }`; `list_workflows` приймає `groupId`; `create_workflow` — необов'язковий `groupId`. `docs/architecture.md` (§ таблиці, REST) і `docs/mcp-server.md` оновлено.
 - DoD: тести Application/Api (Testcontainers): CRUD груп, унікальність назви → 409, видалення групи лишає сценарії без групи, фільтр списку, права viewer/editor; тести `/mcp` на нові tools; `dotnet build -warnaserror`, `dotnet test`, `dotnet format` зелені.
 
