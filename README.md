@@ -35,6 +35,22 @@ dotnet format --verify-no-changes
   `workflowId` для записів виконання; значення credentials у журнал не потрапляють. Рівні — як завжди,
   `Logging__LogLevel__Default=Warning`, `Logging__LogLevel__OpenBP=Information` тощо.
 
+### Продакшн (Docker Compose)
+
+Потрібен Docker з Compose v2 і `openssl`.
+
+```bash
+scripts/gen-env.sh                                            # .env з випадковими секретами (пароль БД, ключ, адмін)
+docker compose -f docker-compose.prod.yml up -d --build --wait   # postgres → migrate → api, worker → web
+```
+
+- Відкрито лише веб-інтерфейс на `OPENBP_HTTP_PORT` (типово 8080); Api, воркер і БД — у внутрішній мережі.
+- `migrate` застосовує міграції один раз і завершується; api і worker стартують лише після нього.
+- Більше воркерів: `docker compose -f docker-compose.prod.yml up -d --scale worker=3`.
+- Публічна адреса для OAuth2 і webhook-ів — `OPENBP_PUBLIC_URL`; усі змінні з поясненнями — у `.env.example`.
+- Журнали Docker обмежено (json-file, 5 × 10 МБ на контейнер), формат журналів застосунку — JSON.
+- `scripts/smoke-prod.sh` перевіряє розгортання: `/health/ready`, вхід адміністратором, запуск `examples/hello-manual.json`.
+
 ### Docker-образи
 
 Образи збираються з кореня репозиторію (контекст — `.`, див. `.dockerignore`):

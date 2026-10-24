@@ -1,5 +1,5 @@
-# Середовище розробки OpenBP. Поки що лише PostgreSQL;
-# сервіси api, worker, web додаються у фазах 2 і 4 (docs/roadmap.md).
+# Середовище розробки OpenBP: лише PostgreSQL (Api, воркер і web запускаються з dotnet/npm).
+# Продакшн-розгортання з образами — docker-compose.prod.yml (README, «Продакшн»).
 name: openbp
 
 services:
