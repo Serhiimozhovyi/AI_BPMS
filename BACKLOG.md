@@ -473,7 +473,7 @@
   - CI job «Конектори» збирає і тестує проєкт.
 
 ### F3-35 · Адмінка психологічної підтримки: сторінка для психологів
-- model: `sonnet` · status: `in-progress agent/F3-35-psy-support-web` · depends: F3-34, F3-25
+- model: `sonnet` · status: `review #87` · depends: F3-34, F3-25
 - Що: `connectors/psy-support/web` — Angular (standalone, Signals) + Material + Tailwind, дизайн-система AC-Kit з Figma (лише читання), інтерфейс українською через i18n; збирається в `wwwroot` бекенду F3-34. Сторінки за `docs/psy-support.md` §7.1:
   - вхід і встановлення пароля за одноразовим посиланням;
   - розклад, слоти й шаблони слотів;
