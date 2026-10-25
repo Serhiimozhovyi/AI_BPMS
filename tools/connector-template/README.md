@@ -13,7 +13,7 @@
   - секрети — **лише зі змінних середовища**: `CONNECTOR_USERNAME`/`CONNECTOR_PASSWORD` (basic), `CONNECTOR_TOKEN`
     (bearer), `CONNECTOR_API_KEY` (api-key). У відповідях tools і текстах помилок їх немає (`ConnectorSecrets.Scrub`);
   - `RestClient` — типізований `HttpClient` до вашого API (приклад — фейкове API товарів `/items`);
-  - `Tools/ItemTools.cs` — tools, описані вручну атрибутами `[McpServerTool]`: `list_items`, `get_item`;
+  - `Tools/ItemTools.cs` — tools, описані вручну атрибутами `[McpServerTool]`: `list_items`, `get_item`, `changes_since`;
   - `OpenApi/`, `OData/` — генератори tools з OpenAPI 3.x і OData `$metadata` (`Connector:Source`, див. нижче);
   - транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
 - `tests/Connector.Template.Tests` — контрактні тести: `tools/list` віддає схеми, `tools/call` проти in-process
@@ -117,6 +117,17 @@ dotnet publish src/Acme.Crm -c Release -o out
 
 OpenBP сам є MCP-сервером: агент бачить ваш конектор через `describe_connectors` (див. «Налаштування» →
 «Підключити ШІ-агента»).
+
+## Події та звірка
+
+Система власник стану — ваша, OpenBP читає її через tools (`docs/consistency.md`). Щоб пропущену подію можна було
+надолужити, дайте конектору tool **`changes_since { entity, since? }`**: заготовка `ItemTools.ChangesSince` віддає
+`{ result, cursor }` — записи, змінені строго після `since`, від старих до нових, і `cursor` (найбільший час зміни) для
+наступного виклику. Замініть `items` на свої сутності, а `ListItemsChangedAsync` — на запит до свого API (фільтр за часом
+зміни, сортування за ним). У вузлі `mcp.poll`: `toolName = changes_since`, `itemsPath = result`, `keyField = id`
+(або поле, що змінюється разом із записом, якщо треба ловити зміни, а не лише нові записи). Тест
+`Changes_since_returns_records_after_the_cursor_and_a_new_cursor` перевіряє курсор і фільтр — оновіть його під свої
+сутності. Контракт — `docs/connectors.md` §8.
 
 ## Розробка шаблону
 
