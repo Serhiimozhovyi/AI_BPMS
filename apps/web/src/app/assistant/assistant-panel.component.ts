@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  computed,
   effect,
   inject,
   input,
@@ -14,10 +15,10 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { Subscription } from 'rxjs';
-import { apiErrorMessage } from '../connectors/connectors-api.service';
+import { apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { WorkflowDefinition } from '../workflows/workflows-api.service';
 import { AssistantApiService, AssistantTurn } from './assistant-api.service';
-import { ExplanationCardComponent } from './explanation-card.component';
+import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.component';
 
 /** Запит до помічника ззовні панелі (швидкі дії вузла, «Описати процес»). */
 export interface AssistantPrompt {
@@ -46,7 +47,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 /**
  * Панель «Помічник» (F3-60): пояснення всього процесу, яке готується після збереження (F3-72), і розмова з ШІ над
- * поточним визначенням. Відповідь помічника приходить подіями; нове
+ * поточним визначенням. Модель не вибрана — замість розмови підказка, що питати Claude чи ChatGPT через MCP (F3-74). Відповідь помічника приходить подіями; нове
  * визначення віддається назовні один раз, коли відповідь завершилась, — тож одна відповідь = одна правка в історії.
  */
 @Component({
@@ -67,7 +68,11 @@ const TOOL_LABELS: Record<string, string> = {
           Закрити
         </button>
       </header>
-      <app-explanation-card [workflowId]="workflowId()" [version]="version()" />
+      <app-explanation-card
+        [workflowId]="workflowId()"
+        [version]="version()"
+        [name]="definition().name"
+      />
       <ol class="assistant__log" #log data-testid="assistant-log">
         @for (line of lines(); track $index) {
           <li
@@ -89,29 +94,42 @@ const TOOL_LABELS: Record<string, string> = {
           </li>
         }
       </ol>
-      <form class="assistant__form" (submit)="$event.preventDefault(); send()">
-        <textarea
-          #field
-          class="assistant__input"
-          rows="3"
-          data-testid="assistant-input"
-          i18n-placeholder="@@assistant.placeholder"
-          placeholder="Що зробити зі сценарієм?"
-          [value]="draft()"
-          [disabled]="busy()"
-          (input)="draft.set($any($event.target).value)"
-          (keydown.control.enter)="send()"
-        ></textarea>
-        <button
-          mat-flat-button
-          type="submit"
-          data-testid="assistant-send"
-          [disabled]="busy() || !draft().trim()"
-          i18n="@@assistant.send"
-        >
-          Надіслати
-        </button>
-      </form>
+      @if (notConfigured()) {
+        <div class="assistant__mcp" data-testid="assistant-mcp">
+          <p class="assistant__mcp-text" i18n="@@assistant.viaMcp">
+            Вбудованому помічнику не вибрано модель, тож він не відповідає. Питайте Claude чи
+            ChatGPT, підключений до OpenBP через MCP: він бачить сценарій, пояснює його, відповідає
+            на питання і змінює кроки. Наприклад:
+          </p>
+          <p class="assistant__mcp-prompt" data-testid="assistant-mcp-prompt">
+            {{ mcpPrompt() }}
+          </p>
+        </div>
+      } @else {
+        <form class="assistant__form" (submit)="$event.preventDefault(); send()">
+          <textarea
+            #field
+            class="assistant__input"
+            rows="3"
+            data-testid="assistant-input"
+            i18n-placeholder="@@assistant.placeholder"
+            placeholder="Що зробити зі сценарієм?"
+            [value]="draft()"
+            [disabled]="busy()"
+            (input)="draft.set($any($event.target).value)"
+            (keydown.control.enter)="send()"
+          ></textarea>
+          <button
+            mat-flat-button
+            type="submit"
+            data-testid="assistant-send"
+            [disabled]="busy() || !draft().trim()"
+            i18n="@@assistant.send"
+          >
+            Надіслати
+          </button>
+        </form>
+      }
     </section>
   `,
   styles: `
@@ -186,6 +204,27 @@ const TOOL_LABELS: Record<string, string> = {
       gap: 6px;
     }
 
+    .assistant__mcp {
+      padding: 8px 10px;
+      border: 1px solid var(--ac-line);
+      border-radius: var(--ac-radius);
+      font:
+        400 13px/18px Ubuntu,
+        sans-serif;
+    }
+
+    .assistant__mcp-text {
+      margin: 0;
+    }
+
+    .assistant__mcp-prompt {
+      margin: 6px 0 0;
+      padding: 4px 8px;
+      border-radius: var(--ac-radius);
+      background: var(--ac-cool-grey);
+      user-select: all;
+    }
+
     .assistant__input {
       padding: 8px;
       border: 1px solid var(--ac-line);
@@ -216,6 +255,9 @@ export class AssistantPanelComponent {
   protected readonly lines = signal<ChatLine[]>([]);
   protected readonly draft = signal('');
   protected readonly busy = signal(false);
+  /** Api відповів, що модель не вибрана (409 ASSISTANT_NOT_CONFIGURED) — замість поля підказка про MCP (F3-74). */
+  protected readonly notConfigured = signal(false);
+  protected readonly mcpPrompt = computed(() => mcpExplainPrompt(this.definition().name));
   private readonly history: AssistantTurn[] = [];
   private readonly field = viewChild<ElementRef<HTMLTextAreaElement>>('field');
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
@@ -266,7 +308,8 @@ export class AssistantPanelComponent {
           else if (e.type === 'error') this.push({ kind: 'error', text: e.text ?? '' });
         },
         error: (e: unknown) => {
-          this.push({ kind: 'error', text: apiErrorMessage(e) });
+          if (apiErrorCode(e) === 'ASSISTANT_NOT_CONFIGURED') this.notConfigured.set(true);
+          else this.push({ kind: 'error', text: apiErrorMessage(e) });
           finish();
         },
         complete: finish,

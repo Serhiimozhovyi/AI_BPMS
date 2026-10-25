@@ -20,13 +20,14 @@ function explanation(patch: Partial<WorkflowExplanation>): WorkflowExplanation {
 }
 
 describe('ExplanationCardComponent', () => {
-  function create(version = 2) {
+  function create(version = 2, name: string | null = null) {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
     const fixture = TestBed.createComponent(ExplanationCardComponent);
     fixture.componentRef.setInput('workflowId', 'w1');
     fixture.componentRef.setInput('version', version);
+    fixture.componentRef.setInput('name', name);
     fixture.detectChanges();
     return {
       fixture,
@@ -113,5 +114,31 @@ describe('ExplanationCardComponent', () => {
     expect(
       (host.querySelector('[data-testid="explanation-refresh"]') as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+
+  it('пояснення немає — підказка, що написати агенту через MCP; застаріле без моделі — теж', () => {
+    const { fixture, host, http } = create(2, 'Бот підтримки');
+    http.expectOne(URL).flush(explanation({ status: 'none' }));
+    fixture.detectChanges();
+    expect(text(host, 'explanation-status')).toContain('через MCP');
+    expect(text(host, 'explanation-mcp-prompt')).toBe(
+      'Поясни сценарій «Бот підтримки» і збережи пояснення в OpenBP',
+    );
+
+    fixture.componentRef.setInput('version', 3);
+    fixture.detectChanges();
+    http.expectOne(URL).flush(
+      explanation({
+        status: 'not_configured',
+        version: 2,
+        currentVersion: 3,
+        text: 'Старе',
+        stale: true,
+      }),
+    );
+    fixture.detectChanges();
+    expect(text(host, 'explanation-text')).toBe('Старе');
+    expect(host.querySelector('[data-testid="explanation-status"]')).toBeNull();
+    expect(text(host, 'explanation-mcp-prompt')).toContain('«Бот підтримки»');
   });
 });

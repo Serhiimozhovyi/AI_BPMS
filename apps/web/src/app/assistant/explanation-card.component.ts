@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   effect,
   inject,
@@ -20,9 +21,17 @@ export const EXPLANATION_POLL_MS = 5000;
 /** Скільки разів перепитувати (5 хв), далі — лише за «Оновити» чи наступним збереженням. */
 const MAX_POLLS = 60;
 
+/** Що написати Claude чи ChatGPT, підключеному до OpenBP через MCP, щоб він пояснив сценарій (F3-74). */
+export function mcpExplainPrompt(name: string | null): string {
+  return name
+    ? $localize`:@@explanation.mcpPrompt:Поясни сценарій «${name}:name:» і збережи пояснення в OpenBP`
+    : $localize`:@@explanation.mcpPromptNoName:Поясни цей сценарій і збережи пояснення в OpenBP`;
+}
+
 /**
  * Пояснення всього сценарію простими словами (F3-72): воркер готує його після збереження, картка показує останнє
- * і, поки воно готується, перепитує Api. Нова версія сценарію (`version`) — перечитати.
+ * і, поки воно готується, перепитує Api. Нова версія сценарію (`version`) — перечитати. Пояснення немає — підказує, що
+ * написати Claude чи ChatGPT, підключеному через MCP (F3-74).
  */
 @Component({
   selector: 'app-explanation-card',
@@ -48,16 +57,6 @@ const MAX_POLLS = 60;
       </summary>
       @if (explanation(); as e) {
         @switch (e.status) {
-          @case ('not_configured') {
-            <p
-              class="explanation__note"
-              data-testid="explanation-status"
-              i18n="@@explanation.notConfigured"
-            >
-              Пояснення пише Claude чи ChatGPT, підключений до OpenBP через MCP (інструмент
-              save_workflow_explanation), або модель із «Налаштувань → Помічник».
-            </p>
-          }
           @case ('failed') {
             <p
               class="explanation__note explanation__note--error"
@@ -67,19 +66,28 @@ const MAX_POLLS = 60;
               Не вдалося пояснити: {{ e.error }}
             </p>
           }
-          @case ('none') {
-            <p class="explanation__note" data-testid="explanation-status" i18n="@@explanation.none">
-              Пояснення з'явиться після збереження сценарію.
-            </p>
-          }
         }
         @if (e.text) {
           @if (e.stale) {
             <p class="explanation__note" data-testid="explanation-stale" i18n="@@explanation.stale">
               Пояснення до версії {{ e.version }}; сценарій уже змінено.
             </p>
+            @if (e.status !== 'pending') {
+              <p class="explanation__note" i18n="@@explanation.updateViaMcp">
+                Щоб оновити, напишіть Claude чи ChatGPT, підключеному до OpenBP через MCP:
+              </p>
+              <p class="explanation__prompt" data-testid="explanation-mcp-prompt">
+                {{ mcpPrompt() }}
+              </p>
+            }
           }
           <div class="explanation__text" data-testid="explanation-text">{{ e.text }}</div>
+        } @else if (e.status === 'none' || e.status === 'not_configured') {
+          <p class="explanation__note" data-testid="explanation-status" i18n="@@explanation.viaMcp">
+            Пояснення ще немає. Відкрийте Claude чи ChatGPT, підключений до OpenBP через MCP, і
+            напишіть:
+          </p>
+          <p class="explanation__prompt" data-testid="explanation-mcp-prompt">{{ mcpPrompt() }}</p>
         } @else if (e.status === 'pending') {
           <p
             class="explanation__note"
@@ -150,6 +158,14 @@ const MAX_POLLS = 60;
       color: var(--ac-red);
     }
 
+    .explanation__prompt {
+      margin: 4px 0 0;
+      padding: 4px 8px;
+      border-radius: var(--ac-radius);
+      background: var(--ac-cool-grey);
+      user-select: all;
+    }
+
     .explanation__text {
       margin-top: 6px;
       white-space: pre-wrap;
@@ -162,12 +178,15 @@ export class ExplanationCardComponent {
   readonly workflowId = input.required<string>();
   /** Поточна версія сценарію: зміна — перечитати пояснення. */
   readonly version = input<number | null>(null);
+  /** Назва сценарію — для підказки, що написати агенту через MCP. */
+  readonly name = input<string | null>(null);
   /** Editor може замовити пояснення заново. */
   readonly canRefresh = input(true);
 
   protected readonly explanation = signal<WorkflowExplanation | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly open = signal(true);
+  protected readonly mcpPrompt = computed(() => mcpExplainPrompt(this.name()));
   private readonly reload = new Subject<void>();
 
   constructor() {
