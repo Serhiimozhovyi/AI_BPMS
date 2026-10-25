@@ -905,7 +905,7 @@
 - DoD: тести проти фейкового HTTP моделі й FakeServer: агент викликає два tools і повертає відповідь за `outputSchema`; `maxIterations` → помилка з трасуванням; пам'ять зберігається між виконаннями за ключем; ключі API і credentials конекторів не потрапляють у підкроки; UI деталей кроку показує підкроки; `docs/connectors.md` §4, `describe_nodes` оновлено.
 
 ### F6-13 · Тригери подій: push від конекторів
-- model: `fable` · status: `ready` · depends: F1-08, F2-12
+- model: `fable` · status: `in-progress agent/F6-13-push-triggers` · depends: F1-08, F2-12
 - Що: рішення для Connector Kit і воркера, як конектор віддає події без polling: (а) `resources/subscribe` + `notifications/resources/updated` MCP; (б) «тригер-tool» — довгий `tools/call`, що стрімить події через `notifications/progress`/логування; (в) конектор сам викликає `POST /webhook/...` OpenBP (найпростіше, уже працює). Вибрати, описати у `docs/connectors.md` §7, зафіксувати вузол `mcp.subscribe { serverId, resourceUri | toolName, keyField }` і як воркер тримає підписки для активних сценаріїв (власник підписки, переподключення, дедуплікація за `keyField`, що буде при падінні воркера). Окремо (можна раніше, `sonnet`): **пресети тригерів** у палітрі — «Новий лист» (msgraph), «Нове повідомлення Telegram», «Новий документ 1С» — це `mcp.poll` з наперед заповненими `toolName`/`itemsPath`/`keyField`/`cron`, описані в маніфесті конектора.
 - DoD: ADR або розділ `connectors.md` погоджено власником; прототип підписки проти FakeServer (подія → виконання ≤ 1 с; падіння воркера → підписку підхоплює інший); задачі реалізації додано в беклог.
 
