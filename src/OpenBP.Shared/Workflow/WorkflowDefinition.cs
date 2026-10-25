@@ -26,6 +26,9 @@ public sealed class WorkflowDefinition
     /// <summary>Бізнес-розмітка для бізнес-вигляду (доріжки, кроки людей); <c>null</c> — немає. Рушій ігнорує.</summary>
     public WorkflowBusiness? Business { get; set; }
 
+    /// <summary>Етапи бізнес-процесу над графом (ADR-004); <c>null</c> — сценарій без етапів.</summary>
+    public List<WorkflowStage>? Stages { get; set; }
+
     /// <summary>Невідомі поля зберігаються при (де)серіалізації.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
