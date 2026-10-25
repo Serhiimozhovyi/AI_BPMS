@@ -65,7 +65,7 @@ public sealed class ODataGeneratorTests : IAsyncLifetime
         // Кирилична назва entity set транслітерується (MCP дозволяє в назвах лише латиницю).
         string[] sets = ["catalog_kontragenty", "document_orders", "order_lines"];
         Assert.Equal(
-            sets.SelectMany(s => new[] { $"create_{s}", $"get_{s}", $"list_{s}", $"update_{s}" }).Concat(["get_item", "list_items"]).Order(),
+            sets.SelectMany(s => new[] { $"create_{s}", $"get_{s}", $"list_{s}", $"update_{s}" }).Concat(["changes_since", "get_item", "list_items"]).Order(),
             tools.Keys.Order());
 
         // list: системні параметри; $select — успадковані й власні властивості, $expand — навігація.

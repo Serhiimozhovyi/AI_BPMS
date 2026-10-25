@@ -77,6 +77,17 @@
         "--project",
         "../connectors/psy-support/src/OpenBP.Connectors.PsySupport"
       ]
+    },
+    {
+      "id": "srv_kit_crm",
+      "name": "Кіт CRM (справжній; адреса OData і Keycloak — зі змінних Connector__BaseUrl, KIT_TOKEN_URL, KIT_CLIENT_ID, KIT_CLIENT_SECRET оболонки)",
+      "transport": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "../connectors/kit-crm/src/OpenBP.Connectors.KitCrm"
+      ]
     }
   ]
 }

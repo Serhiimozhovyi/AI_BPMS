@@ -29,6 +29,14 @@ public sealed class RestClient(HttpClient http, ConnectorSecrets secrets)
     public Task<Item> GetItemAsync(string id, CancellationToken ct) =>
         GetAsync<Item>($"items/{Uri.EscapeDataString(id)}", ct);
 
+    /// <summary><c>GET /items?updatedAfter=</c> — записи, змінені строго після <paramref name="since"/>, від старих до нових.</summary>
+    /// <param name="since">Курсор попередньої звірки; <c>null</c> — усі записи.</param>
+    /// <param name="ct">Скасування.</param>
+    public Task<IReadOnlyList<Item>> ListItemsChangedAsync(DateTimeOffset? since, CancellationToken ct) =>
+        GetAsync<IReadOnlyList<Item>>(
+            since is null ? "items?orderBy=updated" : $"items?orderBy=updated&updatedAfter={Uri.EscapeDataString(since.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}",
+            ct);
+
     private async Task<T> GetAsync<T>(string path, CancellationToken ct)
     {
         using var response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, path), ct).ConfigureAwait(false);
@@ -78,4 +86,5 @@ public sealed class RestClient(HttpClient http, ConnectorSecrets secrets)
 /// <param name="Id">Id.</param>
 /// <param name="Name">Назва.</param>
 /// <param name="Price">Ціна.</param>
-public sealed record Item(string Id, string Name, decimal Price);
+/// <param name="Updated">Час останньої зміни (UTC) — за ним <c>changes_since</c> будує курсор.</param>
+public sealed record Item(string Id, string Name, decimal Price, DateTimeOffset Updated);

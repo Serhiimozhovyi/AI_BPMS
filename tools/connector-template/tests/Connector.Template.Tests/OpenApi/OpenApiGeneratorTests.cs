@@ -59,7 +59,7 @@ public sealed class OpenApiGeneratorTests : IAsyncLifetime
 
         // Ручні tools шаблону лишаються; uploadPhoto (multipart) пропущено; без operationId — <method>_<path>.
         Assert.Equal(
-            ["create_pet", "delete_pet", "get_item", "get_pet_by_id", "get_store_inventory", "list_items", "list_pets"],
+            ["changes_since", "create_pet", "delete_pet", "get_item", "get_pet_by_id", "get_store_inventory", "list_items", "list_pets"],
             tools.Keys.Order());
 
         var list = tools["list_pets"];
@@ -173,10 +173,10 @@ public sealed class OpenApiGeneratorTests : IAsyncLifetime
     public async Task Include_and_exclude_filter_operations_by_tag_and_path()
     {
         var pets = await ConnectAsync($"--Connector:Source={Spec}", "--Connector:OpenApi:Include:0=tag:pets", "--Connector:OpenApi:Exclude:0=/pets/{petId}*");
-        Assert.Equal(["create_pet", "get_item", "list_items", "list_pets"], (await pets.ListToolsAsync()).Select(t => t.Name).Order());
+        Assert.Equal(["changes_since", "create_pet", "get_item", "list_items", "list_pets"], (await pets.ListToolsAsync()).Select(t => t.Name).Order());
 
         var store = await ConnectAsync($"--Connector:Source={Spec}", "--Connector:OpenApi:Include:0=/store/*");
-        Assert.Equal(["get_item", "get_store_inventory", "list_items"], (await store.ListToolsAsync()).Select(t => t.Name).Order());
+        Assert.Equal(["changes_since", "get_item", "get_store_inventory", "list_items"], (await store.ListToolsAsync()).Select(t => t.Name).Order());
     }
 
     [Fact]

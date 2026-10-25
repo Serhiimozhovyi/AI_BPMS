@@ -55,7 +55,7 @@ public sealed class ConnectorContractTests : IAsyncLifetime
         var client = await ConnectAsync();
         var tools = await client.ListToolsAsync();
 
-        Assert.Equal(["get_item", "list_items"], tools.Select(t => t.Name).Order());
+        Assert.Equal(["changes_since", "get_item", "list_items"], tools.Select(t => t.Name).Order());
         var get = tools.Single(t => t.Name == "get_item").ProtocolTool;
         Assert.Equal("object", get.InputSchema.GetProperty("type").GetString());
         Assert.True(get.InputSchema.GetProperty("properties").TryGetProperty("id", out _));
@@ -84,6 +84,30 @@ public sealed class ConnectorContractTests : IAsyncLifetime
 
         Assert.All(_rest.Requests, r => Assert.Equal($"Bearer {Token}", r.Authorization));
         Assert.Contains(_rest.Requests, r => r.Path == "/api/items?search=%D0%BF%D1%88%D0%B5%D0%BD");
+    }
+
+    [Fact]
+    public async Task Changes_since_returns_records_after_the_cursor_and_a_new_cursor()
+    {
+        var client = await ConnectAsync();
+
+        var all = await client.CallToolAsync("changes_since", new Dictionary<string, object?> { ["entity"] = "items" });
+        Assert.NotEqual(true, all.IsError);
+        var first = all.StructuredContent!.Value;
+        Assert.Equal(["1", "2"], first.GetProperty("result").EnumerateArray().Select(i => i.GetProperty("id").GetString()));
+        var cursor = first.GetProperty("cursor").GetString()!;
+        Assert.Equal(new DateTimeOffset(2026, 1, 12, 9, 30, 0, TimeSpan.Zero), DateTimeOffset.Parse(cursor, System.Globalization.CultureInfo.InvariantCulture));
+
+        // Повтор із курсором нічого не віддає, а курсор лишається тим самим.
+        var again = await client.CallToolAsync("changes_since", new Dictionary<string, object?> { ["entity"] = "items", ["since"] = cursor });
+        Assert.Empty(again.StructuredContent!.Value.GetProperty("result").EnumerateArray());
+        Assert.Equal(cursor, again.StructuredContent!.Value.GetProperty("cursor").GetString());
+
+        var partial = await client.CallToolAsync("changes_since", new Dictionary<string, object?> { ["entity"] = "items", ["since"] = "2026-01-11T00:00:00Z" });
+        Assert.Equal("2", Assert.Single(partial.StructuredContent!.Value.GetProperty("result").EnumerateArray()).GetProperty("id").GetString());
+
+        var bad = await client.CallToolAsync("changes_since", new Dictionary<string, object?> { ["entity"] = "orders" });
+        Assert.True(bad.IsError);
     }
 
     [Fact]

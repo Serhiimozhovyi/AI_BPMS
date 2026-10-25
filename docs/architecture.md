@@ -42,7 +42,7 @@
 | `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
 | `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
 | `src/OpenBP.Worker` | хост: бере job, виконує через Engine, пише кроки |
-| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
+| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести; очікування `core.wait` v2 і `mcp.waitFor` CLI не відбуває, а перемотує свій годинник до часу відновлення, F5-06); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
 | `apps/web` | Angular SPA: список, канвас, журнал, конектори, credentials |
 | `tests/*` | xUnit на кожен src-проєкт; Testcontainers для Data/Api |
 | `tools/connector-template` | Connector Kit — шаблон MCP-сервера над REST/OData |
