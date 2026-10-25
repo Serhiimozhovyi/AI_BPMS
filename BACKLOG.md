@@ -827,7 +827,7 @@
 - DoD: CLI-прогін з фейком OData Кіта і моком Graph для обох гілок; дубль угоди не запускає другий процес.
 
 ### F5-07 · Приклад: щоденний звіт по протермінованих задачах CRM
-- model: `sonnet` · status: `ready` · depends: F5-05
+- model: `sonnet` · status: `review` agent/F5-07-kit-overdue-report · depends: F5-05
 - Що: `examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm` задачі зі статусом «Протерміноване» → `core.code` групування за відповідальним → лист кожному менеджеру і зведення керівнику через Graph.
 - DoD: CLI-прогін з фейками; порожній день — без листів.
 

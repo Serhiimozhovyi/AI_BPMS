@@ -7,6 +7,7 @@
     { "file": "telegram-1c-ollama.json", "connectors": ["telegram", "onec"], "description": "Те саме, що «Заявка з Telegram → 1С», але з локальною моделлю Ollama." },
     { "file": "daily-report.json", "connectors": ["onec", "msgraph"], "description": "Щоранку за розкладом: продажі з 1С → звіт → лист через Microsoft Graph." },
     { "file": "kit-sales-followup.json", "connectors": ["kit-crm", "msgraph"], "description": "Нова угода в Кіт CRM: задача менеджеру, контроль закриття 2 дні, інакше лист керівнику й повторна задача." },
+    { "file": "kit-overdue-report.json", "connectors": ["kit-crm", "msgraph"], "description": "Щоранку в робочі дні: протерміновані задачі Кіт CRM → лист кожному менеджеру і зведення його керівнику." },
     { "file": "kit-approval-business.json", "connectors": ["telegram", "msgraph"], "description": "Погодження задачі в Кіт 2 з розміткою бізнес-вигляду: доріжки, дії людей, підписи стрілок." }
   ]
 }

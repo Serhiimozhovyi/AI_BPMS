@@ -1,0 +1,281 @@
+{
+  "formatVersion": 1,
+  "name": "Щоденний звіт по протермінованих задачах CRM",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 300,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_schedule",
+      "name": "Щоранку о 08:30",
+      "type": "core.schedule",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "cron": "30 8 * * 1-5",
+        "timezone": "Europe/Kyiv"
+      },
+      "notes": "Робочі дні (пн–пт), 08:30 за Києвом."
+    },
+    {
+      "id": "n_tasks",
+      "name": "Протерміновані задачі",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        320,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "list_tasks",
+        "arguments": {
+          "status": "Протерміноване",
+          "top": 100
+        }
+      },
+      "timeoutSec": 60,
+      "retry": {
+        "maxTries": 3,
+        "waitMs": 5000
+      }
+    },
+    {
+      "id": "n_group",
+      "name": "За відповідальним",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        540,
+        300
+      ],
+      "parameters": {
+        "mode": "allItems",
+        "code": "// Протерміновані задачі → по одному item'у на відповідального з готовою HTML-таблицею. Немає задач — немає items і листів.\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst day = s => s ? String(s).slice(0, 10) : '—';\nconst groups = {};\nfor (const task of items[0]?.result ?? []) {\n  if (!task.responsibleId) continue; // у Кіті відповідальний обов'язковий\n  (groups[task.responsibleId] ??= { responsibleId: task.responsibleId, tasks: [] }).tasks.push(task);\n}\nreturn Object.values(groups).map(g => {\n  g.tasks.sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)));\n  const rows = g.tasks.map(t => '<tr><td>' + esc(t.title) + '</td><td>' + day(t.deadline) + '</td></tr>').join('');\n  return { ...g, count: g.tasks.length, html: '<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\"><tr><th>Задача</th><th>Дедлайн</th></tr>' + rows + '</table>' };\n});"
+      }
+    },
+    {
+      "id": "n_user",
+      "name": "Користувач менеджера",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        760,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "get_person_user",
+        "arguments": {
+          "crmPersonId": "{{ $json.responsibleId }}"
+        }
+      }
+    },
+    {
+      "id": "n_combine",
+      "name": "Менеджер і задачі",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        980,
+        300
+      ],
+      "parameters": {
+        "mode": "eachItem",
+        "code": "// Поруч з tool'ом індекси items збігаються: відповідь get_person_user — для групи з тим самим індексом.\nreturn { ...$node[\"За відповідальним\"].json, user: $json.found ? $json.user : null };"
+      }
+    },
+    {
+      "id": "n_has_user",
+      "name": "Є email?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        200
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ !!$json.user?.email }}",
+            "operator": "isTrue"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_mail",
+      "name": "Лист менеджеру",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        140
+      ],
+      "parameters": {
+        "serverId": "srv_msgraph",
+        "toolName": "send_mail",
+        "arguments": {
+          "from": "crm-bot@example.com",
+          "to": [
+            "{{ $json.user.email }}"
+          ],
+          "subject": "Протерміновані задачі в Кіті: {{ $json.count }}",
+          "html": "<p>{{ $json.user.name }}, у вас протерміновані задачі в Кіт CRM. Закрийте їх або перенесіть дедлайн.</p>{{ $json.html }}"
+        }
+      }
+    },
+    {
+      "id": "n_manager",
+      "name": "Керівник менеджера",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        420
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "get_user_manager",
+        "arguments": {
+          "crmPersonId": "{{ $json.responsibleId }}"
+        }
+      }
+    },
+    {
+      "id": "n_summary",
+      "name": "Зведення по керівниках",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        420
+      ],
+      "parameters": {
+        "mode": "allItems",
+        "code": "// Зведення для кожного керівника (з профілю відповідального): усі його люди з протермінованими задачами.\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst groups = $node[\"Менеджер і задачі\"].all;\nconst byManager = {};\nitems.forEach((item, i) => {\n  if (!item.found || !item.manager?.email) return;\n  const group = groups[i];\n  const who = group.user?.name || 'Відповідальний ' + (group.responsibleId ?? 'не вказаний');\n  const entry = byManager[item.manager.email] ??= { email: item.manager.email, name: item.manager.name, total: 0, rows: [] };\n  entry.total += group.count;\n  entry.rows.push('<tr><td>' + esc(who) + '</td><td>' + group.count + '</td></tr>');\n});\nreturn Object.values(byManager).map(m => ({ email: m.email, name: m.name, total: m.total,\n  html: '<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\"><tr><th>Менеджер</th><th>Протерміновано</th></tr>' + m.rows.join('') + '</table>' }));"
+      }
+    },
+    {
+      "id": "n_mail_head",
+      "name": "Зведення керівнику",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        420
+      ],
+      "parameters": {
+        "serverId": "srv_msgraph",
+        "toolName": "send_mail",
+        "arguments": {
+          "from": "crm-bot@example.com",
+          "to": [
+            "{{ $json.email }}"
+          ],
+          "subject": "Протерміновані задачі команди: {{ $json.total }}",
+          "html": "<p>{{ $json.name }}, зведення протермінованих задач вашої команди на сьогодні.</p>{{ $json.html }}"
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_schedule",
+        "output": 0
+      },
+      "to": {
+        "node": "n_tasks",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_tasks",
+        "output": 0
+      },
+      "to": {
+        "node": "n_group",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_group",
+        "output": 0
+      },
+      "to": {
+        "node": "n_user",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_user",
+        "output": 0
+      },
+      "to": {
+        "node": "n_combine",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_combine",
+        "output": 0
+      },
+      "to": {
+        "node": "n_has_user",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_has_user",
+        "output": 0
+      },
+      "to": {
+        "node": "n_mail",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_combine",
+        "output": 0
+      },
+      "to": {
+        "node": "n_manager",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_manager",
+        "output": 0
+      },
+      "to": {
+        "node": "n_summary",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_summary",
+        "output": 0
+      },
+      "to": {
+        "node": "n_mail_head",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {}
+}
