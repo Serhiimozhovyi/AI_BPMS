@@ -86,6 +86,52 @@ export interface WorkflowConnectionBusiness {
   [extra: string]: unknown;
 }
 
+/** Виконавець етапу: доріжка бізнес-вигляду (id з `business.lanes`), роль або вираз. */
+export interface StageOwner {
+  lane?: string;
+  role?: string;
+  expression?: string;
+  [extra: string]: unknown;
+}
+
+/** Строк етапу від входу в нього: `amount` + `unit` або вираз дати `until`. */
+export interface StageDue {
+  amount?: number;
+  unit?: 'minutes' | 'hours' | 'days' | 'businessDays';
+  until?: string;
+  [extra: string]: unknown;
+}
+
+/** Правило переходу: `block` — чекати виправлення чи відхилення з причиною, `warn` (типово) — пройти й зафіксувати порушення. */
+export interface StageRule {
+  id: string;
+  condition: string;
+  mode?: 'block' | 'warn';
+  message?: string;
+  [extra: string]: unknown;
+}
+
+/** Правила на переходах з етапу в етап `to`; без `to` — на всіх виходах з етапу. */
+export interface StageTransition {
+  to?: string;
+  rules: StageRule[];
+  [extra: string]: unknown;
+}
+
+/**
+ * Етап бізнес-процесу (ADR-004, F7-01): група вузлів того самого графа з виконавцем, строком і правилами переходу.
+ * Кожен вузол — щонайбільше в одному етапі; вузли без етапу дозволені.
+ */
+export interface WorkflowStage {
+  id: string;
+  name: string;
+  nodes: string[];
+  owner?: StageOwner;
+  due?: StageDue;
+  transitions?: StageTransition[];
+  [extra: string]: unknown;
+}
+
 /** Вузол сценарію (docs/workflow-format.md, «Обов'язкові поля»). Невідомі поля зберігаються як є. */
 export interface WorkflowNode {
   id: string;
@@ -141,6 +187,8 @@ export interface WorkflowDefinition {
   pinData: Record<string, unknown[]>;
   /** Бізнес-розмітка для бізнес-вигляду (F3-67); немає — правила за замовчуванням. */
   business?: WorkflowBusiness;
+  /** Етапи бізнес-процесу над графом (ADR-004, F7-01); немає — сценарій без етапів. */
+  stages?: WorkflowStage[];
   [extra: string]: unknown;
 }
 
