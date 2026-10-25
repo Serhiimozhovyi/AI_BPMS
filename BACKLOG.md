@@ -983,7 +983,7 @@
 - DoD: тести движка: `any` з двома гілками, повільна гілка скасована; `count: 2` з трьох; скасування виконання під час `waiting` в обох гілках → усі кроки `cancelled`; інваріант перевіряється тестом з Testcontainers; `docs/workflow-format.md` (`core.merge` v2), `architecture.md` §2 і §10.4 оновлено; `describe_nodes` знає v2.
 
 ### F7-07 · `docs/consistency.md`: джерело істини та звірка; розділ у Connector Kit
-- model: `sonnet` · status: `review` · depends: —
+- model: `sonnet` · status: `done` · depends: —
 - Що: документ `docs/consistency.md` за ADR-004 §6: таблиця «стан → система-власник → як OpenBP читає → як надолужує пропущене» для угоди/задачі Кіта, замовлення 1С, повідомлення Telegram, листа Graph; правила для авторів сценаріїв (не кешувати стан зовнішнього об'єкта як істину; `mcp.waitFor` перечитує; кореляція + `skipIfActive` проти дублікатів; `mcp.poll` як страхувальна звірка поруч із push-тригерами F6-13; що робити після рестарту конектора); розділ «Події та звірка» у `tools/connector-template/README.md` і `docs/connectors.md` §7 (конектор віддає `changes_since { entity, since }` з курсором, як `kit-crm`); посилання з `docs/guide/authors.md` і `integrators.md`.
 - DoD: документи написані українською, перевірені посилання; шаблон конектора містить заготовку `changes_since` з тестом; `docs/kit-sales.md` §5.4 посилається на `consistency.md`.
 
