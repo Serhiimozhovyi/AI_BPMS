@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.merge",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "all",
+        "any",
+        "count"
+      ],
+      "default": "all",
+      "description": "all — чекати всі гілки; any — пропустити першу гілку, решту скасувати; count — пропустити перші count гілок, решту скасувати"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "description": "Скільки гілок пропустити в режимі count"
+    },
+    "branches": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 8,
+      "default": 2,
+      "description": "Скільки входів показати на канвасі (input1…input8)"
+    },
+    "combine": {
+      "type": "string",
+      "enum": [
+        "append",
+        "combineByPosition"
+      ],
+      "default": "append",
+      "description": "append — items гілок одна за одною в порядку входів; combineByPosition — попарно злити json items з однаковим індексом"
+    }
+  }
+}

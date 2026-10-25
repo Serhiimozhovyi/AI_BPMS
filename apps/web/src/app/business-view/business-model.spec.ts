@@ -237,4 +237,51 @@ describe('buildBusinessView', () => {
       ['t', 'w', 'write', undefined],
     ]);
   });
+
+  it('core.merge v2 підписує ребра через злиття: any — «будь-яка з гілок», count — «N з M»; all і v1 — без підпису', () => {
+    const merge = (id: string, typeVersion: number, parameters: Record<string, unknown>) => node(id, 'core.merge', { typeVersion, parameters });
+    const into = (from: string, to: string, input: number): WorkflowConnection => ({ from: { node: from, output: 0 }, to: { node: to, input } });
+    const v = view(
+      workflow(
+        [
+          node('t', 'core.manualTrigger'),
+          node('a', 'mcp.tool'),
+          node('b', 'mcp.tool'),
+          node('c', 'mcp.tool'),
+          merge('any', 2, { mode: 'any' }),
+          merge('two', 2, { mode: 'count', count: 2, branches: 3 }),
+          merge('all', 2, { mode: 'all' }),
+          merge('old', 1, { mode: 'append' }),
+          node('x', 'mcp.tool'),
+          node('y', 'mcp.tool'),
+          node('z', 'mcp.tool'),
+          node('w', 'mcp.tool'),
+        ],
+        [
+          edge('t', 'a'),
+          edge('t', 'b'),
+          edge('t', 'c'),
+          into('a', 'any', 0),
+          into('b', 'any', 1),
+          edge('any', 'x'),
+          into('a', 'two', 0),
+          into('b', 'two', 1),
+          into('c', 'two', 2),
+          edge('two', 'y'),
+          into('a', 'all', 0),
+          into('b', 'all', 1),
+          edge('all', 'z'),
+          into('a', 'old', 0),
+          into('b', 'old', 1),
+          edge('old', 'w'),
+        ],
+      ),
+    );
+    const label = (from: string, to: string) => v.edges.find((e) => e.from === from && e.to === to)?.label;
+    expect(label('a', 'x')).toBe('будь-яка з гілок');
+    expect(label('b', 'x')).toBe('будь-яка з гілок');
+    expect(label('c', 'y')).toBe('2 з 3');
+    expect(label('a', 'z')).toBeUndefined();
+    expect(label('a', 'w')).toBeUndefined();
+  });
 });
