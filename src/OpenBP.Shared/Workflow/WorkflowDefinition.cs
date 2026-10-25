@@ -56,6 +56,22 @@ public sealed class WorkflowSettings
     /// </summary>
     public int? DisableAfterErrors { get; set; }
 
+    /// <summary>Правила ключа кореляції виконань (F5-04); <c>null</c> — ключ лише зберігається і фільтрується.</summary>
+    public CorrelationSettings? Correlation { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
+/// <summary>Правила ключа кореляції (<c>executions.correlation_key</c>, F5-04).</summary>
+public sealed class CorrelationSettings
+{
+    /// <summary>
+    /// Не запускати нове виконання, якщо є активне (у черзі, в роботі, скасовується) з тим самим ключем: запуск
+    /// пишеться в журнал як <c>cancelled</c> з поясненням, job не ставиться.
+    /// </summary>
+    public bool SkipIfActive { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

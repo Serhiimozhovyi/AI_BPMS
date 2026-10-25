@@ -55,7 +55,14 @@
             "onLimit": { "enum": ["queue", "drop"] }
           }
         },
-        "disableAfterErrors": { "type": "integer", "minimum": 0, "maximum": 1000 }
+        "disableAfterErrors": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "correlation": {
+          "type": "object",
+          "description": "Ключ кореляції виконань: skipIfActive — не запускати нове, якщо є активне з тим самим ключем.",
+          "properties": {
+            "skipIfActive": { "type": "boolean" }
+          }
+        }
       }
     },
     "node": {

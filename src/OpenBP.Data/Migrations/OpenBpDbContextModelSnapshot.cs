@@ -410,6 +410,11 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CorrelationKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("correlation_key");
+
                     b.Property<string>("Error")
                         .HasColumnType("text")
                         .HasColumnName("error");
@@ -426,6 +431,10 @@ namespace OpenBP.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("mode");
+
+                    b.Property<DateTimeOffset?>("ResumeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resume_at");
 
                     b.Property<Guid?>("ResumedFromExecutionId")
                         .HasColumnType("uuid")
@@ -448,6 +457,11 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("version_id");
 
+                    b.Property<string>("WaitingNodeId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("waiting_node_id");
+
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("uuid")
                         .HasColumnName("workflow_id");
@@ -455,6 +469,9 @@ namespace OpenBP.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FinishedAt");
+
+                    b.HasIndex("WorkflowId", "CorrelationKey")
+                        .HasFilter("correlation_key IS NOT NULL");
 
                     b.HasIndex("WorkflowId", "ScheduledAt")
                         .HasFilter("scheduled_at IS NOT NULL");
@@ -540,6 +557,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("output");
 
+                    b.Property<DateTimeOffset?>("ResumeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resume_at");
+
                     b.Property<int>("RunIndex")
                         .HasColumnType("integer")
                         .HasColumnName("run_index");
@@ -556,6 +577,10 @@ namespace OpenBP.Data.Migrations
                     b.Property<string>("SubSteps")
                         .HasColumnType("jsonb")
                         .HasColumnName("sub_steps");
+
+                    b.Property<string>("WaitState")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("wait_state");
 
                     b.HasKey("Id");
 
@@ -1042,6 +1067,42 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("workflows", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.WorkflowExplanationEntity", b =>
+                {
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.Property<string>("DefinitionHash")
+                        .HasColumnType("text")
+                        .HasColumnName("definition_hash");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("WorkflowId");
+
+                    b.ToTable("workflow_explanations", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.WorkflowGroupEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1216,6 +1277,15 @@ namespace OpenBP.Data.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.WorkflowExplanationEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowEntity", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -95,6 +95,18 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
           <span i18n="@@executions.filter.to">По</span>
           <input type="date" data-testid="filter-to" class="rounded border p-1" [value]="to()" (change)="setTo($any($event.target).value)" />
         </label>
+        <label class="flex flex-col text-sm">
+          <span i18n="@@executions.filter.correlationKey">Ключ кореляції</span>
+          <input
+            type="search"
+            data-testid="filter-correlation-key"
+            class="rounded border p-1"
+            placeholder="напр. id угоди"
+            i18n-placeholder="@@executions.filter.correlationKey.placeholder"
+            [value]="correlationKey()"
+            (change)="setCorrelationKey($any($event.target).value)"
+          />
+        </label>
       </div>
 
       @if (loading()) {
@@ -117,6 +129,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
               <th class="p-2" i18n="@@executions.col.mode">Режим</th>
               <th class="p-2" i18n="@@executions.col.state">Стан</th>
               <th class="p-2" i18n="@@executions.col.finishedAt">Завершено</th>
+              <th class="p-2" i18n="@@executions.col.correlationKey">Ключ</th>
             </tr>
           </thead>
           <tbody>
@@ -129,6 +142,15 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
                 <td class="p-2">{{ modeLabel(e.mode) }}</td>
                 <td class="p-2" [class]="stateClass(e.state)" data-testid="state">{{ stateLabel(e.state) }}</td>
                 <td class="p-2">{{ e.finishedAt ? (e.finishedAt | date: 'short') : '—' }}</td>
+                <td class="p-2" data-testid="correlation-key">
+                  @if (e.correlationKey; as key) {
+                    <button mat-button type="button" title="Показати всі виконання з цим ключем" i18n-title="@@executions.correlationKey.filter" (click)="setCorrelationKey(key)">
+                      {{ key }}
+                    </button>
+                  } @else {
+                    —
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -151,6 +173,9 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             </h2>
             <span [class]="stateClass(d.summary.state)" data-testid="detail-state">{{ stateLabel(d.summary.state) }}</span>
             <span class="opacity-70">{{ modeLabel(d.summary.mode) }}</span>
+            @if (d.summary.state === 'waiting' && waitingUntil(d); as until) {
+              <span data-testid="detail-resume-at" i18n="@@executions.waitingUntil">до {{ until | date: 'short' }}</span>
+            }
             @if (canCancel(d.summary.state)) {
               <button mat-stroked-button type="button" data-testid="cancel-button" [disabled]="acting()" (click)="cancel(d.summary.id)" i18n="@@executions.cancel">
                 Скасувати
@@ -261,6 +286,7 @@ export class ExecutionsPage implements OnInit {
   readonly status = signal<ExecutionState | null>(null);
   readonly from = signal('');
   readonly to = signal('');
+  readonly correlationKey = signal('');
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -353,6 +379,11 @@ export class ExecutionsPage implements OnInit {
 
   setTo(date: string): void {
     this.to.set(date);
+    this.resetPage();
+  }
+
+  setCorrelationKey(key: string): void {
+    this.correlationKey.set(key.trim());
     this.resetPage();
   }
 
@@ -453,7 +484,12 @@ export class ExecutionsPage implements OnInit {
   }
 
   canCancel(state: ExecutionState): boolean {
-    return state === 'queued' || state === 'running';
+    return state === 'queued' || state === 'running' || state === 'waiting';
+  }
+
+  /** Коли виконання прокинеться: із заголовка або (після події SSE) з останнього кроку `waiting`. */
+  waitingUntil(detail: ExecutionDetail): string | null {
+    return detail.summary.resumeAt ?? detail.steps.filter((s) => s.status === 'waiting').at(-1)?.resumeAt ?? null;
   }
 
   canRetry(state: ExecutionState): boolean {
@@ -513,6 +549,8 @@ export class ExecutionsPage implements OnInit {
       case 'error':
       case 'timed_out':
         return 'text-red-700';
+      case 'waiting':
+        return 'text-blue-700';
       default:
         return 'opacity-70';
     }
@@ -524,6 +562,8 @@ export class ExecutionsPage implements OnInit {
         return 'text-green-700';
       case 'error':
         return 'text-red-700';
+      case 'waiting':
+        return 'text-blue-700';
       default:
         return 'opacity-50';
     }
@@ -535,6 +575,7 @@ export class ExecutionsPage implements OnInit {
       status: this.status(),
       from: dayBoundary(this.from()),
       to: dayBoundary(this.to(), true),
+      correlationKey: this.correlationKey() || null,
     };
   }
 

@@ -6,7 +6,8 @@ namespace OpenBP.Application.Executions;
 
 /// <summary>
 /// Стан виконання (<c>executions.status</c>, docs/architecture.md §10.4):
-/// <c>queued → running → success | error | cancelled | timed_out</c>; <c>cancelling</c> — тимчасовий стан після запиту на скасування.
+/// <c>queued → running → success | error | cancelled | timed_out</c>; <c>cancelling</c> — тимчасовий стан після запиту на скасування;
+/// <c>running ⇄ waiting</c> — довге очікування (F5-02).
 /// У JSON — рядки в snake_case (<see cref="ExecutionStates"/>, ті самі, що в <see cref="ExecutionStatuses"/>).
 /// </summary>
 public enum ExecutionState
@@ -31,6 +32,9 @@ public enum ExecutionState
 
     /// <summary>Перевищено таймаут сценарію.</summary>
     TimedOut = 6,
+
+    /// <summary>Вузол призупинив виконання до <see cref="ExecutionSummary.ResumeAt"/> (F5-02); воркер вільний.</summary>
+    Waiting = 7,
 }
 
 /// <summary>Рядкові значення <see cref="ExecutionState"/> для БД і JSON.</summary>
@@ -47,6 +51,7 @@ public static class ExecutionStates
         ExecutionState.Error => ExecutionStatuses.Error,
         ExecutionState.Cancelled => ExecutionStatuses.Cancelled,
         ExecutionState.TimedOut => ExecutionStatuses.TimedOut,
+        ExecutionState.Waiting => ExecutionStatuses.Waiting,
         _ => throw new ArgumentOutOfRangeException(nameof(state), state, "Невідомий стан виконання."),
     };
 
@@ -62,12 +67,20 @@ public static class ExecutionStates
         ExecutionStatuses.Error => ExecutionState.Error,
         ExecutionStatuses.Cancelled => ExecutionState.Cancelled,
         ExecutionStatuses.TimedOut => ExecutionState.TimedOut,
+        ExecutionStatuses.Waiting => ExecutionState.Waiting,
         _ => throw new ArgumentException($"Невідомий стан виконання «{value}».", nameof(value)),
     };
 
     /// <summary><c>true</c>, якщо стан фінальний (виконання більше не зміниться).</summary>
     /// <param name="state">Стан.</param>
     public static bool IsFinal(ExecutionState state) => state is ExecutionState.Success or ExecutionState.Error or ExecutionState.Cancelled or ExecutionState.TimedOut;
+
+    /// <summary>
+    /// <c>true</c>, якщо виконання фінальне або чекає (<see cref="ExecutionState.Waiting"/>): той, хто чекає результату
+    /// синхронно (MCP <c>run_workflow</c>, помічник, оцінки), далі не чекає — очікування може тривати дні.
+    /// </summary>
+    /// <param name="state">Стан.</param>
+    public static bool IsSettled(ExecutionState state) => IsFinal(state) || state == ExecutionState.Waiting;
 }
 
 /// <summary>Виконання у списку (<c>GET /executions</c>) і відповідь на запуск.</summary>
@@ -80,6 +93,9 @@ public static class ExecutionStates
 /// <param name="FinishedAt">Завершення; <c>null</c>, поки не фінальний стан.</param>
 /// <param name="Error">Повідомлення помилки для <see cref="ExecutionState.Error"/>/<see cref="ExecutionState.TimedOut"/>.</param>
 /// <param name="ResumedFromExecutionId">Для <see cref="ExecutionMode.Resume"/> — виконання, яке це продовжує (F6-08).</param>
+/// <param name="CorrelationKey">Ключ кореляції (F5-04): Id угоди, контрагента тощо; <c>null</c> — не задано.</param>
+/// <param name="ResumeAt">Для <see cref="ExecutionState.Waiting"/> — коли виконання прокинеться (F5-02).</param>
+/// <param name="WaitingNodeId">Для <see cref="ExecutionState.Waiting"/> — вузол, що чекає.</param>
 public sealed record ExecutionSummary(
     Guid Id,
     Guid WorkflowId,
@@ -89,7 +105,10 @@ public sealed record ExecutionSummary(
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt,
     string? Error,
-    Guid? ResumedFromExecutionId = null);
+    Guid? ResumedFromExecutionId = null,
+    string? CorrelationKey = null,
+    DateTimeOffset? ResumeAt = null,
+    string? WaitingNodeId = null);
 
 /// <summary>Виконання з кроками (<c>GET /executions/{id}</c>); кроки вже очищені від секретів (F2-04).</summary>
 /// <param name="Summary">Заголовок виконання.</param>
@@ -107,6 +126,7 @@ public sealed record ExecutionDetail(ExecutionSummary Summary, IReadOnlyList<Exe
 /// <param name="StartedAt">Початок.</param>
 /// <param name="FinishedAt">Завершення.</param>
 /// <param name="SubSteps">Підкроки вузла (F6-12: запити до моделі й виклики інструментів агентом); зазвичай порожньо.</param>
+/// <param name="ResumeAt">Для кроку <see cref="StepStatus.Waiting"/> — коли вузол прокинеться (F5-02).</param>
 public sealed record ExecutionStepDto(
     Guid Id,
     string NodeId,
@@ -117,14 +137,21 @@ public sealed record ExecutionStepDto(
     StepError? Error,
     DateTimeOffset StartedAt,
     DateTimeOffset FinishedAt,
-    IReadOnlyList<SubStep>? SubSteps = null);
+    IReadOnlyList<SubStep>? SubSteps = null,
+    DateTimeOffset? ResumeAt = null);
 
 /// <summary>Фільтр списку виконань.</summary>
 /// <param name="WorkflowId">Лише цього сценарію; <c>null</c> — усіх.</param>
 /// <param name="State">Лише в цьому стані; <c>null</c> — у будь-якому.</param>
 /// <param name="From">Початок не раніше.</param>
 /// <param name="To">Початок не пізніше.</param>
-public sealed record ExecutionFilter(Guid? WorkflowId = null, ExecutionState? State = null, DateTimeOffset? From = null, DateTimeOffset? To = null);
+/// <param name="CorrelationKey">Лише з цим ключем кореляції (точний збіг).</param>
+public sealed record ExecutionFilter(
+    Guid? WorkflowId = null,
+    ExecutionState? State = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null,
+    string? CorrelationKey = null);
 
 /// <summary>Параметри ручного запуску (<c>POST /workflows/{id}/executions</c>, MCP <c>run_workflow</c>, <c>test_node</c>).</summary>
 /// <param name="StartNodeId">Тригер, з якого стартувати; <c>null</c> — усі вузли без вхідних ребер.</param>
@@ -136,11 +163,13 @@ public sealed record ExecutionFilter(Guid? WorkflowId = null, ExecutionState? St
 /// Виходи вузлів з попереднього тестового запуску (id вузла → items по портах): такі вузли не виконуються, їхній
 /// вихід береться звідси (поверх <c>pinData</c>). Зазвичай — попередники <paramref name="DestinationNodeId"/>.
 /// </param>
+/// <param name="CorrelationKey">Ключ кореляції виконання (F5-04), до 200 символів.</param>
 public sealed record StartExecutionRequest(
     string? StartNodeId = null,
     IReadOnlyList<Item>? StartItems = null,
     string? DestinationNodeId = null,
-    IReadOnlyDictionary<string, Item[][]>? RunData = null);
+    IReadOnlyDictionary<string, Item[][]>? RunData = null,
+    string? CorrelationKey = null);
 
 /// <summary>Тіло <c>POST /executions/{id}/resume</c> (F6-08).</summary>
 /// <param name="Items">Нові items на вхід 0 вузла, що впав; <c>null</c> — ті самі, що були у вихідному виконанні.</param>
@@ -156,6 +185,10 @@ public sealed record ResumeExecutionRequest(IReadOnlyList<Item>? Items = null);
 /// <param name="VersionId">Конкретна версія сценарію (повтор, <see cref="ExecutionMode.Retry"/>); <c>null</c> — поточна.</param>
 /// <param name="ResumedFromExecutionId">Лише <see cref="ExecutionMode.Resume"/>: виконання, яке продовжується.</param>
 /// <param name="InputOverrides">Лише <see cref="ExecutionMode.Resume"/>: нові items на вхід 0 вузла, що впав.</param>
+/// <param name="CorrelationKey">
+/// Ключ кореляції (F5-04); порожній — немає. З <c>settings.correlation.skipIfActive</c> запуск при активному виконанні з тим
+/// самим ключем пишеться як <see cref="ExecutionState.Cancelled"/> без job.
+/// </param>
 public sealed record ExecutionLaunch(
     Guid WorkflowId,
     ExecutionMode Mode,
@@ -165,7 +198,8 @@ public sealed record ExecutionLaunch(
     IReadOnlyDictionary<string, Item[][]>? RunData = null,
     Guid? VersionId = null,
     Guid? ResumedFromExecutionId = null,
-    IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null);
+    IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null,
+    string? CorrelationKey = null);
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

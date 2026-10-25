@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Engine.Execution;
@@ -37,6 +38,12 @@ public sealed record StepRecord
 
     /// <summary>Підкроки останньої спроби (F6-12: запити до моделі й виклики інструментів агентом); зазвичай порожньо.</summary>
     public IReadOnlyList<SubStep> SubSteps { get; init; } = [];
+
+    /// <summary>Для <see cref="StepStatus.Waiting"/> — коли розбудити вузол (UTC); інакше <c>null</c>.</summary>
+    public DateTimeOffset? ResumeAt { get; init; }
+
+    /// <summary>Для <see cref="StepStatus.Waiting"/> — невеликий стан вузла до пробудження; інакше <c>null</c>.</summary>
+    public JsonObject? WaitState { get; init; }
 
     /// <summary>Початок запуску вузла (UTC).</summary>
     public required DateTimeOffset StartedAt { get; init; }

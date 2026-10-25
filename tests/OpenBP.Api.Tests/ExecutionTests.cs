@@ -411,6 +411,38 @@ public class ExecutionTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Waiting_ShowsResumeAt_CancelsAtOnce_AndCannotBeRetried()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        await MarkRunningAsync(executionId);
+        var resumeAt = new DateTimeOffset(2026, 11, 3, 7, 0, 0, TimeSpan.Zero);
+        await using (var db = api.CreateDbContext())
+        {
+            await db.Executions.Where(e => e.Id == executionId).ExecuteUpdateAsync(s => s
+                .SetProperty(e => e.Status, ExecutionStatuses.Waiting)
+                .SetProperty(e => e.ResumeAt, resumeAt)
+                .SetProperty(e => e.WaitingNodeId, "n_wait"));
+        }
+
+        var page = await JsonAsync(await editor.GetAsync($"/api/v1/executions?workflowId={workflowId}&status=waiting"));
+        var row = Assert.Single(page.GetProperty("items").EnumerateArray());
+        Assert.Equal("waiting", row.GetProperty("state").GetString());
+        Assert.Equal(resumeAt, row.GetProperty("resumeAt").GetDateTimeOffset());
+        Assert.Equal("n_wait", row.GetProperty("waitingNodeId").GetString());
+
+        await AssertProblemAsync(
+            await editor.PostAsync($"/api/v1/executions/{executionId}/retry", null),
+            HttpStatusCode.Conflict, "EXECUTION_NOT_FINISHED");
+
+        var cancelled = await JsonAsync(await editor.PostAsync($"/api/v1/executions/{executionId}/cancel", null));
+        Assert.Equal("cancelled", cancelled.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, cancelled.GetProperty("resumeAt").ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, cancelled.GetProperty("finishedAt").ValueKind);
+    }
+
+    [Fact]
     public async Task Cancel_Unknown_Returns404()
     {
         var editor = await LoginAsync(UserRole.Editor);

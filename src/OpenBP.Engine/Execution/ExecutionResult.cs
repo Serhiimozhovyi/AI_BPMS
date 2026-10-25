@@ -17,6 +17,12 @@ public enum ExecutionStatus
 
     /// <summary>Перевищено <c>settings.executionTimeoutSec</c>.</summary>
     TimedOut = 3,
+
+    /// <summary>
+    /// Вузол призупинив виконання (довге очікування, F5-02): хост ставить стан <c>waiting</c> і будить виконання в
+    /// <see cref="ExecutionResult.ResumeAt"/> через <c>ResumeAsync</c>.
+    /// </summary>
+    Waiting = 4,
 }
 
 /// <summary>Результат <see cref="WorkflowExecutor.RunAsync"/>.</summary>
@@ -36,6 +42,12 @@ public sealed record ExecutionResult
 
     /// <summary>Id вузла, на якому виконання зупинилось (помилка, скасування, таймаут); інакше <c>null</c>.</summary>
     public string? FailedNodeId { get; init; }
+
+    /// <summary>Для <see cref="ExecutionStatus.Waiting"/> — найраніший час пробудження серед вузлів, що чекають.</summary>
+    public DateTimeOffset? ResumeAt { get; init; }
+
+    /// <summary>Для <see cref="ExecutionStatus.Waiting"/> — вузол із найранішим <see cref="ResumeAt"/>.</summary>
+    public string? WaitingNodeId { get; init; }
 
     /// <summary>
     /// Кроки виконання в порядку обходу графа: нові — ті самі, що передано в <see cref="IExecutionStore.SaveStepAsync"/>;

@@ -9,6 +9,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
+    public DbSet<WorkflowExplanationEntity> WorkflowExplanations => Set<WorkflowExplanationEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<ProjectMemberEntity> ProjectMembers => Set<ProjectMemberEntity>();
     public DbSet<EvaluationEntity> Evaluations => Set<EvaluationEntity>();
@@ -79,6 +80,12 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("workflow_versions");
             e.Property(x => x.Definition).HasColumnType("jsonb");
             e.HasIndex(x => new { x.WorkflowId, x.Version }).IsUnique();
+        });
+        b.Entity<WorkflowExplanationEntity>(e =>
+        {
+            e.ToTable("workflow_explanations");
+            e.HasKey(x => x.WorkflowId);
+            e.HasOne<WorkflowEntity>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Cascade);
         });
         // Проєкт із credentials чи конекторами не видаляється (сервіс повертає 409), FK лише страхує.
         b.Entity<CredentialEntity>(e =>
@@ -190,6 +197,9 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.HasIndex(x => x.FinishedAt);
             e.HasIndex(x => new { x.WorkflowId, x.StartedAt });
             e.HasIndex(x => new { x.WorkflowId, x.ScheduledAt }).HasFilter("scheduled_at IS NOT NULL");
+            e.Property(x => x.CorrelationKey).HasMaxLength(200);
+            e.Property(x => x.WaitingNodeId).HasMaxLength(200);
+            e.HasIndex(x => new { x.WorkflowId, x.CorrelationKey }).HasFilter("correlation_key IS NOT NULL");
         });
         b.Entity<ExecutionStepEntity>(e =>
         {
@@ -197,6 +207,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.Input).HasColumnType("jsonb");
             e.Property(x => x.Output).HasColumnType("jsonb");
             e.Property(x => x.SubSteps).HasColumnType("jsonb");
+            e.Property(x => x.WaitState).HasColumnType("jsonb");
             e.HasIndex(x => x.ExecutionId);
         });
         b.Entity<JobEntity>(e =>

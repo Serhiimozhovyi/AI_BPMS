@@ -78,6 +78,9 @@ public sealed class NodeTools
         "`$node[\"Node name\"].json` the matching item of an earlier node, `$binary` the current item's files " +
         "(references with fileName, mimeType, fileSize; `{}` when there are none). " +
         "`mcp.tool` returns a tool's structured result as one item; set `itemsPath` to split an array into items. " +
+        "`mcp.waitFor` calls a tool every `intervalMinutes` until `conditions` (`field` is a dot path into the tool's result, " +
+        "operators as in `core.if`) hold, or `timeoutHours` passes: output 0 `done` carries the last result, output 1 `timeout` " +
+        "the input item; between checks the execution is in state waiting. " +
         "Tools of connected systems are listed by describe_connectors. " +
         "In `core.code` JavaScript the same `$node[\"Node name\"].json` is available (plus `.all` with every item), " +
         "and `Date` uses the workflow's `settings.timezone`. " +

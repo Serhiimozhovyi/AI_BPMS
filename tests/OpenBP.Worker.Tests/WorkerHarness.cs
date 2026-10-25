@@ -77,9 +77,10 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
     private ExecutionRecoveryService? _recovery;
 
-    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null)
+    private WorkerHarness(string cs, WorkerOptions options, JobQueueOptions queueOptions, string? encryptionKey = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null, TimeProvider? time = null)
     {
         Loggers = loggers;
+        Time = time;
         Binary = binary;
         Limits = limits;
         EncryptionKey = encryptionKey ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -87,12 +88,12 @@ internal sealed class WorkerHarness : IAsyncDisposable
         Db = new Contexts(cs);
         Options = options;
         QueueOptions = queueOptions;
-        Queue = new JobQueue(Db, queueOptions);
+        Queue = new JobQueue(Db, queueOptions, time);
         Recovery = new ExecutionRecoveryService(Db, Queue, queueOptions, NullLogger<ExecutionRecoveryService>.Instance);
         Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(EncryptionKey));
         Servers = new McpServerSync(Db, _mcp, Credentials);
         DataTables = new PostgresDataTableStore(Db, new DataTableLimits(), TimeProvider.System);
-        var nodes = CoreNodes.All(dataTables: DataTables).Concat(McpNodes.All(_mcp)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
+        var nodes = CoreNodes.All(time, DataTables).Concat(McpNodes.All(_mcp, time)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
 
         // core.webhook з'явиться в F2-10; до того прикладу telegram-1c.json потрібна заглушка (він запускається з pinData).
         if (!nodes.Any(n => n.Descriptor.Type == WebhookStub.Type))
@@ -111,6 +112,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
             binary,
             options,
             loggers?.CreateLogger<ExecutionJobProcessor>() ?? NullLogger<ExecutionJobProcessor>.Instance,
+            time,
             limits: limits);
         Poll = new PollJobProcessor(
             Db,
@@ -123,6 +125,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
             options,
             NullLogger<PollJobProcessor>.Instance);
     }
+
+    /// <summary>Годинник черги, обробника й <c>core.wait</c>; <c>null</c> — системний.</summary>
+    public TimeProvider? Time { get; }
 
     /// <summary>Сховище таблиць даних для <c>core.dataTable</c> (F6-11).</summary>
     public PostgresDataTableStore DataTables { get; }
@@ -167,7 +172,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
     /// <param name="binary">Файлове сховище; <c>null</c> — немає.</param>
     /// <param name="limits">Серверні межі виконання (<c>OPENBP_MAX_EXECUTION_TIMEOUT_SEC</c>); <c>null</c> — типові.</param>
     /// <param name="loggers">Журнали обробника виконань; <c>null</c> — без журналу.</param>
-    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null)
+    /// <param name="time">Годинник черги, обробника й <c>core.wait</c>; <c>null</c> — системний.</param>
+    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null, TimeProvider? time = null)
     {
         var cs = await postgres.NewMigratedDatabaseAsync();
         return new WorkerHarness(
@@ -182,7 +188,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
             new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) },
             binary: binary,
             limits: limits,
-            loggers: loggers);
+            loggers: loggers,
+            time: time);
     }
 
     /// <summary>
@@ -192,7 +199,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public async Task<WorkerHarness> RestartAsync()
     {
         await StopAsync();
-        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey, Binary, Limits, Loggers);
+        return new WorkerHarness(ConnectionString, Options, QueueOptions, EncryptionKey, Binary, Limits, Loggers, Time);
     }
 
     /// <summary>

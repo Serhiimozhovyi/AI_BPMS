@@ -16,6 +16,7 @@ import telegram1c from '../../../../../examples/telegram-1c.json';
 const EXTRA: NodeTypeInfo[] = [
   { type: 'core.loop', version: 1, displayName: 'Цикл', group: 'logic', inputs: ['main'], outputs: ['item'], parametersSchema: {}, isTrigger: false },
   { type: 'core.wait', version: 1, displayName: 'Пауза', group: 'logic', inputs: ['main'], outputs: ['main'], parametersSchema: {}, isTrigger: false },
+  { type: 'mcp.waitFor', version: 1, displayName: 'Чекати умову', group: 'logic', inputs: ['main'], outputs: ['done', 'timeout'], parametersSchema: {}, isTrigger: false },
   { type: 'core.errorTrigger', version: 1, displayName: 'Збій', group: 'trigger', inputs: [], outputs: ['main'], parametersSchema: {}, isTrigger: true },
   {
     type: 'core.switch',
@@ -185,6 +186,14 @@ describe('buildBusinessView', () => {
     expect(v.lanes.map((l) => l.name)).toEqual(['Зовнішня система', 'Кіт CRM', 'Інша система', 'ШІ', 'OpenBP']);
     expect(v.steps.find((s) => s.id === 'w')).toEqual(expect.objectContaining({ kind: 'wait', badge: '5 хв', lane: LANE_OPENBP }));
     expect(v.steps.some((s) => s.id === 'off')).toBe(false);
+  });
+
+  it('mcp.waitFor — крок очікування на доріжці свого конектора', () => {
+    const v = view(
+      workflow([node('t', 'core.webhook'), node('wf', 'mcp.waitFor', { parameters: { serverId: 'srv_kit', toolName: 'get_task' } })], [edge('t', 'wf')]),
+      [{ id: 'srv_kit', name: 'Кіт CRM' }],
+    );
+    expect(v.steps.find((s) => s.id === 'wf')).toEqual(expect.objectContaining({ kind: 'wait', lane: 'connector:srv_kit' }));
   });
 
   it('бізнес-атрибути: назва, підрядок, власні доріжки, приховування, підпис ребра і зовнішні кроки', () => {

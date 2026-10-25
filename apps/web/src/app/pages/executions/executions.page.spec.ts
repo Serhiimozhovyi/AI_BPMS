@@ -134,6 +134,45 @@ describe('ExecutionsPage', () => {
     expect(host.querySelector('[data-testid="empty"]')).not.toBeNull();
   });
 
+  it('ключ кореляції: колонка, клік по ключу і поле фільтра запитують журнал з correlationKey', async () => {
+    const keyed: ExecutionSummary = { ...failed, correlationKey: 'угода-42' };
+    const { harness, http, host } = await setup('/executions', [keyed, running]);
+    const cells = host.querySelectorAll('[data-testid="correlation-key"]');
+    expect(cells[0].textContent).toContain('угода-42');
+    expect(cells[1].textContent).toContain('—');
+
+    cells[0].querySelector<HTMLButtonElement>('button')!.click();
+    let req = expectList(http);
+    expect(req.request.params.get('correlationKey')).toBe('угода-42');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush({ items: [keyed], page: 1, pageSize: 50, total: 1 });
+    await render(harness);
+    expect(host.querySelector<HTMLInputElement>('[data-testid="filter-correlation-key"]')!.value).toBe('угода-42');
+
+    const input = host.querySelector<HTMLInputElement>('[data-testid="filter-correlation-key"]')!;
+    input.value = '  ';
+    input.dispatchEvent(new Event('change'));
+    req = expectList(http);
+    expect(req.request.params.has('correlationKey')).toBe(false);
+    req.flush({ items: [keyed, running], page: 1, pageSize: 50, total: 2 });
+  });
+
+  it('очікування: стан «Очікує», час пробудження з заголовка або кроку, «Скасувати» доступне', async () => {
+    const waiting: ExecutionSummary = { ...running, id: 'e3', state: 'waiting', resumeAt: '2026-11-03T07:00:00Z', waitingNodeId: 'n_1c' };
+    const ctx = await setup('/executions', [waiting]);
+    const { host } = ctx;
+    expect(host.querySelector('[data-execution="e3"] [data-testid="state"]')?.textContent).toContain('Очікує');
+
+    await openDetail(ctx, { summary: waiting, steps: [step('s1', 'n_webhook'), { ...step('s2', 'n_1c', 'waiting'), resumeAt: '2026-11-03T07:00:00Z' }] });
+    expect(host.querySelector('[data-testid="detail-state"]')?.textContent).toContain('Очікує');
+    expect(host.querySelector('[data-testid="detail-resume-at"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="cancel-button"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="retry-button"]')).toBeNull();
+    expect(ctx.page.waitingUntil({ summary: { ...waiting, resumeAt: null }, steps: [{ ...step('s2', 'n_1c', 'waiting'), resumeAt: '2026-11-04T07:00:00Z' }] })).toBe(
+      '2026-11-04T07:00:00Z',
+    );
+  });
+
   it('пагінація: «Далі» запитує наступну сторінку', async () => {
     const { harness, http, host } = await setup('/executions', [failed], 120);
     expect(host.querySelector('[data-testid="page-info"]')?.textContent).toContain('1 з 3');

@@ -1,0 +1,410 @@
+{
+  "formatVersion": 1,
+  "name": "Нова угода → задача менеджеру → контроль → ескалація",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 300,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true,
+    "correlation": {
+      "skipIfActive": true
+    }
+  },
+  "business": {
+    "lanes": [
+      {
+        "id": "kit",
+        "name": "Кіт CRM",
+        "description": "менеджер і керівник"
+      },
+      {
+        "id": "openbp",
+        "name": "OpenBP",
+        "description": "сценарій"
+      },
+      {
+        "id": "notify",
+        "name": "Сповіщення",
+        "description": "пошта"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s_sale",
+        "title": "Менеджер створює угоду",
+        "lane": "kit",
+        "links": [
+          {
+            "node": "n_poll",
+            "direction": "in",
+            "label": "бачить за ≤5 хв"
+          }
+        ]
+      },
+      {
+        "id": "s_call",
+        "title": "Менеджер зв'язується з клієнтом і закриває задачу",
+        "subtitle": "статус «Виконане»",
+        "lane": "kit",
+        "links": [
+          {
+            "node": "n_task",
+            "direction": "out",
+            "label": "задача + лист від Кіта"
+          },
+          {
+            "node": "n_wait",
+            "direction": "in",
+            "label": "перевіряє кожні 30 хв"
+          }
+        ]
+      },
+      {
+        "id": "s_head",
+        "title": "Керівник розбирається з угодою",
+        "lane": "kit",
+        "links": [
+          {
+            "node": "n_mail",
+            "direction": "out",
+            "label": "лист про прострочку"
+          }
+        ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "n_poll",
+      "name": "Нова угода в Кіті",
+      "type": "mcp.poll",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "changes_since",
+        "arguments": {
+          "entity": "sales",
+          "withinMinutes": 60,
+          "createdOnly": true
+        },
+        "itemsPath": "result",
+        "keyField": "id",
+        "cron": "*/5 * * * *",
+        "correlationKey": "{{ $json.id }}"
+      },
+      "notes": "Кожні 5 хв (рішення власника): угоди, створені за останню годину. Вікно більше за інтервал — запас на збої; дублі відсікає seenKeys, а ключ кореляції (id угоди) з skipIfActive не дає запустити другий процес, поки йде перший.",
+      "business": {
+        "title": "Нова угода",
+        "subtitle": "kit-crm",
+        "lane": "openbp"
+      }
+    },
+    {
+      "id": "n_deadline",
+      "name": "Дедлайн +1 робочий день",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        340,
+        300
+      ],
+      "parameters": {
+        "code": "// Кінець наступного робочого дня (пн–пт), 18:00 за Києвом (EET/EEST).\nconst kyivOffsetHours = d => {\n  const y = d.getUTCFullYear();\n  const lastSunday = month => { const x = new Date(Date.UTC(y, month + 1, 0, 1)); x.setUTCDate(x.getUTCDate() - x.getUTCDay()); return x; };\n  return d >= lastSunday(2) && d < lastSunday(9) ? 3 : 2;\n};\nconst nextWorkingDay18 = from => {\n  const local = new Date(from.getTime() + kyivOffsetHours(from) * 3600000);\n  do { local.setUTCDate(local.getUTCDate() + 1); } while (local.getUTCDay() === 0 || local.getUTCDay() === 6);\n  const noon = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 12));\n  const offset = kyivOffsetHours(noon);\n  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 18 - offset)).toISOString().slice(0, 19) + 'Z';\n};\nreturn { saleId: $json.id, saleName: $json.name, responsibleId: $json.responsibleId, deadline: nextWorkingDay18(new Date()) };"
+      }
+    },
+    {
+      "id": "n_task",
+      "name": "Задача менеджеру",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        580,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "create_task",
+        "arguments": {
+          "title": "Зв'язатися з клієнтом: {{ $json.saleName }}",
+          "description": "Нова угода «{{ $json.saleName }}». Зв'яжіться з клієнтом і закрийте задачу зі статусом «Виконане».",
+          "responsibleId": "{{ $json.responsibleId }}",
+          "deadline": "{{ $json.deadline }}",
+          "saleId": "{{ $json.saleId }}"
+        }
+      },
+      "timeoutSec": 60,
+      "retry": {
+        "maxTries": 3,
+        "waitMs": 5000
+      },
+      "business": {
+        "title": "Створити задачу відповідальному",
+        "subtitle": "kit-crm",
+        "lane": "openbp"
+      }
+    },
+    {
+      "id": "n_wait",
+      "name": "Задачу закрито?",
+      "type": "mcp.waitFor",
+      "typeVersion": 1,
+      "position": [
+        820,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "get_task",
+        "arguments": {
+          "id": "{{ $json.id }}"
+        },
+        "conditions": [
+          {
+            "field": "done",
+            "operator": "isTrue"
+          }
+        ],
+        "intervalMinutes": 30,
+        "timeoutHours": 48
+      },
+      "notes": "done = true, коли статус задачі «Виконане» або «Невиконане». «Протерміноване» Кіт ставить сам після дедлайну — це ще не закриття.",
+      "business": {
+        "title": "Чекати закриття задачі (до 2 днів)",
+        "subtitle": "kit-crm",
+        "lane": "openbp"
+      }
+    },
+    {
+      "id": "n_note",
+      "name": "Нотатка в угоді",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        180
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "add_sale_note",
+        "arguments": {
+          "saleId": "{{ $node[\"Нова угода в Кіті\"].json.id }}",
+          "text": "Контакт з клієнтом відпрацьовано: задача «{{ $json.title }}» — {{ $json.status }}.{{ $json.result ? ' Результат: ' + $json.result : '' }}"
+        }
+      },
+      "business": {
+        "title": "Нотатка в угоді",
+        "subtitle": "kit-crm",
+        "lane": "openbp"
+      }
+    },
+    {
+      "id": "n_manager",
+      "name": "Керівник менеджера",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        420
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "get_user_manager",
+        "arguments": {
+          "crmPersonId": "{{ $json.responsibleId }}"
+        }
+      },
+      "business": {
+        "title": "Знайти керівника з профілю",
+        "subtitle": "kit-crm",
+        "lane": "openbp"
+      }
+    },
+    {
+      "id": "n_has_manager",
+      "name": "Керівника знайдено?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        420
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.found }}",
+            "operator": "isTrue"
+          }
+        ],
+        "combine": "and"
+      }
+    },
+    {
+      "id": "n_mail",
+      "name": "Лист керівнику",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        360
+      ],
+      "parameters": {
+        "serverId": "srv_msgraph",
+        "toolName": "send_mail",
+        "arguments": {
+          "from": "crm-bot@example.com",
+          "to": [
+            "{{ $json.manager.email }}"
+          ],
+          "subject": "Не відпрацьовано нову угоду: {{ $node[\"Нова угода в Кіті\"].json.name }}",
+          "html": "<p>{{ $json.manager.name }}, задачу «{{ $node[\"Задача менеджеру\"].json.title }}» не закрито за 2 дні.</p><p>Угода: {{ $node[\"Нова угода в Кіті\"].json.name }}. Створено повторну задачу з дедлайном наступного робочого дня.</p>"
+        }
+      },
+      "business": {
+        "title": "Лист керівнику",
+        "subtitle": "msgraph",
+        "lane": "notify"
+      }
+    },
+    {
+      "id": "n_redeadline",
+      "name": "Новий дедлайн",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        600
+      ],
+      "parameters": {
+        "code": "// Кінець наступного робочого дня (пн–пт), 18:00 за Києвом (EET/EEST).\nconst kyivOffsetHours = d => {\n  const y = d.getUTCFullYear();\n  const lastSunday = month => { const x = new Date(Date.UTC(y, month + 1, 0, 1)); x.setUTCDate(x.getUTCDate() - x.getUTCDay()); return x; };\n  return d >= lastSunday(2) && d < lastSunday(9) ? 3 : 2;\n};\nconst nextWorkingDay18 = from => {\n  const local = new Date(from.getTime() + kyivOffsetHours(from) * 3600000);\n  do { local.setUTCDate(local.getUTCDate() + 1); } while (local.getUTCDay() === 0 || local.getUTCDay() === 6);\n  const noon = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 12));\n  const offset = kyivOffsetHours(noon);\n  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 18 - offset)).toISOString().slice(0, 19) + 'Z';\n};\nconst task = $node[\"Задача менеджеру\"].json;\nreturn { title: 'Повторно: ' + task.title, responsibleId: task.responsibleId, saleId: $node[\"Нова угода в Кіті\"].json.id, deadline: nextWorkingDay18(new Date()) };"
+      }
+    },
+    {
+      "id": "n_retask",
+      "name": "Повторна задача",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        600
+      ],
+      "parameters": {
+        "serverId": "srv_kit_crm",
+        "toolName": "create_task",
+        "arguments": {
+          "title": "{{ $json.title }}",
+          "description": "Попередню задачу не закрито за 2 дні, керівника повідомлено.",
+          "responsibleId": "{{ $json.responsibleId }}",
+          "deadline": "{{ $json.deadline }}",
+          "saleId": "{{ $json.saleId }}"
+        }
+      },
+      "timeoutSec": 60,
+      "retry": {
+        "maxTries": 3,
+        "waitMs": 5000
+      },
+      "business": {
+        "title": "Повторна задача",
+        "subtitle": "kit-crm",
+        "lane": "openbp"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_poll",
+        "output": 0
+      },
+      "to": {
+        "node": "n_deadline",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_deadline",
+        "output": 0
+      },
+      "to": {
+        "node": "n_task",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_task",
+        "output": 0
+      },
+      "to": {
+        "node": "n_wait",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_wait",
+        "output": 0
+      },
+      "to": {
+        "node": "n_note",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_wait",
+        "output": 1
+      },
+      "to": {
+        "node": "n_manager",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_manager",
+        "output": 0
+      },
+      "to": {
+        "node": "n_has_manager",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_has_manager",
+        "output": 0
+      },
+      "to": {
+        "node": "n_mail",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_wait",
+        "output": 1
+      },
+      "to": {
+        "node": "n_redeadline",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_redeadline",
+        "output": 0
+      },
+      "to": {
+        "node": "n_retask",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {}
+}

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using OpenBP.Application.Assistant;
 using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
@@ -129,6 +130,7 @@ public sealed class WorkflowService(
         db.WorkflowVersions.Add(version);
         db.Audit(currentUser, now, AuditActions.WorkflowCreated, AuditEntities.Workflow, workflow.Id.ToString(),
             new JsonObject { ["name"] = name, ["version"] = 1 });
+        await WorkflowExplanationQueue.ScheduleAsync(db, workflow.Id, 1, now, WorkflowExplanationQueue.Delay, force: false, ct);
         await db.SaveChangesAsync(ct);
         return ToDetail(workflow, version, publishedVersion: null);
     }
@@ -155,6 +157,9 @@ public sealed class WorkflowService(
         db.WorkflowVersions.Add(version);
         db.Audit(currentUser, now, AuditActions.WorkflowSaved, AuditEntities.Workflow, id.ToString(),
             new JsonObject { ["name"] = workflow.Name, ["version"] = version.Version, ["active"] = workflow.Active });
+        // Пояснення простими словами (F3-72) — у фоні після паузи, збереження його не чекає.
+        await WorkflowExplanationQueue.ScheduleAsync(
+            db, id, version.Version, now, WorkflowExplanationQueue.Delay, force: false, ct, (version.Definition, workflow.Name));
         try
         {
             await db.SaveChangesAsync(ct);
@@ -228,6 +233,11 @@ public sealed class WorkflowService(
             var number = await PublishedNumberAsync(workflow, ct);
             db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowDraftDiscarded, AuditEntities.Workflow, id.ToString(),
                 new JsonObject { ["name"] = workflow.Name, ["version"] = number });
+            if (number is { } restored)
+            {
+                await WorkflowExplanationQueue.ScheduleAsync(db, id, restored, workflow.UpdatedAt, WorkflowExplanationQueue.Delay, force: false, ct);
+            }
+
             await db.SaveChangesAsync(ct);
         }
 

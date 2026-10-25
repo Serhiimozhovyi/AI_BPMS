@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mcp.waitFor",
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "required": [
+        "field",
+        "operator"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Шлях до поля у відповіді дії через крапку, напр. status або task.statusId"
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "equals",
+            "notEquals",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "notContains",
+            "startsWith",
+            "endsWith",
+            "isEmpty",
+            "isNotEmpty",
+            "isTrue",
+            "isFalse"
+          ]
+        },
+        "right": {
+          "description": "Значення для порівняння (можна вираз над вхідним item'ом); не потрібне для isEmpty, isNotEmpty, isTrue, isFalse"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "required": [
+    "serverId",
+    "toolName",
+    "conditions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "serverId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toolName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/condition"
+      }
+    },
+    "combine": {
+      "type": "string",
+      "enum": [
+        "and",
+        "or"
+      ],
+      "default": "and"
+    },
+    "intervalMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1440,
+      "default": 15,
+      "description": "Як часто перевіряти, хв (1…1440)"
+    },
+    "timeoutHours": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 2160,
+      "default": 72,
+      "description": "Скільки чекати, год (до 2160 = 90 днів); далі — вихід timeout"
+    }
+  }
+}

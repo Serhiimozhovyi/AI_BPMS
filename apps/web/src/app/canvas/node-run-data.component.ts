@@ -239,6 +239,8 @@ export class NodeRunDataComponent {
         return $localize`:@@noderun.status.skipped:пропущено`;
       case 'cancelled':
         return $localize`:@@noderun.status.cancelled:скасовано`;
+      case 'waiting':
+        return $localize`:@@noderun.status.waiting:очікує`;
     }
   });
 }

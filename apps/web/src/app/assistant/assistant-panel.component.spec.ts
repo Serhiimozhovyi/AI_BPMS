@@ -7,9 +7,20 @@ import { parseAssistantStream } from './assistant-api.service';
 import { AssistantPanelComponent } from './assistant-panel.component';
 
 const URL = '/api/v1/workflows/w1/assistant';
+const EXPLANATION = {
+  status: 'none',
+  version: null,
+  currentVersion: 1,
+  text: null,
+  error: null,
+  updatedAt: null,
+  stale: false,
+};
 
 function sse(...events: object[]): string {
-  return events.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+  return events
+    .map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`)
+    .join('');
 }
 
 describe('parseAssistantStream', () => {
@@ -25,14 +36,25 @@ describe('AssistantPanelComponent', () => {
   const start: WorkflowDefinition = emptyWorkflowDefinition('Заявки');
 
   function create() {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     const fixture = TestBed.createComponent(AssistantPanelComponent);
     fixture.componentRef.setInput('workflowId', 'w1');
     fixture.componentRef.setInput('definition', start);
     fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/workflows/w1/explanation')
+      .flush(EXPLANATION);
+    fixture.detectChanges();
     const changes: WorkflowDefinition[] = [];
     fixture.componentInstance.definitionChange.subscribe((d) => changes.push(d));
-    return { fixture, host: fixture.nativeElement as HTMLElement, http: TestBed.inject(HttpTestingController), changes };
+    return {
+      fixture,
+      host: fixture.nativeElement as HTMLElement,
+      http: TestBed.inject(HttpTestingController),
+      changes,
+    };
   }
 
   function type(host: HTMLElement, text: string) {
@@ -52,18 +74,43 @@ describe('AssistantPanelComponent', () => {
 
     const request = http.expectOne(URL);
     expect(request.request.body).toEqual({ message: 'додай Set', definition: start, history: [] });
-    const first = { ...start, nodes: [{ id: 'a', name: 'A', type: 'core.manualTrigger', typeVersion: 1, position: [0, 0] as [number, number], parameters: {} }] };
+    const first = {
+      ...start,
+      nodes: [
+        {
+          id: 'a',
+          name: 'A',
+          type: 'core.manualTrigger',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+          parameters: {},
+        },
+      ],
+    };
     const second = { ...first, name: 'інше' };
-    const partial = sse({ type: 'step', tool: 'update_workflow', ok: true, text: 'вузлів 1' }, { type: 'definition', definition: first });
+    const partial = sse(
+      { type: 'step', tool: 'update_workflow', ok: true, text: 'вузлів 1' },
+      { type: 'definition', definition: first },
+    );
     request.event({ type: HttpEventType.DownloadProgress, loaded: 1, partialText: partial });
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="assistant-busy"]')).not.toBeNull();
     expect(changes).toEqual([]);
 
-    request.flush(partial + sse({ type: 'definition', definition: second }, { type: 'message', text: 'Готово' }, { type: 'done' }));
+    request.flush(
+      partial +
+        sse(
+          { type: 'definition', definition: second },
+          { type: 'message', text: 'Готово' },
+          { type: 'done' },
+        ),
+    );
     fixture.detectChanges();
 
-    const lines = Array.from(host.querySelectorAll('[data-kind]')).map((l) => [l.getAttribute('data-kind'), l.textContent?.trim()]);
+    const lines = Array.from(host.querySelectorAll('[data-kind]')).map((l) => [
+      l.getAttribute('data-kind'),
+      l.textContent?.trim(),
+    ]);
     expect(lines).toEqual([
       ['user', 'додай Set'],
       ['step', 'Змінив сценарій: вузлів 1'],
@@ -82,15 +129,41 @@ describe('AssistantPanelComponent', () => {
     ]);
   });
 
-  it('помилка Api (409 не налаштовано) — текст із detail; запит ззовні з send надсилається одразу', () => {
+  it('модель не вибрана (409) — замість поля підказка про MCP із назвою сценарію; запит ззовні з send надсилається одразу', () => {
     const { fixture, host, http } = create();
     fixture.componentRef.setInput('prompt', { text: 'Поясни вузол', send: true, seq: 1 });
     fixture.detectChanges();
 
-    http.expectOne(URL).flush(JSON.stringify({ code: 'ASSISTANT_NOT_CONFIGURED', detail: 'Помічник не налаштований.' }), { status: 409, statusText: 'Conflict' });
+    http
+      .expectOne(URL)
+      .flush(
+        JSON.stringify({ code: 'ASSISTANT_NOT_CONFIGURED', detail: 'Помічник не налаштований.' }),
+        { status: 409, statusText: 'Conflict' },
+      );
     fixture.detectChanges();
 
-    expect(host.querySelector('[data-kind="error"]')?.textContent).toContain('Помічник не налаштований.');
-    expect((host.querySelector('[data-testid="assistant-send"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(host.querySelector('[data-kind="error"]')).toBeNull();
+    expect(host.querySelector('[data-testid="assistant-input"]')).toBeNull();
+    expect(host.querySelector('[data-testid="assistant-mcp"]')?.textContent).toContain('через MCP');
+    expect(host.querySelector('[data-testid="assistant-mcp-prompt"]')?.textContent?.trim()).toBe(
+      'Поясни сценарій «Заявки» і збережи пояснення в OpenBP',
+    );
+  });
+
+  it('інша помилка Api — червоний рядок, поле лишається', () => {
+    const { fixture, host, http } = create();
+    fixture.componentRef.setInput('prompt', { text: 'Поясни вузол', send: true, seq: 1 });
+    fixture.detectChanges();
+
+    http
+      .expectOne(URL)
+      .flush(JSON.stringify({ code: 'ASSISTANT_FAILED', detail: 'Модель недоступна.' }), {
+        status: 502,
+        statusText: 'Bad Gateway',
+      });
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-kind="error"]')?.textContent).toContain('Модель недоступна.');
+    expect(host.querySelector('[data-testid="assistant-input"]')).not.toBeNull();
   });
 });

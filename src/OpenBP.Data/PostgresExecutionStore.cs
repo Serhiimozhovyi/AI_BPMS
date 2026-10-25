@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OpenBP.Data.Credentials;
@@ -222,6 +223,8 @@ public sealed class PostgresExecutionStore(
             Output = JsonSerializer.Serialize(step.Output, WorkflowJson.Options),
             Error = step.Error is null ? null : JsonSerializer.Serialize(step.Error, WorkflowJson.Options),
             SubSteps = step.SubSteps.Count == 0 ? null : JsonSerializer.Serialize(step.SubSteps, WorkflowJson.Options),
+            ResumeAt = step.ResumeAt?.ToUniversalTime(),
+            WaitState = step.WaitState?.ToJsonString(),
             StartedAt = step.StartedAt.ToUniversalTime(),
             FinishedAt = step.FinishedAt.ToUniversalTime(),
         };
@@ -237,6 +240,8 @@ public sealed class PostgresExecutionStore(
         Output = ReadItems(e.Output),
         Error = e.Error is null ? null : JsonSerializer.Deserialize<StepError>(e.Error, WorkflowJson.Options),
         SubSteps = e.SubSteps is null ? [] : JsonSerializer.Deserialize<SubStep[]>(e.SubSteps, WorkflowJson.Options) ?? [],
+        ResumeAt = e.ResumeAt,
+        WaitState = e.WaitState is null ? null : JsonNode.Parse(e.WaitState) as JsonObject,
         StartedAt = e.StartedAt ?? DateTimeOffset.MinValue,
         FinishedAt = e.FinishedAt ?? DateTimeOffset.MinValue,
     };

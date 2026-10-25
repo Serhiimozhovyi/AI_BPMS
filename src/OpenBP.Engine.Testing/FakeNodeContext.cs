@@ -52,6 +52,19 @@ public sealed class FakeNodeContext : INodeContext
     /// <summary>Підкроки, які записав вузол (F6-12).</summary>
     public List<SubStep> SubSteps { get; } = [];
 
+    /// <summary>Пробудження, яке тест подає вузлу (F5-02); <c>null</c> — звичайний запуск.</summary>
+    public NodeResumption? Resumption { get; set; }
+
+    /// <summary>Призупинення, яке запросив вузол (<see cref="INodeContext.Suspend"/>); <c>null</c> — не призупинявся.</summary>
+    public (DateTimeOffset ResumeAt, JsonObject State)? Suspension { get; private set; }
+
+    /// <inheritdoc />
+    public Item[][] Suspend(DateTimeOffset resumeAt, JsonObject? state = null)
+    {
+        Suspension = (resumeAt, state ?? []);
+        return [];
+    }
+
     IReadOnlyDictionary<string, IReadOnlyList<Item>> INodeContext.NodeOutputs => NodeOutputs;
 
     IReadOnlyDictionary<string, string> INodeContext.Vars => Vars;

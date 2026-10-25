@@ -774,7 +774,7 @@
           "Виконання"
         ],
         "summary": "Запустити сценарій вручну",
-        "description": "Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`).",
+        "description": "Ставить виконання в чергу воркера; стан — у `GET /executions/{id}` або потоці `/events`. Тіло необов'язкове: тестовий запуск з вузла, з даними тригера або до вузла (`destinationNodeId`). `correlationKey` — ключ кореляції (до 200 символів); з `settings.correlation.skipIfActive` за активного виконання з тим самим ключем запуск одразу `cancelled` з поясненням.",
         "parameters": [
           {
             "name": "id",
@@ -992,6 +992,162 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/{id}/explanation": {
+      "get": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Пояснення сценарію простими словами",
+        "description": "Пояснення всього процесу (кроки, дані на вході й виході), яке воркер генерує моделлю помічника після кожного збереження (з паузою 15 с, лише для останньої версії; пересування вузлів його не оновлює). `status`: `none`, `pending`, `ready`, `failed` (`error`), `not_configured`; `stale` — текст належить старішій версії. Читає viewer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Пояснити сценарій заново",
+        "description": "Ставить пояснення поточної версії в чергу одразу, навіть якщо сценарій не змінювався. Лише editor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Зберегти пояснення сценарію",
+        "description": "Пояснення поточної версії, написане ззовні — ШІ-агентом через `/mcp` (`save_workflow_explanation`) або людиною; модель помічника не потрібна. `text` — до 50 000 символів. Лише editor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowExplanationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
           },
           "4XX": {
             "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
@@ -3383,7 +3539,7 @@
           "Виконання"
         ],
         "summary": "Історія виконань",
-        "description": "Фільтри: `workflowId`, `status` (queued, running, success, error, cancelled, timed_out), період `from`–`to`.",
+        "description": "Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).",
         "parameters": [
           {
             "name": "workflowId",
@@ -3414,6 +3570,13 @@
             "schema": {
               "type": "string",
               "format": "date-time"
+            }
+          },
+          {
+            "name": "correlationKey",
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -3693,7 +3856,7 @@
           "Виконання"
         ],
         "summary": "Потік подій виконання (SSE)",
-        "description": "`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану.",
+        "description": "`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану; у стані `waiting` (довге очікування) лишається відкритим.",
         "parameters": [
           {
             "name": "id",
@@ -6521,7 +6684,8 @@
           "success",
           "error",
           "cancelled",
-          "timed_out"
+          "timed_out",
+          "waiting"
         ]
       },
       "ExecutionStepDto": {
@@ -6600,6 +6764,13 @@
             "items": {
               "$ref": "#/components/schemas/SubStep"
             }
+          },
+          "resumeAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -6660,6 +6831,25 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "correlationKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resumeAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "waitingNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7595,6 +7785,12 @@
                 }
               }
             }
+          },
+          "correlationKey": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7650,7 +7846,8 @@
           "success",
           "error",
           "skipped",
-          "cancelled"
+          "cancelled",
+          "waiting"
         ],
         "description": "Результат одного запуску вузла (поле `execution_steps.status`)."
       },
@@ -7990,6 +8187,75 @@
           },
           "hasUnpublishedChanges": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkflowExplanation": {
+        "required": [
+          "status",
+          "version",
+          "currentVersion",
+          "text",
+          "error",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "currentVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkflowExplanationInput": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

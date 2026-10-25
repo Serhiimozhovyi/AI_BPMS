@@ -32,6 +32,12 @@
     "keyField": {
       "type": "string",
       "minLength": 1
+    },
+    "correlationKey": {
+      "title": "Ключ кореляції",
+      "description": "Вираз над новим записом, напр. {{ $json.Id }}: кожен новий запис запускає окреме виконання з цим ключем; з settings.correlation.skipIfActive запис з ключем активного виконання пропускається.",
+      "type": "string",
+      "maxLength": 500
     }
   }
 }

@@ -82,23 +82,26 @@ MCP-сервер на Connector Kit (`connectors/kit-crm`), stdio або http, �
 
 ### 5.3. Tools
 
-Генератор з `$metadata` (F3-12) дає базові CRUD-tools; поверх них ручні, з людськими назвами й описами:
+Ручні tools з людськими назвами й описами (реалізовано в F5-05, `connectors/kit-crm/README.md`); генератор з
+`$metadata` не підключено — контракт Кіта зафіксовано типізованими tools:
 
 | Tool | Що робить |
 |---|---|
-| `find_sales { query?, stageId?, responsibleId?, updatedSince?, top? }` | пошук угод `CrmSales` |
-| `get_sale { id }` · `update_sale { id, fields }` · `set_sale_stage { id, stageId }` | угода |
-| `create_task { title, description?, responsibleId, managerId?, deadline, categoryId?, saleId?, personId? }` | задача `CrmTasks` (сервер Кіта сам створить сповіщення й лист) |
-| `get_task { id }` · `list_tasks { saleId?, responsibleId?, status?, deadlineBefore? }` · `set_task_status { id, status }` | задачі |
+| `find_sales { query?, stageId?, responsibleId?, contractorId?, updatedSince?, top? }` | пошук угод `CrmSales` |
+| `get_sale { id }` · `update_sale { id, fields }` · `set_sale_stage { id, stageId }` · `list_sale_stages` | угода і стадії |
+| `create_task { title, responsibleId, deadline, description?, managerId?, categoryId?, saleId?, contractorId?, personIds? }` | задача `CrmTasks` у статусі «Планове» (сервер Кіта сам створить сповіщення й лист) |
+| `get_task { id }` · `list_tasks { saleId?, responsibleId?, status?, deadlineBefore?, top? }` · `set_task_status { id, status, result? }` | задачі; `get_task` віддає назву статусу і `done` (Виконане/Невиконане) |
 | `find_contractors { query }` · `get_contractor { id }` · `find_persons { query }` · `get_person { id }` | контрагенти й особи |
-| `add_sale_note { saleId, text }` | нотатка до угоди |
-| `get_user_manager { crmPersonId }` | керівник менеджера з профілю користувача: `CrmPerson` → `Users` (email) → `GET /users/{email}/manager` у Microsoft Graph; повертає ім'я та email або `null` |
-| `changes_since { entity: sales \| tasks \| contractors, since }` | записи з `Updated gt since` для `mcp.poll`, новий курсор = найбільший `Updated` |
+| `add_sale_note { saleId, text, authorPersonId? }` | нотатка до угоди (автор за замовчуванням — `Connector__AuthorPersonId`) |
+| `get_person_user { crmPersonId }` | користувач Кіта (ім'я, email), зв'язаний з особою |
+| `get_user_manager { crmPersonId }` | керівник з профілю в Кіті: `CrmPerson.ManagerId` → `Users` (email); `found: false`, якщо керівника не задано |
+| `changes_since { entity: sales \| tasks \| contractors \| persons, since?, withinMinutes?, createdOnly? }` | нові чи змінені записи для `mcp.poll` (`{ result, cursor }`, `keyField = id`) |
 
 ### 5.4. Опитування змін
 
-- `mcp.poll` викликає `changes_since` кожні 5 хв (підтверджено власником) і зберігає курсор `since` у стані тригера.
-- Нова угода відрізняється від зміненої за `Created >= since`; сценарій фільтрує це сам (`core.if`).
+- `mcp.poll` викликає `changes_since` кожні 5 хв (підтверджено власником). Аргументи вузла статичні, тож замість курсора
+  — вікно `withinMinutes` (більше за інтервал, із запасом на збої), а вже бачені записи відсікає `seenKeys` за `id`.
+- Лише нові угоди — `createdOnly: true` (умова `Created gt …` на боці Кіта).
 - Дублікати між опитуваннями (запис змінився двічі) відсікає ключ кореляції (§4) зі `skipIfActive`.
 
 ## 6. Пілотні сценарії
@@ -107,16 +110,16 @@ MCP-сервер на Connector Kit (`connectors/kit-crm`), stdio або http, �
 
 `examples/kit-sales-followup.json`:
 
-1. `mcp.poll` `kit-crm.changes_since { entity: sales }` → лише нові угоди; `correlationKey = {{ $json.Id }}`, `skipIfActive`.
+1. `mcp.poll` `kit-crm.changes_since { entity: sales, withinMinutes: 60, createdOnly: true }` кожні 5 хв → лише нові угоди; `correlationKey = {{ $json.id }}`, `skipIfActive`.
 2. `kit-crm.create_task`: «Зв'язатися з клієнтом», відповідальний = відповідальний угоди, дедлайн +1 робочий день: понеділок–п'ятниця, суботу й неділю пропускаємо, державні свята не враховуємо (рішення власника).
-3. `mcp.waitFor` `kit-crm.get_task` до статусу Виконане/Невиконане, `intervalMinutes` 30, `timeoutHours` 48.
-4. `done` → `kit-crm.add_sale_note` з результатом. `timeout` → `kit-crm.get_user_manager` → лист керівнику (Graph `sendMail`) і повторна задача. Немає керівника в профілі → лист на адресу з параметра сценарію.
+3. `mcp.waitFor` `kit-crm.get_task` до `done = true` (Виконане/Невиконане), `intervalMinutes` 30, `timeoutHours` 48.
+4. `done` → `kit-crm.add_sale_note` з результатом. `timeout` → `kit-crm.get_user_manager` → лист керівнику (Graph `send_mail`) і повторна задача. Немає керівника в профілі → листа немає, повторна задача все одно створюється.
 
 DoD: CLI-прогін з фейком OData Кіта й моком Graph для обох гілок; дубль угоди не запускає другий процес.
 
 ### 6.2. Щоденний звіт по протермінованих задачах (F5-07)
 
-`examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm.list_tasks { status: Протерміноване }` → `core.code` групує за відповідальним → лист кожному менеджеру й зведення його керівнику (`get_user_manager`) через Graph. Порожній день — без листів.
+`examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv`, пн–пт → `kit-crm.list_tasks { status: Протерміноване }` → `core.code` групує за відповідальним → лист кожному менеджеру з email (`get_person_user`) і зведення його керівнику (`get_user_manager`) через Graph. Порожній день — без листів.
 
 ## 7. Порядок робіт
 
@@ -130,5 +133,5 @@ DoD: CLI-прогін з фейком OData Кіта й моком Graph для 
 1. Сервісний доступ — окремий client у Keycloak (`client_credentials`); користувача з роллю `CRM_user` створює власник.
 2. `FrontPagePath` — поки не задаємо, значення поставимо пізніше.
 3. Робочі дні — понеділок–п'ятниця, без довідника свят.
-4. Ескалація — листом; керівник береться з профілю користувача (Microsoft Graph `manager`).
+4. Ескалація — листом; керівник береться з профілю користувача в Кіті (`CrmPerson.ManagerId`, email — з `Users`), без Microsoft Graph.
 5. Інтервал опитування угод — 5 хв.

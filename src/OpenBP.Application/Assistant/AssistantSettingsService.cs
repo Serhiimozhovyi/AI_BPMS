@@ -50,6 +50,14 @@ public sealed class AssistantSettingsService(OpenBpDbContext db, ICurrentUser cu
     public async Task<AssistantSettings> GetAsync(CancellationToken ct)
     {
         currentUser.Require(UserRole.Editor);
+        return await LoadAsync(db, ct);
+    }
+
+    /// <summary>Налаштування без перевірки прав — для системних операцій (пояснення сценарію у воркері, F3-72).</summary>
+    /// <param name="db">Контекст БД.</param>
+    /// <param name="ct">Скасування.</param>
+    internal static async Task<AssistantSettings> LoadAsync(OpenBpDbContext db, CancellationToken ct)
+    {
         var row = await db.AppSettings.AsNoTracking().SingleOrDefaultAsync(s => s.Key == Key, ct);
         var stored = row is null ? null : JsonSerializer.Deserialize<Stored>(row.Value, JsonSerializerOptions.Web);
         if (stored?.CredentialId is not { } credentialId)

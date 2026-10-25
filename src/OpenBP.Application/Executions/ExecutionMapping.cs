@@ -17,7 +17,10 @@ internal static class ExecutionMapping
         e.StartedAt,
         e.FinishedAt,
         e.Error,
-        e.ResumedFromExecutionId);
+        e.ResumedFromExecutionId,
+        e.CorrelationKey,
+        e.Status == ExecutionStatuses.Waiting ? e.ResumeAt : null,
+        e.Status == ExecutionStatuses.Waiting ? e.WaitingNodeId : null);
 
     /// <summary>Крок як збережений: items і помилка вже очищені від секретів (F2-04).</summary>
     public static ExecutionStepDto ToStep(ExecutionStepEntity e) => new(
@@ -30,7 +33,8 @@ internal static class ExecutionMapping
         e.Error is null ? null : JsonSerializer.Deserialize<StepError>(e.Error, WorkflowJson.Options),
         e.StartedAt ?? DateTimeOffset.MinValue,
         e.FinishedAt ?? DateTimeOffset.MinValue,
-        e.SubSteps is null ? null : JsonSerializer.Deserialize<SubStep[]>(e.SubSteps, WorkflowJson.Options));
+        e.SubSteps is null ? null : JsonSerializer.Deserialize<SubStep[]>(e.SubSteps, WorkflowJson.Options),
+        e.ResumeAt);
 
     private static Item[][] ReadItems(string? json) =>
         json is null ? [] : JsonSerializer.Deserialize<Item[][]>(json, WorkflowJson.Options) ?? [];

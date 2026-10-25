@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Ai;
+using OpenBP.Application.Assistant;
 using OpenBP.Application.DataTables;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
@@ -24,7 +25,8 @@ public static class WorkerServiceCollectionExtensions
     /// <summary>
     /// Додає воркер виконань: БД (рядок підключення <c>Default</c>), <see cref="JobQueue"/>, credentials (ключ з
     /// <c>OPENBP_ENCRYPTION_KEY</c> — без нього старт неможливий), реєстри MCP-серверів і вузлів, Jint і
-    /// <see cref="ExecutionWorker"/> (виконання і опитування <c>mcp.poll</c>, <see cref="PollJobProcessor"/>) з налаштуваннями секції <see cref="WorkerOptions.Section"/>, а також
+    /// <see cref="ExecutionWorker"/> (виконання, опитування <c>mcp.poll</c> — <see cref="PollJobProcessor"/>, пояснення сценаріїв —
+    /// <see cref="ExplainJobProcessor"/>) з налаштуваннями секції <see cref="WorkerOptions.Section"/>, а також
     /// <see cref="ExecutionRecoveryService"/> (відновлення після падіння воркера) з налаштуваннями черги з підсекції
     /// <see cref="QueueSection"/>; файли — у <see cref="S3BinaryStore"/> (<c>Storage:S3:Bucket</c>) або <see cref="LocalBinaryStore"/>
     /// (<c>Storage:LocalPath</c>); трейси — <see cref="WorkerTelemetry.AddOpenBpTracing"/>.
@@ -101,7 +103,7 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
             CoreNodes.All(dataTables: sp.GetRequiredService<PostgresDataTableStore>())
-                .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>()))
+                .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>(), sp.GetRequiredService<TimeProvider>()))
                 .Concat(AiNodes.All(
                     sp.GetRequiredService<HttpClient>(),
                     sp.GetRequiredService<IMcpServerRegistry>(),
@@ -132,6 +134,17 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<WorkerOptions>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PollJobProcessor>>(),
             sp.GetRequiredService<TimeProvider>()));
+        // Пояснення сценаріїв (F3-72): модель помічника з «Налаштувань → Помічник».
+        services.AddSingleton(sp => new WorkflowExplainer(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<CredentialEncryptionKey>(),
+            new LlmChat(new HttpClient { Timeout = TimeSpan.FromMinutes(4) }),
+            sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(sp => new ExplainJobProcessor(
+            sp.GetRequiredService<JobQueue>(),
+            sp.GetRequiredService<WorkflowExplainer>(),
+            sp.GetRequiredService<WorkerOptions>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExplainJobProcessor>>()));
         services.AddHostedService(sp => new ExecutionWorker(
             sp.GetRequiredService<JobQueue>(),
             sp.GetRequiredService<ExecutionJobProcessor>(),
@@ -139,7 +152,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionWorker>>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<PollJobProcessor>(),
-            sp.GetRequiredService<WorkerLiveness>()));
+            sp.GetRequiredService<WorkerLiveness>(),
+            sp.GetRequiredService<ExplainJobProcessor>()));
         services.AddHostedService(sp => new WorkerHeartbeatService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<WorkerLiveness>(),

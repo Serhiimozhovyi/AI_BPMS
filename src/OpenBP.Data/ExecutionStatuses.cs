@@ -14,6 +14,12 @@ public static class ExecutionStatuses
     /// <summary>Запитано скасування; воркер зупинить виконання на найближчому heartbeat (§10.4).</summary>
     public const string Cancelling = "cancelling";
 
+    /// <summary>
+    /// Виконання призупинене вузлом до <c>resume_at</c> (довге очікування, F5-02): воркер вільний, job пробудження
+    /// стоїть у черзі з <c>run_at = resume_at</c>.
+    /// </summary>
+    public const string Waiting = "waiting";
+
     /// <summary>Усі досяжні вузли виконано.</summary>
     public const string Success = "success";
 
@@ -34,6 +40,7 @@ public static class ExecutionStatuses
         ExecutionStatus.Error => Error,
         ExecutionStatus.Cancelled => Cancelled,
         ExecutionStatus.TimedOut => TimedOut,
+        ExecutionStatus.Waiting => Waiting,
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
     };
 }
@@ -71,6 +78,7 @@ public static class StepStatuses
         StepStatus.Error => "error",
         StepStatus.Skipped => "skipped",
         StepStatus.Cancelled => "cancelled",
+        StepStatus.Waiting => "waiting",
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
     };
 
@@ -80,6 +88,7 @@ public static class StepStatuses
         "error" => StepStatus.Error,
         "skipped" => StepStatus.Skipped,
         "cancelled" => StepStatus.Cancelled,
+        "waiting" => StepStatus.Waiting,
         _ => throw new InvalidOperationException($"Невідомий статус кроку «{status}» у БД."),
     };
 }

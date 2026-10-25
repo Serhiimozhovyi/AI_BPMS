@@ -151,6 +151,28 @@ workflow не змінюється. Список вантажиться чере
 
 Розклад (F2-12): активний сценарій отримує Quartz-тригер за `cron` вузла (формат і перевірка — як у `core.schedule`, §6; часовий пояс — `settings.timezone`). Спрацювання ставить job `poll`; воркер виконує лише цей вузол зі станом з `node_state`. Нових записів немає — виконання не створюється; є — новий стан і виконання (`trigger`, `startItems` = нові записи) комітяться однією транзакцією. Помилка вузла не змінює стан, повтор — наступним спрацюванням.
 
+### 3.1. `mcp.waitFor` — чекати умову (F5-03)
+
+«Чекати, доки умова виконається» в зовнішній системі (задача закрита в Кіті, оплата надійшла). Параметри: `serverId`,
+`toolName`, `arguments` (як у `mcp.tool`, вирази — над вхідним item'ом), `conditions` — `[{ field, operator, right? }]`,
+де `field` — шлях через крапку в першому item'і відповіді tool'а (`status`, `task.statusId`), оператори й `right` — як у
+`core.if` (`right` може бути виразом над вхідним item'ом), `combine` (`and`/`or`), `intervalMinutes` (1…1440, типово 15),
+`timeoutHours` (до 2160 = 90 днів, типово 72).
+
+Перша перевірка — одразу. Умова не виконалась — виконання переходить у `waiting` до наступної перевірки (механізм
+`core.wait` v2, docs/architecture.md §10.4), воркер вільний; остання перевірка — рівно в мить таймауту. Кожен item
+чекає окремо: для items, де умова вже виконалась, tool більше не викликається. Коли умова виконалась для всіх items або
+минув таймаут — виходи: `done` (0) — остання відповідь tool'а для кожного item'а з виконаною умовою, `timeout` (1) —
+вхідні items, для яких не дочекались (дані вхідного item'а в гілці `done` — через `$node["Назва"].json`). Помилка
+tool'а — помилка вузла (з `continueOnFail` — item помилки на окремому виході). Скасування `waiting` — як у `core.wait`.
+
+```json
+{ "id": "n_closed", "name": "Задача закрита", "type": "mcp.waitFor", "typeVersion": 1, "position": [600, 0],
+  "parameters": { "serverId": "srv_kit", "toolName": "get_task", "arguments": { "id": "{{ $json.taskId }}" },
+    "conditions": [ { "field": "status", "operator": "equals", "right": "Виконано" } ],
+    "intervalMinutes": 30, "timeoutHours": 48 } }
+```
+
 ## 4. `ai.llm`
 
 Параметри: `provider` (`anthropic` | `openai` | `openai-compatible`), `model`, `credentialId`, `system`, `prompt` (з `{{ }}`), `outputSchema` (JSON Schema, опційно), `temperature`, `maxTokens`.
@@ -319,6 +341,13 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   артикулом, запис документа → `{ number }`), `sales_report` (`{ result }`: проведені продажі за період з назвами
   контрагентів), плюс згенеровані з `$metadata` tools (`Connector:Source`); імена об'єктів 1С — налаштування
   `Connector:OneC:*`, логін і пароль — лише змінні `ONEC_USERNAME`/`ONEC_PASSWORD`.
+- `connectors/kit-crm` — Кіт CRM через OData (F5-05, `docs/kit-sales.md`): угоди (`find_sales`, `get_sale`,
+  `update_sale`, `set_sale_stage`, `list_sale_stages`, `add_sale_note`), задачі (`create_task` з прив'язкою до угоди,
+  `get_task` з `status` і `done`, `list_tasks`, `set_task_status`), контрагенти й особи, `get_person_user`,
+  `get_user_manager` (керівник із профілю `CrmPerson.ManagerId`, email із `Users`) і `changes_since` (`{ result,
+  cursor }`, для `mcp.poll` — `keyField = id`). М'яко видалені записи не повертаються; токен Keycloak за client
+  credentials (`KIT_TOKEN_URL`/`KIT_CLIENT_ID`/`KIT_CLIENT_SECRET`), на 401 — одне повторне отримання, `FrontPagePath`
+  на запис — `KIT_FRONT_PAGE_PATH`.
 - `connectors/psy-support` — застосунок психологічної підтримки з власною БД і адмінкою (F3-34, `docs/psy-support.md`):
   сім tools бота `bot_*` повертають `{ ok, code, screen { text, parse_mode, reply_markup, new_message }, notifications,
   commands }` для Telegram-конектора; доменні tools (`book_slot`, `register_event`, `book_bst`, `join_waitlist`,
@@ -365,3 +394,25 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 | Google | `https://accounts.google.com/o/oauth2/v2/auth` | `https://oauth2.googleapis.com/token` | `https://www.googleapis.com/auth/spreadsheets` (для `refresh_token` Google потребує `access_type=offline` — задайте його в адресі авторизації: `…/auth?access_type=offline&prompt=consent`) |
 
 Токени, коди й верифікатори не потрапляють у відповіді REST/MCP, журнали й адресу сторінки — лише код помилки провайдера.
+
+## 8. Події та звірка: `changes_since`
+
+Правила для авторів сценаріїв — [consistency.md](consistency.md); тут — що має віддати конектор, щоб страхувальна
+звірка через `mcp.poll` працювала.
+
+Якщо система не вміє віддавати події (або push може загубитися), конектор додає tool **`changes_since`**
+(`ReadOnly`, `UseStructuredContent`):
+
+- вхід: `entity` (одна з сутностей конектора; невідома → `isError` з переліком допустимих), `since?` (ISO 8601, зміни
+  **строго після**; без нього — вікно `withinMinutes` або усе, якщо система не має часу зміни);
+- вихід: `{ "result": [...], "cursor": "<ISO 8601>" }`; записи — у тій самій формі, що `get_*`, **від старих до нових**;
+  `cursor` — найбільший час зміни серед записів або вхідний `since`, якщо нічого нового; його передають як `since` наступного
+  виклику;
+- у `mcp.poll`: `toolName = changes_since`, `itemsPath = result`, `keyField = id`. Щоб ловити й зміни наявних
+  записів, а не лише нові, запис має мати поле, що змінюється разом із ним (час зміни, ревізія) — його і задають
+  як `keyField`;
+- видалені (м'яко видалені) записи не повертаються; секрети у відповідь не потрапляють;
+- еталон — `connectors/kit-crm` (`sales`, `tasks`, `contractors`, `persons`); заготовка з тестом — у шаблоні Connector Kit
+  (`ItemTools.ChangesSince`, `Changes_since_returns_records_after_the_cursor_and_a_new_cursor`).
+
+Push-тригери подій (F6-13) цей контракт не замінюють, а доповнюють: див. [consistency.md §3](consistency.md#3-правила-для-авторів-сценаріїв).

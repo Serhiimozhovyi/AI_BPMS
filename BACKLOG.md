@@ -667,6 +667,24 @@
 - Що: SDK `ModelContextProtocol` 2.3.0 спершу надсилає `server/discover` і через 5 с (`DiscoverProbeTimeout`) відкочується на `initialize`. Сервер, що відповів на discover пізніше (повільний старт stdio-процесу, навантаження CI), уже на протоколі 2026-07-28 і відхиляє `initialize` — так нестабільно падав `PsySupportBotTests.Consult_Booking_AndConcurrentBookingOfSameSlot`. `McpServerRegistry` задає `DiscoverProbeTimeout = ConnectTimeout`.
 - DoD: тест реєстру — stdio-сервер, що стартує 6 с, підключається протоколом 2026-07-28 без відкату (без фіксу тест червоний); `dotnet build -warnaserror`, `dotnet test`, `dotnet format` зелені.
 
+### F3-72 · Пояснення всього сценарію простими словами при збереженні
+- model: `opus` · status: `done` · depends: F3-60
+- Запит власника (2026-10-24): «пояснення записувати по всьому БП при збереженні», а відповіді на питання — у чаті помічника.
+- Що: після кожного збереження воркер (job `explain`, пауза 15 с — пояснюється лише остання версія автозбереження) генерує моделлю помічника пояснення всього процесу українською: коротко, кроки в порядку виконання з даними на вході й виході, розгалуження, дані на вході/виході процесу, помилки й очікування. Таблиця `workflow_explanations`, відбиток визначення без координат/нотаток/`pinData` (пересування вузлів не перегенеровує), без значень credentials і тестових даних. REST `GET/POST /workflows/{id}/explanation`. У панелі «Помічник» — картка «Пояснення процесу» зі станом і «Пояснити заново». Помічник не налаштований — збереження працює як раніше, картка підказує, де вибрати модель.
+- DoD: тести Api проти фейкового провайдера (job з паузою після збереження, лише поточна версія, пересування — без нового запиту, помилка моделі видна, not_configured без job'а, ролі); тест воркера (job → пояснення); Vitest картки (опитування, застаріле, «Пояснити заново»); `docs/architecture.md` і `docs/openapi.json` оновлено.
+
+### F3-73 · Пояснення сценарію від ШІ-агента через MCP
+- model: `opus` · status: `done` · depends: F3-72
+- Запит власника (2026-10-24): пояснення має писати Claude чи ChatGPT, підключений до OpenBP через MCP, а не модель за API-ключем.
+- Що: `/mcp` tools `get_workflow_explanation` (viewer) і `save_workflow_explanation` (editor, `text` ≤ 50 000) поверх `IWorkflowExplanationService`, REST `PUT /workflows/{id}/explanation`; описи `create_workflow`/`update_workflow` підказують агенту писати пояснення після збереження, опис `save_workflow_explanation` задає структуру. Збереження з тим самим відбитком (пересунули вузли) лишає пояснення актуальним без моделі; відбиток не залежить від порядку ключів jsonb. Картка в редакторі підказує, що пояснення пише агент через MCP або модель із налаштувань.
+- DoD: тести `/mcp` (зберегти, пересування — актуальне, зміна кроку — застаріле, viewer — FORBIDDEN, порожній текст — помилка); тест Api `PUT`; `docs/mcp-server.md`, `docs/architecture.md`, `docs/openapi.json` оновлено.
+
+### F3-74 · Панель «Помічник» без моделі веде до MCP
+- model: `sonnet` · status: `done` · depends: F3-73
+- Запит власника (2026-10-24): на «Боті психологічної підтримки» картка пояснення порожня, а вбудований чат відповідає червоною помилкою «Помічник не налаштований» — незрозуміло, куди натиснути.
+- Що: картка «Пояснення процесу» без тексту (`none`/`not_configured`) і застаріле пояснення без моделі показують готову фразу для Claude чи ChatGPT через MCP з назвою сценарію («Поясни сценарій «…» і збережи пояснення в OpenBP»). Вбудований чат на `409 ASSISTANT_NOT_CONFIGURED` замість червоного рядка ховає поле і пояснює, що питати агента через MCP; інші помилки — як раніше.
+- DoD: Vitest картки (немає пояснення — фраза з назвою; застаріле без моделі — фраза) і панелі (409 — підказка без поля; інша помилка — червоний рядок); `npm run lint`, `npm test`, `npm run build` зелені.
+
 ## Фаза 4 — Продуктова готовність
 
 Критерій фази (`docs/roadmap.md`): інсталяція у клієнта за документацією без нашої участі.
@@ -784,38 +802,38 @@
 - DoD: `docs/kit-sales.md` погоджено власником; F5-02…F5-07 уточнено за ним.
 
 ### F5-02 · Довге очікування: `core.wait` до дати або на дні
-- model: `opus` · status: `ready` · depends: F5-01
-- Що: зараз `core.wait` тримає воркер `Task.Delay` і обмежений 1 год. Нова версія (`typeVersion` 2): `until` (вираз дати) або `amount`/`unit` до 90 днів; виконання зберігає знімок, переходить у статус `waiting` з `resume_at`, звільняє воркер; планувальник ставить job відновлення, коли настає час; `ResumeAsync` продовжує з наступного вузла. Скасування `waiting` працює; рестарт Api/воркера нічого не губить. Статус `waiting` видно в `/executions`, REST і MCP. Деталі механізму — `docs/kit-sales.md` §2.
+- model: `opus` · status: `done` · depends: F5-01
+- Що: зараз `core.wait` тримає воркер `Task.Delay` і обмежений 1 год. Нова версія (`typeVersion` 2): `until` (вираз дати) або `amount`/`unit` до 90 днів; виконання зберігає знімок, переходить у статус `waiting` з `resume_at`, звільняє воркер; планувальник ставить job відновлення, коли настає час; `ResumeAsync` продовжує з наступного вузла. Скасування `waiting` працює; рестарт Api/воркера нічого не губить. Статус `waiting` видно в `/executions`, REST і MCP.
 - DoD: тести движка (знімок → відновлення, вихід як у v1), інтеграційний тест з Testcontainers (очікування з `TimeProvider`-фейком, рестарт воркера посеред очікування, скасування), старі сценарії з v1 працюють без змін; `docs/workflow-format.md` і `architecture.md` оновлено.
 
-### F5-03 · Очікування умови: `core.waitFor`
-- model: `opus` · status: `ready` · depends: F5-02
-- Що: вузол «чекати, доки умова виконається»: з інтервалом (хв…год) викликає вказаний tool конектора (`serverId`, `tool`, `args` з виразами), перевіряє умову (як у `core.if`) над результатом; виходи `done` (з останнім результатом) і `timeout` (після `timeoutAfter`, напр. 3 дні). Між перевірками виконання в `waiting` (F5-02), воркер вільний. Типовий випадок — «чекати, поки менеджер закриє задачу в Кіті, інакше ескалація». Деталі механізму — `docs/kit-sales.md` §3.
+### F5-03 · Очікування умови: `mcp.waitFor`
+- model: `opus` · status: `done` · depends: F5-02
+- Що: вузол «чекати, доки умова виконається»: з інтервалом (хв…год) викликає вказаний tool конектора (`serverId`, `tool`, `args` з виразами), перевіряє умову (як у `core.if`) над результатом; виходи `done` (з останнім результатом) і `timeout` (після `timeoutAfter`, напр. 3 дні). Між перевірками виконання в `waiting` (F5-02), воркер вільний. Типовий випадок — «чекати, поки менеджер закриє задачу в Кіті, інакше ескалація». Реалізовано як `mcp.waitFor` (вузол живе поруч з `mcp.tool`, бо викликає конектор; docs/connectors.md §3.1).
 - DoD: тести: умова виконалась з N-ї перевірки, таймаут → вихід `timeout`, помилка tool'а за `continueOnFail`, скасування під час очікування; опис у `describe_nodes`.
 
 ### F5-04 · Ключ кореляції виконань
-- model: `sonnet` · status: `ready` · depends: F5-01
-- Що: необов'язковий `correlationKey` виконання (вираз у тригері `core.webhook`/`mcp.poll`/ручному і параметр REST/MCP-запуску), колонка й індекс у `executions`; фільтр у `/executions` (UI, REST, MCP `list_executions`); налаштування сценарію «не запускати нове, якщо є активне (`running`/`waiting`) з тим самим ключем». Деталі механізму — `docs/kit-sales.md` §4.
+- model: `sonnet` · status: `done` · depends: F5-01
+- Що: необов'язковий `correlationKey` виконання (вираз у тригері `core.webhook`/`mcp.poll`/ручному і параметр REST/MCP-запуску), колонка й індекс у `executions`; фільтр у `/executions` (UI, REST, MCP `list_executions`); налаштування сценарію «не запускати нове, якщо є активне (`running`/`waiting`) з тим самим ключем».
 - DoD: тести: ключ зберігається з кожного тригера, фільтр, дубль пропускається і пишеться в журнал; міграція EF Core.
 
 ### F5-05 · Конектор «Кіт CRM» (`connectors/kit-crm`)
-- model: `opus` · status: `ready` · depends: F5-01
-- Що: MCP-сервер на Connector Kit поверх OData Кіта (`/odata/<Set>`), генератор з `$metadata` (F3-12) плюс ручні tools: угоди `CrmSales` (пошук, отримати, змінити стадію/поля), задачі `CrmTasks` (створити, отримати, список за угодою/відповідальним/статусом, змінити статус), контрагенти й особи (пошук, отримати), нотатка до угоди, `changes_since { entity, since }` для `mcp.poll`. Автентифікація: токен Keycloak для сервісного користувача з env, кеш і оновлення; заголовок `FrontPagePath` на кожен запис; записи з `IsDelete` не повертаються. Секрети лише в env, не в відповідях і журналах. Деталі механізму — `docs/kit-sales.md` §5.
+- model: `opus` · status: `done` agent/F5-05-kit-crm · depends: F5-01
+- Що: MCP-сервер на Connector Kit поверх OData Кіта (`/odata/<Set>`), генератор з `$metadata` (F3-12) плюс ручні tools: угоди `CrmSales` (пошук, отримати, змінити стадію/поля), задачі `CrmTasks` (створити, отримати, список за угодою/відповідальним/статусом, змінити статус), контрагенти й особи (пошук, отримати), нотатка до угоди, `changes_since { entity, since }` для `mcp.poll`. Автентифікація: токен Keycloak для сервісного користувача з env, кеш і оновлення; заголовок `FrontPagePath` на кожен запис; записи з `IsDelete` не повертаються. Секрети лише в env, не в відповідях і журналах.
 - DoD: тести проти фейку OData (кожен tool, 401 → одне оновлення токена, 403 без `FrontPagePath` → зрозуміла помилка, `$filter` для `changes_since`); README «сервісний користувач у Кіті → env → реєстрація в OpenBP»; перевірка на живому Кіті — лише з власником на dev-стенді, не на проді.
 
 ### F5-06 · Приклад: нова угода → задача менеджеру → контроль → ескалація
-- model: `sonnet` · status: `blocked чекає F5-02…F5-05` · depends: F5-02, F5-03, F5-04, F5-05
-- Що: `examples/kit-sales-followup.json`: `mcp.poll` нових угод (`changes_since`) з ключем кореляції = Id угоди → `kit-crm` створює задачу відповідальному («зв'язатися з клієнтом», дедлайн +1 робочий день) → `core.waitFor` закриття задачі (таймаут 2 дні) → `done`: нотатка в угоді; `timeout`: лист або Teams керівнику (Graph) і повторна задача. Деталі механізму — `docs/kit-sales.md` §6.1.
+- model: `sonnet` · status: `done` agent/F5-06-kit-sales-followup · depends: F5-02, F5-03, F5-04, F5-05
+- Що: `examples/kit-sales-followup.json`: `mcp.poll` нових угод (`changes_since`) з ключем кореляції = Id угоди → `kit-crm` створює задачу відповідальному («зв'язатися з клієнтом», дедлайн +1 робочий день) → `mcp.waitFor` закриття задачі (таймаут 2 дні) → `done`: нотатка в угоді; `timeout`: лист або Teams керівнику (Graph) і повторна задача.
 - DoD: CLI-прогін з фейком OData Кіта і моком Graph для обох гілок; дубль угоди не запускає другий процес.
 
 ### F5-07 · Приклад: щоденний звіт по протермінованих задачах CRM
-- model: `sonnet` · status: `blocked чекає F5-05` · depends: F5-05
-- Що: `examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm` задачі зі статусом «Протерміноване» → `core.code` групування за відповідальним → лист кожному менеджеру і зведення керівнику через Graph. Деталі механізму — `docs/kit-sales.md` §6.2.
+- model: `sonnet` · status: `done` agent/F5-07-kit-overdue-report · depends: F5-05
+- Що: `examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm` задачі зі статусом «Протерміноване» → `core.code` групування за відповідальним → лист кожному менеджеру і зведення керівнику через Graph.
 - DoD: CLI-прогін з фейками; порожній день — без листів.
 
 ## Фаза 6 — Функціональність BPMS
 
-Нарізано 2026-10-24 за дослідженням «Функціональність BPMS-білдерів і OpenBP» (n8n, Make, Zapier, Power Automate, Pipedream, Activepieces, Windmill, Node-RED, Camunda 8, Temporal, Retool): https://claude.ai/artifact/8scgYioo1avyAUCngbzQfA. Пропозиції Ф-01…Ф-19 звіту = F6-01…F6-19. Рішення власника: додати всі. Номери F5-* зайняті фазою 5 «БП продажів поверх CRM «Кіт 2»» (PR #81): її F5-02 (довге очікування до дати), F5-03 (`core.waitFor` — очікування умови через tool) і F5-04 (ключ кореляції) — спільний фундамент, задачі нижче спираються на них, а не дублюють.
+Нарізано 2026-10-24 за дослідженням «Функціональність BPMS-білдерів і OpenBP» (n8n, Make, Zapier, Power Automate, Pipedream, Activepieces, Windmill, Node-RED, Camunda 8, Temporal, Retool): https://claude.ai/artifact/8scgYioo1avyAUCngbzQfA. Пропозиції Ф-01…Ф-19 звіту = F6-01…F6-19. Рішення власника: додати всі. Номери F5-* зайняті фазою 5 «БП продажів поверх CRM «Кіт 2»» (PR #81): її F5-02 (довге очікування до дати), F5-03 (`mcp.waitFor` — очікування умови через tool) і F5-04 (ключ кореляції) — спільний фундамент, задачі нижче спираються на них, а не дублюють.
 
 Рішення для фази:
 - Ідеї з конкурентів використовуються, код не копіюється (правило 7); нові пакети лише з екосистеми стеку (ADR-001), інше — з записом у PR, чому.
@@ -832,8 +850,8 @@
 - DoD: рев'ю власником формату і механізму пробудження; тести: режими F5-02 працюють як раніше; `webhook` → `resumeUrl` → POST продовжує з тілом запиту, повторний POST → 409, чужий токен → 404; `maxWaitSec` → вихід `timeout`; слот воркера вільний під час очікування (паралельний запуск іде); скасування у `waiting`; воркер впав під час `waiting` → новий воркер пробуджує; `workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 
 ### F6-02 · Погодження і людські задачі: `core.approval` та `/tasks`
-- model: `opus` · status: `ready` · depends: F6-01, F6-03
-- Що: вузол `core.approval { title, description, decisions: [{ key, label }] (типово approve/reject), fields? (JSON Schema коментаря/даних), assignee: { userId | role | expression (email або telegram id) }, maxWaitSec, escalateTo? }`: створює запис у новій таблиці `tasks` (виконання, вузол, статус `open`/`done`/`expired`, виконавець, рішення, дані, час) і чекає через механізм F6-01; виходи — по одному на рішення + `timeout`; після таймауту задача переходить `escalateTo`, якщо задано. Доставка: сторінка `/tasks` в UI (мої задачі, усі задачі для admin, фільтри, картка задачі з формою рішення на ngx-formly), посилання на задачу для листа/повідомлення у виразі `$execution.taskUrl`; кнопки Telegram робить сам сценарій через конектор (`reply_markup` з `callback_data` = токен задачі) і `POST /api/v1/tasks/{id}/complete`. Application-сервіс `ITaskService`; REST `GET /api/v1/tasks`, `GET /tasks/{id}`, `POST /tasks/{id}/complete`; MCP tools `list_tasks`, `complete_task`; viewer бачить і закриває лише свої задачі. Записи `tasks` ідуть у ретеншн F4-07 разом з виконанням. Відмінність від `core.waitFor` (F5-03): там умову перевіряє сам сценарій через tool зовнішньої системи (задача закрита в Кіті), тут рішення приймає людина в OpenBP або за посиланням; у сценарії продажів можна використовувати обидва.
+- model: `opus` · status: `ready` · depends: F6-01, F6-03, F7-06
+- Що: вузол `core.approval { title, description, decisions: [{ key, label }] (типово approve/reject), fields? (JSON Schema коментаря/даних), assignee: { userId | role | expression (email або telegram id) }, maxWaitSec, escalateTo? }`: створює запис у новій таблиці `tasks` (виконання, вузол, статус `open`/`done`/`expired`, виконавець, рішення, дані, час) і чекає через механізм F6-01; виходи — по одному на рішення + `timeout`; після таймауту задача переходить `escalateTo`, якщо задано. Доставка: сторінка `/tasks` в UI (мої задачі, усі задачі для admin, фільтри, картка задачі з формою рішення на ngx-formly), посилання на задачу для листа/повідомлення у виразі `$execution.taskUrl`; кнопки Telegram робить сам сценарій через конектор (`reply_markup` з `callback_data` = токен задачі) і `POST /api/v1/tasks/{id}/complete`. Application-сервіс `ITaskService`; REST `GET /api/v1/tasks`, `GET /tasks/{id}`, `POST /tasks/{id}/complete`; MCP tools `list_tasks`, `complete_task`; viewer бачить і закриває лише свої задачі. Записи `tasks` ідуть у ретеншн F4-07 разом з виконанням. Завершення чи скасування виконання (і скасування гілки `core.merge any|count`, F7-06) закриває відкриті задачі статусом `cancelled` — інваріант ADR-004 §5. Відмінність від `mcp.waitFor` (F5-03): там умову перевіряє сам сценарій через tool зовнішньої системи (задача закрита в Кіті), тут рішення приймає людина в OpenBP або за посиланням; у сценарії продажів можна використовувати обидва.
 - DoD: тести вузла і сервісу (Testcontainers): рішення `approve` → вихід `approve` з даними форми; `reject`; таймаут → `timeout` і ескалація; чужий користувач → 403; повторне завершення → 409; MCP `list_tasks`/`complete_task`; Vitest сторінки `/tasks` (список, форма рішення, 403); Playwright: сценарій з `core.approval` зупиняється, користувач погоджує в UI, сценарій завершується; `docs/workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 
 ### F6-03 · Форми: тригер `core.formTrigger` і форма як крок очікування
@@ -920,6 +938,64 @@
 - model: `sonnet` · status: `done` · depends: F3-53
 - Що: вузол `core.decisionTable { inputs: [{ name, expression }], outputs: [{ name }], rules: [{ when: [умова на вхід | "-"], then: [значення виходу] }], hitPolicy: first | all | collect }`: умови — ті самі оператори, що у `core.if` (конструктор F3-53), значення виходів — вирази; `first` → один item з виходами, `all`/`collect` → усі збіги; жодного збігу → вихід `noMatch`. Панель вузла — таблична правка (рядки = правила, колонки = входи/виходи) на основі formly-типів F3-53.
 - DoD: тести вузла: `first`, `all`, `collect`, `noMatch`, умова `-` (будь-яке), помилка виразу → помилка вузла з номером правила; Vitest табличного редактора; `describe_nodes` і `docs/workflow-format.md` (приклад) оновлено.
+
+## Фаза 7 — Етапи й правила
+
+Нарізано 2026-10-26 за рекомендацією власника щодо розвитку OpenBP (2026-10-25): окремий продукт, Кіт — перший пілот, базова сутність для бізнесу — етап БП. Рішення — [ADR-004](docs/adr/ADR-004-stages.md): етап — необов'язковий шар над графом, одиниця виконання лишається вузол; PRD v0.3 §5a. Розбір пунктів рекомендації і що з них уже є: https://claude.ai/artifact/HE5eYpzLyNBpp9AJ6d7smA
+
+Рішення для фази:
+- Жодної другої моделі процесу: стан етапу обчислюється з виконання, умова завершення структурна (перехід пройдено), умови — у вузлах.
+- Правила переходу перевіряються на ребрі з етапу; `block` зупиняє у `waiting` до виправлення чи відхилення з причиною, `warn` пропускає й фіксує порушення. Порушення — окремо від стану процесу.
+- Контракт «стан етапів · дії · невиконані умови» — один application-сервіс для REST, `/mcp` і `<openbp-canvas>`; сутностей Кіта в ньому немає.
+- F7-06, F7-07, F7-09 не залежать від формату етапів і можуть іти одразу; F7-06 — до F6-02, щоб задачі з першого дня закривались при скасуванні.
+- Сценарії без `stages` працюють як раніше; усі тести фаз 1–6 лишаються зеленими.
+
+Порядок: F7-06, F7-07, F7-09 паралельно з F5-05; F7-01 (вдень з власником) → F7-02 → F7-03 → F7-04 → F7-05 → F7-08.
+
+### F7-01 · ADR-004 і формат етапів: `stages[]`, валідатор, схема, `/mcp`
+- model: `fable` · status: `ready` · depends: —
+- Що: прийняти ADR-004 (статус «прийнято»); у `docs/workflow-format.md` розділ «Етапи» з таблицею полів `stages[] { id, name, nodes[], owner?, due?, transitions[] { to?, rules[] { id, condition, mode: block|warn, message } } }`; JSON Schema в `OpenBP.Shared`; `WorkflowValidator`: `STAGE_ID_DUPLICATE`, `STAGE_NODE_UNKNOWN`, `STAGE_NODE_IN_TWO_STAGES`, `STAGE_NOT_CONNECTED` (зв'язність після згортання технічних вузлів, як у бізнес-вигляді), `STAGE_TRANSITION_UNKNOWN`, `STAGE_RULE_ID_DUPLICATE`; `formatVersion` лишається 1 (поля необов'язкові); TS-типи в `apps/web`; `/mcp` і `openbp://schema/workflow-format` віддають поля без втрат; приклад `examples/kit-approval-stages.json` (на основі `kit-approval-business.json`).
+- DoD: тести валідатора на кожен код і на сценарій без `stages`; старі приклади валідні; `describe_nodes`/схема у MCP містять `stages`; `docs/workflow-format.md`, `architecture.md` §2 оновлено; рев'ю власником.
+
+### F7-02 · Рушій: стан етапу, строки, таблиця `execution_stages`
+- model: `opus` · status: `ready` · depends: F7-01
+- Що: `OpenBP.Engine` обчислює стан етапів за ADR-004 §2 (`pending`/`active`/`done`/`skipped`/`cancelled`, підстан `overdue`) при кожному `SaveStepAsync`; інтерфейс `IStageStore` (правило 1), реалізація в `OpenBP.Data`: таблиця `execution_stages (execution_id, stage_id, status, entered_at, due_at, exited_at)` + міграція; `due` з `businessDays` (пн–пт за `settings.timezone`) і `until`; ретеншн F4-07 чистить разом із виконанням; `ExecutionDetail` отримує `stages[]`; журнал виконань `/executions/:id` показує етапи (AC-Kit «Етап N», як у F3-69); бізнес-вигляд виконання фарбує етапи за станом.
+- DoD: тести движка: послідовні етапи, гілка не дійшла → `skipped`, скасування під час `active` → `cancelled`, `overdue` з `TimeProvider`-фейком, `businessDays` через вихідні; інтеграційний тест (Testcontainers) запису `execution_stages` і відновлення після рестарту воркера; Vitest журналу; сценарії без `stages` не пишуть у таблицю.
+
+### F7-03 · Правила переходу `block`/`warn` і відхилення з причиною
+- model: `opus` · status: `ready` · depends: F7-02, F6-15
+- Що: рушій перевіряє `transitions[].rules[]` на ребрі з етапу (ADR-004 §3): `block` і умова хибна → виконання `waiting` з причиною `STAGE_RULE_BLOCKED`, повторна перевірка при `resume`/події; `warn` → перехід проходить. Відхилення: `POST /api/v1/executions/{id}/overrides { ruleId, reason }` (`editor` або виконавець етапу; порожня `reason` → 422 `STAGE_RULE_REASON_REQUIRED`), MCP `override_rule`; таблиця `violations (execution_id, stage_id, rule_id, workflow_version_id, status open|resolved|overridden, actor_user_id|actor_system, reason, context jsonb, created_at, resolved_at)`, `context` після scrubbing (§8); події audit log `violation.opened|resolved|overridden`; панель виконання показує заблокований перехід, повідомлення правила й кнопку «Продовжити з причиною…».
+- DoD: тести: `block` зупиняє і пробуджується після відхилення; `block` пробуджується, коли умова стала істинною на `resume`; `warn` пропускає й створює `open`; відхилення без причини → 422; viewer → 403; audit log містить події; `docs/workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
+
+### F7-04 · Порушення: список, повторна перевірка, сторінка у виконанні
+- model: `sonnet` · status: `ready` · depends: F7-03
+- Що: при кожній події етапу (крок етапу завершився, перехід, `resume`) рушій переобчислює `open` правила етапу → `resolved`; `GET /api/v1/executions/{id}/violations` і фільтр `hasOpenViolations` у `GET /executions`; розділ «Порушення» у журналі виконання (правило, повідомлення, стан, хто й чому відхилив, час) за AC-Kit; «Огляд» (F6-07) показує кількість виконань з відкритими порушеннями.
+- DoD: тести: порушення `open` → умова виправлена на наступному кроці → `resolved` з `resolved_at`; фільтр списку; Vitest розділу; `docs/architecture.md` §6 оновлено.
+
+### F7-05 · Контракт взаємодії: стан етапів, дії, умови — REST, `/mcp`, web-component
+- model: `opus` · status: `ready` · depends: F7-02, F6-02
+- Що: application-сервіс `IStageService` (ADR-004 §4): `GET /api/v1/executions/{id}/stages` → стан етапів, `violations`, `unmet` (невиконані правила на наступному переході, обчислені з поточних items), `actions` (відкриті задачі F6-02 цього етапу, дозволені відхилення, пробудження `core.wait` у режимі `webhook`); `POST /executions/{id}/stages/{stageId}/actions/{actionId} { data?, reason? }` виконує дію через ті самі сервіси (`ITaskService`, overrides, resume); MCP `get_execution_stages`, `act_on_stage`, resource `openbp://executions/{id}/stages`; `<openbp-canvas view="business" execution-id>` малює етапи колонками зі станом, строком і діями з контракту; пошук виконання за `correlationKey` (`GET /executions?correlationKey=`, F5-04). У контракті немає сутностей жодного клієнта.
+- DoD: тести сервісу (Testcontainers): стан + дії + `unmet`; дія «завершити задачу» через контракт = `complete_task`; дія з `reason` на `warn`-правилі; viewer бачить лише свої дії; MCP tools; Vitest web-component; `docs/embedding.md`, `docs/mcp-server.md`, `docs/architecture.md` оновлено; OpenAPI перегенеровано.
+
+### F7-06 · Гілки: `core.merge` `all|any|count`, скасування закриває очікування й задачі
+- model: `opus` · status: `ready` · depends: F5-02
+- Що: `core.merge` typeVersion 2: `mode: all | any | count` (+ `count`), `any`/`count` пропускають першу/N-ту гілку, решту рушій скасовує (їхні `waiting` вузли → `cancelled`, подальші вузли не стартують); v1 працює як раніше. Завершення (`success`/`error`/`timed_out`) або скасування виконання закриває все незавершене: `core.wait`/`mcp.waitFor` у `waiting` → `cancelled`, job пробудження знімається; інваріант «немає `waiting` кроків і відкритих задач у завершеному виконанні» — у `IExecutionStore` як перевірка при `CompleteAsync`; для задач F6-02 — контракт у `architecture.md` §10.4 (статус задачі `cancelled` з `executionId` причини), який F6-02 реалізує. Бізнес-вигляд підписує merge «будь-яка з гілок»/«N з M».
+- DoD: тести движка: `any` з двома гілками, повільна гілка скасована; `count: 2` з трьох; скасування виконання під час `waiting` в обох гілках → усі кроки `cancelled`; інваріант перевіряється тестом з Testcontainers; `docs/workflow-format.md` (`core.merge` v2), `architecture.md` §2 і §10.4 оновлено; `describe_nodes` знає v2.
+
+### F7-07 · `docs/consistency.md`: джерело істини та звірка; розділ у Connector Kit
+- model: `sonnet` · status: `done` · depends: —
+- Що: документ `docs/consistency.md` за ADR-004 §6: таблиця «стан → система-власник → як OpenBP читає → як надолужує пропущене» для угоди/задачі Кіта, замовлення 1С, повідомлення Telegram, листа Graph; правила для авторів сценаріїв (не кешувати стан зовнішнього об'єкта як істину; `mcp.waitFor` перечитує; кореляція + `skipIfActive` проти дублікатів; `mcp.poll` як страхувальна звірка поруч із push-тригерами F6-13; що робити після рестарту конектора); розділ «Події та звірка» у `tools/connector-template/README.md` і `docs/connectors.md` §7 (конектор віддає `changes_since { entity, since }` з курсором, як `kit-crm`); посилання з `docs/guide/authors.md` і `integrators.md`.
+- DoD: документи написані українською, перевірені посилання; шаблон конектора містить заготовку `changes_since` з тестом; `docs/kit-sales.md` §5.4 посилається на `consistency.md`.
+
+### F7-08 · Перевірка незалежності продукту: архітектурний тест і критерій другого застосунку
+- model: `sonnet` · status: `ready` · depends: F7-05
+- Що: тест `tests/OpenBP.Architecture.Tests/ProductIndependenceTests.cs`: у `src/` і `apps/web/src` немає ідентифікаторів клієнтських систем (`CrmSale`, `CrmTask`, `CrmPerson`, `lams`, `odata/`, `kit-crm`, назви з `connectors/*/connector.json`), крім `connectors/` і `examples/`; список винятків у тесті з поясненням; CI запускає тест. Протокол `docs/admin/independence-check.md`: підключити другий застосунок (адмінка психологічної підтримки `connectors/psy-support` або 1С) до контракту F7-05 — виконання з етапами, стан і дія через REST і `/mcp` — без змін у `src/`; результат прогону записати як у `install-check.md`. Критерій фази 7 у `docs/roadmap.md`.
+- DoD: тест зелений на main і червоніє на навмисному порушенні (тест тесту); протокол пройдено хоча б для одного застосунку, запис у `independence-check.md`; `roadmap.md` оновлено.
+
+### F7-09 · `docs/capabilities.md`: матриця автоматизацій і критерії приймання
+- model: `haiku` · status: `done` · depends: —
+- Що: таблиця «можливість → чим робиться в OpenBP → стан (є / частково / немає, задача) → критерій приймання (приклад у `examples/` + тест)» для п'яти груп: шедулери (cron, робочі дні, часові пояси, довге очікування), чатботи (Telegram-діалоги, клавіатури, стан діалогу, LLM-відповіді, ескалація людині), події (webhook, polling, push F6-13, дедуплікація, кореляція), обробка даних (set/code/loop/merge/decisionTable, таблиці даних, файли, бінарні дані), інтеграції (MCP-сервери, OData/OpenAPI-генератори, credentials, OAuth2). Орієнтир — реальні сценарії компанії (бот психологічної підтримки, звіти, БП продажів); паритет з n8n не є метою — відсутні можливості з реальним попитом стають задачами беклогу, без попиту — позначаються «не плануємо».
+- DoD: документ українською, кожен рядок «є» посилається на приклад і тест; рядки «немає» з попитом → нові задачі у `BACKLOG.md` (окремим PR, за рішенням власника); посилання з `docs/PRD.md` §5b.
 
 ## Постійні (раз на місяць, `haiku`)
 

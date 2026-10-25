@@ -282,7 +282,7 @@ export interface EditorErrorEvent {
           </div>
           @if (assistantOpen() && !readonly()) {
             <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
-              <app-assistant-panel [workflowId]="workflowId()" [definition]="def" [prompt]="assistantPrompt()" (definitionChange)="assistantChanged($event)" (closed)="assistantOpen.set(false)" />
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" (definitionChange)="assistantChanged($event)" (closed)="assistantOpen.set(false)" />
             </aside>
           } @else if (selectedNode(); as node) {
             <aside class="editor__panel" data-testid="editor-panel" [class.editor__panel--wide]="wide()" [style.width.px]="panelWidth()">
@@ -1563,6 +1563,8 @@ export class WorkflowEditorComponent implements OnInit {
         return $localize`:@@workfloweditor.run.queued:У черзі`;
       case 'running':
         return $localize`:@@workfloweditor.run.running:Виконується`;
+      case 'waiting':
+        return $localize`:@@workfloweditor.run.waiting:Очікує: вузол «Очікування» продовжить виконання в призначений час`;
       case 'cancelling':
         return $localize`:@@workfloweditor.run.cancelling:Скасовується`;
       case 'success':
@@ -1635,6 +1637,8 @@ export class WorkflowEditorComponent implements OnInit {
         return $localize`:@@noderun.status.skipped:пропущено`;
       case 'cancelled':
         return $localize`:@@noderun.status.cancelled:скасовано`;
+      case 'waiting':
+        return $localize`:@@noderun.status.waiting:очікує`;
     }
   }
 

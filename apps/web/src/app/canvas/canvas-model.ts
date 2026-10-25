@@ -206,7 +206,7 @@ function padPorts(ports: string[], maxIndex: number, prefix: string | undefined)
 }
 
 function subtitleOf(node: WorkflowNode): string {
-  if (node.type === 'mcp.tool' || node.type === 'mcp.poll') {
+  if (node.type === 'mcp.tool' || node.type === 'mcp.poll' || node.type === 'mcp.waitFor') {
     const toolName = node.parameters?.['toolName'];
     if (typeof toolName === 'string' && toolName) return `${node.type} · ${toolName}`;
   }

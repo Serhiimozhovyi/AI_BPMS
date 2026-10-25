@@ -17,6 +17,8 @@ export interface SettingsFormValue {
   throttlePeriodSec: string;
   throttleOnLimit: LimitAction;
   disableAfterErrors: string;
+  /** Кореляція (F5-04): пропускати запуск, поки активне виконання з тим самим ключем. */
+  skipIfActive: boolean;
 }
 
 /** Поля лімітів, що перевіряються як цілі числа, і їхні межі (як у workflow.schema.json). */
@@ -59,6 +61,7 @@ export function settingsFormValue(settings: WorkflowSettings): SettingsFormValue
     throttlePeriodSec: settings.throttle ? String(settings.throttle.periodSec) : '',
     throttleOnLimit: settings.throttle?.onLimit ?? 'queue',
     disableAfterErrors: settings.disableAfterErrors ? String(settings.disableAfterErrors) : '',
+    skipIfActive: settings.correlation?.skipIfActive ?? false,
   };
 }
 
@@ -100,6 +103,11 @@ export function applySettings(settings: WorkflowSettings, value: SettingsFormVal
   const errors = Number(value.disableAfterErrors.trim() || 0);
   if (errors > 0) next.disableAfterErrors = errors;
   else delete next.disableAfterErrors;
+  // Вимкнений перемикач прибирає поле, якщо в ньому немає невідомих полів.
+  const extra: Record<string, unknown> = { ...settings.correlation };
+  delete extra['skipIfActive'];
+  if (value.skipIfActive || Object.keys(extra).length > 0) next.correlation = { ...extra, skipIfActive: value.skipIfActive };
+  else delete next.correlation;
   return next;
 }
 
@@ -112,6 +120,7 @@ export function settingsChanged(a: WorkflowSettings, b: WorkflowSettings): boole
     a.saveSuccessfulData !== b.saveSuccessfulData ||
     JSON.stringify(a.concurrency ?? null) !== JSON.stringify(b.concurrency ?? null) ||
     JSON.stringify(a.throttle ?? null) !== JSON.stringify(b.throttle ?? null) ||
-    (a.disableAfterErrors ?? 0) !== (b.disableAfterErrors ?? 0)
+    (a.disableAfterErrors ?? 0) !== (b.disableAfterErrors ?? 0) ||
+    JSON.stringify(a.correlation ?? null) !== JSON.stringify(b.correlation ?? null)
   );
 }

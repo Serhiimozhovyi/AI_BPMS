@@ -1,0 +1,59 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "kit-crm",
+  "name": "Кіт CRM",
+  "description": "Угоди, задачі, контрагенти, особи й нотатки Кіт CRM через OData; changes_since для mcp.poll, керівник із профілю.",
+  "icon": "🐈",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/kit-crm/OpenBP.Connectors.KitCrm.dll"
+    ]
+  },
+  "http": {
+    "url": "http://kit-crm:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "Connector__BaseUrl",
+        "title": "Адреса OData Кіта, напр. https://crm-dev.example.ua/odata/",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "KIT_TOKEN_URL",
+        "title": "Token endpoint Keycloak, напр. https://sso/realms/astarta/protocol/openid-connect/token",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "KIT_CLIENT_ID",
+        "title": "Client ID сервісного клієнта Keycloak",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "KIT_CLIENT_SECRET",
+        "title": "Client secret сервісного клієнта Keycloak",
+        "required": true,
+        "secret": true
+      },
+      {
+        "name": "KIT_FRONT_PAGE_PATH",
+        "title": "Заголовок FrontPagePath на запис (лише якщо роль користувача не CRM_user)",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "Connector__AuthorPersonId",
+        "title": "Id особи (CrmPerson) сервісного користувача — автор нотаток",
+        "required": false,
+        "secret": false
+      }
+    ],
+    "headers": []
+  },
+  "triggers": []
+}

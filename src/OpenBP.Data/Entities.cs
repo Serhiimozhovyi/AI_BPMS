@@ -267,6 +267,23 @@ public sealed class WorkflowVersionEntity
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+/// <summary>
+/// Пояснення сценарію простими словами (F3-72): одне на сценарій, для версії <see cref="Version"/>. Генерує воркер
+/// (job <c>explain</c>) після збереження; <see cref="DefinitionHash"/> — відбиток визначення без координат, щоб
+/// пересування вузлів не генерувало пояснення заново.
+/// </summary>
+public sealed class WorkflowExplanationEntity
+{
+    public Guid WorkflowId { get; set; }
+    public int Version { get; set; }
+    /// <summary><c>pending</c> | <c>ready</c> | <c>failed</c> | <c>not_configured</c>.</summary>
+    public string Status { get; set; } = "pending";
+    public string? Text { get; set; }
+    public string? Error { get; set; }
+    public string? DefinitionHash { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class CredentialEntity
 {
     public Guid Id { get; set; }
@@ -307,6 +324,12 @@ public sealed class ExecutionEntity
     public DateTimeOffset? HeartbeatAt { get; set; }
     /// <summary>Виконання, яке продовжує це (<c>mode = resume</c>, F6-08).</summary>
     public Guid? ResumedFromExecutionId { get; set; }
+    /// <summary>Ключ кореляції (F5-04): Id угоди, контрагента тощо; до 200 символів.</summary>
+    public string? CorrelationKey { get; set; }
+    /// <summary>Для <c>waiting</c> — коли розбудити (F5-02); інакше <c>null</c>.</summary>
+    public DateTimeOffset? ResumeAt { get; set; }
+    /// <summary>Для <c>waiting</c> — вузол із найранішим <see cref="ResumeAt"/>.</summary>
+    public string? WaitingNodeId { get; set; }
     public string? Error { get; set; }
     /// <summary>
     /// Запланований час старту з урахуванням ліміту частоти (F6-06); заповнюється лише для запусків, на які діє
@@ -329,6 +352,10 @@ public sealed class ExecutionStepEntity
     public string? Error { get; set; }
     /// <summary>jsonb: підкроки (F6-12, <c>SubStep[]</c>); <c>null</c> — немає.</summary>
     public string? SubSteps { get; set; }
+    /// <summary>Для кроку <c>waiting</c> — коли розбудити вузол (F5-02).</summary>
+    public DateTimeOffset? ResumeAt { get; set; }
+    /// <summary>jsonb: стан вузла до пробудження для кроку <c>waiting</c>; <c>null</c> — немає.</summary>
+    public string? WaitState { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
 }

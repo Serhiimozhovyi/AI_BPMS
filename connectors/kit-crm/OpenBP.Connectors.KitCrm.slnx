@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenBP.Connectors.KitCrm/OpenBP.Connectors.KitCrm.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenBP.Connectors.KitCrm.Tests/OpenBP.Connectors.KitCrm.Tests.csproj" />
+  </Folder>
+</Solution>

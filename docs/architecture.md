@@ -42,7 +42,7 @@
 | `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
 | `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
 | `src/OpenBP.Worker` | хост: бере job, виконує через Engine, пише кроки |
-| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
+| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести; очікування `core.wait` v2 і `mcp.waitFor` CLI не відбуває, а перемотує свій годинник до часу відновлення, F5-06); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
 | `apps/web` | Angular SPA: список, канвас, журнал, конектори, credentials |
 | `tests/*` | xUnit на кожен src-проєкт; Testcontainers для Data/Api |
 | `tools/connector-template` | Connector Kit — шаблон MCP-сервера над REST/OData |
@@ -134,10 +134,11 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
+| `workflow_explanations` | workflow_id (PK, FK cascade), version, status (`pending`/`ready`/`failed`/`not_configured`), text, error, definition_hash, updated_at — пояснення сценарію простими словами (F3-72, §10.8) |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
-| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08) |
+| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
@@ -249,6 +250,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `IExecutionEventSource` | SSE `/executions/{id}/events`, MCP-ресурс `openbp://executions/{id}` | потік подій кроків виконання |
 | `IConnectorService` | REST, MCP `describe_connectors`, UI | CRUD `mcp_servers`, discovery, тестовий виклик tool'а |
 | `IAssistantService`, `IAssistantSettingsService` | REST `POST /workflows/{id}/assistant`, `/settings/assistant`, UI | помічник у редакторі (§10.8) |
+| `IWorkflowExplanationService` (+ `WorkflowExplainer` у воркері) | REST `/workflows/{id}/explanation`, UI | пояснення сценарію простими словами (§10.8, F3-72) |
 | `INodeService` | REST `GET /nodes`, UI (палітра канвасу) | дескриптори зареєстрованих вузлів (`NodeDescriptor`), viewer |
 
 Сигнатури — у коді (`OpenBP.Application`), вони є джерелом правди; тут — лише правила.
@@ -308,6 +310,9 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
 | `POST /workflows/{id}/publish` · `/discard-draft` | editor | `WorkflowDetail`; публікація чернетки й «Скасувати зміни» (F6-10, §10.2) |
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
+| `GET /workflows/{id}/explanation` | viewer | пояснення сценарію (§10.8): `status` (`none`, `pending`, `ready`, `failed`, `not_configured`), `version`, `currentVersion`, `text`, `error`, `stale` |
+| `POST /workflows/{id}/explanation` | editor | пояснити поточну версію заново, одразу |
+| `PUT /workflows/{id}/explanation { text }` | editor | зберегти пояснення, написане ззовні (агент через `/mcp`, людина), F3-73 |
 | `GET /settings/assistant`, `PUT /settings/assistant { credentialId, model }` | editor / admin | налаштування помічника: credential `anthropic`/`openai`/`openai-compatible` (назва й тип, без значень) і модель; `credentialId: null` вимикає |
 | `GET /workflows/templates` | viewer | `[{ id, name, description, definition, connectors }]` — шаблони «Почати з прикладу» (F3-59): файли `examples/` з каталогу `examples/templates.json`, вбудовані в збірку Api; у `definition` немає `pinData` і `settings.errorWorkflowId`, `serverId`/`credentialId` порожні; `connectors` — id записів каталогу конекторів, потрібних шаблону (F6-16) |
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
@@ -357,9 +362,10 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 |---|---|---|---|
 | `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax?, inputOverrides? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію»; `inputOverrides` — лише `resume`) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
 | `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
+| `explain` | `ExplainJobPayload { workflowId, version }` | `IWorkflowService` при збереженні (з паузою 15 с), `POST /workflows/{id}/explanation` (одразу) | `WorkflowExplainer`: версія вже не поточна → нічого; інакше пояснення моделлю помічника в `workflow_explanations` (F3-72, §10.8) |
 
 Життєвий цикл `executions.status`: `queued` → `running` → `success` | `error` | `cancelled` | `timed_out`;
-`cancelling` — тимчасовий стан після запиту на скасування. Рядок `executions` створює `IExecutionLauncher`
+`cancelling` — тимчасовий стан після запиту на скасування; `running` ⇄ `waiting` — довге очікування (F5-02, нижче). Рядок `executions` створює `IExecutionLauncher`
 зі статусом `queued` (клієнт одразу отримує id для SSE), `started_at`/`heartbeat_at` ставить воркер при взятті job.
 
 Обробка job `execution` воркером (F2-07/F2-08):
@@ -369,14 +375,36 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 3. Під час виконання кожні `HeartbeatInterval` (5 с): `JobQueue.ExtendLockAsync` + `executions.heartbeat_at`;
    статус став `cancelling` → скасувати `CancellationToken`.
 4. Підсумок → `PostgresExecutionStore.FinishAsync`, `node_state` з `ExecutionResult.NodeStates`, `CompleteAsync`.
+   `ExecutionStatus.Waiting` → див. «Довге очікування».
 5. Необроблена помилка воркера → `FailAsync` (повтор з backoff; наступна спроба йде через крок 2 як resume);
    `Dropped` → статус виконання `error` з повідомленням про вичерпані спроби.
 6. Лічильник `attempts` job'а = кількість падінь воркера на цьому виконанні; помилки вузлів у нього не входять — їх обробляє движок (retry вузла, `continueOnFail`).
+
+Довге очікування (F5-02, docs/kit-sales.md §2):
+- Вузол викликає `ctx.Suspend(resumeAt, state)` і повертає його результат. Движок пише крок `waiting`
+  (`execution_steps.resume_at`, `wait_state` jsonb, вхідні items), не планує наступників вузла, доводить до кінця інші
+  гілки й повертає `ExecutionStatus.Waiting` з найранішим `ResumeAt` і `WaitingNodeId`.
+- Воркер **однією транзакцією**: `executions.status = waiting`, `resume_at`, `waiting_node_id`; новий job `execution` із
+  тим самим payload і `run_at = resume_at`; видалення поточного job'а. Слот воркера звільняється одразу; рестарт Api чи
+  воркера нічого не губить. Якщо тим часом запитали скасування (`cancelling`) — виконання стає `cancelled`.
+- Job пробудження бере будь-який воркер, коли настає `run_at`: `waiting` → `running` (`resume_at`/`waiting_node_id`
+  очищаються) і `ResumeAsync` зі знімка. Вузол, чий останній крок `waiting`, виконується знову з `ctx.Resumption`
+  (стан і запланований час) і сам вирішує: віддати items далі чи призупинитись ще раз.
+- Скасування `waiting` через API — одразу `cancelled` (воркер не потрібен); job пробудження побачить фінальний стан і
+  завершиться без виконання. Повтор (`retry`) `waiting` — 409, як для незавершеного.
+- `executionTimeoutSec` рахується на кожен прохід окремо, тож час у `waiting` не входить. Ліміт `concurrency` (F6-06)
+  `waiting` не рахує; `correlation.skipIfActive` (F5-04) — рахує як активне.
+- SSE не закривається на `waiting`; MCP `run_workflow`, помічник і оцінки перестають чекати на `waiting`
+  (`ExecutionStates.IsSettled`).
 
 Відновлення (F2-08): `ReleaseStaleLocksAsync` раз на `LockTimeout / 2` повертає job'и впалих воркерів;
 виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)
 отримує статус `error`. Паралельність воркера — `MaxConcurrentExecutions` (50 за замовчуванням, PRD §7):
 job береться лише за вільного слота.
+
+Ключ кореляції (F5-04, docs/workflow-format.md «Ключ кореляції»): `ExecutionLauncher` пише `correlation_key`; з
+`settings.correlation.skipIfActive` запуск із ключем іде під тим самим advisory lock, що й ліміти, і за активного
+(`queued`/`running`/`waiting`/`cancelling`) виконання з тим самим ключем записується як `cancelled` без job.
 
 Ліміти сценарію (F6-06, docs/workflow-format.md «Ліміти навантаження»); не діють на `manual`:
 - **Рішення при запуску.** `ExecutionLauncher` бере `pg_advisory_xact_lock(hashtextextended('launch:' + workflowId, 0))`
@@ -407,7 +435,7 @@ job береться лише за вільного слота.
 `startNodeId` = цей вузол, `startItems` = його вихід 0 (тригер не виконується знову, тож webhook/`mcp.poll`/розклад
 повторюються з тими самими items); інакше — старт з усіх вузлів без вхідних ребер. `pinData` у `retry` не
 застосовується, `destinationNodeId`/`runData` ручного запуску не переносяться (повторюється весь граф).
-Незавершене (`queued`/`running`/`cancelling`) → 409 `EXECUTION_NOT_FINISHED`; потрібна роль editor.
+Незавершене (`queued`/`running`/`waiting`/`cancelling`) → 409 `EXECUTION_NOT_FINISHED`; потрібна роль editor.
 Успішне виконання без збережених даних (`saveSuccessfulData: false`) → 409 `EXECUTION_DATA_NOT_SAVED`.
 
 Продовження з вузла, що впав (`IExecutionService.ResumeFromFailedAsync`, `POST /executions/{id}/resume`, MCP
@@ -432,7 +460,7 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
   `OPENBP_EXECUTION_RETENTION_CRON` (типово `0 0 3 * * ?` — щодня о 03:00 за часом сервера; можна 5 полів crontab)
   видаляє завершені виконання з кроками, що закінчились раніше ніж `OPENBP_EXECUTION_RETENTION_DAYS` днів тому
   (типово 30; `0` — не видаляти). Видалення йде пачками по 500 виконань, кожна пачка — окрема транзакція;
-  `queued`/`running`/`cancelling` не чіпаються. Кількість видаленого пишеться в журнал.
+  `queued`/`running`/`waiting`/`cancelling` не чіпаються. Кількість видаленого пишеться в журнал.
 - Quartz-job `execution-stats` в Api (`ExecutionStatsJob`, кожні 5 хв) перераховує `execution_stats` за останні 3 години
   одним `INSERT … SELECT … ON CONFLICT DO UPDATE` над `executions.finished_at` (індекс); порожня таблиця — за всю історію.
   Тривалість — у кошиках гістограми, тож p50/p95 у «Огляді» — верхня межа кошика. Видалення старих виконань
@@ -534,3 +562,21 @@ Api — при кожній зміні через `IConnectorService`; Worker �
 `ASSISTANT_STEP_LIMIT`/`ASSISTANT_TIMEOUT`, помилка провайдера — `ASSISTANT_PROVIDER_ERROR`. Модель не отримує значень
 credentials (у визначенні — лише `credentialId`) і журналу виконань; ключ провайдера йде лише в заголовок запиту.
 Credential моделі розшифровується в Api на час запиту (§8).
+
+**Пояснення сценарію (F3-72).** Кожне збереження (`SaveAsync`, `CreateAsync`, повернення чернетки) у тій самій транзакції
+позначає `workflow_explanations.status = pending` і ставить job `explain` з `run_at` = зараз + 15 с; помічник не
+налаштований — `not_configured` без job'а. Автозбереження пише версію на кожну правку, тож воркер пояснює лише
+версію, яка досі поточна, а решта job'ів завершуються без запиту до моделі. Відбиток (`definition_hash`) рахується від
+визначення без координат вузлів, нотаток і `pinData`: пересування вузлів пояснення не оновлює. Модель (налаштування й
+credential ті самі, що в помічника; без інструментів, до 8000 токенів, 180 с) отримує це ж визначення з обрізаними до
+3000 символів рядками і назви конекторів за `serverId`; значень credentials і тестових даних — ні. Помилка моделі —
+`failed` з текстом у `error`, job не повторюється. REST: `GET /workflows/{id}/explanation` (viewer) і
+`POST …/explanation` (editor, пояснити заново одразу). У редакторі — картка «Пояснення процесу» над розмовою в панелі
+«Помічник»; поки `pending`, вона перепитує Api кожні 5 с.
+
+**Пояснення від агента через `/mcp` (F3-73).** Модель у «Налаштуваннях → Помічник» не обов'язкова: Claude чи ChatGPT,
+підключений до OpenBP як до MCP-сервера, пише пояснення сам — `save_workflow_explanation` (або `PUT /workflows/{id}/explanation
+{ text }`, editor) зберігає його як `ready` для поточної версії з тим самим відбитком; `get_workflow_explanation` читає.
+Описи `create_workflow`/`update_workflow` підказують агенту оновлювати пояснення після збереження. Відбиток рахується
+від визначення з упорядкованими ключами (jsonb їх переставляє); збереження з тим самим відбитком (пересунули вузли)
+переводить готове пояснення на нову версію одразу, без job'а — і за наявності моделі, і без неї.
