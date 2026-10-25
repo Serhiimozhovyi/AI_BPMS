@@ -129,7 +129,7 @@ describe('AssistantPanelComponent', () => {
     ]);
   });
 
-  it('помилка Api (409 не налаштовано) — текст із detail; запит ззовні з send надсилається одразу', () => {
+  it('модель не вибрана (409) — замість поля підказка про MCP із назвою сценарію; запит ззовні з send надсилається одразу', () => {
     const { fixture, host, http } = create();
     fixture.componentRef.setInput('prompt', { text: 'Поясни вузол', send: true, seq: 1 });
     fixture.detectChanges();
@@ -142,11 +142,28 @@ describe('AssistantPanelComponent', () => {
       );
     fixture.detectChanges();
 
-    expect(host.querySelector('[data-kind="error"]')?.textContent).toContain(
-      'Помічник не налаштований.',
+    expect(host.querySelector('[data-kind="error"]')).toBeNull();
+    expect(host.querySelector('[data-testid="assistant-input"]')).toBeNull();
+    expect(host.querySelector('[data-testid="assistant-mcp"]')?.textContent).toContain('через MCP');
+    expect(host.querySelector('[data-testid="assistant-mcp-prompt"]')?.textContent?.trim()).toBe(
+      'Поясни сценарій «Заявки» і збережи пояснення в OpenBP',
     );
-    expect(
-      (host.querySelector('[data-testid="assistant-send"]') as HTMLButtonElement).disabled,
-    ).toBe(true);
+  });
+
+  it('інша помилка Api — червоний рядок, поле лишається', () => {
+    const { fixture, host, http } = create();
+    fixture.componentRef.setInput('prompt', { text: 'Поясни вузол', send: true, seq: 1 });
+    fixture.detectChanges();
+
+    http
+      .expectOne(URL)
+      .flush(JSON.stringify({ code: 'ASSISTANT_FAILED', detail: 'Модель недоступна.' }), {
+        status: 502,
+        statusText: 'Bad Gateway',
+      });
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-kind="error"]')?.textContent).toContain('Модель недоступна.');
+    expect(host.querySelector('[data-testid="assistant-input"]')).not.toBeNull();
   });
 });
