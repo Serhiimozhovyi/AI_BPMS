@@ -319,6 +319,13 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   артикулом, запис документа → `{ number }`), `sales_report` (`{ result }`: проведені продажі за період з назвами
   контрагентів), плюс згенеровані з `$metadata` tools (`Connector:Source`); імена об'єктів 1С — налаштування
   `Connector:OneC:*`, логін і пароль — лише змінні `ONEC_USERNAME`/`ONEC_PASSWORD`.
+- `connectors/kit-crm` — Кіт CRM через OData (F5-05, `docs/kit-sales.md`): угоди (`find_sales`, `get_sale`,
+  `update_sale`, `set_sale_stage`, `list_sale_stages`, `add_sale_note`), задачі (`create_task` з прив'язкою до угоди,
+  `get_task` з `status` і `done`, `list_tasks`, `set_task_status`), контрагенти й особи, `get_person_user`,
+  `get_user_manager` (керівник із профілю `CrmPerson.ManagerId`, email із `Users`) і `changes_since` (`{ result,
+  cursor }`, для `mcp.poll` — `keyField = id`). М'яко видалені записи не повертаються; токен Keycloak за client
+  credentials (`KIT_TOKEN_URL`/`KIT_CLIENT_ID`/`KIT_CLIENT_SECRET`), на 401 — одне повторне отримання, `FrontPagePath`
+  на запис — `KIT_FRONT_PAGE_PATH`.
 - `connectors/psy-support` — застосунок психологічної підтримки з власною БД і адмінкою (F3-34, `docs/psy-support.md`):
   сім tools бота `bot_*` повертають `{ ok, code, screen { text, parse_mode, reply_markup, new_message }, notifications,
   commands }` для Telegram-конектора; доменні tools (`book_slot`, `register_event`, `book_bst`, `join_waitlist`,
