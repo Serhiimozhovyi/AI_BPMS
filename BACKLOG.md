@@ -817,17 +817,17 @@
 - DoD: тести: ключ зберігається з кожного тригера, фільтр, дубль пропускається і пишеться в журнал; міграція EF Core.
 
 ### F5-05 · Конектор «Кіт CRM» (`connectors/kit-crm`)
-- model: `opus` · status: `review` agent/F5-05-kit-crm · depends: F5-01
+- model: `opus` · status: `done` · depends: F5-01
 - Що: MCP-сервер на Connector Kit поверх OData Кіта (`/odata/<Set>`), генератор з `$metadata` (F3-12) плюс ручні tools: угоди `CrmSales` (пошук, отримати, змінити стадію/поля), задачі `CrmTasks` (створити, отримати, список за угодою/відповідальним/статусом, змінити статус), контрагенти й особи (пошук, отримати), нотатка до угоди, `changes_since { entity, since }` для `mcp.poll`. Автентифікація: токен Keycloak для сервісного користувача з env, кеш і оновлення; заголовок `FrontPagePath` на кожен запис; записи з `IsDelete` не повертаються. Секрети лише в env, не в відповідях і журналах.
 - DoD: тести проти фейку OData (кожен tool, 401 → одне оновлення токена, 403 без `FrontPagePath` → зрозуміла помилка, `$filter` для `changes_since`); README «сервісний користувач у Кіті → env → реєстрація в OpenBP»; перевірка на живому Кіті — лише з власником на dev-стенді, не на проді.
 
 ### F5-06 · Приклад: нова угода → задача менеджеру → контроль → ескалація
-- model: `sonnet` · status: `blocked чекає F5-02…F5-05` · depends: F5-02, F5-03, F5-04, F5-05
+- model: `sonnet` · status: `review` agent/F5-06-kit-sales-followup · depends: F5-02, F5-03, F5-04, F5-05
 - Що: `examples/kit-sales-followup.json`: `mcp.poll` нових угод (`changes_since`) з ключем кореляції = Id угоди → `kit-crm` створює задачу відповідальному («зв'язатися з клієнтом», дедлайн +1 робочий день) → `mcp.waitFor` закриття задачі (таймаут 2 дні) → `done`: нотатка в угоді; `timeout`: лист або Teams керівнику (Graph) і повторна задача.
 - DoD: CLI-прогін з фейком OData Кіта і моком Graph для обох гілок; дубль угоди не запускає другий процес.
 
 ### F5-07 · Приклад: щоденний звіт по протермінованих задачах CRM
-- model: `sonnet` · status: `blocked чекає F5-05` · depends: F5-05
+- model: `sonnet` · status: `ready` · depends: F5-05
 - Що: `examples/kit-overdue-report.json`: `core.schedule` 08:30 `Europe/Kyiv` → `kit-crm` задачі зі статусом «Протерміноване» → `core.code` групування за відповідальним → лист кожному менеджеру і зведення керівнику через Graph.
 - DoD: CLI-прогін з фейками; порожній день — без листів.
 

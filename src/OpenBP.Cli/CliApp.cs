@@ -29,6 +29,9 @@ public static class CliApp
     /// <summary>Код виходу: неправильні аргументи, файл чи сценарій.</summary>
     public const int UsageError = 2;
 
+    /// <summary>Найбільше відновлень після очікувань за один прогін.</summary>
+    public const int MaxWaits = 10_000;
+
     private const string Usage = """
         Використання:
           openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]
@@ -103,8 +106,10 @@ public static class CliApp
 
         // Таймаутом запиту до моделі керує сам вузол (timeoutSec), тож HttpClient без власного таймауту.
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        // Очікування (core.wait v2, mcp.waitFor) CLI не відбуває: годинник перемотується до часу відновлення.
+        var clock = new CliClock(DateTimeOffset.UtcNow);
         var registry = new InMemoryNodeRegistry();
-        foreach (var node in CoreNodes.All().Concat(McpNodes.All(mcp)).Concat(AiNodes.All(http, mcp)))
+        foreach (var node in CoreNodes.All(clock).Concat(McpNodes.All(mcp, clock)).Concat(AiNodes.All(http, mcp)))
         {
             registry.Register(node);
         }
@@ -120,7 +125,7 @@ public static class CliApp
             WorkflowId = Path.GetFileNameWithoutExtension(options.WorkflowPath),
             Workflow = workflow,
             Mode = mode,
-            StartedAt = DateTimeOffset.UtcNow,
+            StartedAt = clock.GetUtcNow(),
         });
 
         var executor = new WorkflowExecutor(
@@ -129,14 +134,27 @@ public static class CliApp
             new JintExpressionEvaluator(),
             credentials,
             new InMemoryBinaryStore(),
-            new InMemoryExecutionLogger());
+            new InMemoryExecutionLogger(),
+            clock);
 
+        var request = new ExecutionRequest { ExecutionId = executionId, Workflow = workflow, Mode = mode };
         ExecutionResult result;
+        var waits = 0;
         try
         {
-            result = await executor.RunAsync(
-                new ExecutionRequest { ExecutionId = executionId, Workflow = workflow, Mode = mode },
-                ct).ConfigureAwait(false);
+            result = await executor.RunAsync(request, ct).ConfigureAwait(false);
+            while (result is { Status: ExecutionStatus.Waiting, ResumeAt: { } resumeAt })
+            {
+                if (++waits > MaxWaits)
+                {
+                    throw new CliException($"Сценарій чекав понад {MaxWaits} разів — схоже на нескінченне очікування.");
+                }
+
+                clock.AdvanceTo(resumeAt);
+                var snapshot = await store.LoadAsync(executionId, ct).ConfigureAwait(false)
+                    ?? throw new CliException("Знімок виконання зник під час очікування.");
+                result = await executor.ResumeAsync(snapshot, request, ct).ConfigureAwait(false);
+            }
         }
         catch (Exception ex) when (ex is EngineException or ArgumentException)
         {
@@ -144,6 +162,11 @@ public static class CliApp
         }
 
         await RunReport.WriteAsync(stdout, workflow, result, mode).ConfigureAwait(false);
+        if (waits > 0)
+        {
+            await stdout.WriteLineAsync($"Очікувань: {waits}; час CLI перемотано до {clock.GetUtcNow():yyyy-MM-ddTHH:mm:ssZ} (у OpenBP виконання чекало б у стані waiting).").ConfigureAwait(false);
+        }
+
         return result.Status == ExecutionStatus.Success ? Ok : ExecutionFailed;
     }
 
