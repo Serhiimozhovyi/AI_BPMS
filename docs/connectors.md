@@ -394,3 +394,25 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 | Google | `https://accounts.google.com/o/oauth2/v2/auth` | `https://oauth2.googleapis.com/token` | `https://www.googleapis.com/auth/spreadsheets` (для `refresh_token` Google потребує `access_type=offline` — задайте його в адресі авторизації: `…/auth?access_type=offline&prompt=consent`) |
 
 Токени, коди й верифікатори не потрапляють у відповіді REST/MCP, журнали й адресу сторінки — лише код помилки провайдера.
+
+## 8. Події та звірка: `changes_since`
+
+Правила для авторів сценаріїв — [consistency.md](consistency.md); тут — що має віддати конектор, щоб страхувальна
+звірка через `mcp.poll` працювала.
+
+Якщо система не вміє віддавати події (або push може загубитися), конектор додає tool **`changes_since`**
+(`ReadOnly`, `UseStructuredContent`):
+
+- вхід: `entity` (одна з сутностей конектора; невідома → `isError` з переліком допустимих), `since?` (ISO 8601, зміни
+  **строго після**; без нього — вікно `withinMinutes` або усе, якщо система не має часу зміни);
+- вихід: `{ "result": [...], "cursor": "<ISO 8601>" }`; записи — у тій самій формі, що `get_*`, **від старих до нових**;
+  `cursor` — найбільший час зміни серед записів або вхідний `since`, якщо нічого нового; його передають як `since` наступного
+  виклику;
+- у `mcp.poll`: `toolName = changes_since`, `itemsPath = result`, `keyField = id`. Щоб ловити й зміни наявних
+  записів, а не лише нові, запис має мати поле, що змінюється разом із ним (час зміни, ревізія) — його і задають
+  як `keyField`;
+- видалені (м'яко видалені) записи не повертаються; секрети у відповідь не потрапляють;
+- еталон — `connectors/kit-crm` (`sales`, `tasks`, `contractors`, `persons`); заготовка з тестом — у шаблоні Connector Kit
+  (`ItemTools.ChangesSince`, `Changes_since_returns_records_after_the_cursor_and_a_new_cursor`).
+
+Push-тригери подій (F6-13) цей контракт не замінюють, а доповнюють: див. [consistency.md §3](consistency.md#3-правила-для-авторів-сценаріїв).

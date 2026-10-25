@@ -186,6 +186,10 @@ curl -fsS -X POST "$OPENBP_URL/api/v1/connectors" \
 Повний шлях «від нуля за годину» — [tools/connector-template/README.md](../../tools/connector-template/README.md),
 контракт — [docs/connectors.md §5](../connectors.md#5-connector-kit-toolsconnector-template).
 
+Щоб сценарії могли надолужити пропущені події, дайте конектору tool `changes_since { entity, since }` з курсором
+(заготовка є в шаблоні): [docs/connectors.md §8](../connectors.md#8-події-та-звірка-changes_since),
+[docs/consistency.md](../consistency.md).
+
 ## 7. Перенесення між середовищами і CI/CD
 
 Сценарії зберігаються в git як файли експорту і розкочуються з dev на prod командами CLI (F6-09). Файл містить
