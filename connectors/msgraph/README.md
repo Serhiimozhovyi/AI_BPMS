@@ -15,6 +15,12 @@ Microsoft 365, зроблений на шаблоні Connector Kit (`tools/conn
 `list_messages` без власного `filter` віддає найновіші листи першими. Для тригера `mcp.poll`: tool `list_messages`,
 `itemsPath = result`, `keyField = id`; `since` обмежує вибірку, щоб не тягнути всю скриньку.
 
+**Нові листи без розкладу** — тригер «Новий лист» з палітри, вузол `mcp.subscribe` з ресурсом
+`msgraph://mail/<скринька>/inbox` (напр. `msgraph://mail/orders@firma.ua/inbox`), `itemsPath = result`, `keyField = id`.
+Поки сценарій активний, конектор раз на `Connector:Events:IntervalSec` (60 с) читає «Вхідні» після останнього
+`receivedDateTime` і сповіщає OpenBP про нові листи (подія — лист у формі `list_messages`). Graph change notifications
+не використовуються: їм потрібна публічна HTTPS-адреса конектора й поновлення підписки щодоби.
+
 Автентифікація — client credentials (застосунок без користувача). Токен кешується до хвилини перед закінченням; якщо
 Graph відповів 401, конектор один раз бере новий токен і повторює запит. 429 і 503 повертаються як `isError` з
 «Повторіть через N с (Retry-After)» — повтор вирішує сценарій (налаштування повторів вузла). Секрету застосунку й

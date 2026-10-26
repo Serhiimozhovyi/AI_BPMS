@@ -64,9 +64,18 @@ dotnet publish src/OpenBP.Connectors.Telegram -c Release -o out
 Для CLI (`openbp run`) запис є в `examples/servers.json` (`srv_telegram_bot`): токен береться зі змінної
 середовища вашої оболонки, у файлі його немає.
 
-## 4. Отримувати повідомлення: два сценарії
+## 4. Отримувати повідомлення: три сценарії
 
 Telegram доставляє оновлення **або** на webhook, **або** через `getUpdates`, не обома способами одночасно.
+
+### Підписка (миттєво, без публічної адреси) — рекомендовано
+
+Тригер «Нове повідомлення Telegram» з палітри — вузол `mcp.subscribe`: `resourceUri = telegram://updates`,
+`itemsPath = result`, `keyField = update_id`. Поки сценарій активний, конектор сам тримає long-polling `getUpdates`
+(`Connector:Events:LongPollSec`, 25 с), підтверджує отримане (`offset`) і одразу сповіщає OpenBP; без підписників
+`getUpdates` не викликається. Повідомлення — у `$json.message`, натискання кнопки — у `$json.callback_query`.
+Обмеження: підтверджені оновлення tool `get_updates` уже не побачить (один споживач на бота), а з заданим webhook
+ресурс недоступний — підписка повертає помилку з поясненням; зніміть webhook tool'ом `delete_webhook`.
 
 ### Webhook (миттєво; потрібна публічна HTTPS-адреса OpenBP)
 
@@ -91,7 +100,7 @@ Telegram доставляє оновлення **або** на webhook, **або
    у тому самому повідомленні, `edit_message_text` з `message_id = {{ $json.body.callback_query.message.message_id }}`.
 4. Меню команд (`/start`, `/sos`…) задається один раз tool'ом `set_my_commands`.
 
-### Polling (без публічної адреси)
+### Polling (опитування за розкладом)
 
 1. Якщо webhook встановлено, зніміть його tool'ом `delete_webhook`.
 2. Тригер `mcp.poll`: сервер Telegram, tool `get_updates`, `itemsPath = result`, `keyField = update_id`,

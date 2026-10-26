@@ -120,7 +120,7 @@ public sealed class FakeGraph : IAsyncDisposable
                 {
                     new { id = "AAMk-1", subject = "Замовлення", receivedDateTime = "2026-10-23T06:10:00Z", hasAttachments = true },
                     new { id = "AAMk-2", subject = "Рахунок", receivedDateTime = "2026-10-23T05:00:00Z", hasAttachments = false },
-                },
+                }.Concat(Delivered()),
             },
             ("GET", "/v1.0/users/orders@contoso.com/messages/AAMk-1") => new
             {
@@ -165,6 +165,31 @@ public sealed class FakeGraph : IAsyncDisposable
             default:
                 await ctx.Response.WriteAsync(JsonSerializer.Serialize(result));
                 break;
+        }
+    }
+
+    private readonly List<(string Id, string Subject, DateTimeOffset Received)> _delivered = [];
+
+    /// <summary>Новий лист у «Вхідних» (фільтр і сортування запиту фейк не застосовує).</summary>
+    public void Deliver(string id, string subject, DateTimeOffset received)
+    {
+        lock (_delivered)
+        {
+            _delivered.Add((id, subject, received));
+        }
+    }
+
+    private IEnumerable<object> Delivered()
+    {
+        lock (_delivered)
+        {
+            return [.. _delivered.Select(d => new
+            {
+                id = d.Id,
+                subject = d.Subject,
+                receivedDateTime = d.Received.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture),
+                hasAttachments = false,
+            })];
         }
     }
 

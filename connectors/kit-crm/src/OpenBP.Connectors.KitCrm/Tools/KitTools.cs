@@ -415,14 +415,6 @@ public sealed class KitTools(KitClient kit, KitDictionaries dictionaries, IOptio
         CancellationToken ct = default) =>
         Call(async () =>
         {
-            var set = entity?.Trim().ToLowerInvariant() switch
-            {
-                "sales" => "CrmSales",
-                "tasks" => "CrmTasks",
-                "contractors" => "CrmContractors",
-                "persons" => "CrmPersons",
-                _ => throw new ConnectorException($"entity «{entity}» — одне з: sales, tasks, contractors, persons."),
-            };
             DateTimeOffset from;
             if (since is not null)
             {
@@ -437,32 +429,61 @@ public sealed class KitTools(KitClient kit, KitDictionaries dictionaries, IOptio
                 throw new ConnectorException("withinMinutes — від 1 до 10080 (тиждень).");
             }
 
-            var at = Iso(from);
-            var filter = new List<string> { NotDeleted, createdOnly ? $"Created gt {at}" : $"(Updated gt {at} or Created gt {at})" };
-            var rows = await ListAsync(set, filter, createdOnly ? "Created asc" : "Updated asc", MaxTop, ct).ConfigureAwait(false);
-            var result = new List<object>(rows.Count);
-            var cursor = from;
-            foreach (var row in rows)
-            {
-                foreach (var field in new[] { "Updated", "Created" })
-                {
-                    if (Str(row, field) is { } value && DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var changed) && changed > cursor)
-                    {
-                        cursor = changed;
-                    }
-                }
+            var changes = await ChangesAsync(entity, from, createdOnly, ct).ConfigureAwait(false);
+            var cursor = changes.Select(c => c.Changed).Append(from).Max();
+            return new ChangesResult([.. changes.Select(c => c.Record)], Iso(cursor));
+        });
 
-                result.Add(set switch
+    /// <summary>
+    /// Записи сутності, створені чи змінені після <paramref name="from"/>, від найстаріших, з часом зміни кожного —
+    /// спільне для <c>changes_since</c> і стрічки <c>kit://changes/{entity}</c> (<see cref="Events.KitEvents"/>).
+    /// </summary>
+    /// <param name="entity"><c>sales</c>, <c>tasks</c>, <c>contractors</c> або <c>persons</c>.</param>
+    /// <param name="from">Зміни строго після цього часу.</param>
+    /// <param name="createdOnly">Лише нові записи.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="ConnectorException">Невідома сутність або помилка Кіта.</exception>
+    public async Task<IReadOnlyList<(object Record, DateTimeOffset Changed)>> ChangesAsync(string? entity, DateTimeOffset from, bool createdOnly, CancellationToken ct)
+    {
+        var set = EntitySet(entity);
+        var at = Iso(from);
+        var filter = new List<string> { NotDeleted, createdOnly ? $"Created gt {at}" : $"(Updated gt {at} or Created gt {at})" };
+        var rows = await ListAsync(set, filter, createdOnly ? "Created asc" : "Updated asc", MaxTop, ct).ConfigureAwait(false);
+        var result = new List<(object, DateTimeOffset)>(rows.Count);
+        foreach (var row in rows)
+        {
+            var changed = DateTimeOffset.MinValue;
+            foreach (var field in new[] { "Updated", "Created" })
+            {
+                if (Str(row, field) is { } value && DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value2) && value2 > changed)
                 {
-                    "CrmSales" => ToSale(row),
-                    "CrmTasks" => await ToTaskAsync(row, ct).ConfigureAwait(false),
-                    "CrmContractors" => ToContractor(row),
-                    _ => ToPerson(row),
-                });
+                    changed = value2;
+                }
             }
 
-            return new ChangesResult(result, Iso(cursor));
-        });
+            result.Add((set switch
+            {
+                "CrmSales" => ToSale(row),
+                "CrmTasks" => await ToTaskAsync(row, ct).ConfigureAwait(false),
+                "CrmContractors" => ToContractor(row),
+                _ => ToPerson(row),
+            }, changed));
+        }
+
+        return result;
+    }
+
+    /// <summary>Набір OData для сутності <c>changes_since</c>.</summary>
+    /// <param name="entity"><c>sales</c>, <c>tasks</c>, <c>contractors</c> або <c>persons</c>.</param>
+    /// <exception cref="ConnectorException">Невідома сутність.</exception>
+    public static string EntitySet(string? entity) => entity?.Trim().ToLowerInvariant() switch
+    {
+        "sales" => "CrmSales",
+        "tasks" => "CrmTasks",
+        "contractors" => "CrmContractors",
+        "persons" => "CrmPersons",
+        _ => throw new ConnectorException($"entity «{entity}» — одне з: sales, tasks, contractors, persons."),
+    };
 
     // ---------- допоміжне ----------
 

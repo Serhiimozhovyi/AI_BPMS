@@ -19,7 +19,7 @@ namespace OpenBP.Connectors.MsGraph.Tools;
 public sealed class MailTools(GraphClient graph)
 {
     private const string MailboxDescription = "Mailbox: user principal name or email address, e.g. orders@contoso.com.";
-    private const string MessageFields = "id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,isRead,bodyPreview,internetMessageId,webLink";
+    internal const string MessageFields = "id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,isRead,bodyPreview,internetMessageId,webLink";
 
     /// <summary><c>list_messages</c>.</summary>
     /// <param name="mailbox">Скринька.</param>
@@ -213,7 +213,7 @@ public sealed class MailTools(GraphClient graph)
             return Structured(JsonSerializer.SerializeToElement(new { sent = true, from, to }));
         });
 
-    private static string Mailbox(string mailbox) =>
+    internal static string Mailbox(string mailbox) =>
         string.IsNullOrWhiteSpace(mailbox) ? throw new ConnectorException("mailbox — адреса скриньки.") : $"users/{Uri.EscapeDataString(mailbox.Trim())}";
 
     private static object[] Recipients(IEnumerable<string> addresses) =>

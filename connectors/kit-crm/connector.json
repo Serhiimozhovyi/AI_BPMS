@@ -59,10 +59,11 @@
     {
       "id": "new_sale",
       "title": "Нова угода в Кіті",
-      "description": "Нові угоди CRM; перевірка раз на 5 хвилин.",
+      "description": "Нові угоди CRM: сигнал від kit://changes/sales, нові записи читає changes_since (createdOnly).",
       "node": {
-        "type": "mcp.poll",
+        "type": "mcp.subscribe",
         "parameters": {
+          "resourceUri": "kit://changes/sales",
           "toolName": "changes_since",
           "arguments": {
             "entity": "sales",
@@ -70,26 +71,20 @@
             "createdOnly": true
           },
           "itemsPath": "result",
-          "keyField": "id",
-          "cron": "*/5 * * * *"
+          "keyField": "id"
         }
       }
     },
     {
       "id": "changed_task",
       "title": "Нова чи змінена задача в Кіті",
-      "description": "Задачі Кіта, створені або змінені за останні хвилини.",
+      "description": "Кожна зміна задачі Кіта — окрема подія (kit://changes/tasks, ключ eventKey = id@час зміни).",
       "node": {
-        "type": "mcp.poll",
+        "type": "mcp.subscribe",
         "parameters": {
-          "toolName": "changes_since",
-          "arguments": {
-            "entity": "tasks",
-            "withinMinutes": 10
-          },
+          "resourceUri": "kit://changes/tasks",
           "itemsPath": "result",
-          "keyField": "id",
-          "cron": "*/5 * * * *"
+          "keyField": "eventKey"
         }
       }
     }

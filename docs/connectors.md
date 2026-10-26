@@ -472,7 +472,7 @@ docs/consistency.md §3.
 
 Щоб конектор давав push-події, він має:
 
-1. **Ресурс подій** — URI на кшталт `telegram://updates`, `kit://changes/sales`, `msgraph://mail/inbox`. `resources/read`
+1. **Ресурс подій** — URI на кшталт `telegram://updates`, `kit://changes/sales`, `msgraph://mail/orders@contoso.com/inbox`. `resources/read`
    віддає `TextResourceContents` з JSON: об'єкт зі списком останніх подій (`{ "result": [...] }`, від старих до нових,
    буфер щонайменше на кілька хвилин роботи; у `mcp.subscribe` — `itemsPath = result`) або масив (OpenBP загортає його
    в `{ "result": [...] }`). Кожна подія має стабільний ключ (`keyField`: `update_id`, `id`, час зміни + id). Секретів у
@@ -501,8 +501,33 @@ docs/consistency.md §3.
 ```
 
 `node.type` — `mcp.subscribe` або `mcp.poll`; `parameters` — усе, крім `serverId` (його підставляє палітра за обраним
-конектором). Еталон і заготовка — `FakeEvents` у тестовому сервері (`tests/OpenBP.Mcp.Tests/FakeServer/FakeEvents.cs`:
-ресурс `fake://events`, tool `emit_event`); у шаблоні Connector Kit — задача беклогу.
+конектором). Еталон у тестовому сервері — `FakeEvents` (`tests/OpenBP.Mcp.Tests/FakeServer/FakeEvents.cs`: ресурс
+`fake://events`, tool `emit_event`).
+
+**Заготовка в Connector Kit (F6-22).** `tools/connector-template/src/Connector.Template/Events/EventHub.cs` — усе з п. 1–3
+однією реєстрацією: `services.AddSingleton(MyEvents.Create); EventHub.Register(services);`. Стрічка (`EventFeed`) — URI
+або шаблон URI (`kit://changes/{entity}`: у кожного конкретного URI свій буфер і своє джерело), `Capacity` буфера,
+необов'язкова перевірка `Check` (текст помилки → помилка протоколу `InvalidRequest` на `subscribe`/`read`, напр. «у бота
+задано webhook») і джерело `Source` — функція, яку хаб запускає з першим підписником URI і скасовує з останнім (виняток —
+пауза й перезапуск, до 1 хв). Хаб відповідає на `resources/list`, `resources/templates/list`, `resources/read`
+(`{ "result": [...] }`), `resources/subscribe`/`unsubscribe`, шле `notifications/resources/updated` усім підписаним сесіям
+(ключ сесії — `SessionId`: у Streamable HTTP кожен запит має свій об'єкт сервера) і прибирає сесію, якій надіслати не
+вдалося. HTTP-режим шаблону — `StatefulForInitializeClients`. Приклад стрічки — `Events/ItemEvents.cs`
+(`items://changes`, опитування REST API з курсором, ключ `eventKey`). У кожному конекторі — копія `EventHub.cs` зі своїм
+простором імен (конектори — окремі проєкти без спільних залежностей).
+
+Ресурси подій конекторів OpenBP:
+
+| Конектор | Ресурс | Звідки події | `keyField` | Налаштування |
+|---|---|---|---|---|
+| `telegram` | `telegram://updates` | long-polling `getUpdates` (тайм-аут 25 с) з підтвердженням `offset`, лише поки є підписники; з заданим webhook ресурс недоступний з поясненням (`delete_webhook` або `core.webhook`) | `update_id` | `Connector:Events:LongPollSec` (0–50) |
+| `kit-crm` | `kit://changes/{entity}`: `sales`, `tasks`, `contractors`, `persons` | опитування OData тим самим запитом, що й `changes_since`, з курсором за `Updated`/`Created` (без м'яко видалених); подія — запис у формі `get_*` | `eventKey` = `id@час зміни` (кожна зміна — окрема подія); лише нові записи — пресет `new_sale` (`toolName = changes_since`, `createdOnly`) | `Connector:Events:IntervalSec` (60) |
+| `msgraph` | `msgraph://mail/{mailbox}/inbox` | опитування `mailFolders/inbox/messages` з курсором за `receivedDateTime`; Graph change notifications не використовуються — їм потрібна публічна HTTPS-адреса конектора й поновлення підписки щодоби | `id` | `Connector:Events:IntervalSec` (60) |
+
+`onec` і решта конекторів подій поки не мають: для них — `mcp.poll`. Пресети `triggers[]` у маніфестах `telegram`,
+`kit-crm`, `msgraph` — `mcp.subscribe` (у `telegram` поруч лишається `new_update_poll` на `get_updates`). Сценарій
+`examples/telegram-1c.json` з `mcp.subscribe` замість `core.webhook` проходить у CLI-тесті з Telegram-моком
+(`CliRunTests.Example_WithSubscribeTrigger_ReadsTelegramUpdatesInsteadOfWebhook`).
 
 ### 9.3. Вузол `mcp.subscribe`
 
@@ -555,6 +580,5 @@ docs/consistency.md §3.
 «Відкрита» (оренда живого воркера) або «Немає власника» (оренди нема чи вона протухла: воркера немає або він упав).
 Деталей повтору після невдалого підключення (пауза до 5 хв) в Api немає — вони живуть у пам'яті воркера й видні в його журналі.
 
-Що **не** входить у прототип (задачі беклогу): пресети в палітрі (F6-21); події в реальних конекторах (`telegram`,
-`kit-crm`, `msgraph`) і заготовка в шаблоні Connector Kit (F6-22); `subscriptions/listen` (SEP-2575) після оновлення SDK
-(F6-23).
+Що **не** входить (задачі беклогу): `subscriptions/listen` (SEP-2575) після оновлення SDK (F6-23). Пресети в палітрі —
+F6-21, події в конекторах і заготовка в Connector Kit — F6-22 (§9.2).

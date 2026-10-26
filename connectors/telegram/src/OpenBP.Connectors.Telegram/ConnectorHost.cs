@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using OpenBP.Connectors.Telegram.Events;
 using OpenBP.Connectors.Telegram.Tools;
 
 namespace OpenBP.Connectors.Telegram;
@@ -35,7 +37,10 @@ public static class ConnectorHost
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(url);
         AddConnector(builder.Services, builder.Configuration, environment);
-        builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<TelegramTools>();
+        // Сесії для клієнтів з initialize: лише в сесії сервер може сам надіслати notifications/resources/updated (EventHub).
+        builder.Services.AddMcpServer(Configure)
+            .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
+            .WithTools<TelegramTools>();
         builder.Services.PostConfigure<McpServerOptions>(AnnotateChatIds);
         var app = builder.Build();
         app.MapMcp("/mcp");
@@ -61,6 +66,10 @@ public static class ConnectorHost
             var baseUrl = sp.GetRequiredService<IOptions<ConnectorOptions>>().Value.BaseUrl!;
             http.BaseAddress = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
         });
+
+        // Стрічка telegram://updates для mcp.subscribe (docs/connectors.md §9.2).
+        services.AddSingleton(TelegramEvents.Create);
+        EventHub.Register(services);
     }
 
     private static void Configure(McpServerOptions options) =>

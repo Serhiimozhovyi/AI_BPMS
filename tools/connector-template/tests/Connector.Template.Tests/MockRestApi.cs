@@ -14,7 +14,31 @@ public sealed class MockRestApi : IAsyncDisposable
 {
     private readonly WebApplication _app;
 
+    private readonly List<Item> _items =
+    [
+        new("1", "Пшениця", 9500m, new DateTimeOffset(2026, 1, 10, 8, 0, 0, TimeSpan.Zero)),
+        new("2", "Кукурудза", 8200m, new DateTimeOffset(2026, 1, 12, 9, 30, 0, TimeSpan.Zero)),
+    ];
+
     private MockRestApi(WebApplication app) => _app = app;
+
+    /// <summary>Додає або замінює запис (за <c>Id</c>) — для тестів стрічки подій.</summary>
+    public void Upsert(Item item)
+    {
+        lock (_items)
+        {
+            _items.RemoveAll(i => i.Id == item.Id);
+            _items.Add(item);
+        }
+    }
+
+    private Item[] Snapshot()
+    {
+        lock (_items)
+        {
+            return [.. _items];
+        }
+    }
 
     /// <summary>Заголовки <c>Authorization</c> і <c>X-API-Key</c> кожного запиту.</summary>
     public ConcurrentQueue<(string Path, string? Authorization, string? ApiKey)> Requests { get; } = new();
@@ -44,18 +68,14 @@ public sealed class MockRestApi : IAsyncDisposable
 
             await next(ctx);
         });
-        Item[] items = [
-            new("1", "Пшениця", 9500m, new DateTimeOffset(2026, 1, 10, 8, 0, 0, TimeSpan.Zero)),
-            new("2", "Кукурудза", 8200m, new DateTimeOffset(2026, 1, 12, 9, 30, 0, TimeSpan.Zero)),
-        ];
         app.MapGet("/api/items", (string? search, DateTimeOffset? updatedAfter) =>
-            items
+            mock.Snapshot()
                 .Where(i => search is null || i.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
                 .Where(i => updatedAfter is null || i.Updated > updatedAfter)
                 .OrderBy(i => i.Updated)
                 .ToArray());
         app.MapGet("/api/items/{id}", (string id) =>
-            items.FirstOrDefault(i => i.Id == id) is { } item ? Results.Ok(item) : Results.NotFound(new { message = $"item {id} not found" }));
+            mock.Snapshot().FirstOrDefault(i => i.Id == id) is { } item ? Results.Ok(item) : Results.NotFound(new { message = $"item {id} not found" }));
         await app.StartAsync();
         return mock;
     }

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
+using OpenBP.Connectors.KitCrm.Events;
 using OpenBP.Connectors.KitCrm.Tools;
 
 namespace OpenBP.Connectors.KitCrm;
@@ -32,7 +34,10 @@ public static class ConnectorHost
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(url);
         AddConnector(builder.Services, builder.Configuration, environment, time);
-        builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<KitTools>();
+        // Сесії для клієнтів з initialize: лише в сесії сервер може сам надіслати notifications/resources/updated (EventHub).
+        builder.Services.AddMcpServer(Configure)
+            .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
+            .WithTools<KitTools>();
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;
@@ -72,6 +77,10 @@ public static class ConnectorHost
             sp.GetRequiredService<Microsoft.Extensions.Http.ITypedHttpClientFactory<KitClient>>()
                 .CreateClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(KitClient))),
             sp.GetRequiredService<TimeProvider>()));
+
+        // Стрічки kit://changes/{entity} для mcp.subscribe (docs/connectors.md §9.2).
+        services.AddSingleton(KitEvents.Create);
+        EventHub.Register(services);
     }
 
     private static void Configure(ModelContextProtocol.Server.McpServerOptions options) =>

@@ -136,8 +136,16 @@ OpenBP сам є MCP-сервером: агент бачить ваш конек
 подію шле `notifications/resources/updated` підписаним сесіям; сповіщення — лише сигнал, події OpenBP читає сам і
 відсікає вже бачені за ключем. Для Streamable HTTP потрібні сесії для клієнтів з `initialize`
 (`WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)`); stdio-екземплярів може
-бути кілька одночасно. Пресет тригера для палітри — `triggers[]` у `connector.json`. Еталон — `FakeEvents` у тестовому
-сервері OpenBP; заготовка в шаблоні з'явиться окремою задачею.
+бути кілька одночасно. Пресет тригера для палітри — `triggers[]` у `connector.json`.
+
+Усе це вже є в шаблоні: `Events/EventHub.cs` (буфер, `resources/*`, розсилка сповіщень) і приклад стрічки
+`Events/ItemEvents.cs` — ресурс `items://changes`, що, поки є підписники, раз на `Connector:Events:IntervalSec` (30 с)
+читає зміни після курсора і публікує їх з ключем `eventKey` (`id@updated`). Для своєї системи замініть джерело
+(`Source`): long-polling, черга, webhook системи або опитування; стрічка може бути шаблоном URI (`orders://changes/{shop}`)
+і мати перевірку `Check` (текст помилки — коли ресурс зараз недоступний). Реєстрація — у `ConnectorHost.AddConnector`:
+`services.AddSingleton(ItemEvents.Create); EventHub.Register(services);`. Тест — `EventResourceTests`. Готові приклади —
+`connectors/telegram` (`telegram://updates`), `connectors/kit-crm` (`kit://changes/{entity}`), `connectors/msgraph`
+(`msgraph://mail/{mailbox}/inbox`); таблиця — `docs/connectors.md` §9.2.
 
 ## Розробка шаблону
 
