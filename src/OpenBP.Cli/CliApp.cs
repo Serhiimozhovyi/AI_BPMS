@@ -110,7 +110,7 @@ public static class CliApp
         // webhook/form без HTTP-сервера йдуть виходом timeout.
         var clock = new CliClock(DateTimeOffset.UtcNow);
         var registry = new InMemoryNodeRegistry();
-        foreach (var node in CoreNodes.All(clock).Concat(McpNodes.All(mcp, clock)).Concat(AiNodes.All(http, mcp)))
+        foreach (var node in CoreNodes.All(clock, CliDataTables.Create(workflow)).Concat(McpNodes.All(mcp, clock)).Concat(AiNodes.All(http, mcp)))
         {
             registry.Register(node);
         }

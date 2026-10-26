@@ -985,7 +985,7 @@
 - DoD: unit-тести на кожен новий мапінг і вирази Luxon; сценарій «Аграрії — MVP» (знеособлена копія у тестах) перетворюється без заглушок; `docs/workflow-format.md` §«Імпорт з n8n» оновлено.
 
 ### F6-29 · Приклад «Агро-новини з погодженням» — повний прогін
-- model: `sonnet` · status: `ready` · depends: F6-28
+- model: `sonnet` · status: `review` · depends: F6-28
 - Що: `examples/agro-news.json` — робочий аналог «Аграрії — MVP» на OpenBP: `core.schedule` 6:30 і 18:30 → `rss_read` з кількох стрічок → `core.merge` → історія в `core.dataTable` → відбір кандидатів (`core.code`) → `ai.llm` (Ollama, openai-compatible) пише пост → чернетка в Telegram → `send_approval` + `mcp.waitFor` → публікація (`send_photo` з картинкою або `send_message`) → запис у таблицю. Шаблон у «Почати з прикладу». Перевірка в бою — з власником на тестовому каналі й тестовому боті (не продакшн n8n).
 - DoD: CLI-тест прикладу з моками RSS, Telegram і LLM (погоджено / відхилено / таймаут / без кандидатів); валідатор без помилок; запис у `examples/templates.json`.
 

@@ -1,0 +1,620 @@
+{
+  "formatVersion": 1,
+  "name": "Агро-новини з погодженням",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 21600,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_schedule",
+      "name": "6:30 і 18:30",
+      "type": "core.schedule",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "cron": "30 6,18 * * *"
+      },
+      "notes": "Двічі на день за київським часом. Для проби запустіть вручну: «Запустити»."
+    },
+    {
+      "id": "n_rss_a",
+      "name": "AgroTimes",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        260,
+        100
+      ],
+      "parameters": {
+        "serverId": "srv_http",
+        "toolName": "rss_read",
+        "arguments": {
+          "url": "https://agrotimes.ua/feed/",
+          "limit": 20
+        },
+        "itemsPath": "items"
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "n_rss_b",
+      "name": "SuperAgronom новини",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_http",
+        "toolName": "rss_read",
+        "arguments": {
+          "url": "https://superagronom.com/rss/novosti",
+          "limit": 20
+        },
+        "itemsPath": "items"
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "n_history",
+      "name": "Історія публікацій",
+      "type": "core.dataTable",
+      "typeVersion": 1,
+      "position": [
+        260,
+        500
+      ],
+      "parameters": {
+        "table": "agro_history",
+        "operation": "list",
+        "limit": 1000
+      },
+      "notes": "Таблицю «agro_history» з колонками link, status, at створіть у розділі «Таблиці». Порожня історія — не помилка."
+    },
+    {
+      "id": "n_merge",
+      "name": "Зібрати",
+      "type": "core.merge",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ],
+      "parameters": {
+        "mode": "all",
+        "branches": 3,
+        "combine": "append"
+      },
+      "notes": "alwaysRun: вузол спрацьовує, навіть коли стрічки чи історія порожні (інакше на першому запуску з порожньою історією сценарій тихо зупинився б).",
+      "alwaysRun": true
+    },
+    {
+      "id": "n_pick",
+      "name": "Відібрати кандидатів",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        780,
+        300
+      ],
+      "parameters": {
+        "mode": "allItems",
+        "code": "// Стрічки дають записи з title/link, історія — рядки зі status. Беремо свіжі, яких ще не було, не більше 5.\nconst seen = new Set(items.filter(i => i.status).map(i => String(i.link).trim()));\nconst fresh = items\n  .filter(i => i.title && i.link && !seen.has(String(i.link).trim()))\n  .sort((a, b) => String(b.isoDate || '').localeCompare(String(a.isoDate || '')))\n  .slice(0, 5)\n  .map(i => {\n    const img = String(i.content || '').match(/<img[^>]+src=[\"']([^\"']+\\.(?:jpe?g|png))/i);\n    return { title: i.title, link: String(i.link).trim(), snippet: String(i.contentSnippet || '').slice(0, 400), image: img ? img[1] : '' };\n  });\nreturn [{ candidates: fresh, count: fresh.length }];"
+      },
+      "alwaysRun": true,
+      "notes": "alwaysRun: без нових записів вузол усе одно віддає { candidates: [], count: 0 } — гілка «без поста»."
+    },
+    {
+      "id": "n_has",
+      "name": "Є що публікувати?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        300
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.count }}",
+            "operator": "gt",
+            "right": 0
+          }
+        ],
+        "combine": "and"
+      }
+    },
+    {
+      "id": "n_llm",
+      "name": "Модель пише пост",
+      "type": "ai.llm",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        200
+      ],
+      "parameters": {
+        "provider": "openai-compatible",
+        "model": "qwen3:4b",
+        "credentialId": "cred_ollama",
+        "system": "Ти редактор агро-каналу. Пишеш українською, коротко, без вигадок.",
+        "prompt": "Обери одну найцікавішу новину і напиши пост до 600 символів (HTML лише <b> і <a>). Наприкінці — посилання на джерело.\n\nНовини: {{ JSON.stringify($json.candidates) }}"
+      },
+      "notes": "Ollama через openai-compatible: у credential cred_ollama вкажіть baseUrl з /v1."
+    },
+    {
+      "id": "n_post",
+      "name": "Пост",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ],
+      "parameters": {
+        "mode": "allItems",
+        "code": "const c = $node[\"Відібрати кандидатів\"].json.candidates[0];\nconst text = String(items[0].text || '').trim();\nreturn [{ post: text, caption: text.slice(0, 1000), link: c.link, image: c.image }];"
+      }
+    },
+    {
+      "id": "n_preview",
+      "name": "Чернетка в Telegram",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": {
+          "chat_id": "@agro_drafts",
+          "text": "🌾 Агро-чернетка\n\n{{ $json.post }}",
+          "parse_mode": "HTML",
+          "disable_link_preview": true
+        }
+      }
+    },
+    {
+      "id": "n_ask",
+      "name": "Запит на погодження",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_approval",
+        "arguments": {
+          "chat_id": "@agro_drafts",
+          "text": "Опублікувати цей пост?"
+        }
+      }
+    },
+    {
+      "id": "n_wait",
+      "name": "Чекати відповідь",
+      "type": "mcp.waitFor",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        200
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "get_approval",
+        "arguments": {
+          "chat_id": "{{ $json.chat_id }}",
+          "message_id": "{{ $json.message_id }}",
+          "token": "{{ $json.token }}"
+        },
+        "conditions": [
+          {
+            "field": "answered",
+            "operator": "isTrue"
+          }
+        ],
+        "intervalMinutes": 1,
+        "timeoutHours": 4
+      },
+      "notes": "Нема відповіді за 4 години — вихід timeout, пост не публікується."
+    },
+    {
+      "id": "n_ok",
+      "name": "Погоджено?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        2600,
+        100
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $json.approved }}",
+            "operator": "isTrue"
+          }
+        ],
+        "combine": "and"
+      }
+    },
+    {
+      "id": "n_image",
+      "name": "Є картинка?",
+      "type": "core.if",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "left": "{{ $node[\"Пост\"].json.image }}",
+            "operator": "isNotEmpty"
+          }
+        ],
+        "combine": "and"
+      }
+    },
+    {
+      "id": "n_photo",
+      "name": "Опублікувати з фото",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        -100
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_photo",
+        "arguments": {
+          "chat_id": "@agro_channel",
+          "photo_url": "{{ $node[\"Пост\"].json.image }}",
+          "caption": "{{ $node[\"Пост\"].json.caption }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "n_text",
+      "name": "Опублікувати текстом",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        100
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": {
+          "chat_id": "@agro_channel",
+          "text": "{{ $node[\"Пост\"].json.post }}",
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "n_saved",
+      "name": "Записати: опубліковано",
+      "type": "core.dataTable",
+      "typeVersion": 1,
+      "position": [
+        3380,
+        0
+      ],
+      "parameters": {
+        "table": "agro_history",
+        "operation": "insert",
+        "values": {
+          "link": "{{ $node[\"Пост\"].json.link }}",
+          "status": "published",
+          "at": "{{ new Date().toISOString() }}"
+        }
+      }
+    },
+    {
+      "id": "n_rejected",
+      "name": "Записати: відхилено",
+      "type": "core.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        300
+      ],
+      "parameters": {
+        "table": "agro_history",
+        "operation": "insert",
+        "values": {
+          "link": "{{ $node[\"Пост\"].json.link }}",
+          "status": "rejected",
+          "at": "{{ new Date().toISOString() }}"
+        }
+      }
+    },
+    {
+      "id": "n_skip",
+      "name": "Без поста",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        450
+      ],
+      "parameters": {
+        "serverId": "srv_telegram",
+        "toolName": "send_message",
+        "arguments": {
+          "chat_id": "@agro_drafts",
+          "text": "⚪️ Агро: цього разу без поста — нових новин немає"
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_schedule",
+        "output": 0
+      },
+      "to": {
+        "node": "n_rss_a",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_schedule",
+        "output": 0
+      },
+      "to": {
+        "node": "n_rss_b",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_schedule",
+        "output": 0
+      },
+      "to": {
+        "node": "n_history",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_rss_a",
+        "output": 0
+      },
+      "to": {
+        "node": "n_merge",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_rss_a",
+        "output": 1
+      },
+      "to": {
+        "node": "n_merge",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_rss_b",
+        "output": 0
+      },
+      "to": {
+        "node": "n_merge",
+        "input": 1
+      }
+    },
+    {
+      "from": {
+        "node": "n_rss_b",
+        "output": 1
+      },
+      "to": {
+        "node": "n_merge",
+        "input": 1
+      }
+    },
+    {
+      "from": {
+        "node": "n_history",
+        "output": 0
+      },
+      "to": {
+        "node": "n_merge",
+        "input": 2
+      }
+    },
+    {
+      "from": {
+        "node": "n_merge",
+        "output": 0
+      },
+      "to": {
+        "node": "n_pick",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_pick",
+        "output": 0
+      },
+      "to": {
+        "node": "n_has",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_has",
+        "output": 0
+      },
+      "to": {
+        "node": "n_llm",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_has",
+        "output": 1
+      },
+      "to": {
+        "node": "n_skip",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_llm",
+        "output": 0
+      },
+      "to": {
+        "node": "n_post",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_post",
+        "output": 0
+      },
+      "to": {
+        "node": "n_preview",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_preview",
+        "output": 0
+      },
+      "to": {
+        "node": "n_ask",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_ask",
+        "output": 0
+      },
+      "to": {
+        "node": "n_wait",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_wait",
+        "output": 0
+      },
+      "to": {
+        "node": "n_ok",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_wait",
+        "output": 1
+      },
+      "to": {
+        "node": "n_rejected",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_ok",
+        "output": 0
+      },
+      "to": {
+        "node": "n_image",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_ok",
+        "output": 1
+      },
+      "to": {
+        "node": "n_rejected",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_image",
+        "output": 0
+      },
+      "to": {
+        "node": "n_photo",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_image",
+        "output": 1
+      },
+      "to": {
+        "node": "n_text",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_photo",
+        "output": 0
+      },
+      "to": {
+        "node": "n_saved",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_photo",
+        "output": 1
+      },
+      "to": {
+        "node": "n_text",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_text",
+        "output": 0
+      },
+      "to": {
+        "node": "n_saved",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {}
+}

@@ -5,6 +5,7 @@
     { "file": "order-total.json", "description": "Підсумок замовлення: вирази {{ }}, Code-вузол і умова над items." },
     { "file": "telegram-1c.json", "connectors": ["telegram", "onec"], "description": "Заявка з Telegram: ШІ розбирає текст, створює документ в 1С і відповідає клієнту." },
     { "file": "telegram-1c-ollama.json", "connectors": ["telegram", "onec"], "description": "Те саме, що «Заявка з Telegram → 1С», але з локальною моделлю Ollama." },
+    { "file": "agro-news.json", "connectors": ["http", "telegram"], "description": "Агро-новини: RSS → ШІ пише пост → чернетка в Telegram з кнопками «Погодити/Відхилити» → публікація в канал." },
     { "file": "daily-report.json", "connectors": ["onec", "msgraph"], "description": "Щоранку за розкладом: продажі з 1С → звіт → лист через Microsoft Graph." },
     { "file": "kit-sales-followup.json", "connectors": ["kit-crm", "msgraph"], "description": "Нова угода в Кіт CRM: задача менеджеру, контроль закриття 2 дні, інакше лист керівнику й повторна задача." },
     { "file": "kit-overdue-report.json", "connectors": ["kit-crm", "msgraph"], "description": "Щоранку в робочі дні: протерміновані задачі Кіт CRM → лист кожному менеджеру і зведення його керівнику." },
