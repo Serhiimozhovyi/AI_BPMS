@@ -113,7 +113,31 @@ public sealed record ExecutionSummary(
 /// <summary>Виконання з кроками (<c>GET /executions/{id}</c>); кроки вже очищені від секретів (F2-04).</summary>
 /// <param name="Summary">Заголовок виконання.</param>
 /// <param name="Steps">Кроки в порядку збереження.</param>
-public sealed record ExecutionDetail(ExecutionSummary Summary, IReadOnlyList<ExecutionStepDto> Steps);
+/// <param name="Stages">Стан етапів (ADR-004 §2, F7-02) у порядку <c>stages[]</c>; порожньо — сценарій без етапів.</param>
+public sealed record ExecutionDetail(ExecutionSummary Summary, IReadOnlyList<ExecutionStepDto> Steps, IReadOnlyList<ExecutionStageDto> Stages);
+
+/// <summary>Стан етапу виконання (<c>execution_stages</c>, ADR-004 §2).</summary>
+/// <param name="StageId">Id етапу (<c>stages[].id</c>).</param>
+/// <param name="Name">Назва етапу на момент виконання.</param>
+/// <param name="Position">Номер етапу в <c>stages[]</c>, з 0 — «Етап N» у журналі.</param>
+/// <param name="Status">
+/// Стан етапу. Для завершеного виконання етап, що лишився <see cref="StageStatus.Pending"/>, віддається як
+/// <see cref="StageStatus.Skipped"/>, а <see cref="StageStatus.Active"/> — як <see cref="StageStatus.Cancelled"/> (або
+/// <see cref="StageStatus.Done"/> після успіху): так буває, коли виконання скасовано без воркера.
+/// </param>
+/// <param name="Overdue">Етап активний, а строк <paramref name="DueAt"/> уже минув (підстан, ADR-004 §2).</param>
+/// <param name="EnteredAt">Коли стартував перший вузол етапу.</param>
+/// <param name="DueAt">Строк етапу за <c>due</c>.</param>
+/// <param name="ExitedAt">Коли етап завершився.</param>
+public sealed record ExecutionStageDto(
+    string StageId,
+    string Name,
+    int Position,
+    StageStatus Status,
+    bool Overdue,
+    DateTimeOffset? EnteredAt,
+    DateTimeOffset? DueAt,
+    DateTimeOffset? ExitedAt);
 
 /// <summary>Крок виконання (<c>execution_steps</c>) для API і SSE.</summary>
 /// <param name="Id"><c>execution_steps.id</c> — монотонний UUIDv7; це ж <c>id</c> події SSE для <c>Last-Event-ID</c>.</param>

@@ -66,6 +66,16 @@
   credentials, `required` з `inputSchema` tool'а) картка позначає «не заповнено: N» ще до збереження.
 - `CancellationToken` прокидається у кожен вузол; скасування з UI/API і таймаути працюють через нього.
 - Етапи (`stages[]`, [ADR-004](adr/ADR-004-stages.md), F7-01) — шар над графом, не одиниця виконання: рушій обчислює їхній стан з кроків виконання (F7-02) і перевіряє правила переходу на ребрах, що виходять з етапу (F7-03). Сценарій без `stages` виконується без змін.
+- Стан етапів (F7-02) рахує чиста функція `StageTracker.Compute` з кроків запуску: `active` — є крок вузла етапу (крім
+  `skipped`), `entered_at` — найраніший його старт; `done` — вихід вузла етапу, з'єднаний з вузлом поза етапом, отримав
+  items, або вузол етапу без вихідних ребер завершився успішно (`exited_at` — найраніше таке завершення); після успішного
+  виконання етап, що почався, — `done`, після помилки/скасування/таймауту — `cancelled`; етап, що не почався, — `pending`,
+  а після завершення виконання — `skipped`. Виконавець перераховує стан після кожного `SaveStepAsync` і в кінці та
+  передає в `IStageStore`, лише коли стан змінився і лише для сценаріїв з `stages`. Строк `due_at` рахується від входу:
+  `minutes`/`hours` — від моменту, `days`/`businessDays` — у `settings.timezone` зі збереженням часу доби (робочі дні —
+  пн–пт, вхід у вихідні рахується з понеділка), `until` — вираз з `$now` = час входу; раз пораховано — не
+  перераховується (при відновленні береться з `ExecutionSnapshot.Stages`). Підстан `overdue` не зберігається:
+  `active` і `now > due_at` на момент читання.
 
 ### Інтерфейси Engine (все зовнішнє — тільки через них)
 
@@ -75,6 +85,7 @@ public interface ICredentialProvider { Task<JsonObject> GetAsync(string credenti
 public interface INodeRegistry      { INode Resolve(string type, int typeVersion); }
 public interface IExpressionEvaluator { JsonNode? Evaluate(string expr, ExpressionScope scope); }
 public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string message, object? data = null); }
+public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IReadOnlyList<StageState> stages, CancellationToken ct); } // F7-02, необов'язковий
 ```
 
 `InMemoryExecutionStore` і `FakeCredentialProvider` живуть у `OpenBP.Engine.Testing` і використовуються CLI та тестами.
@@ -141,6 +152,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
+| `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |

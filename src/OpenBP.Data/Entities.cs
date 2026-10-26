@@ -360,6 +360,21 @@ public sealed class ExecutionStepEntity
     public DateTimeOffset? FinishedAt { get; set; }
 }
 
+/// <summary>Стан етапу виконання (ADR-004 §2, F7-02); рядок на кожен етап сценарію з <c>stages</c>.</summary>
+public sealed class ExecutionStageEntity
+{
+    public Guid ExecutionId { get; set; }
+    public string StageId { get; set; } = "";
+    /// <summary>Порядковий номер етапу в <c>stages[]</c>, з 0.</summary>
+    public int Position { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary><c>pending</c> | <c>active</c> | <c>done</c> | <c>skipped</c> | <c>cancelled</c>.</summary>
+    public string Status { get; set; } = "";
+    public DateTimeOffset? EnteredAt { get; set; }
+    public DateTimeOffset? DueAt { get; set; }
+    public DateTimeOffset? ExitedAt { get; set; }
+}
+
 public sealed class JobEntity
 {
     public Guid Id { get; set; }

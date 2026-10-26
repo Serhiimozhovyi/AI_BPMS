@@ -73,6 +73,8 @@ internal sealed class TestGraph
 
     public InMemoryExecutionLogger Logger { get; } = new();
 
+    public InMemoryStageStore Stages { get; } = new();
+
     public WorkflowDefinition Workflow => _workflow;
 
     public static NodeDescriptor Descriptor(string type, IReadOnlyList<string> inputs, IReadOnlyList<string> outputs, IReadOnlyList<CredentialRequirement>? credentials = null) =>
@@ -98,6 +100,13 @@ internal sealed class TestGraph
         return this;
     }
 
+    /// <summary>Додає етап над вузлами <paramref name="nodes"/>.</summary>
+    public TestGraph Stage(string id, string[] nodes, StageDue? due = null)
+    {
+        (_workflow.Stages ??= []).Add(new WorkflowStage { Id = id, Name = $"Етап {id}", Nodes = [.. nodes], Due = due });
+        return this;
+    }
+
     public static void AlwaysRun(NodeDefinition node) =>
         node.ExtensionData = new() { ["alwaysRun"] = JsonSerializer.SerializeToElement(true) };
 
@@ -105,7 +114,7 @@ internal sealed class TestGraph
     public TimeProvider? Time { get; set; }
 
     public WorkflowExecutor Executor(IExecutionStore? store = null) =>
-        new(Registry, store ?? Store, Expressions, Credentials, new InMemoryBinaryStore(), Logger, Time);
+        new(Registry, store ?? Store, Expressions, Credentials, new InMemoryBinaryStore(), Logger, Time, Stages);
 
     public ExecutionRequest Request(Func<ExecutionRequest, ExecutionRequest>? configure = null)
     {

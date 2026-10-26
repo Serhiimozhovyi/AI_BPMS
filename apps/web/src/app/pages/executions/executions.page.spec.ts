@@ -215,6 +215,38 @@ describe('ExecutionsPage', () => {
     expect(detail.querySelector('[data-testid="node-run-output"]')?.textContent).toContain('"out": "n_webhook"');
   });
 
+  it('етапи (F7-02): «Етап N», назва і стан кожного етапу, прострочений позначено, строк — для активного', async () => {
+    const s = await setup();
+    await openDetail(s, {
+      ...failedDetail,
+      stages: [
+        { stageId: 'st_intake', name: 'Прийом заявки', position: 0, status: 'done', overdue: false, enteredAt: '2026-10-23T10:00:00Z', dueAt: null, exitedAt: '2026-10-23T10:00:01Z' },
+        { stageId: 'st_approval', name: 'Погодження', position: 1, status: 'active', overdue: true, enteredAt: '2026-10-23T10:00:01Z', dueAt: '2026-10-23T12:00:00Z', exitedAt: null },
+        { stageId: 'st_close', name: 'Закриття', position: 2, status: 'skipped', overdue: false, enteredAt: null, dueAt: null, exitedAt: null },
+      ],
+    });
+    const strip = s.host.querySelector('[data-testid="stage-strip"]')!;
+    const stages = [...strip.querySelectorAll('[data-stage]')];
+    expect(stages.map((li) => [li.getAttribute('data-stage'), li.getAttribute('data-status'), li.getAttribute('data-overdue')])).toEqual([
+      ['st_intake', 'done', 'false'],
+      ['st_approval', 'active', 'true'],
+      ['st_close', 'skipped', 'false'],
+    ]);
+    expect(stages[0].textContent).toContain('Етап 1');
+    expect(stages[0].textContent).toContain('Прийом заявки');
+    expect(stages[0].querySelector('[data-testid="stage-state"]')?.textContent).toBe('Пройдено');
+    expect(stages[1].querySelector('[data-testid="stage-state"]')?.textContent).toBe('Прострочено');
+    expect(stages[1].querySelector('[data-testid="stage-due"]')).not.toBeNull();
+    expect(stages[2].querySelector('[data-testid="stage-state"]')?.textContent).toBe('Не знадобився');
+    expect(stages[2].classList).toContain('stage--skipped');
+  });
+
+  it('сценарій без етапів — смуги етапів немає', async () => {
+    const s = await setup();
+    await openDetail(s, { ...failedDetail, stages: [] });
+    expect(s.host.querySelector('[data-testid="stage-strip"]')).toBeNull();
+  });
+
   it('«Повторити» запускає повтор, оновлює журнал і відкриває нове виконання', async () => {
     const s = await setup();
     await openDetail(s, failedDetail);

@@ -84,10 +84,29 @@ export interface ExecutionStep {
   resumeAt?: string | null;
 }
 
+/** Стан етапу бізнес-процесу (ADR-004 §2). */
+export type StageStatus = 'pending' | 'active' | 'done' | 'skipped' | 'cancelled';
+
+/** `ExecutionStageDto` — стан етапу виконання (F7-02). */
+export interface ExecutionStage {
+  stageId: string;
+  name: string;
+  /** Номер етапу в `stages[]`, з 0 — «Етап N». */
+  position: number;
+  status: StageStatus;
+  /** Етап активний, а строк минув. */
+  overdue: boolean;
+  enteredAt: string | null;
+  dueAt: string | null;
+  exitedAt: string | null;
+}
+
 /** `ExecutionDetail` — `GET /executions/{id}`. */
 export interface ExecutionDetail {
   summary: ExecutionSummary;
   steps: ExecutionStep[];
+  /** Етапи в порядку `stages[]`; порожньо або немає — сценарій без етапів. */
+  stages?: ExecutionStage[];
 }
 
 /** `StartExecutionRequest` — тіло ручного запуску. */

@@ -12,6 +12,7 @@ import { BusinessRun } from '../../business-view/business-run';
 import { EditorView, readEditorView, writeEditorView } from '../../business-view/editor-view';
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
 import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
+import { StageStripComponent } from '../../executions/stage-strip.component';
 import { ConnectorsApiService, apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
   EXECUTION_STATES,
@@ -63,7 +64,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
 @Component({
   selector: 'app-executions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, BusinessViewComponent, NodeRunDataComponent],
+  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, BusinessViewComponent, NodeRunDataComponent, StageStripComponent],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@executions.title">Виконання</h1>
@@ -229,6 +230,11 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             <p role="alert" class="mb-2 text-red-700" data-testid="action-error">{{ actionError() }}</p>
           }
 
+          @if (d.stages; as stages) {
+            @if (stages.length > 0) {
+              <app-stage-strip [stages]="stages" />
+            }
+          }
           <div class="mb-2 inline-flex overflow-hidden rounded border" role="radiogroup" i18n-aria-label="@@executions.view" aria-label="Вигляд виконання">
             <button type="button" role="radio" class="px-3 py-1" data-testid="view-business" [class.font-semibold]="view() === 'business'" [attr.aria-checked]="view() === 'business'" (click)="setView('business')" i18n-title="@@executions.view.business.hint" title="Де зараз процес — на схемі з доріжками" i18n="@@executions.view.business">Бізнес</button>
             <button type="button" role="radio" class="px-3 py-1" data-testid="view-technical" [class.font-semibold]="view() === 'technical'" [attr.aria-checked]="view() === 'technical'" (click)="setView('technical')" i18n-title="@@executions.view.technical.hint" title="Список кроків з даними" i18n="@@executions.view.technical">Технічний</button>

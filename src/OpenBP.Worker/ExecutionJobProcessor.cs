@@ -246,7 +246,8 @@ public sealed partial class ExecutionJobProcessor
             new PostgresCredentialProvider(_credentials, scrubber),
             _binary,
             new HostExecutionLogger(_logger, executionId, scrubber),
-            _time);
+            _time,
+            store);
         var request = new ExecutionRequest
         {
             ExecutionId = executionId,

@@ -365,6 +365,48 @@ public class ExecutionTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Get_ReturnsStages_WithOverdue_AndNormalisesThemAfterCancelWithoutWorker()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        var store = new PostgresExecutionStore(new Contexts(api));
+        Assert.Empty((await JsonAsync(await editor.GetAsync($"/api/v1/executions/{executionId}"))).GetProperty("stages").EnumerateArray());
+
+        await MarkRunningAsync(executionId);
+        var entered = DateTimeOffset.UtcNow.AddHours(-3);
+        await store.SaveStagesAsync(
+            executionId,
+            [
+                new("st_intake", "Прийом", 0, StageStatus.Done, entered, null, entered.AddMinutes(5)),
+                new("st_approval", "Погодження", 1, StageStatus.Active, entered.AddMinutes(5), entered.AddHours(1), null),
+                new("st_close", "Закриття", 2, StageStatus.Pending, null, null, null),
+            ],
+            default);
+        await using (var db = api.CreateDbContext())
+        {
+            await db.Executions.Where(e => e.Id == executionId).ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, ExecutionStatuses.Waiting));
+        }
+
+        var waiting = (await JsonAsync(await editor.GetAsync($"/api/v1/executions/{executionId}"))).GetProperty("stages").EnumerateArray().ToList();
+        Assert.Equal(["st_intake", "st_approval", "st_close"], waiting.Select(s => s.GetProperty("stageId").GetString()));
+        Assert.Equal(["done", "active", "pending"], waiting.Select(s => s.GetProperty("status").GetString()));
+        Assert.Equal([false, true, false], waiting.Select(s => s.GetProperty("overdue").GetBoolean()));
+        Assert.Equal(1, waiting[1].GetProperty("position").GetInt32());
+        Assert.Equal("Погодження", waiting[1].GetProperty("name").GetString());
+
+        // Очікування скасовується без воркера: етапи в таблиці лишились active/pending, API віддає підсумок.
+        await editor.PostAsync($"/api/v1/executions/{executionId}/cancel", null);
+        var detail = await JsonAsync(await editor.GetAsync($"/api/v1/executions/{executionId}"));
+        var cancelled = detail.GetProperty("stages").EnumerateArray().ToList();
+        Assert.Equal(["done", "cancelled", "skipped"], cancelled.Select(s => s.GetProperty("status").GetString()));
+        Assert.All(cancelled, s => Assert.False(s.GetProperty("overdue").GetBoolean()));
+        Assert.Equal(
+            detail.GetProperty("summary").GetProperty("finishedAt").GetDateTimeOffset(),
+            cancelled[1].GetProperty("exitedAt").GetDateTimeOffset());
+    }
+
+    [Fact]
     public async Task Get_Unknown_Returns404()
     {
         var viewer = await LoginAsync(UserRole.Viewer);

@@ -17,6 +17,8 @@ namespace OpenBP.Data;
 /// <item>Items кроків зберігаються в jsonb через <see cref="WorkflowJson.Options"/>; помилка кроку — JSON
 /// <see cref="StepError"/> у текстовій колонці <c>error</c>.</item>
 /// <item>Id кроку — монотонний UUIDv7 (<see cref="SequentialGuid"/>): <see cref="LoadAsync"/> повертає кроки в порядку збереження.</item>
+/// <item>Стан етапів (ADR-004 §2) — таблиця <c>execution_stages</c>: <see cref="SaveStagesAsync"/> замінює всі рядки
+/// виконання однією транзакцією, <see cref="LoadAsync"/> віддає їх у <see cref="ExecutionSnapshot.Stages"/>.</item>
 /// <item>Визначення сценарію в знімку читається з <c>workflow_versions.definition</c> за <c>executions.version_id</c>.</item>
 /// <item>З <see cref="SecretScrubber"/> кроки (items, повідомлення помилки) і <c>executions.error</c> пишуться вже
 /// очищеними від секретів (docs/architecture.md §8). Scrubber — той самий, що в <see cref="PostgresCredentialProvider"/>
@@ -30,7 +32,7 @@ namespace OpenBP.Data;
 public sealed class PostgresExecutionStore(
     IDbContextFactory<OpenBpDbContext> contexts,
     TimeProvider? time = null,
-    SecretScrubber? scrubber = null) : IExecutionStore
+    SecretScrubber? scrubber = null) : IExecutionStore, IStageStore
 {
     private const string UniqueViolation = "23505";
 
@@ -169,6 +171,49 @@ public sealed class PostgresExecutionStore(
     }
 
     /// <inheritdoc />
+    public async Task SaveStagesAsync(Guid executionId, IReadOnlyList<StageState> stages, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(stages);
+        ct.ThrowIfCancellationRequested();
+        await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await db.ExecutionStages.Where(s => s.ExecutionId == executionId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+        foreach (var stage in stages)
+        {
+            db.ExecutionStages.Add(new ExecutionStageEntity
+            {
+                ExecutionId = executionId,
+                StageId = stage.StageId,
+                Position = stage.Position,
+                Name = stage.Name,
+                Status = StageStatuses.ToDb(stage.Status),
+                EnteredAt = stage.EnteredAt?.ToUniversalTime(),
+                DueAt = stage.DueAt?.ToUniversalTime(),
+                ExitedAt = stage.ExitedAt?.ToUniversalTime(),
+            });
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Стан етапів виконання в порядку <c>stages[]</c>; порожньо — сценарій без етапів.</summary>
+    /// <param name="db">Контекст БД.</param>
+    /// <param name="executionId">Ідентифікатор виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    public static async Task<IReadOnlyList<StageState>> LoadStagesAsync(OpenBpDbContext db, Guid executionId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        var rows = await db.ExecutionStages
+            .AsNoTracking()
+            .Where(s => s.ExecutionId == executionId)
+            .OrderBy(s => s.Position)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return [.. rows.Select(r => new StageState(r.StageId, r.Name, r.Position, StageStatuses.FromDb(r.Status), r.EnteredAt, r.DueAt, r.ExitedAt))];
+    }
+
+    /// <inheritdoc />
     public async Task<ExecutionSnapshot?> LoadAsync(Guid id, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -200,6 +245,7 @@ public sealed class PostgresExecutionStore(
             Mode = ExecutionModes.FromDb(row.Execution.Mode),
             StartedAt = row.Execution.StartedAt ?? DateTimeOffset.MinValue,
             Steps = [.. steps.Select(FromEntity)],
+            Stages = await LoadStagesAsync(db, id, ct).ConfigureAwait(false),
         };
     }
 
