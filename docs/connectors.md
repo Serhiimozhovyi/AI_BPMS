@@ -343,6 +343,11 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
   `send_mail`; client credentials з `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, токен кешується, на 401 — одне повторне
   отримання токена, 429/503 → `isError` з `Retry-After`. Канали Teams — ні: `ChannelMessage.Send` лише делегований.
+  Excel у SharePoint/OneDrive (F3-32): «табличний» контракт `gsheets` (`read_sheets`, `update_row`, `append_row`,
+  `upsert_row`, `append_rows`) поверх Graph Excel API; `spreadsheet_id` — `"<drive_id>/<item_id>"` або посилання на файл;
+  дописування — лише `tables/{id}/rows/add` (без таблиці Excel — `isError` з підказкою створити), записи — в сесії книги
+  на виклик; RAW-текст, схожий на формулу чи число, пишеться з `'`; 423/429/503 → `isError` з `Retry-After`. Дозволи —
+  `Sites.Selected` з доступом до потрібного сайту, запасний варіант `Files.ReadWrite.All`.
 - `connectors/gsheets` — Google Sheets (F3-28): «табличний» контракт, спільний з Excel у `msgraph` (F3-32) —
   `read_sheets` (`{ sheets: { <лист>: [{ row_number, <колонка>: значення }] }, headers }`, без форматування, порожні
   рядки пропускаються), `update_row`/`append_row`/`upsert_row` за назвами колонок живого заголовка (невідома колонка →
