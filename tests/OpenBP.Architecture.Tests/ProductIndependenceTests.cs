@@ -15,7 +15,7 @@ public class ProductIndependenceTests
     /// (канали сповіщень, перенесення з n8n, підказки в схемах) — частина продукту. Новий конектор у <c>connectors/</c>
     /// за замовчуванням вважається клієнтським, доки його не внесено сюди свідомо.
     /// </summary>
-    private static readonly HashSet<string> GenericConnectors = new(StringComparer.Ordinal) { "telegram", "onec", "msgraph", "http" };
+    private static readonly HashSet<string> GenericConnectors = new(StringComparer.Ordinal) { "telegram", "onec", "msgraph", "gsheets", "http" };
 
     /// <summary>Сутності й адреси клієнтських систем, яких у коді продукту бути не може.</summary>
     private static readonly string[] ForbiddenPatterns =

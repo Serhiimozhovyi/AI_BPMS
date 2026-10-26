@@ -507,7 +507,7 @@
   - кабінет відкривається лише психологу.
 
 ### F3-28 · Конектор Google Sheets
-- model: `opus` · status: `blocked необов'язкова: для бота психологічної підтримки обрано власну адмінку F3-33…F3-35 (рішення власника 2026-10-24)` · depends: F3-10
+- model: `opus` · status: `review` · depends: F3-10
 - Що: `connectors/gsheets` на шаблоні. Автентифікація сервісним акаунтом: JSON-ключ лише у змінній `GOOGLE_SERVICE_ACCOUNT_JSON`, JWT (RS256) → OAuth-токен, кеш токена. Tools (спільний «табличний» контракт; той самий набір реалізує F3-32 для Excel, щоб сценарій перемикався між сховищами лише зміною `serverId`): `read_sheets { spreadsheet_id, sheets[] }` → `{ sheets: { <лист>: [ { row_number, <колонка>: значення } ] }, headers }` (UNFORMATTED_VALUE, порожні рядки пропускаються); `update_row { spreadsheet_id, sheet, row_number, values{} }` за назвами колонок живого заголовка (невідома колонка → `isError`); `append_row { spreadsheet_id, sheet, values{} }` у порядку заголовка → `{ row_number }`; `upsert_row { spreadsheet_id, sheet, key_column, values{} }`; `append_rows { spreadsheet_id, range, values[][] }` для журналів.
 - DoD: тести проти фейку Sheets API (успіх кожного tool'а, невідома колонка, 401/403/429 → `isError`, ключ і токен не потрапляють у відповіді й журнали); README «сервісний акаунт → доступ до таблиці → реєстрація в OpenBP»; `docs/connectors.md` оновлено.
 

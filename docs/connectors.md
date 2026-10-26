@@ -343,6 +343,12 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
   `send_mail`; client credentials з `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, токен кешується, на 401 — одне повторне
   отримання токена, 429/503 → `isError` з `Retry-After`. Канали Teams — ні: `ChannelMessage.Send` лише делегований.
+- `connectors/gsheets` — Google Sheets (F3-28): «табличний» контракт, спільний з Excel у `msgraph` (F3-32) —
+  `read_sheets` (`{ sheets: { <лист>: [{ row_number, <колонка>: значення }] }, headers }`, без форматування, порожні
+  рядки пропускаються), `update_row`/`append_row`/`upsert_row` за назвами колонок живого заголовка (невідома колонка →
+  `isError`), `append_rows` (сирі рядки для журналів). Сервісний акаунт: JSON-ключ лише в `GOOGLE_SERVICE_ACCOUNT_JSON`,
+  JWT (RS256) → токен, кеш, на 401 — одне повторне отримання; 403/404 — з підказкою відкрити таблицю для `client_email`,
+  429/503 → `isError` з `Retry-After`.
 - `connectors/onec` — 1С через OData `standard.odata` (F3-14): `create_order` (контрагент за назвою, номенклатура за
   артикулом, запис документа → `{ number }`), `sales_report` (`{ result }`: проведені продажі за період з назвами
   контрагентів), плюс згенеровані з `$metadata` tools (`Connector:Source`); імена об'єктів 1С — налаштування
