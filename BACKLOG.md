@@ -1038,7 +1038,7 @@
 - DoD: документи написані українською, перевірені посилання; шаблон конектора містить заготовку `changes_since` з тестом; `docs/kit-sales.md` §5.4 посилається на `consistency.md`.
 
 ### F7-08 · Перевірка незалежності продукту: архітектурний тест і критерій другого застосунку
-- model: `sonnet` · status: `review #174` · depends: F7-05
+- model: `sonnet` · status: `done` · depends: F7-05
 - Що: тест `tests/OpenBP.Architecture.Tests/ProductIndependenceTests.cs`: у `src/` і `apps/web/src` немає ідентифікаторів клієнтських систем (`CrmSale`, `CrmTask`, `CrmPerson`, `lams`, `odata/`, `kit-crm`, назви з `connectors/*/connector.json`), крім `connectors/` і `examples/`; список винятків у тесті з поясненням; CI запускає тест. Протокол `docs/admin/independence-check.md`: підключити другий застосунок (адмінка психологічної підтримки `connectors/psy-support` або 1С) до контракту F7-05 — виконання з етапами, стан і дія через REST і `/mcp` — без змін у `src/`; результат прогону записати як у `install-check.md`. Критерій фази 7 у `docs/roadmap.md`.
 - DoD: тест зелений на main і червоніє на навмисному порушенні (тест тесту); протокол пройдено хоча б для одного застосунку, запис у `independence-check.md`; `roadmap.md` оновлено.
 
