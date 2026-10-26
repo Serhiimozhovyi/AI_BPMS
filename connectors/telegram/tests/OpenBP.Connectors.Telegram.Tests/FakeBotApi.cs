@@ -35,6 +35,12 @@ public sealed class FakeBotApi : IAsyncDisposable
     /// <summary>Якщо задано — кожна відповідь має цей статус і тіло.</summary>
     public (int Status, string Body)? FailWith { get; set; }
 
+    /// <summary>Якщо не порожній — <c>getUpdates</c> повертає ці оновлення замість типових.</summary>
+    public ConcurrentQueue<object> Updates { get; } = new();
+
+    /// <summary>Відповіді-помилки для окремих методів Bot API (назва → статус і тіло).</summary>
+    public ConcurrentDictionary<string, (int Status, string Body)> FailMethod { get; } = new();
+
     /// <summary>Відповіді-помилки для окремих чатів (<c>chat_id</c> → статус і тіло).</summary>
     public ConcurrentDictionary<long, (int Status, string Body)> FailForChat { get; } = new();
 
@@ -91,6 +97,13 @@ public sealed class FakeBotApi : IAsyncDisposable
             return;
         }
 
+        if (FailMethod.TryGetValue(method, out var methodFail))
+        {
+            ctx.Response.StatusCode = methodFail.Status;
+            await ctx.Response.WriteAsync(methodFail.Body);
+            return;
+        }
+
         if (json is { ValueKind: JsonValueKind.Object } body && body.TryGetProperty("chat_id", out var chatId) &&
             chatId.ValueKind == JsonValueKind.Number && FailForChat.TryGetValue(chatId.GetInt64(), out var chatFail))
         {
@@ -109,6 +122,8 @@ public sealed class FakeBotApi : IAsyncDisposable
             "sendPhoto" => PhotoMessage(
                 json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
                 json?.TryGetProperty("caption", out var pc) == true ? pc.GetString() : form.GetValueOrDefault("caption")),
+            "getUpdates" when !Updates.IsEmpty => Updates.ToArray(),
+            "editMessageReplyMarkup" => Message(json!.Value.GetProperty("chat_id")),
             "getUpdates" => new object[]
             {
                 new { update_id = 9001, message = new { message_id = 1, date = 1761200000, chat = new { id = 42, type = "private" }, text = "Привіт" } },

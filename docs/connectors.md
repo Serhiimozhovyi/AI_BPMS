@@ -173,6 +173,13 @@ tool'а — помилка вузла (з `continueOnFail` — item помилк
     "intervalMinutes": 30, "timeoutHours": 48 } }
 ```
 
+Погодження в Telegram з очікуванням відповіді (F6-27) — саме такий випадок: `mcp.tool send_approval` (повідомлення з
+кнопками ✅/❌, відповідь `{ message_id, chat_id, token }`) → `mcp.waitFor get_approval` з умовою `answered isTrue` →
+`core.if` на `approved`; вихід `timeout` — «ніхто не відповів». `get_approval` читає непідтверджені оновлення
+(`getUpdates` без `offset`, нічого не підтверджує), тож з webhook-ом того самого бота не працює; натискання з чужим токеном
+чи в іншому повідомленні не зараховуються, зараховується перше; після відповіді конектор прибирає кнопки й дописує
+рішення в повідомлення. Приклад і обмеження — `connectors/telegram/README.md` §5.
+
 ## 4. `ai.llm`
 
 Параметри: `provider` (`anthropic` | `openai` | `openai-compatible`), `model`, `credentialId`, `system`, `prompt` (з `{{ }}`), `outputSchema` (JSON Schema, опційно), `temperature`, `maxTokens`.
@@ -337,7 +344,7 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 
 - `connectors/telegram` — Telegram Bot API (F3-13, F3-27): `send_message` (з `reply_markup`: `inline_keyboard`,
   `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_messages` (до 100 повідомлень
-  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26),
+  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26), `send_approval`/`get_approval` (погодження кнопками, F6-27, §3.1),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
   `get_chat`; `chat_id` має `x-openbp-options` на `get_updates` (§2); токен — лише змінна

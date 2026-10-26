@@ -12,7 +12,7 @@ namespace OpenBP.Connectors.Telegram.Tools;
 /// </summary>
 /// <param name="api">Клієнт Bot API.</param>
 [McpServerToolType]
-public sealed class TelegramTools(BotApiClient api)
+public sealed partial class TelegramTools(BotApiClient api)
 {
     private const string ChatIdDescription = "Target chat: numeric chat id or @channelusername.";
 

@@ -53,7 +53,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
 
         Assert.Equal(
-            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_updates", "send_document", "send_message", "send_messages", "send_photo", "set_my_commands", "set_webhook"],
+            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_approval", "get_chat", "get_updates", "send_approval", "send_document", "send_message", "send_messages", "send_photo", "set_my_commands", "set_webhook"],
             tools.Keys.Order());
         var send = tools["send_message"].InputSchema;
         Assert.Equal(["chat_id", "text"], send.GetProperty("required").EnumerateArray().Select(e => e.GetString()).Order());
@@ -66,7 +66,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.All(tools.Values, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 
         // chat_id → список чатів з get_updates у формі OpenBP (x-openbp-options, docs/connectors.md §2).
-        foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "send_photo", "get_chat" })
+        foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "send_photo", "send_approval", "get_approval", "get_chat" })
         {
             var options = tools[name].InputSchema.GetProperty("properties").GetProperty("chat_id").GetProperty("x-openbp-options");
             Assert.Equal(("get_updates", "result", "message.chat.id"), (options.GetProperty("tool").GetString(), options.GetProperty("itemsPath").GetString(), options.GetProperty("valuePath").GetString()));
@@ -418,6 +418,202 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
         Assert.Contains("wrong file identifier", text, StringComparison.Ordinal);
         Assert.DoesNotContain(Token, text, StringComparison.Ordinal);
+    }
+
+    private static object Press(long updateId, string data, long messageId = 77, long userId = 501, string? username = "olena") => new
+    {
+        update_id = updateId,
+        callback_query = new
+        {
+            id = $"cb{updateId}",
+            from = new { id = userId, is_bot = false, first_name = "Олена", username },
+            data,
+            message = new
+            {
+                message_id = messageId,
+                date = 1761200000,
+                chat = new { id = 42, type = "private" },
+                text = "Погодити пост «Пшениця»?",
+                entities = new[] { new { type = "bold", offset = 0, length = 8 } },
+            },
+        },
+    };
+
+    private static async Task<(string Token, long MessageId)> SendApprovalAsync(McpClient client)
+    {
+        var sent = await client.CallToolAsync("send_approval", new Dictionary<string, object?> { ["chat_id"] = 42, ["text"] = "Погодити пост «Пшениця»?" });
+        Assert.NotEqual(true, sent.IsError);
+        var data = sent.StructuredContent!.Value;
+        return (data.GetProperty("token").GetString()!, data.GetProperty("message_id").GetInt64());
+    }
+
+    private static Task<CallToolResult> GetApprovalAsync(McpClient client, string token, long messageId = 77) =>
+        client.CallToolAsync("get_approval", new Dictionary<string, object?> { ["chat_id"] = 42, ["message_id"] = messageId, ["token"] = token }).AsTask();
+
+    [Fact]
+    public async Task Send_approval_posts_two_inline_buttons_with_a_token()
+    {
+        var client = await ConnectAsync();
+
+        var result = await client.CallToolAsync("send_approval", new Dictionary<string, object?>
+        {
+            ["chat_id"] = 42,
+            ["text"] = "<b>Пост</b> готовий",
+            ["parse_mode"] = "HTML",
+            ["approve_label"] = "Так",
+        });
+
+        Assert.NotEqual(true, result.IsError);
+        var data = result.StructuredContent!.Value;
+        var token = data.GetProperty("token").GetString()!;
+        Assert.Equal(16, token.Length);
+        Assert.Equal(77, data.GetProperty("message_id").GetInt64());
+        Assert.Equal(42, data.GetProperty("chat_id").GetInt64());
+        var request = _api.Requests.Last();
+        Assert.Equal("sendMessage", request.Method);
+        Assert.Equal("HTML", request.Json!.Value.GetProperty("parse_mode").GetString());
+        var buttons = request.Json.Value.GetProperty("reply_markup").GetProperty("inline_keyboard")[0];
+        Assert.Equal(("Так", $"apv:{token}:1"), (buttons[0].GetProperty("text").GetString(), buttons[0].GetProperty("callback_data").GetString()));
+        Assert.Equal(("❌ Відхилити", $"apv:{token}:0"), (buttons[1].GetProperty("text").GetString(), buttons[1].GetProperty("callback_data").GetString()));
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(buttons[0].GetProperty("callback_data").GetString()!) <= 64);
+
+        var other = await client.CallToolAsync("send_approval", new Dictionary<string, object?> { ["chat_id"] = 42, ["text"] = "Ще" });
+        Assert.NotEqual(token, other.StructuredContent!.Value.GetProperty("token").GetString());
+    }
+
+    [Fact]
+    public async Task Send_approval_validates_arguments()
+    {
+        var client = await ConnectAsync();
+        var count = _api.Requests.Count;
+
+        var empty = await client.CallToolAsync("send_approval", new Dictionary<string, object?> { ["chat_id"] = 42, ["text"] = " " });
+        var longLabel = await client.CallToolAsync("send_approval", new Dictionary<string, object?> { ["chat_id"] = 42, ["text"] = "x", ["reject_label"] = new string('н', 65) });
+
+        Assert.True(empty.IsError);
+        Assert.True(longLabel.IsError);
+        Assert.Equal(count, _api.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Get_approval_is_not_answered_until_a_button_is_pressed()
+    {
+        var client = await ConnectAsync();
+        var (token, messageId) = await SendApprovalAsync(client);
+        _api.Updates.Enqueue(new { update_id = 1, message = new { message_id = 5, date = 1761200000, chat = new { id = 42, type = "private" }, text = "Привіт" } });
+
+        var result = await GetApprovalAsync(client, token, messageId);
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.False(result.StructuredContent!.Value.GetProperty("answered").GetBoolean());
+        var poll = _api.Requests.Last();
+        Assert.Equal("getUpdates", poll.Method);
+        Assert.False(poll.Json!.Value.TryGetProperty("offset", out _));
+    }
+
+    [Fact]
+    public async Task Approved_answer_closes_the_request()
+    {
+        var client = await ConnectAsync();
+        var (token, messageId) = await SendApprovalAsync(client);
+        _api.Updates.Enqueue(Press(10, $"apv:{token}:1", messageId));
+
+        var result = await GetApprovalAsync(client, token, messageId);
+
+        var data = result.StructuredContent!.Value;
+        Assert.True(data.GetProperty("answered").GetBoolean());
+        Assert.True(data.GetProperty("approved").GetBoolean());
+        Assert.Equal("approve", data.GetProperty("decision").GetString());
+        Assert.Equal((501, "olena"), (data.GetProperty("by").GetProperty("id").GetInt64(), data.GetProperty("by").GetProperty("username").GetString()));
+
+        var answer = _api.Requests.Single(r => r.Method == "answerCallbackQuery");
+        Assert.Equal("cb10", answer.Json!.Value.GetProperty("callback_query_id").GetString());
+        var edit = _api.Requests.Single(r => r.Method == "editMessageText").Json!.Value;
+        Assert.Equal("Погодити пост «Пшениця»?\n\n✅ Погоджено: Олена (@olena)", edit.GetProperty("text").GetString());
+        Assert.Equal("bold", edit.GetProperty("entities")[0].GetProperty("type").GetString());
+        Assert.False(edit.TryGetProperty("reply_markup", out _));
+    }
+
+    [Fact]
+    public async Task Rejected_answer_is_reported_as_not_approved()
+    {
+        var client = await ConnectAsync();
+        var (token, messageId) = await SendApprovalAsync(client);
+        _api.Updates.Enqueue(Press(11, $"apv:{token}:0", messageId, username: null));
+
+        var data = (await GetApprovalAsync(client, token, messageId)).StructuredContent!.Value;
+
+        Assert.True(data.GetProperty("answered").GetBoolean());
+        Assert.False(data.GetProperty("approved").GetBoolean());
+        Assert.Equal("reject", data.GetProperty("decision").GetString());
+        Assert.EndsWith("❌ Відхилено: Олена", _api.Requests.Single(r => r.Method == "editMessageText").Json!.Value.GetProperty("text").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Presses_with_another_token_or_message_are_ignored()
+    {
+        var client = await ConnectAsync();
+        var (token, messageId) = await SendApprovalAsync(client);
+        _api.Updates.Enqueue(Press(12, "apv:AAAAAAAAAAAAAAAA:1", messageId));
+        _api.Updates.Enqueue(Press(13, $"apv:{token}:1", messageId + 1));
+        _api.Updates.Enqueue(Press(14, $"apv:{token}x:1", messageId));
+        _api.Updates.Enqueue(Press(15, "book:s1", messageId));
+
+        var data = (await GetApprovalAsync(client, token, messageId)).StructuredContent!.Value;
+
+        Assert.False(data.GetProperty("answered").GetBoolean());
+        Assert.DoesNotContain(_api.Requests, r => r.Method is "answerCallbackQuery" or "editMessageText");
+    }
+
+    [Fact]
+    public async Task Repeated_presses_count_the_first_answer()
+    {
+        var client = await ConnectAsync();
+        var (token, messageId) = await SendApprovalAsync(client);
+        _api.Updates.Enqueue(Press(20, $"apv:{token}:0", messageId, userId: 601, username: "petro"));
+        _api.Updates.Enqueue(Press(21, $"apv:{token}:1", messageId));
+
+        var first = (await GetApprovalAsync(client, token, messageId)).StructuredContent!.Value;
+        var again = (await GetApprovalAsync(client, token, messageId)).StructuredContent!.Value;
+
+        Assert.False(first.GetProperty("approved").GetBoolean());
+        Assert.Equal("petro", first.GetProperty("by").GetProperty("username").GetString());
+        Assert.False(again.GetProperty("approved").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Stale_callback_and_failed_edit_do_not_lose_the_answer()
+    {
+        var client = await ConnectAsync();
+        var (token, messageId) = await SendApprovalAsync(client);
+        _api.Updates.Enqueue(Press(30, $"apv:{token}:1", messageId));
+        _api.FailMethod["answerCallbackQuery"] = (400, """{"ok":false,"error_code":400,"description":"Bad Request: query is too old and response timeout expired"}""");
+        _api.FailMethod["editMessageText"] = (400, """{"ok":false,"error_code":400,"description":"Bad Request: MESSAGE_TOO_LONG"}""");
+
+        var result = await GetApprovalAsync(client, token, messageId);
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.True(result.StructuredContent!.Value.GetProperty("approved").GetBoolean());
+        var markup = _api.Requests.Single(r => r.Method == "editMessageReplyMarkup").Json!.Value;
+        Assert.Empty(markup.GetProperty("reply_markup").GetProperty("inline_keyboard").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Get_approval_explains_the_webhook_conflict_and_hides_the_token()
+    {
+        var client = await ConnectAsync();
+        _api.FailMethod["getUpdates"] = (409, """{"ok":false,"error_code":409,"description":"Conflict: can't use getUpdates method while webhook is active; use deleteWebhook to delete the webhook first"}""");
+
+        var result = await GetApprovalAsync(client, "AAAAAAAAAAAAAAAA");
+
+        Assert.True(result.IsError);
+        var text = Text(result);
+        Assert.Contains("webhook", text, StringComparison.Ordinal);
+        Assert.Contains("delete_webhook", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(Token, text, StringComparison.Ordinal);
+
+        var badToken = await GetApprovalAsync(client, "a:b");
+        Assert.True(badToken.IsError);
     }
 
     [Fact]
