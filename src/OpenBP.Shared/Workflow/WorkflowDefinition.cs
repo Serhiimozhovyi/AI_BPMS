@@ -29,6 +29,9 @@ public sealed class WorkflowDefinition
     /// <summary>Етапи бізнес-процесу над графом (ADR-004); <c>null</c> — сценарій без етапів.</summary>
     public List<WorkflowStage>? Stages { get; set; }
 
+    /// <summary>Вільні нотатки на канвасі (F3-62); <c>null</c> — немає. Рушій і валідатор (крім схеми) їх ігнорують.</summary>
+    public List<WorkflowNote>? Notes { get; set; }
+
     /// <summary>Невідомі поля зберігаються при (де)серіалізації.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }

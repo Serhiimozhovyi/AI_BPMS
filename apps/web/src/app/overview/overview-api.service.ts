@@ -15,6 +15,20 @@ export interface OverviewFailingWorkflow {
   total: number;
 }
 
+/** Підписка push-тригера `mcp.subscribe` (F6-20): `held` — орендована живим воркером, `free` — власника нема. */
+export interface OverviewSubscription {
+  workflowId: string;
+  workflowName: string;
+  nodeId: string;
+  nodeName: string | null;
+  serverId: string;
+  serverName: string | null;
+  resourceUri: string;
+  workerId: string | null;
+  leasedUntil: string | null;
+  state: 'held' | 'free';
+}
+
 /** `GET /api/v1/overview` (F6-07): з погодинних агрегатів `execution_stats`, «зараз» — з черги. */
 export interface Overview {
   range: OverviewRange;
@@ -33,6 +47,8 @@ export interface Overview {
   waiting: number;
   /** Виконань з відкритими порушеннями правил переходу (F7-04). */
   openViolations?: number;
+  /** Підписки `mcp.subscribe` активних сценаріїв (F6-20). */
+  subscriptions?: OverviewSubscription[];
 }
 
 /** Назва періоду для людей. */

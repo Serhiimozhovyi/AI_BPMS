@@ -196,6 +196,57 @@ public class WorkflowTransferTests(ApiFactory api)
         Assert.Equal("/business/steps/0/lane", error.GetProperty("path").GetString());
     }
 
+    /// <summary>F3-62: нотатки на канвасі проходять create → get → update → export → import без втрат.</summary>
+    [Fact]
+    public async Task Notes_survive_create_get_update_export_and_import()
+    {
+        var editor = await LoginAsync(api, UserRole.Editor);
+        var notes = JsonNode.Parse("""
+            [
+              { "id": "note_in", "text": "## Вхід\n\nЗаявки з **Telegram** — пік уранці.", "position": [0, -140], "size": [260, 120], "color": "yellow" },
+              { "id": "note_todo", "text": "", "position": [400, 60], "x-author": "agent" }
+            ]
+            """)!;
+        var definition = JsonNode.Parse(Definition($"Нотатки {Guid.NewGuid():N}", NotesNodes, "[]"))!.AsObject();
+        definition["notes"] = notes.DeepClone();
+
+        var created = await editor.PostAsync(Workflows, Json(definition.ToJsonString()));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await JsonAsync(created)).GetProperty("id").GetGuid();
+
+        var read = JsonNode.Parse(await editor.GetStringAsync($"{Workflows}/{id}"))!["definition"]!;
+        Assert.True(JsonNode.DeepEquals(notes, read["notes"]), read["notes"]?.ToJsonString());
+
+        // Нова версія: текст і колір змінено, нотатку додано — зберігається як є.
+        definition["notes"]![1]!["text"] = "Перевірити ліміт 1С";
+        definition["notes"]![1]!["color"] = "red";
+        definition["notes"]!.AsArray().Add(JsonNode.Parse("""{ "id": "note_3", "text": "- [ ] тест", "position": [10, 10], "size": [200, 80], "color": "green" }"""));
+        var updated = await editor.PutAsync($"{Workflows}/{id}", Json(definition.ToJsonString()));
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        var saved = JsonNode.Parse(await editor.GetStringAsync($"{Workflows}/{id}"))!["definition"]!;
+        Assert.True(JsonNode.DeepEquals(definition["notes"], saved["notes"]), saved["notes"]?.ToJsonString());
+
+        var export = JsonNode.Parse(await editor.GetStringAsync($"{Workflows}/{id}/export"))!.AsObject();
+        Assert.True(JsonNode.DeepEquals(definition["notes"], export["definition"]!["notes"]));
+
+        var imported = await editor.PostAsync($"{Workflows}/import", Json(export.ToJsonString()));
+        Assert.True(imported.StatusCode == HttpStatusCode.Created, await imported.Content.ReadAsStringAsync());
+        var importedDefinition = JsonNode.Parse((await JsonAsync(imported)).GetProperty("workflow").GetProperty("definition").GetRawText())!;
+        Assert.True(JsonNode.DeepEquals(definition["notes"], importedDefinition["notes"]));
+
+        // Зламана нотатка (колір поза палітрою) — 422 зі шляхом, як інші помилки схеми.
+        definition["notes"]![0]!["color"] = "#fac701";
+        var invalid = await editor.PostAsync(Workflows, Json(definition.ToJsonString()));
+        var problem = await AssertProblemAsync(invalid, HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        var error = Assert.Single(problem.GetProperty("errors").EnumerateArray());
+        Assert.Equal("SCHEMA_VIOLATION", error.GetProperty("code").GetString());
+        Assert.StartsWith("/notes/0", error.GetProperty("path").GetString());
+    }
+
+    private const string NotesNodes = """
+        { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} }
+        """;
+
     private const string BusinessNodes = """
         { "id": "n_hook", "name": "Хук", "type": "core.webhook", "typeVersion": 1, "position": [0, 0],
           "parameters": { "method": "POST", "path": "business-hook" }, "business": { "title": "Нова задача", "lane": "openbp" } },

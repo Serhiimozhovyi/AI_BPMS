@@ -189,6 +189,23 @@ export interface WorkflowDefinition {
   business?: WorkflowBusiness;
   /** Етапи бізнес-процесу над графом (ADR-004, F7-01); немає — сценарій без етапів. */
   stages?: WorkflowStage[];
+  /** Вільні нотатки на канвасі (F3-62); немає — без нотаток. Рушій їх ігнорує. */
+  notes?: WorkflowNote[];
+  [extra: string]: unknown;
+}
+
+/** Highlight-колір AC-Kit нотатки (docs/workflow-format.md §«Нотатки»). */
+export type NoteColor = 'yellow' | 'green' | 'blue' | 'teal' | 'orange' | 'red' | 'violet';
+
+/** Вільна нотатка на канвасі (F3-62): Markdown-текст, положення й розмір у координатах канвасу, колір. Не пов'язана з вузлами. */
+export interface WorkflowNote {
+  id: string;
+  text: string;
+  position: [number, number];
+  /** `[ширина, висота]`; немає — розмір редактора за замовчуванням. */
+  size?: [number, number];
+  /** Немає — `yellow`. */
+  color?: NoteColor;
   [extra: string]: unknown;
 }
 

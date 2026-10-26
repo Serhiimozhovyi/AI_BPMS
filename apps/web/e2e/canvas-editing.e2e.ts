@@ -19,6 +19,15 @@ interface Connection {
   to: { node: string; input: number };
 }
 
+/** Нотатка на канвасі (F3-62). */
+interface Note {
+  id: string;
+  text: string;
+  position: [number, number];
+  size?: [number, number];
+  color?: string;
+}
+
 interface Definition {
   formatVersion: 1;
   name: string;
@@ -26,6 +35,7 @@ interface Definition {
   nodes: Node[];
   connections: Connection[];
   pinData: Record<string, unknown>;
+  notes?: Note[];
 }
 
 const WORKFLOW_ID = '11111111-2222-3333-4444-555555555555';
@@ -570,4 +580,71 @@ test('F3-61: змінити, відкрити історію, відновити
   await page.getByTestId('version-current').click();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
   await expect(page.getByTestId('undo')).toBeVisible();
+});
+
+test('F3-62: ПКМ → «Додати нотатку», Markdown-текст, колір, Shift+S і Escape; після перезавантаження нотатка на місці', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+
+  // ПКМ на порожньому місці канвасу → «Додати нотатку»: нова нотатка там, де клацнули, одразу з полем тексту.
+  const canvas = page.locator('vflow');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width - 320, box.y + 80, { button: 'right' });
+  await expect(page.getByTestId('context-menu')).toHaveAttribute('data-kind', 'canvas');
+  await page.getByTestId('menu-add-note').click();
+  const editor = page.getByTestId('note-editor');
+  await expect(editor).toBeFocused();
+  await editor.fill('## Ліміт 1С\n\nПеревірити **до запуску**\n- [ ] узгодити з бухгалтерією');
+  await editor.press('Control+Enter');
+  await expect(editor).toHaveCount(0);
+  const note = page.locator('[data-note-id]');
+  await expect(note).toHaveCount(1);
+  await expect(note.locator('h2')).toHaveText('Ліміт 1С');
+  await expect(note.locator('strong')).toHaveText('до запуску');
+  await expect(note.locator('li')).toContainText('☐ узгодити');
+  await waitSaved(page);
+  expect(api.definition.notes).toHaveLength(1);
+  expect(api.definition.notes![0]).toMatchObject({ text: '## Ліміт 1С\n\nПеревірити **до запуску**\n- [ ] узгодити з бухгалтерією', color: 'yellow', size: [240, 120] });
+  const noteId = api.definition.notes![0].id;
+
+  // Палітра над виділеною нотаткою: колір зберігається у визначенні.
+  await note.locator('h2').click();
+  await expect(note).toHaveClass(/selected/);
+  await page.getByTestId('note-color-green').click();
+  await expect(note).toHaveAttribute('data-note-color', 'green');
+  await waitSaved(page);
+  expect(api.definition.notes![0].color).toBe('green');
+
+  // Shift+S: друга нотатка в центрі; Escape на порожній прибирає її, вузол і перша нотатка лишаються.
+  await page.mouse.click(box.x + 60, box.y + box.height - 60);
+  await page.keyboard.press('Shift+S');
+  await expect(page.getByTestId('note-editor')).toBeFocused();
+  await expect(page.locator('[data-note-id]')).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-note-id]')).toHaveCount(1);
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+  await waitSaved(page);
+  expect(api.definition.notes!.map((n) => n.id)).toEqual([noteId]);
+  expect(graph(api.definition).nodes).toEqual(['Задати поля:core.set']);
+
+  // Перезавантаження: нотатка на місці з тим самим текстом і кольором; вузол теж.
+  await page.reload();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+  const reloaded = page.locator(`[data-note-id="${noteId}"]`);
+  await expect(reloaded).toBeVisible();
+  await expect(reloaded.locator('h2')).toHaveText('Ліміт 1С');
+  await expect(reloaded).toHaveAttribute('data-note-color', 'green');
+
+  // Подвійний клік — редагування; клік поза нотаткою зберігає новий текст.
+  await reloaded.locator('h2').dblclick();
+  const again = page.getByTestId('note-editor');
+  await expect(again).toBeFocused();
+  await again.fill('Готово');
+  await page.mouse.click(box.x + 60, box.y + box.height - 60);
+  await expect(reloaded.locator('p')).toHaveText('Готово');
+  await waitSaved(page);
+  expect(api.definition.notes![0].text).toBe('Готово');
 });
