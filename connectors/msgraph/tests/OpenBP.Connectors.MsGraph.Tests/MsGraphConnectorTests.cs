@@ -64,7 +64,9 @@ public sealed class MsGraphConnectorTests : IAsyncLifetime
         var client = await ConnectAsync();
         var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
 
-        Assert.Equal(["get_attachment", "get_message", "list_attachments", "list_messages", "send_mail"], tools.Keys.Order());
+        Assert.Equal(
+            ["append_row", "append_rows", "get_attachment", "get_message", "list_attachments", "list_messages", "read_sheets", "send_mail", "update_row", "upsert_row"],
+            tools.Keys.Order());
         var send = tools["send_mail"].InputSchema;
         Assert.Equal(["from", "html", "subject", "to"], send.GetProperty("required").EnumerateArray().Select(e => e.GetString()).Order());
         Assert.Equal("array", send.GetProperty("properties").GetProperty("to").GetProperty("type").GetString());

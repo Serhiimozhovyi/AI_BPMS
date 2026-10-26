@@ -18,7 +18,7 @@ public static class ConnectorHost
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         AddConnector(builder.Services, builder.Configuration);
-        builder.Services.AddMcpServer(Configure).WithStdioServerTransport().WithTools<MailTools>();
+        builder.Services.AddMcpServer(Configure).WithStdioServerTransport().WithTools<MailTools>().WithTools<ExcelTools>();
         return builder.Build();
     }
 
@@ -31,7 +31,7 @@ public static class ConnectorHost
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(url);
         AddConnector(builder.Services, builder.Configuration, environment);
-        builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<MailTools>();
+        builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<MailTools>().WithTools<ExcelTools>();
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;

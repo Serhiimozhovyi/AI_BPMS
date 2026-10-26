@@ -512,7 +512,7 @@
 - DoD: тести проти фейку Sheets API (успіх кожного tool'а, невідома колонка, 401/403/429 → `isError`, ключ і токен не потрапляють у відповіді й журнали); README «сервісний акаунт → доступ до таблиці → реєстрація в OpenBP»; `docs/connectors.md` оновлено.
 
 ### F3-32 · Excel у SharePoint/OneDrive (Microsoft Graph)
-- model: `opus` · status: `blocked необов'язкова: див. F3-28` · depends: F3-15, F3-28
+- model: `opus` · status: `review` · depends: F3-15, F3-28
 - Що: у `connectors/msgraph` tools того самого контракту, що й F3-28 (`read_sheets`, `update_row`, `append_row`, `upsert_row`, `append_rows`; `spreadsheet_id` → `{ drive_id, item_id }` або посилання на файл), поверх Graph Excel API (`/drives/{id}/items/{id}/workbook`: `worksheets/{name}/usedRange`, `range(address=…)` PATCH; дописування — `tables/{name}/rows/add`, бо в таблиці Excel воно атомарне, на відміну від запису «в кінець usedRange»). Сесія книги (`createSession`, `persistChanges: true`) на один виклик tool'а. Дозволи застосунку: `Sites.Selected` з доступом лише до потрібного сайту (README: як видати), запасний варіант — `Files.ReadWrite.All`. Запит власника: бот психологічної підтримки має працювати і з Excel у SharePoint, не лише з Google Sheets.
 - DoD: тести проти фейку Graph на ті самі сценарії, що й F3-28 (успіх кожного tool'а, невідома колонка, 401 → одне повторне отримання токена, 423/429/503 з `Retry-After` → `isError`); `upsert_row` і `append_row` працюють і з листом без таблиці Excel (помилка з підказкою створити таблицю); `docs/connectors.md` і README оновлено.
 
