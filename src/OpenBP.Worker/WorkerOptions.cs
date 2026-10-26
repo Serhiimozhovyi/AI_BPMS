@@ -29,6 +29,13 @@ public sealed class WorkerOptions
     /// </summary>
     public TimeSpan HealthMaxPollAge { get; set; } = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Публічна адреса OpenBP без <c>/</c> в кінці (<c>OPENBP_PUBLIC_URL</c>, як в Api): з неї будуються адреси пробудження
+    /// <c>$execution.resumeUrl</c> для <c>core.wait</c> у режимі <c>webhook</c>/<c>form</c> (F6-01). <c>null</c> — адреси
+    /// відносні (<c>/webhook/resume/{token}</c>).
+    /// </summary>
+    public string? PublicUrl { get; set; }
+
     /// <summary>Перевіряє узгодженість налаштувань.</summary>
     /// <exception cref="ArgumentException">Значення поза допустимими межами.</exception>
     public void Validate()

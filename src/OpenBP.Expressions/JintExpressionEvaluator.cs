@@ -16,7 +16,8 @@ namespace OpenBP.Expressions;
 
 /// <summary>
 /// <see cref="IExpressionEvaluator"/> на Jint (docs/architecture.md §5): вирази <c>{{ &lt;js&gt; }}</c> у рядках,
-/// змінні <c>$json</c>, <c>$binary</c>, <c>$input</c>, <c>$node</c>, <c>$now</c>, <c>$env</c>, <c>$vars</c>, <c>$execution</c>.
+/// змінні <c>$json</c>, <c>$binary</c>, <c>$input</c>, <c>$node</c>, <c>$now</c>, <c>$env</c>, <c>$vars</c>, <c>$execution</c>
+/// (<c>id</c>, а з F6-01 — <c>resumeUrl</c>/<c>resumeUrls</c>).
 /// Пісочниця: ліміти часу, пам'яті і рекурсії з <see cref="JintExpressionOptions"/>; без CLR-interop,
 /// без <c>require</c>/модулів, без <c>eval</c> і <c>new Function</c> з рядка.
 /// Кожен виклик створює окремий рушій, тож обчислювач потокобезпечний і вирази не діляться станом.
@@ -85,10 +86,7 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
             var parser = new JsonParser(engine);
             engine.SetValue("$json", parser.Parse(scope.Item.Json.ToJsonString()));
             engine.SetValue("$now", engine.Construct("Date", new JsNumber(scope.Now.ToUnixTimeMilliseconds())));
-            engine.SetValue("$execution", parser.Parse(JsonSerializer.Serialize(new Dictionary<string, string>
-            {
-                ["id"] = scope.ExecutionId.ToString(),
-            })));
+            engine.SetValue("$execution", parser.Parse(SerializeExecution(scope)));
 
             // Великі колекції серіалізуються лише тоді, коли вираз на них посилається.
             // Посилання на файли поточного item'а (BinaryRef, без байтів); item без файлів — {}.
@@ -235,6 +233,26 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
 
         var node = ToJsonNode(engine, expression, value);
         return node?.ToJsonString() ?? "";
+    }
+
+    /// <summary>
+    /// <c>$execution</c>: <c>id</c>; з адресами пробудження (F6-01) — <c>resumeUrls</c> за назвою вузла і <c>resumeUrl</c>,
+    /// коли вузол <c>core.wait</c> у режимі <c>webhook</c>/<c>form</c> у сценарії один (інакше <c>resumeUrl</c> відсутній,
+    /// щоб не підставити адресу не того вузла).
+    /// </summary>
+    private static string SerializeExecution(ExpressionScope scope)
+    {
+        var execution = new Dictionary<string, object>(StringComparer.Ordinal) { ["id"] = scope.ExecutionId.ToString() };
+        if (scope.ResumeUrls.Count > 0)
+        {
+            execution["resumeUrls"] = scope.ResumeUrls;
+            if (scope.ResumeUrls.Count == 1)
+            {
+                execution["resumeUrl"] = scope.ResumeUrls.Values.First();
+            }
+        }
+
+        return JsonSerializer.Serialize(execution);
     }
 
     private static string SerializeItems(IReadOnlyList<Item> items)

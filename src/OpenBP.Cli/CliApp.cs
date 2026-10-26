@@ -106,7 +106,8 @@ public static class CliApp
 
         // Таймаутом запиту до моделі керує сам вузол (timeoutSec), тож HttpClient без власного таймауту.
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-        // Очікування (core.wait v2, mcp.waitFor) CLI не відбуває: годинник перемотується до часу відновлення.
+        // Очікування (core.wait v2/v3, mcp.waitFor) CLI не відбуває: годинник перемотується до часу відновлення;
+        // webhook/form без HTTP-сервера йдуть виходом timeout.
         var clock = new CliClock(DateTimeOffset.UtcNow);
         var registry = new InMemoryNodeRegistry();
         foreach (var node in CoreNodes.All(clock).Concat(McpNodes.All(mcp, clock)).Concat(AiNodes.All(http, mcp)))

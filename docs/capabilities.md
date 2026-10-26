@@ -14,6 +14,7 @@
 | Часовий пояс сценарію | `timezone` у `core.schedule`, `settings.timezone` сценарію, час у `core.code` | є | `examples/daily-report.json`; `ScheduleNodeTests.cs` (`Test_run_emits_current_time_in_node_timezone`) |
 | Пауза на N одиниць або до дати | `core.wait` (`mode: duration`, F5-02) | є | `examples/kit-approval-business.json`; `tests/OpenBP.Worker.Tests/LongWaitTests.cs` |
 | Довге очікування (дні, тижні) з пробудженням після рестарту | таймер у воркері, відновлення виконання | є | `tests/OpenBP.Worker.Tests/LongWaitTests.cs`, `ExecutionResumeTests.cs` |
+| Очікування відповіді зовні (webhook) з таймаутом | `core.wait` v3 (`mode: webhook`, `maxWaitSec`, F6-01), `$execution.resumeUrl`, `POST /webhook/resume/{token}` | є | `tests/OpenBP.Worker.Tests/WebhookWaitTests.cs`, `tests/OpenBP.Api.Tests/ResumeWebhookTests.cs` |
 | Робочі дні (пн–пт) у паузах і строках | немає в `core.wait` і `core.schedule` | немає (F7-02: `due` з `businessDays`) |  — |
 | Очікування умови з опитуванням | `mcp.waitFor` | частково (приклад у `examples/` відсутній) | `tests/OpenBP.Worker.Tests/WaitForTests.cs`, `tests/OpenBP.Mcp.Tests/McpWaitForNodeTests.cs` |
 

@@ -33,6 +33,9 @@ public static class WorkerServiceCollectionExtensions
     /// </summary>
     /// <param name="services">Колекція сервісів.</param>
     /// <param name="configuration">Конфігурація.</param>
+    /// <summary>Змінна з публічною адресою OpenBP (спільна з Api, F6-01).</summary>
+    public const string PublicUrlKey = "OPENBP_PUBLIC_URL";
+
     public static IServiceCollection AddOpenBpWorker(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -40,6 +43,8 @@ public static class WorkerServiceCollectionExtensions
 
         var options = new WorkerOptions();
         configuration.GetSection(WorkerOptions.Section).Bind(options);
+        // Публічна адреса — та сама змінна, що й в Api (docs/admin/env.md), секція Worker може її перекрити.
+        options.PublicUrl ??= configuration[PublicUrlKey];
         options.Validate();
         services.AddSingleton(options);
 

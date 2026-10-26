@@ -234,6 +234,8 @@ public sealed partial class ExecutionJobProcessor
 
         var loadedStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false);
         var vars = await LoadVariablesAsync(stoppingToken).ConfigureAwait(false);
+        // Адреси пробудження (F6-01) видаються до старту графа, щоб $execution.resumeUrl був відомий ще до вузла очікування.
+        var resumeUrls = await EnsureResumeTokensAsync(executionId, workflow, stoppingToken).ConfigureAwait(false);
         // Ручний тестовий запуск з канвасу показує дані вузлів завжди; решта — за settings.saveSuccessfulData (F4-07).
         var store = new PostgresExecutionStore(_contexts, _time, scrubber)
         {
@@ -257,6 +259,8 @@ public sealed partial class ExecutionJobProcessor
             DestinationNodeId = payload.DestinationNodeId,
             RunData = payload.RunData ?? new Dictionary<string, Item[][]>(),
             InputOverrides = payload.InputOverrides ?? new Dictionary<string, IReadOnlyList<Item>>(),
+            Signals = payload.Signals ?? new Dictionary<string, JsonNode>(),
+            ResumeUrls = resumeUrls,
             Vars = vars,
             NodeStates = loadedStates,
         };
@@ -546,6 +550,23 @@ public sealed partial class ExecutionJobProcessor
         }
     }
 
+    /// <summary>Токени й адреси пробудження вузлів <c>core.wait</c> у режимі <c>webhook</c>/<c>form</c> (F6-01); без таких вузлів — порожньо.</summary>
+    private async Task<IReadOnlyDictionary<string, string>> EnsureResumeTokensAsync(Guid executionId, WorkflowDefinition workflow, CancellationToken ct)
+    {
+        if (!ResumeTokens.Needed(workflow))
+        {
+            return new Dictionary<string, string>();
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.PublicUrl))
+        {
+            LogNoPublicUrl(_logger, executionId);
+        }
+
+        await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await ResumeTokens.EnsureAsync(db, executionId, workflow, _options.PublicUrl, _time, ct).ConfigureAwait(false);
+    }
+
     private async Task<string?> ReadStatusAsync(Guid executionId, CancellationToken ct)
     {
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -782,6 +803,9 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Виконання {ExecutionId}: не вдалося запустити сценарій помилок {ErrorWorkflowId}.")]
     private static partial void LogErrorWorkflowFailure(ILogger logger, Exception exception, Guid executionId, string errorWorkflowId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: OPENBP_PUBLIC_URL не задано — $execution.resumeUrl буде відносним шляхом без хоста.")]
+    private static partial void LogNoPublicUrl(ILogger logger, Guid executionId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Виконання {ExecutionId}: чекає до {ResumeAt:O} (вузол {NodeId}).")]
     private static partial void LogSuspended(ILogger logger, Guid executionId, DateTimeOffset resumeAt, string? nodeId);

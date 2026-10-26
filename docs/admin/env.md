@@ -29,7 +29,7 @@ compose-файли: `docker-compose.yml` (розробка) і `docker-compose.p
 | Змінна | Типово | Хто читає | Опис |
 |---|---|---|---|
 | `OPENBP_HTTP_PORT` | `8080` | web (порт на хості) | Єдиний відкритий назовні порт: веб-інтерфейс, REST, `/mcp`, webhook-и. |
-| `OPENBP_PUBLIC_URL` | хост запиту | api | Публічна адреса без `/` в кінці, напр. `https://openbp.example.com`. З неї будуються redirect URI OAuth2 (`/api/v1/oauth2/callback`) і OIDC (`/signin-oidc/<key>`). За reverse proxy з HTTPS обов'язкова. |
+| `OPENBP_PUBLIC_URL` | хост запиту (api) / відносний шлях (worker) | api, worker | Публічна адреса без `/` в кінці, напр. `https://openbp.example.com`. З неї будуються redirect URI OAuth2 (`/api/v1/oauth2/callback`) і OIDC (`/signin-oidc/<key>`), а у воркері — адреси пробудження `$execution.resumeUrl` (`/webhook/resume/{token}`, F6-01). За reverse proxy з HTTPS обов'язкова; без неї воркер пише попередження і підставляє шлях без хоста. |
 | `OPENBP_CORS_ORIGINS` | — (заборонено) | api | Origin-и сторінок, що вбудовують редактор `<openbp-canvas>`, через кому ([embedding.md](../embedding.md)). |
 | `OPENBP_PASSWORD_LOGIN` | `true` | api | `false` — вхід паролем лише для `OPENBP_ADMIN_EMAIL` (сторінка `/login?password`), решта — через OIDC ([oidc.md](oidc.md)). |
 | `OPENBP_VERSION` | `local` | compose | Тег образів `openbp/api:<тег>`, `openbp/worker:<тег>` тощо. |

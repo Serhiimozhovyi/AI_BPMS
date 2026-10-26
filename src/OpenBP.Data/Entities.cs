@@ -381,6 +381,24 @@ public sealed class WebhookEntity
     public string Path { get; set; } = "";
 }
 
+/// <summary>
+/// Одноразовий токен зовнішнього пробудження (F6-01): адреса <c>/webhook/resume/{token}</c> для вузла <c>core.wait</c>
+/// у режимі <c>webhook</c>/<c>form</c> конкретного виконання. Воркер створює токени на старті виконання, Api гасить
+/// (<see cref="UsedAt"/>) при пробудженні; видаляються разом із виконанням.
+/// </summary>
+public sealed class ResumeTokenEntity
+{
+    /// <summary>Сам токен (base64url, 32 випадкові байти).</summary>
+    public string Token { get; set; } = "";
+    public Guid ExecutionId { get; set; }
+    public string NodeId { get; set; } = "";
+    /// <summary><c>webhook</c> або <c>form</c>.</summary>
+    public string Kind { get; set; } = "webhook";
+    public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>Коли токен використано; <c>null</c> — ще ні.</summary>
+    public DateTimeOffset? UsedAt { get; set; }
+}
+
 public sealed class NodeStateEntity
 {
     public Guid WorkflowId { get; set; }

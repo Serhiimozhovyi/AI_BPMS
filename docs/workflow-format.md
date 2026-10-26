@@ -184,7 +184,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 
 - Версія 1 (`typeVersion: 1`, збережені сценарії): `amount` у `unit` (`milliseconds`…`hours`), до 1 год; пауза тримає
   воркер.
-- Версія 2 (`typeVersion: 2`, палітра пропонує її для нових вузлів, F5-02): `mode: "duration"` — `amount` у `unit`
+- Версія 2 (`typeVersion: 2`, F5-02): `mode: "duration"` — `amount` у `unit`
   (`seconds`, `minutes`, `hours`, `days`); `mode: "until"` — `until`, дата ISO 8601 (можна вираз), без зсуву — у
   `settings.timezone`. Найдовше — 90 днів; минула дата — items ідуть далі одразу. До 30 с вузол чекає в пам'яті, довше —
   виконання переходить у стан `waiting` до `resumeAt`, воркер вільний, а в призначений час виконання прокидається й
@@ -196,9 +196,35 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   "parameters": { "mode": "duration", "amount": 2, "unit": "days" } }
 ```
 
+- Версія 3 (`typeVersion: 3`, палітра пропонує її для нових вузлів, F6-01): режими `duration` і `until` як у версії 2 плюс
+  пробудження зовні — `mode: "webhook"` (чекати `POST` на адресу пробудження) і `mode: "form"` (чекати надіслану форму за
+  тією ж адресою; сторінку форми дає F6-03). Виходи — `main` і `timeout`: дані, що розбудили вузол, ідуть на `main`
+  (об'єкт — один item, масив об'єктів — item на елемент, інше — `{ "body": … }`), а коли минув `maxWaitSec` (секунди,
+  типово і не більше 90 днів) без відповіді — вхідні items ідуть на `timeout`. Режими за часом вихід `timeout` не
+  використовують. Поки вузол чекає, виконання у стані `waiting`, воркер вільний; воркер може впасти й піднятися — сигнал
+  не губиться.
+- Адреса пробудження — `POST /webhook/resume/{token}` з одноразовим випадковим токеном на пару (виконання, вузол).
+  Воркер видає токени на старті виконання, тож адресу можна вставити в лист чи повідомлення **до** вузла очікування:
+  `$execution.resumeUrl` — коли такий вузол у сценарії один, `$execution.resumeUrls["Назва вузла"]` — за назвою вузла (з
+  кількома вузлами `resumeUrl` не визначений). Адреса будується з `OPENBP_PUBLIC_URL` (docs/admin/env.md; змінна потрібна й
+  воркеру). Тіло запиту (JSON, форма або текст) стає виходом вузла. Відповідь `202 { executionId }`; невідомий токен — 404;
+  повторний запит, завершене чи скасоване виконання, інший вузол, що чекає, або строк, що вже вийшов — 409
+  (`RESUME_TOKEN_USED`, `EXECUTION_NOT_WAITING`, `NODE_NOT_WAITING`). Шляхи тригерів `core.webhook` не можуть починатися з
+  `resume/`.
+
+```json
+{ "id": "n_mail", "name": "Лист", "type": "mcp.tool", "typeVersion": 1, "position": [200, 0],
+  "parameters": { "serverId": "…", "toolName": "send_mail", "arguments": { "text": "Підтвердьте: POST {{ $execution.resumeUrl }}" } } },
+{ "id": "n_wait", "name": "Відповідь", "type": "core.wait", "typeVersion": 3, "position": [400, 0],
+  "parameters": { "mode": "webhook", "maxWaitSec": 259200 } }
+```
+
+У `openbp run` (CLI) HTTP-сервера немає: очікування `webhook`/`form` перемотується до `maxWaitSec` і йде виходом `timeout`.
+
 Чекати не часу, а події в зовнішній системі (задачу закрили, оплата надійшла) — `mcp.waitFor` (F5-03): перевіряє умову
 над відповіддю tool'а конектора з інтервалом, між перевірками виконання теж у `waiting`; виходи `done` і `timeout`
-(docs/connectors.md §3.1).
+(docs/connectors.md §3.1). Різниця з `core.wait` у режимі `webhook`: там умову перевіряє сам сценарій через tool, тут
+зовнішня система чи людина викликає OpenBP.
 
 ### Ключ кореляції
 
