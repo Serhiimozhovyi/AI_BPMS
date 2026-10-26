@@ -109,6 +109,10 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             (change)="setCorrelationKey($any($event.target).value)"
           />
         </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" data-testid="filter-violations" [checked]="onlyViolations()" (change)="setOnlyViolations($any($event.target).checked)" />
+          <span i18n="@@executions.filter.violations">Лише з відкритими порушеннями</span>
+        </label>
       </div>
 
       @if (loading()) {
@@ -275,8 +279,18 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
                   @if (v.message) {
                     <p data-testid="violation-message">{{ v.message }}</p>
                   }
+                  <p class="opacity-70" data-testid="violation-times">
+                    <span i18n="@@violations.createdAt">Виникло {{ v.createdAt | date: 'short' }}</span>
+                    @if (v.resolvedAt; as at) {
+                      <span> · </span>
+                      <span i18n="@@violations.resolvedAt">закрито {{ at | date: 'short' }}</span>
+                    }
+                  </p>
                   @if (v.status === 'overridden') {
                     <p class="opacity-70" data-testid="violation-reason" i18n="@@violations.reason">Причина: {{ v.reason }}</p>
+                    @if (v.actorUserId; as actor) {
+                      <p class="opacity-70" data-testid="violation-actor" i18n="@@violations.actor">Відхилив користувач {{ actor }}</p>
+                    }
                   }
                   @if (v.status === 'open') {
                     @if (overrideId() === v.id) {
@@ -368,6 +382,8 @@ export class ExecutionsPage implements OnInit {
   readonly from = signal('');
   readonly to = signal('');
   readonly correlationKey = signal('');
+  /** Лише виконання з відкритими порушеннями правил переходу (F7-04). */
+  readonly onlyViolations = signal(false);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -422,6 +438,7 @@ export class ExecutionsPage implements OnInit {
   ngOnInit(): void {
     if (this.view() === 'business') this.loadBusiness();
     this.workflowId.set(this.route.snapshot.queryParamMap.get('workflowId') || null);
+    this.onlyViolations.set(this.route.snapshot.queryParamMap.get('hasOpenViolations') === 'true');
     this.workflowsApi
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -470,6 +487,11 @@ export class ExecutionsPage implements OnInit {
 
   setCorrelationKey(key: string): void {
     this.correlationKey.set(key.trim());
+    this.resetPage();
+  }
+
+  setOnlyViolations(on: boolean): void {
+    this.onlyViolations.set(on);
     this.resetPage();
   }
 
@@ -707,6 +729,7 @@ export class ExecutionsPage implements OnInit {
       from: dayBoundary(this.from()),
       to: dayBoundary(this.to(), true),
       correlationKey: this.correlationKey() || null,
+      hasOpenViolations: this.onlyViolations() || null,
     };
   }
 

@@ -3659,7 +3659,7 @@
           "Виконання"
         ],
         "summary": "Історія виконань",
-        "description": "Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).",
+        "description": "Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг), `hasOpenViolations` (лише з відкритими порушеннями правил переходу — або лише без них).",
         "parameters": [
           {
             "name": "workflowId",
@@ -3697,6 +3697,13 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "hasOpenViolations",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -3780,6 +3787,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExecutionDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/executions/{id}/violations": {
+      "get": {
+        "tags": [
+          "Виконання"
+        ],
+        "summary": "Порушення правил переходу виконання",
+        "description": "ADR-004 §3: відкриті (`open`), виправлені (`resolved`) і відхилені з причиною (`overridden`; `reason`, `actorUserId`, `resolvedAt`) порушення, у порядку виникнення.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ViolationDto"
+                  }
                 }
               }
             }
@@ -7705,6 +7765,15 @@
               "string"
             ],
             "format": "int32"
+          },
+          "openViolations": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 0
           }
         }
       },

@@ -500,6 +500,42 @@ public class ExecutionTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Violations_ListInOrderWithResolution_FilterAndOverviewCountOnlyOpenOnes()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var viewer = await LoginAsync(UserRole.Viewer);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var withOpen = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        var withResolved = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        var clean = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        var store = new PostgresExecutionStore(new Contexts(api));
+        await store.SaveRuleChecksAsync(withOpen, [Check("st_a", "r_first", blocking: false, passed: false), Check("st_a", "r_second", blocking: true, passed: false)], default);
+        // Порушення відкрите, потім умова виправлена на наступному кроці — рушій повідомляє про виконане правило.
+        await store.SaveRuleChecksAsync(withResolved, [Check("st_a", "r_first", blocking: false, passed: false)], default);
+        await store.SaveRuleChecksAsync(withResolved, [Check("st_a", "r_first", blocking: false, passed: true)], default);
+
+        var opened = (await JsonAsync(await viewer.GetAsync($"/api/v1/executions/{withOpen}/violations"))).EnumerateArray().ToList();
+        Assert.Equal(["r_first", "r_second"], opened.Select(v => v.GetProperty("ruleId").GetString()));
+        Assert.Equal(["warn", "block"], opened.Select(v => v.GetProperty("mode").GetString()));
+        Assert.All(opened, v => Assert.Equal("open", v.GetProperty("status").GetString()));
+
+        var resolved = Assert.Single((await JsonAsync(await viewer.GetAsync($"/api/v1/executions/{withResolved}/violations"))).EnumerateArray());
+        Assert.Equal("resolved", resolved.GetProperty("status").GetString());
+        Assert.NotEqual(JsonValueKind.Null, resolved.GetProperty("resolvedAt").ValueKind);
+        Assert.Empty((await JsonAsync(await viewer.GetAsync($"/api/v1/executions/{clean}/violations"))).EnumerateArray());
+        await AssertProblemAsync(await viewer.GetAsync($"/api/v1/executions/{Guid.NewGuid()}/violations"), HttpStatusCode.NotFound, "NOT_FOUND");
+
+        async Task<List<Guid>> ListAsync(string flag) =>
+            [.. (await JsonAsync(await viewer.GetAsync($"/api/v1/executions?workflowId={workflowId}&hasOpenViolations={flag}")))
+                .GetProperty("items").EnumerateArray().Select(e => e.GetProperty("id").GetGuid())];
+        Assert.Equal([withOpen], await ListAsync("true"));
+        Assert.Equal(new[] { clean, withResolved }.Order(), (await ListAsync("false")).Order());
+
+        var overview = await JsonAsync(await viewer.GetAsync("/api/v1/overview?range=24h"));
+        Assert.True(overview.GetProperty("openViolations").GetInt32() >= 1);
+    }
+
+    [Fact]
     public async Task Override_SameRuleInTwoStages_NeedsStageId()
     {
         var editor = await LoginAsync(UserRole.Editor);

@@ -210,12 +210,18 @@ public sealed record ExecutionStepDto(
 /// <param name="From">Початок не раніше.</param>
 /// <param name="To">Початок не пізніше.</param>
 /// <param name="CorrelationKey">Лише з цим ключем кореляції (точний збіг).</param>
+/// <param name="HasOpenViolations"><c>true</c> — лише з відкритими порушеннями правил переходу (F7-04), <c>false</c> — лише без них.</param>
 public sealed record ExecutionFilter(
     Guid? WorkflowId = null,
     ExecutionState? State = null,
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
-    string? CorrelationKey = null);
+    string? CorrelationKey = null,
+    bool? HasOpenViolations = null);
+
+/// <summary>Порушення правил переходу виконання (MCP <c>list_violations</c>: structured content має бути об'єктом).</summary>
+/// <param name="Items">Порушення в порядку виникнення.</param>
+public sealed record ViolationList(IReadOnlyList<ViolationDto> Items);
 
 /// <summary>Параметри ручного запуску (<c>POST /workflows/{id}/executions</c>, MCP <c>run_workflow</c>, <c>test_node</c>).</summary>
 /// <param name="StartNodeId">Тригер, з якого стартувати; <c>null</c> — усі вузли без вхідних ребер.</param>

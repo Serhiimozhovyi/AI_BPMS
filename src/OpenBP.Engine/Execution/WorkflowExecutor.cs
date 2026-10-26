@@ -361,6 +361,7 @@ public sealed class WorkflowExecutor
             }
 
             run.Complete(node, step);
+            await ResolveRulesAsync(plan, run).ConfigureAwait(false);
             foreach (var next in node.Successors.Distinct())
             {
                 if (!plan.Nodes.ContainsKey(next.Definition.Id))
@@ -439,6 +440,11 @@ public sealed class WorkflowExecutor
                 foreach (var rule in transition.Rules)
                 {
                     var passed = RulePassed(rule, items, run, now);
+                    if (passed)
+                    {
+                        run.PassedRules.Add((from.Id, rule.Id, node.Definition.Id));
+                    }
+
                     var overridden = !passed && request.RuleOverrides.Contains(new RuleOverride(from.Id, rule.Id));
                     checks.Add(new RuleCheck(
                         from.Id,
@@ -489,6 +495,64 @@ public sealed class WorkflowExecutor
             StartedAt = now,
             FinishedAt = now,
         };
+    }
+
+    /// <summary>
+    /// Повторна перевірка правил (F7-04, ADR-004 §3): після кожного кроку рахує знову правила переходів, які виконання вже
+    /// пройшло (вузол-ціль запущено), і повідомляє про ті, що тепер виконані, — сховище закриває відповідні відкриті
+    /// порушення (<c>resolved</c>). Невиконані правила тут не звітуються: вони зафіксовані при переході. Стан не
+    /// зберігається між запусками: після відновлення перша перевірка заново повідомляє про виконані правила.
+    /// </summary>
+    private async Task ResolveRulesAsync(ExecutionPlan plan, RunState run)
+    {
+        if (_stages is null || run.Request.Workflow.Stages is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var now = _time.GetUtcNow();
+        var checks = new List<RuleCheck>();
+        foreach (var node in plan.Nodes.Values)
+        {
+            var target = run.StageOf(node.Definition.Id);
+            var last = run.Steps.LastOrDefault(s => s.NodeId == node.Definition.Id);
+            if (last is null || !StageTracker.IsStart(last))
+            {
+                continue;
+            }
+
+            foreach (var edge in node.Incoming)
+            {
+                var from = run.StageOf(edge.From.Definition.Id);
+                if (from is null || from == target || from.Transitions is not { Count: > 0 } || !run.IsCompleted(edge.From.Definition.Id))
+                {
+                    continue;
+                }
+
+                var items = run.EdgeItems(edge);
+                if (items.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (var rule in from.Transitions.Where(t => t.To is null || t.To == target?.Id).SelectMany(t => t.Rules))
+                {
+                    var key = (from.Id, rule.Id, node.Definition.Id);
+                    if (run.PassedRules.Contains(key) || !RulePassed(rule, items, run, now))
+                    {
+                        continue;
+                    }
+
+                    run.PassedRules.Add(key);
+                    checks.Add(new RuleCheck(from.Id, rule.Id, rule.IsBlocking, true, false, rule.Message, node.Definition.Id, [.. items.Select(i => (JsonNode)i.Json.DeepClone())], now));
+                }
+            }
+        }
+
+        if (checks.Count > 0)
+        {
+            await _stages.SaveRuleChecksAsync(run.Request.ExecutionId, checks, CancellationToken.None).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Умова правила істинна для кожного item; вираз, що не обчислився, — правило не виконане.</summary>
@@ -1009,6 +1073,9 @@ public sealed class WorkflowExecutor
         }
 
         public bool IsCompleted(string nodeId) => _completion.ContainsKey(nodeId);
+
+        /// <summary>Правила переходів (етап, правило, вузол-ціль), про виконання яких уже повідомлено сховищу (F7-04).</summary>
+        public HashSet<(string StageId, string RuleId, string NodeId)> PassedRules { get; } = [];
 
         /// <summary>Items на ребрі від завершеного джерела (копії не робляться — лише для читання).</summary>
         public IReadOnlyList<Item> EdgeItems(Edge edge) =>

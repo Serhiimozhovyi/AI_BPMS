@@ -82,6 +82,9 @@ import {
           <a routerLink="/executions" data-testid="now-queued">
             <span i18n="@@overview.now.queued">У черзі</span>: <b>{{ d.queued }}</b>
           </a>
+          <a routerLink="/executions" [queryParams]="{ hasOpenViolations: true }" data-testid="now-violations">
+            <span i18n="@@overview.now.violations">З порушеннями правил</span>: <b>{{ d.openViolations ?? 0 }}</b>
+          </a>
         </div>
 
         <h2 class="mb-2 text-lg font-semibold" i18n="@@overview.topFailing">Найбільше помилок</h2>

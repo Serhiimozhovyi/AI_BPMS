@@ -114,6 +114,26 @@ describe('ExecutionsPage', () => {
     expect(host.querySelector<HTMLSelectElement>('[data-testid="filter-workflow"]')!.value).toBe('w1');
   });
 
+  it('порушення (F7-04): ?hasOpenViolations=true з «Огляду» і прапорець фільтра запитують лише виконання з відкритими порушеннями', async () => {
+    const s = await setup('/executions?hasOpenViolations=true');
+    expect(s.list.request.params.get('hasOpenViolations')).toBe('true');
+    const checkbox = s.host.querySelector<HTMLInputElement>('[data-testid="filter-violations"]')!;
+    expect(checkbox.checked).toBe(true);
+
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    const all = expectList(s.http);
+    expect(all.request.params.has('hasOpenViolations')).toBe(false);
+    all.flush({ items: [failed], page: 1, pageSize: 50, total: 1 });
+    await render(s.harness);
+
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    const only = expectList(s.http);
+    expect(only.request.params.get('hasOpenViolations')).toBe('true');
+    only.flush({ items: [], page: 1, pageSize: 50, total: 0 });
+  });
+
   it('фільтри стану й періоду перезавантажують список з першої сторінки', async () => {
     const { harness, http, host, page } = await setup();
     const status = host.querySelector<HTMLSelectElement>('[data-testid="filter-status"]')!;
@@ -266,7 +286,7 @@ describe('ExecutionsPage', () => {
       summary: waiting,
       steps: [step('s1', 'n_webhook')],
       stages: [{ stageId: 'st_request', name: 'Заявка', position: 0, status: 'active', overdue: false, enteredAt: '2026-10-23T10:00:00Z', dueAt: null, exitedAt: null }],
-      violations: [violation, { ...violation, id: 'v2', ruleId: 'r_comment', mode: 'warn', status: 'overridden', message: null, reason: 'Коментар усно' }],
+      violations: [violation, { ...violation, id: 'v2', ruleId: 'r_comment', mode: 'warn', status: 'overridden', message: null, reason: 'Коментар усно', actorUserId: 'u1', resolvedAt: '2026-10-23T10:05:00Z' }],
     });
     const items = [...s.host.querySelectorAll<HTMLElement>('[data-testid="violation"]')];
     expect(items.map((li) => [li.getAttribute('data-rule'), li.getAttribute('data-status')])).toEqual([
@@ -277,6 +297,10 @@ describe('ExecutionsPage', () => {
     expect(items[0].textContent).toContain('Заявка');
     expect(items[0].querySelector('[data-testid="violation-message"]')?.textContent).toBe('Сума замала для оплати.');
     expect(items[1].querySelector('[data-testid="violation-reason"]')?.textContent).toContain('Коментар усно');
+    expect(items[0].querySelector('[data-testid="violation-times"]')?.textContent).toContain('Виникло');
+    expect(items[0].querySelector('[data-testid="violation-times"]')?.textContent).not.toContain('закрито');
+    expect(items[1].querySelector('[data-testid="violation-times"]')?.textContent).toContain('закрито');
+    expect(items[1].querySelector('[data-testid="violation-actor"]')?.textContent).toContain('u1');
     expect(items[1].querySelector('[data-testid="override-button"]')).toBeNull();
 
     const open = items[0].querySelector<HTMLButtonElement>('[data-testid="override-button"]')!;

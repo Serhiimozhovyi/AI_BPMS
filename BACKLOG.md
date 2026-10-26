@@ -1018,7 +1018,7 @@
 - DoD: тести: `block` зупиняє і пробуджується після відхилення; `block` пробуджується, коли умова стала істинною на `resume`; `warn` пропускає й створює `open`; відхилення без причини → 422; viewer → 403; audit log містить події; `docs/workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 
 ### F7-04 · Порушення: список, повторна перевірка, сторінка у виконанні
-- model: `sonnet` · status: `ready` · depends: F7-03
+- model: `sonnet` · status: `review #170` · depends: F7-03
 - Що: при кожній події етапу (крок етапу завершився, перехід, `resume`) рушій переобчислює `open` правила етапу → `resolved`; `GET /api/v1/executions/{id}/violations` і фільтр `hasOpenViolations` у `GET /executions`; розділ «Порушення» у журналі виконання (правило, повідомлення, стан, хто й чому відхилив, час) за AC-Kit; «Огляд» (F6-07) показує кількість виконань з відкритими порушеннями.
 - DoD: тести: порушення `open` → умова виправлена на наступному кроці → `resolved` з `resolved_at`; фільтр списку; Vitest розділу; `docs/architecture.md` §6 оновлено.
 

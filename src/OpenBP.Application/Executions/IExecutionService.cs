@@ -57,6 +57,15 @@ public interface IExecutionService
     Task<ExecutionDetail> GetAsync(Guid id, CancellationToken ct);
 
     /// <summary>
+    /// Порушення правил переходу виконання (F7-04, ADR-004 §3): відкриті, виправлені та відхилені з причиною, у порядку
+    /// виникнення. Роль viewer.
+    /// </summary>
+    /// <param name="id">Виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="Errors.NotFoundException">Виконання немає.</exception>
+    Task<IReadOnlyList<ViolationDto>> ListViolationsAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
     /// Скасування: <see cref="ExecutionState.Queued"/> → одразу <see cref="ExecutionState.Cancelled"/>;
     /// <see cref="ExecutionState.Running"/> → <see cref="ExecutionState.Cancelling"/>, воркер зупинить виконання на
     /// найближчому heartbeat. Для фінального стану — нічого не змінює (ідемпотентно).

@@ -107,6 +107,12 @@ public sealed class ExecutionService(
             query = query.Where(e => e.CorrelationKey == key);
         }
 
+        if (filter.HasOpenViolations is { } hasOpen)
+        {
+            var open = db.Violations.AsNoTracking().Where(v => v.Status == ViolationStatuses.Open).Select(v => v.ExecutionId);
+            query = hasOpen ? query.Where(e => open.Contains(e.Id)) : query.Where(e => !open.Contains(e.Id));
+        }
+
         if (filter.From is { } from)
         {
             var fromUtc = from.ToUniversalTime();
@@ -159,6 +165,18 @@ public sealed class ExecutionService(
             [.. stages.Select(s => ExecutionMapping.ToStage(s, execution, now))],
             [.. children.Select(ExecutionMapping.ToSummary)],
             [.. violations.Select(ExecutionMapping.ToViolation)]);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ViolationDto>> ListViolationsAsync(Guid id, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Viewer);
+        await RequireExecutionAsync(id, UserRole.Viewer, ct);
+        var violations = await db.Violations.AsNoTracking()
+            .Where(v => v.ExecutionId == id)
+            .OrderBy(v => v.Id)
+            .ToListAsync(ct);
+        return [.. violations.Select(ExecutionMapping.ToViolation)];
     }
 
     /// <inheritdoc />
