@@ -334,6 +334,11 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
   `get_chat`; `chat_id` має `x-openbp-options` на `get_updates` (§2); токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
+- `connectors/http` — HTTP і RSS (F6-25): `rss_read` (`{ feedTitle, feedLink, items }` з полями як у n8n «RSS Read»; RSS 2.0/1.0 і
+  Atom; у `mcp.tool` — `itemsPath: "items"`) і `http_request` (`{ status, ok, reason, url, headers, contentType }` + `json`/`text`/`base64`;
+  не 2xx — `isError`, якщо не `fail_on_status_error: false`). Захист від SSRF: приватні адреси й метадані хмари заборонені
+  на підключенні й у редіректах, окрім хостів з `HTTP_ALLOW_PRIVATE`; `HTTP_ALLOWED_HOSTS` обмежує цілі; ліміт розміру
+  відповіді; параметри адреси не потрапляють у відповіді й журнали.
 - `connectors/msgraph` — Microsoft Graph, пошта (F3-15): `list_messages` (`{ result }`, для `mcp.poll` —
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
   `send_mail`; client credentials з `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, токен кешується, на 401 — одне повторне

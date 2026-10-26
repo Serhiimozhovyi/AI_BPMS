@@ -1,0 +1,35 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "http",
+  "name": "HTTP і RSS",
+  "description": "Читання RSS/Atom-стрічок і довільні HTTP-запити (rss_read, http_request) із захистом від SSRF.",
+  "icon": "🌐",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/http/OpenBP.Connectors.Http.dll"
+    ]
+  },
+  "http": {
+    "url": "http://http:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "HTTP_ALLOWED_HOSTS",
+        "title": "Дозволені хости через кому (порожньо — будь-які публічні), напр. example.com, *.example.org",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "HTTP_ALLOW_PRIVATE",
+        "title": "Хости, яким дозволено приватні адреси (напр. host.docker.internal), або * — усім",
+        "required": false,
+        "secret": false
+      }
+    ],
+    "headers": []
+  },
+  "triggers": []
+}

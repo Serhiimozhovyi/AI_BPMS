@@ -965,7 +965,7 @@
 - DoD: unit-тести конвертера (валідація результату, зв'язки й виходи помилок, маніфест, цикли, cron, виконання коду n8n через движок); Vitest діалогу; `docs/workflow-format.md` §«Імпорт з n8n».
 
 ### F6-25 · Конектор HTTP і RSS (`connectors/http`)
-- model: `sonnet` · status: `ready` · depends: F6-24
+- model: `sonnet` · status: `review` · depends: F6-24
 - Що: запит власника 2026-10-26 — для сценарію n8n «Аграрії — MVP» бракує читання RSS і HTTP-запитів (в OpenBP немає прямого HTTP-вузла: інтеграції лише через MCP, правило 3). Новий конектор на Connector Kit: tool `rss_read { url, limit? }` → `items[]` з полями, звичними для n8n Read RSS (`title`, `link`, `isoDate`, `pubDate`, `contentSnippet`, `content`, `creator`, `categories`, `guid`), RSS 2.0 і Atom; tool `http_request { method, url, headers?, query?, json?, body?, timeoutSec? }` → `{ status, headers, json | text }` (ліміт розміру відповіді, `timeoutSec` до 300). Безпека: `HTTP_ALLOWED_HOSTS` (порожній — будь-які публічні), заборона приватних адрес (SSRF), крім явно дозволених (`HTTP_ALLOW_PRIVATE`, напр. `host.docker.internal` для локального FLUX/Ollama). Маніфест `connector.json`, запис у каталозі конекторів, сервіс у `docker-compose`.
 - DoD: контрактні тести проти локального HTTP-моку (RSS 2.0, Atom, битий XML, 404, таймаут, заборонена приватна адреса); job конектора в CI; README з прикладами `mcp.tool`.
 
