@@ -967,6 +967,53 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("variables", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.WebhookDedupeEntity", b =>
+                {
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.Property<string>("NodeId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("node_id");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("key");
+
+                    b.Property<byte[]>("Body")
+                        .HasColumnType("bytea")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Headers")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("headers");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_code");
+
+                    b.HasKey("WorkflowId", "NodeId", "Key");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("webhook_dedupe", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.WebhookEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -999,6 +1046,36 @@ namespace OpenBP.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("webhooks", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.WebhookResponseEntity", b =>
+                {
+                    b.Property<Guid>("ExecutionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<byte[]>("Body")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Headers")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("headers");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_code");
+
+                    b.HasKey("ExecutionId");
+
+                    b.ToTable("webhook_responses", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.WorkerHeartbeatEntity", b =>

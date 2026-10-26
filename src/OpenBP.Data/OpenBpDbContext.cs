@@ -25,6 +25,8 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<ExecutionStepEntity> ExecutionSteps => Set<ExecutionStepEntity>();
     public DbSet<JobEntity> Jobs => Set<JobEntity>();
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
+    public DbSet<WebhookResponseEntity> WebhookResponses => Set<WebhookResponseEntity>();
+    public DbSet<WebhookDedupeEntity> WebhookDedupe => Set<WebhookDedupeEntity>();
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
     public DbSet<AuditEntryEntity> AuditLog => Set<AuditEntryEntity>();
@@ -220,6 +222,21 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("webhooks");
             e.HasIndex(x => x.Path).IsUnique();
+        });
+        b.Entity<WebhookResponseEntity>(e =>
+        {
+            e.ToTable("webhook_responses");
+            e.HasKey(x => x.ExecutionId);
+            e.Property(x => x.Headers).HasColumnType("jsonb");
+        });
+        b.Entity<WebhookDedupeEntity>(e =>
+        {
+            e.ToTable("webhook_dedupe");
+            e.HasKey(x => new { x.WorkflowId, x.NodeId, x.Key });
+            e.Property(x => x.NodeId).HasMaxLength(200);
+            e.Property(x => x.Key).HasMaxLength(200);
+            e.Property(x => x.Headers).HasColumnType("jsonb");
+            e.HasIndex(x => x.ExpiresAt);
         });
         b.Entity<NodeStateEntity>(e =>
         {

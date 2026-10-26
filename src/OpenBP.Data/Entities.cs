@@ -381,6 +381,39 @@ public sealed class WebhookEntity
     public string Path { get; set; } = "";
 }
 
+/// <summary>
+/// Відповідь webhook-а з виконання (F6-05): пише воркер (<c>core.respondToWebhook</c> або <c>respond: whenFinished</c>),
+/// читає Api, що тримає HTTP-запит. Одна на виконання — перша виграє.
+/// </summary>
+public sealed class WebhookResponseEntity
+{
+    public Guid ExecutionId { get; set; }
+    public int StatusCode { get; set; }
+    /// <summary>Заголовки відповіді — JSON-об'єкт ім'я → значення.</summary>
+    public string Headers { get; set; } = "{}";
+    public byte[] Body { get; set; } = [];
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>
+/// Дедуплікація запитів webhook-а (F6-05): ключ ідемпотентності запиту → виконання, яке він запустив, і відповідь,
+/// щойно вона відома. До <see cref="ExpiresAt"/> повторний запит отримує ту саму відповідь без нового виконання.
+/// </summary>
+public sealed class WebhookDedupeEntity
+{
+    public Guid WorkflowId { get; set; }
+    /// <summary>Вузол <c>core.webhook</c>.</summary>
+    public string NodeId { get; set; } = "";
+    public string Key { get; set; } = "";
+    public Guid ExecutionId { get; set; }
+    /// <summary>Статус збереженої відповіді; <c>null</c> — відповідь ще не відома (перший запит чекає на виконання).</summary>
+    public int? StatusCode { get; set; }
+    public string? Headers { get; set; }
+    public byte[]? Body { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+}
+
 public sealed class NodeStateEntity
 {
     public Guid WorkflowId { get; set; }
