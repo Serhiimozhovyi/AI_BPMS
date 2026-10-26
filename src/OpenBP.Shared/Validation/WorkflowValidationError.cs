@@ -70,6 +70,27 @@ public static class WorkflowValidationCodes
     /// <summary>Бізнес-розмітка: зовнішній крок без жодного зв'язку з вузлом — на схемі він нічого не означає.</summary>
     public const string BusinessStepLinksMissing = "BUSINESS_STEP_LINKS_MISSING";
 
+    /// <summary>Етапи (ADR-004): два етапи <c>stages</c> з однаковим <c>id</c>.</summary>
+    public const string StageIdDuplicate = "STAGE_ID_DUPLICATE";
+
+    /// <summary>Етапи: <c>stages[].nodes[]</c> посилається на вузол, якого немає.</summary>
+    public const string StageNodeUnknown = "STAGE_NODE_UNKNOWN";
+
+    /// <summary>Етапи: вузол належить двом етапам — стан етапу був би неоднозначним.</summary>
+    public const string StageNodeInTwoStages = "STAGE_NODE_IN_TWO_STAGES";
+
+    /// <summary>
+    /// Етапи: вузли етапу не зв'язані між собою в графі (шлях може йти лише через технічні вузли без етапу) —
+    /// етап мав би кілька незалежних частин, і його стан був би неоднозначним.
+    /// </summary>
+    public const string StageNotConnected = "STAGE_NOT_CONNECTED";
+
+    /// <summary>Етапи: <c>transitions[].to</c> посилається на етап, якого немає.</summary>
+    public const string StageTransitionUnknown = "STAGE_TRANSITION_UNKNOWN";
+
+    /// <summary>Етапи: два правила одного етапу з однаковим <c>id</c> — порушення й відхилення неоднозначні.</summary>
+    public const string StageRuleIdDuplicate = "STAGE_RULE_ID_DUPLICATE";
+
     /// <summary>
     /// <c>serverId</c>/<c>credentialId</c> посилається на конектор чи credential іншого проєкту (F6-14): сценарій може
     /// використовувати лише спільні ресурси і ресурси свого проєкту.

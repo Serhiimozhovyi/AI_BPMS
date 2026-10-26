@@ -93,7 +93,12 @@ public sealed class NodeTools
         "(true hides the node; false shows a core.set/core.code/core.merge node that is otherwise collapsed). " +
         "At the workflow level `business.lanes` lists participants ({ id, name, description? }) and `business.steps` the human " +
         "actions in external systems ({ id, title, subtitle?, lane, links: [{ node, direction: in|out, label? }] }); " +
-        "a connection may carry `business.label` for its arrow. See the format schema for details.")]
+        "a connection may carry `business.label` for its arrow. " +
+        "A business process may also declare `stages` at the workflow level (ADR-004): { id, name, nodes: [node ids], " +
+        "owner?: { lane | role | expression }, due?: { amount, unit: minutes|hours|days|businessDays } | { until }, " +
+        "transitions?: [{ to?: stage id, rules: [{ id, condition, mode: block|warn, message? }] }] }. A node belongs to at most " +
+        "one stage and a stage's nodes must be connected; the engine derives stage state from the execution and checks " +
+        "transition rules on edges leaving the stage. See the format schema for details.")]
     public static Task<NodesDescription> DescribeNodes(INodeService nodes, CancellationToken ct) =>
         NodesDescription.BuildAsync(nodes, ct);
 }
