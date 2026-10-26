@@ -36,6 +36,12 @@ public class NodeToolsTests(McpServerFactory mcp)
         Assert.Equal(["main", "noMatch"], table["outputs"]!.AsArray().Select(o => (string?)o));
         Assert.Equal(["inputs", "outputs", "rules"], table["parametersSchema"]!["required"]!.AsArray().Select(r => (string?)r));
 
+        // Злиття гілок v2 (F7-06): вісім входів, режими all/any/count; v1 лишається для збережених сценаріїв.
+        var merge = byType["core.merge@2"];
+        Assert.Equal(8, merge["inputs"]!.AsArray().Count);
+        Assert.Equal(["all", "any", "count"], merge["parametersSchema"]!["properties"]!["mode"]!["enum"]!.AsArray().Select(m => (string?)m));
+        Assert.Equal(2, byType["core.merge@1"]["inputs"]!.AsArray().Count);
+
         var tool = byType["mcp.tool@1"];
         Assert.Contains("itemsPath", tool["parametersSchema"]!["properties"]!.AsObject().Select(p => p.Key));
 

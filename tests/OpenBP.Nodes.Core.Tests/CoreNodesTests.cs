@@ -23,7 +23,7 @@ public class CoreNodesTests
         { "core.set", """{"fields":[{"name":"order.customer","value":"{{ $json.name }}"}],"keepOnlySet":false}""" },
         { "core.if", """{"combine":"and","conditions":[{"left":"{{ $json.qty }}","operator":"gt","right":5}]}""" },
         { "core.switch", """{"rules":[{"conditions":[{"left":"{{ $json.s }}","operator":"equals","right":"new"}]}]}""" },
-        { "core.merge", """{"mode":"combineByPosition"}""" },
+        { "core.merge", """{"mode":"count","count":2,"branches":3,"combine":"combineByPosition"}""" },
         { "core.loop", """{"list":"{{ $json.lines }}","batchSize":1}""" },
         { "core.wait", """{"amount":5,"unit":"seconds"}""" },
         { "core.code", """{"code":"return $json;","mode":"eachItem"}""" },
@@ -91,6 +91,7 @@ public class CoreNodesTests
         Assert.True(registry.Resolve("core.workflowTrigger", 1).Descriptor.IsTrigger);
         Assert.False(registry.Resolve("core.executeWorkflow", 1).Descriptor.IsTrigger);
         Assert.Equal(2, registry.Resolve("core.merge", 1).Descriptor.Inputs.Count);
+        Assert.Equal(8, registry.Resolve("core.merge", 2).Descriptor.Inputs.Count);
         Assert.Equal(5, registry.Resolve("core.switch", 1).Descriptor.Outputs.Count);
         Assert.Equal(17, registry.Resolve("core.switch", 2).Descriptor.Outputs.Count);
     }

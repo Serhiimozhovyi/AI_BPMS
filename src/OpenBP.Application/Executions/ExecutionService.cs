@@ -156,13 +156,9 @@ public sealed class ExecutionService(
 
             var updated = status switch
             {
-                // У черзі чи в очікуванні воркер виконання не тримає — скасовуємо одразу; job побачить фінальний стан.
-                ExecutionStatuses.Queued or ExecutionStatuses.Waiting => await db.Executions
-                    .Where(e => e.Id == id && e.Status == status)
-                    .ExecuteUpdateAsync(
-                        s => s.SetProperty(e => e.Status, ExecutionStatuses.Cancelled)
-                            .SetProperty(e => e.FinishedAt, time.GetUtcNow()),
-                        ct),
+                // У черзі чи в очікуванні воркер виконання не тримає — скасовуємо одразу разом з очікуваннями
+                // вузлів і job'ом пробудження (ADR-004 §5).
+                ExecutionStatuses.Queued or ExecutionStatuses.Waiting => await CancelIdleAsync(id, status, ct),
                 ExecutionStatuses.Running => await db.Executions
                     .Where(e => e.Id == id && e.Status == ExecutionStatuses.Running)
                     .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, ExecutionStatuses.Cancelling), ct),
@@ -175,6 +171,28 @@ public sealed class ExecutionService(
                 return ExecutionMapping.ToSummary(await db.Executions.AsNoTracking().SingleAsync(e => e.Id == id, ct));
             }
         }
+    }
+
+    /// <summary>
+    /// <c>queued</c>/<c>waiting</c> → <c>cancelled</c> однією транзакцією з закриттям очікувань вузлів і видаленням job'а
+    /// пробудження; 0 — стан тим часом змінився.
+    /// </summary>
+    private async Task<int> CancelIdleAsync(Guid id, string status, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var updated = await db.Executions
+            .Where(e => e.Id == id && e.Status == status)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(e => e.Status, ExecutionStatuses.Cancelled)
+                    .SetProperty(e => e.FinishedAt, time.GetUtcNow()),
+                ct);
+        if (updated == 1)
+        {
+            await ExecutionWaits.CloseAsync(db, id, "Очікування закрито: виконання скасовано.", time, ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return updated;
     }
 
     /// <summary>Визначення поточної версії сценарію.</summary>

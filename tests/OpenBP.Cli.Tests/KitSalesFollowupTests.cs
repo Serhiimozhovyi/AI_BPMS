@@ -9,6 +9,12 @@ namespace OpenBP.Cli.Tests;
 /// <summary>Збирає справжній конектор <c>connectors/kit-crm</c> один раз на клас тестів.</summary>
 public sealed class KitCrmFixture : IDisposable
 {
+    /// <summary>
+    /// Класи тестів з цією фікстурою йдуть паралельно, а <c>obj/</c> конектора спільний: дві збірки водночас падають на
+    /// копіюванні <c>refint/*.dll</c> (MSB3883). Збираємо по черзі.
+    /// </summary>
+    private static readonly Lock BuildLock = new();
+
     public KitCrmFixture()
     {
         Directory = System.IO.Directory.CreateTempSubdirectory("openbp-kit-").FullName;
@@ -59,11 +65,14 @@ public sealed class KitCrmFixture : IDisposable
             start.Environment.Remove(key);
         }
 
-        using var process = Process.Start(start)!;
-        var log = process.StandardOutput.ReadToEndAsync();
-        var errors = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"Збірка kit-crm: {log.Result}{errors.Result}");
+        lock (BuildLock)
+        {
+            using var process = Process.Start(start)!;
+            var log = process.StandardOutput.ReadToEndAsync();
+            var errors = process.StandardError.ReadToEndAsync();
+            process.WaitForExit();
+            Assert.True(process.ExitCode == 0, $"Збірка kit-crm: {log.Result}{errors.Result}");
+        }
         return Path.Combine(output, "OpenBP.Connectors.KitCrm.dll");
     }
 
