@@ -15,4 +15,13 @@ public interface IStageStore
     /// <param name="stages">Стан кожного етапу сценарію в порядку <c>stages[]</c>.</param>
     /// <param name="ct">Скасування.</param>
     Task SaveStagesAsync(Guid executionId, IReadOnlyList<StageState> stages, CancellationToken ct);
+
+    /// <summary>
+    /// Результати перевірки правил переходу (ADR-004 §3, F7-03) — викликається, коли рушій бере ребро з етапу, на якому є
+    /// правила. Хост відкриває порушення для невиконаних і не відхилених правил і закриває відкриті, якщо правило виконане.
+    /// </summary>
+    /// <param name="executionId">Ідентифікатор виконання.</param>
+    /// <param name="checks">Перевірки в порядку правил.</param>
+    /// <param name="ct">Скасування.</param>
+    Task SaveRuleChecksAsync(Guid executionId, IReadOnlyList<RuleCheck> checks, CancellationToken ct);
 }

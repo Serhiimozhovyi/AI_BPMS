@@ -397,6 +397,33 @@ public sealed class ExecutionStageEntity
     public DateTimeOffset? ExitedAt { get; set; }
 }
 
+/// <summary>Порушення правила переходу з етапу (ADR-004 §3, F7-03).</summary>
+public sealed class ViolationEntity
+{
+    public Guid Id { get; set; }
+    public Guid ExecutionId { get; set; }
+    public string StageId { get; set; } = "";
+    public string RuleId { get; set; } = "";
+    /// <summary>Версія сценарію, з якої правило (версії незмінні, тож це й версія правила).</summary>
+    public Guid WorkflowVersionId { get; set; }
+    /// <summary><c>block</c> | <c>warn</c>.</summary>
+    public string Mode { get; set; } = "";
+    /// <summary><c>open</c> | <c>resolved</c> | <c>overridden</c> (<see cref="ViolationStatuses"/>).</summary>
+    public string Status { get; set; } = "";
+    /// <summary>Повідомлення правила на момент порушення.</summary>
+    public string? Message { get; set; }
+    /// <summary>Хто відхилив; <c>null</c> — система.</summary>
+    public Guid? ActorUserId { get; set; }
+    /// <summary>Яка система змінила стан (<c>engine</c>), якщо не людина.</summary>
+    public string? ActorSystem { get; set; }
+    /// <summary>Причина відхилення.</summary>
+    public string? Reason { get; set; }
+    /// <summary>jsonb: items переходу після scrubbing секретів.</summary>
+    public string Context { get; set; } = "[]";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? ResolvedAt { get; set; }
+}
+
 public sealed class JobEntity
 {
     public Guid Id { get; set; }

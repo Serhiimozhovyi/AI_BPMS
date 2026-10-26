@@ -12,7 +12,7 @@ OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
   - `viewer` — читання (`describe_connectors`, `describe_nodes`, `list_*`, `get_*`, `validate_workflow`, resources);
-  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`, `save_workflow_explanation`;
+  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`, `override_rule`, `save_workflow_explanation`;
   - `admin` — те саме (керування конекторами й користувачами в MCP не винесено).
 - Без ключа або з відкликаним ключем — HTTP 401 ще до MCP-обміну. Cookie-сесія UI для `/mcp` не діє.
 
@@ -99,6 +99,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `list_executions` | viewer | `workflowId?`, `status?`, `correlationKey?`, `page?` | сторінка виконань без кроків |
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
 | `resume_execution` | editor | `id`, `items?` | нове виконання `resume` (у черзі): продовження помилкового (`error`/`timed_out`) з вузла, що впав; успішні вузли не виконуються знову, `items` — нові дані на вхід 0 вузла, що впав (F6-08). Інакше — `EXECUTION_NOT_FAILED` / `RESUME_INPUT_NOT_APPLICABLE` |
+| `override_rule` | editor | `id`, `ruleId`, `reason`, `stageId?` | відхилити порушене правило переходу з причиною (F7-03, ADR-004 §3): відкрите порушення стає `overridden` з автором і причиною; для `block` виконання, що чекає на переході, прокидається одразу. Порожня причина — `STAGE_RULE_REASON_REQUIRED`, порушення немає — `STAGE_RULE_NOT_VIOLATED`, той самий `ruleId` у кількох етапах без `stageId` — `STAGE_RULE_AMBIGUOUS` |
 
 `definition` — сценарій у форматі [workflow-format.md](workflow-format.md); схема — resource
 `openbp://schema/workflow-format`, типи вузлів і їхні `parameters` — з `describe_nodes`, `serverId`/`toolName` вузлів
@@ -117,7 +118,10 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 `STAGE_NODE_UNKNOWN`, `STAGE_NODE_IN_TWO_STAGES`, `STAGE_NOT_CONNECTED`, `STAGE_TRANSITION_UNKNOWN`,
 `STAGE_RULE_ID_DUPLICATE` — з `path` на поле. Стан етапів виконання (F7-02) — у `ExecutionDetail.stages[]`, тож його
 віддають `run_workflow`, `get_execution` і `openbp://executions/{id}`: `{ stageId, name, position, status
-(pending|active|done|skipped|cancelled), overdue, enteredAt, dueAt, exitedAt }`. Дії над етапами — F7-05.
+(pending|active|done|skipped|cancelled), overdue, enteredAt, dueAt, exitedAt }`, а порушення правил переходу (F7-03) — у
+`violations[]`: `{ id, stageId, ruleId, mode, status (open|resolved|overridden), message, reason, actorUserId, createdAt,
+resolvedAt }`; виконання, зупинене `block`-правилом, — `waiting` з кроком `waitState.reason = STAGE_RULE_BLOCKED`, і
+агент може відхилити правило з причиною через `override_rule`. Дії над етапами — F7-05.
 
 ### Оцінки вузлів ШІ (F6-17)
 

@@ -14,6 +14,9 @@ public sealed class InMemoryStageStore : IStageStore
     /// <summary>Історія збережень у порядку викликів: кожне — повний стан етапів виконання.</summary>
     public List<(Guid ExecutionId, IReadOnlyList<StageState> Stages)> History { get; } = [];
 
+    /// <summary>Усі перевірки правил переходу (F7-03) у порядку викликів.</summary>
+    public List<(Guid ExecutionId, RuleCheck Check)> RuleChecks { get; } = [];
+
     /// <summary>Останній збережений стан етапів виконання; порожньо — не зберігався.</summary>
     /// <param name="executionId">Ідентифікатор виконання.</param>
     public IReadOnlyList<StageState> Of(Guid executionId)
@@ -35,6 +38,19 @@ public sealed class InMemoryStageStore : IStageStore
             _stages[executionId] = copy;
             History.Add((executionId, copy));
             Saves++;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task SaveRuleChecksAsync(Guid executionId, IReadOnlyList<RuleCheck> checks, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(checks);
+        ct.ThrowIfCancellationRequested();
+        lock (_lock)
+        {
+            RuleChecks.AddRange(checks.Select(c => (executionId, c)));
         }
 
         return Task.CompletedTask;

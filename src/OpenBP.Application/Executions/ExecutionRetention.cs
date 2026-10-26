@@ -128,6 +128,7 @@ public sealed class ExecutionRetentionService(OpenBpDbContext db, ExecutionReten
             {
                 await db.ExecutionSteps.Where(s => ids.Contains(s.ExecutionId)).ExecuteDeleteAsync(ct);
                 await db.ExecutionStages.Where(s => ids.Contains(s.ExecutionId)).ExecuteDeleteAsync(ct);
+                await db.Violations.Where(s => ids.Contains(s.ExecutionId)).ExecuteDeleteAsync(ct);
                 total += await db.Executions.Where(e => ids.Contains(e.Id)).ExecuteDeleteAsync(ct);
                 await tx.CommitAsync(ct);
             }

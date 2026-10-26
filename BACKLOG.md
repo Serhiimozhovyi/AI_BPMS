@@ -988,7 +988,7 @@
 - DoD: тести движка: послідовні етапи, гілка не дійшла → `skipped`, скасування під час `active` → `cancelled`, `overdue` з `TimeProvider`-фейком, `businessDays` через вихідні; інтеграційний тест (Testcontainers) запису `execution_stages` і відновлення після рестарту воркера; Vitest журналу; сценарії без `stages` не пишуть у таблицю.
 
 ### F7-03 · Правила переходу `block`/`warn` і відхилення з причиною
-- model: `opus` · status: `ready` · depends: F7-02, F6-15
+- model: `opus` · status: `review #168` · depends: F7-02, F6-15
 - Що: рушій перевіряє `transitions[].rules[]` на ребрі з етапу (ADR-004 §3): `block` і умова хибна → виконання `waiting` з причиною `STAGE_RULE_BLOCKED`, повторна перевірка при `resume`/події; `warn` → перехід проходить. Відхилення: `POST /api/v1/executions/{id}/overrides { ruleId, reason }` (`editor` або виконавець етапу; порожня `reason` → 422 `STAGE_RULE_REASON_REQUIRED`), MCP `override_rule`; таблиця `violations (execution_id, stage_id, rule_id, workflow_version_id, status open|resolved|overridden, actor_user_id|actor_system, reason, context jsonb, created_at, resolved_at)`, `context` після scrubbing (§8); події audit log `violation.opened|resolved|overridden`; панель виконання показує заблокований перехід, повідомлення правила й кнопку «Продовжити з причиною…».
 - DoD: тести: `block` зупиняє і пробуджується після відхилення; `block` пробуджується, коли умова стала істинною на `resume`; `warn` пропускає й створює `open`; відхилення без причини → 422; viewer → 403; audit log містить події; `docs/workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 

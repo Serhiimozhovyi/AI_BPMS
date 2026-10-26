@@ -119,11 +119,42 @@ public sealed record ExecutionSummary(
 /// <param name="Steps">Кроки в порядку збереження.</param>
 /// <param name="Stages">Стан етапів (ADR-004 §2, F7-02) у порядку <c>stages[]</c>; порожньо — сценарій без етапів.</param>
 /// <param name="Children">Підсценарії, які запустило це виконання (F6-04), у порядку запуску; <c>parentNodeId</c> — вузол-викликач.</param>
+/// <param name="Violations">Порушення правил переходу (ADR-004 §3, F7-03) у порядку виникнення; порожньо — немає.</param>
 public sealed record ExecutionDetail(
     ExecutionSummary Summary,
     IReadOnlyList<ExecutionStepDto> Steps,
     IReadOnlyList<ExecutionStageDto> Stages,
-    IReadOnlyList<ExecutionSummary>? Children = null);
+    IReadOnlyList<ExecutionSummary>? Children = null,
+    IReadOnlyList<ViolationDto>? Violations = null);
+
+/// <summary>Порушення правила переходу з етапу (<c>violations</c>, ADR-004 §3).</summary>
+/// <param name="Id"><c>violations.id</c>.</param>
+/// <param name="StageId">Етап, з якого перехід.</param>
+/// <param name="RuleId">Правило.</param>
+/// <param name="Mode"><c>block</c> — перехід зупинено, поки правило не виконане чи не відхилене; <c>warn</c> — пройшов.</param>
+/// <param name="Status"><c>open</c> | <c>resolved</c> | <c>overridden</c>.</param>
+/// <param name="Message">Повідомлення правила.</param>
+/// <param name="Reason">Причина відхилення.</param>
+/// <param name="ActorUserId">Хто відхилив; <c>null</c> — стан змінив рушій.</param>
+/// <param name="CreatedAt">Коли порушення відкрито.</param>
+/// <param name="ResolvedAt">Коли закрито (виконано чи відхилено).</param>
+public sealed record ViolationDto(
+    Guid Id,
+    string StageId,
+    string RuleId,
+    string Mode,
+    string Status,
+    string? Message,
+    string? Reason,
+    Guid? ActorUserId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ResolvedAt);
+
+/// <summary>Тіло <c>POST /executions/{id}/overrides</c>: відхилити невиконане правило переходу з причиною.</summary>
+/// <param name="RuleId">Правило (<c>transitions[].rules[].id</c>).</param>
+/// <param name="Reason">Чому перехід має пройти попри правило; обов'язкова.</param>
+/// <param name="StageId">Етап правила — лише якщо однаковий <c>ruleId</c> відкритий у кількох етапах.</param>
+public sealed record RuleOverrideRequest(string RuleId, string? Reason, string? StageId = null);
 
 /// <summary>Стан етапу виконання (<c>execution_stages</c>, ADR-004 §2).</summary>
 /// <param name="StageId">Id етапу (<c>stages[].id</c>).</param>

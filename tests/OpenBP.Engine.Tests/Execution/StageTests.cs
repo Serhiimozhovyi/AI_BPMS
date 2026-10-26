@@ -62,11 +62,11 @@ public sealed class StageTests
         Assert.True(s1.ExitedAt <= s2.EnteredAt);
         Assert.Null(s1.DueAt);
 
-        // Стан пишеться після кожного кроку, лише коли змінився; останній запис — підсумок.
+        // Стан пишеться після кожного кроку, лише коли змінився; перехід пройдено, коли вузол за ним стартував.
         var history = g.Stages.History.Select(h => h.Stages).ToList();
         Assert.Equal(result.Stages, g.Stages.Of(result.ExecutionId));
         Assert.Equal([StageStatus.Pending, StageStatus.Pending], history[0].Select(s => s.Status));
-        Assert.Equal([StageStatus.Done, StageStatus.Pending], history[1].Select(s => s.Status));
+        Assert.Equal([StageStatus.Active, StageStatus.Pending], history[1].Select(s => s.Status));
         Assert.Equal([StageStatus.Done, StageStatus.Active], history[2].Select(s => s.Status));
         Assert.Equal([StageStatus.Done, StageStatus.Done], history[3].Select(s => s.Status));
         Assert.Equal(4, g.Stages.Saves);
@@ -308,9 +308,13 @@ public sealed class StageTests
         var running = StageTracker.Compute(workflow, [Step("a", 0, 1)], null, t0);
         Assert.Equal([StageStatus.Active, StageStatus.Pending], running.Select(s => s.Status));
 
-        var passed = StageTracker.Compute(workflow, [Step("a", 0, 1), Step("b", 2, 1)], null, t0);
+        // Вихід b → c має items, але c ще не стартував — етап ще триває.
+        var leaving = StageTracker.Compute(workflow, [Step("a", 0, 1), Step("b", 2, 1)], null, t0);
+        Assert.Equal([StageStatus.Active, StageStatus.Pending], leaving.Select(s => s.Status));
+
+        var passed = StageTracker.Compute(workflow, [Step("a", 0, 1), Step("b", 2, 1), Step("c", 4, 1)], null, t0);
         Assert.Equal(StageStatus.Done, passed[0].Status);
         Assert.Equal(t0.AddMinutes(3), passed[0].ExitedAt);
-        Assert.Equal(StageStatus.Pending, passed[1].Status);
+        Assert.Equal(StageStatus.Done, passed[1].Status);
     }
 }

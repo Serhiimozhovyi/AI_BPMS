@@ -73,6 +73,12 @@ public static class ExecutionEndpoints
             .WithDescription("Нове виконання `mode = resume` тієї самої версії: успішні вузли не виконуються знову, вузол, що впав, — з тими самими входами або з `items` на вході 0. Лише для `error`/`timed_out` (інакше 409 EXECUTION_NOT_FAILED); `items` без вузла, що впав, або для вузла без входу — 422 RESUME_INPUT_NOT_APPLICABLE.")
             .Produces<ExecutionSummary>(StatusCodes.Status202Accepted);
 
+        executions.MapPost("/{id:guid}/overrides", async (Guid id, RuleOverrideRequest body, IExecutionService service, CancellationToken ct) =>
+            Results.Ok(await service.OverrideRuleAsync(id, body, ct)))
+            .WithSummary("Відхилити правило переходу з причиною")
+            .WithDescription("ADR-004 §3: відкрите порушення правила `ruleId` стає `overridden` з автором і причиною; для `block` виконання, що чекає на цьому переході, прокидається одразу. Роль editor. Порожня `reason` — 422 STAGE_RULE_REASON_REQUIRED; правило не порушене — 409 STAGE_RULE_NOT_VIOLATED; `ruleId` порушений у кількох етапах без `stageId` — 422 STAGE_RULE_AMBIGUOUS.")
+            .Produces<ViolationDto>();
+
         executions.MapGet("/{id:guid}/events", StreamEventsAsync)
             .WithSummary("Потік подій виконання (SSE)")
             .WithDescription("`text/event-stream`: події `step` (крок, `id:` — для `Last-Event-ID`) і `status` (стан виконання), коментар `: ping` кожні 15 с. Потік закривається після фінального стану; у стані `waiting` (довге очікування) лишається відкритим.")

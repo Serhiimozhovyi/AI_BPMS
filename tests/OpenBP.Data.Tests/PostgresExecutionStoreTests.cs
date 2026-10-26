@@ -335,6 +335,39 @@ public class PostgresExecutionStoreTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task SaveRuleChecksAsync_OpensOnce_ResolvesWhenPassed_SkipsOverridden_WithAudit()
+    {
+        var (store, cs) = await StoreAsync();
+        var workflow = ResumeWorkflow();
+        var (wf, ver) = await SaveVersionAsync(cs, workflow);
+        var created = Snapshot(wf, ver, workflow);
+        await store.CreateAsync(created, CancellationToken.None);
+        RuleCheck Check(string rule, bool passed, bool overridden = false) =>
+            new("s1", rule, true, passed, overridden, $"Правило {rule}", "n_b", [new JsonObject { ["n"] = 1 }], Now);
+
+        await store.SaveRuleChecksAsync(created.Id, [Check("r1", passed: false), Check("r2", passed: true), Check("r3", passed: false, overridden: true)], CancellationToken.None);
+        await store.SaveRuleChecksAsync(created.Id, [Check("r1", passed: false)], CancellationToken.None);
+
+        await using (var db = PostgresFixture.CreateContext(cs))
+        {
+            var open = Assert.Single(await db.Violations.Where(v => v.ExecutionId == created.Id).ToListAsync());
+            Assert.Equal(("r1", ViolationStatuses.Open, "block", ver, "Правило r1"), (open.RuleId, open.Status, open.Mode, open.WorkflowVersionId, open.Message));
+            Assert.Equal(1, JsonNode.Parse(open.Context)![0]!["n"]!.GetValue<int>());
+        }
+
+        await store.SaveRuleChecksAsync(created.Id, [Check("r1", passed: true)], CancellationToken.None);
+
+        await using (var db = PostgresFixture.CreateContext(cs))
+        {
+            var resolved = await db.Violations.SingleAsync(v => v.ExecutionId == created.Id);
+            Assert.Equal((ViolationStatuses.Resolved, ViolationStatuses.EngineActor, (DateTimeOffset?)Now), (resolved.Status, resolved.ActorSystem, resolved.ResolvedAt));
+            // Обидві події з тим самим At — порядок id у межах мілісекунди не гарантований.
+            var audit = await db.AuditLog.Where(a => a.EntityId == created.Id.ToString()).Select(a => a.Action).ToListAsync();
+            Assert.Equal([ViolationStatuses.AuditOpened, ViolationStatuses.AuditResolved], audit.Order());
+        }
+    }
+
+    [Fact]
     public async Task WorkflowWithoutStages_WritesNoStageRows()
     {
         var (store, cs) = await StoreAsync();

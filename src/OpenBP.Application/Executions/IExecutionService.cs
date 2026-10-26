@@ -86,6 +86,19 @@ public interface IExecutionService
     /// <exception cref="ConflictException"><c>EXECUTION_NOT_FAILED</c> — стан не <c>error</c>/<c>timed_out</c>.</exception>
     /// <exception cref="WorkflowValidationException"><c>RESUME_INPUT_NOT_APPLICABLE</c> — <paramref name="items"/> нікуди подати.</exception>
     Task<ExecutionSummary> ResumeFromFailedAsync(Guid id, IReadOnlyList<Item>? items, CancellationToken ct);
+
+    /// <summary>
+    /// Відхилення правила переходу з причиною (ADR-004 §3, F7-03): відкрите порушення стає <c>overridden</c> з автором і
+    /// причиною, у журнал аудиту — <c>violation.overridden</c>. Для <c>block</c> виконання, що чекає на цьому переході,
+    /// прокидається одразу, і перехід проходить. Потрібна роль <see cref="UserRole.Editor"/> у проєкті сценарію.
+    /// </summary>
+    /// <param name="id">Виконання.</param>
+    /// <param name="request">Правило, причина, етап (за потреби).</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="UnprocessableException">Причина порожня (<c>STAGE_RULE_REASON_REQUIRED</c>) або <c>ruleId</c> відкритий у
+    /// кількох етапах без <c>stageId</c> (<c>STAGE_RULE_AMBIGUOUS</c>).</exception>
+    /// <exception cref="ConflictException">Відкритого порушення правила немає (<c>STAGE_RULE_NOT_VIOLATED</c>).</exception>
+    Task<ViolationDto> OverrideRuleAsync(Guid id, RuleOverrideRequest request, CancellationToken ct);
 }
 
 /// <summary>
