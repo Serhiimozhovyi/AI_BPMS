@@ -5,6 +5,7 @@ using OpenBP.Ai;
 using OpenBP.Application.Assistant;
 using OpenBP.Application.DataTables;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
@@ -106,11 +107,16 @@ public static class WorkerServiceCollectionExtensions
         services.AddSingleton(sp => new PostgresSubWorkflowLauncher(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<TimeProvider>()));
+        // Відповіді webhook-ів (F6-05): core.respondToWebhook і respond: whenFinished пишуть у webhook_responses.
+        services.AddSingleton(sp => new PostgresWebhookResponder(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
             CoreNodes.All(
-                    sp.GetRequiredService<TimeProvider>(),
-                    sp.GetRequiredService<PostgresDataTableStore>(),
-                    sp.GetRequiredService<PostgresSubWorkflowLauncher>())
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<PostgresDataTableStore>(),
+                sp.GetRequiredService<PostgresSubWorkflowLauncher>(),
+                sp.GetRequiredService<PostgresWebhookResponder>())
                 .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>(), sp.GetRequiredService<TimeProvider>()))
                 .Concat(AiNodes.All(
                     sp.GetRequiredService<HttpClient>(),
@@ -130,7 +136,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionJobProcessor>>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<WorkflowLimits>(),
-            sp.GetRequiredService<WorkerMetrics>()));
+            sp.GetRequiredService<WorkerMetrics>(),
+            sp.GetRequiredService<PostgresWebhookResponder>()));
         services.AddSingleton(sp => new PollJobProcessor(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

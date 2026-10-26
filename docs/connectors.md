@@ -361,7 +361,9 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 - `core.manualTrigger` — для тестового запуску.
 - `core.webhook` — `{ method, path, auth? }`; api реєструє маршрут `/webhook/{path}`, payload (`headers`, `query`, `body`) стає першим item.
   `auth` — `{ type: "header" | "basic", credentialId, headerName? }`: секрет у credential (`header` → `{ token }`, заголовок `headerName`, за замовчуванням `X-Webhook-Token`; `basic` → `{ username, password }`).
-  Шлях реєструється в `webhooks` при активації (конфлікт — `WEBHOOK_PATH_CONFLICT`); відповіді: 202 `{ executionId }`, невідомий/неактивний шлях або інший метод — 404, невдала автентифікація — 401.
+  Шлях реєструється в `webhooks` при активації (конфлікт — `WEBHOOK_PATH_CONFLICT`); невідомий/неактивний шлях або інший метод — 404, невдала автентифікація — 401.
+  Відповідь (F6-05) — за `respond`: `immediately` (типово) — 202 `{ executionId }`; `whenFinished` — 200 з виходом останнього вузла після завершення; `fromNode` — те, що віддав вузол `core.respondToWebhook { statusCode, headers, body | binaryKey }` (виконання триває далі). Не дочекались за `responseTimeoutSec` (типово 30) — 504.
+  Дедуплікація: `idempotencyKey` (вираз, напр. `{{ $json.body.update_id }}`) або заголовок `Idempotency-Key`; повтор у вікні `dedupeWindowSec` (типово доба) повертає ту саму відповідь із заголовком `Idempotent-Replayed: true` без нового виконання. Деталі — docs/workflow-format.md «Відповідь webhook-у й дедуплікація».
   Заголовок із секретом автентифікації і `cookie` в item не потрапляють.
 - `core.schedule` — `{ cron, timezone }`; api реєструє Quartz-job.
   `cron` — 5 полів crontab (`0 7 * * 1-5`, день тижня 0–7, 0 і 7 — неділя) або 6–7 полів Quartz із секундами (`0 0 7 ? * MON-FRI`); `timezone` — IANA, за замовчуванням `settings.timezone` сценарію.

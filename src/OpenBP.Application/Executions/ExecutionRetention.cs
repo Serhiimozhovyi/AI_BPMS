@@ -154,6 +154,22 @@ public sealed class ExecutionRetentionService(OpenBpDbContext db, ExecutionReten
     }
 
     /// <summary>
+    /// Відповіді webhook-ів (F6-05): <c>webhook_responses</c> потрібні, лише поки Api чекає на запит (≤ 300 с), тож
+    /// видаляються ті, що старші за <see cref="WebhookResponseKeep"/>; ключі дедуплікації <c>webhook_dedupe</c> — після
+    /// <c>expires_at</c>. Не залежить від <see cref="ExecutionRetentionOptions.Days"/>. Повертає кількість видалених.
+    /// </summary>
+    public async Task<int> PurgeWebhooksAsync(CancellationToken ct)
+    {
+        var now = time.GetUtcNow();
+        var responsesCutoff = now - WebhookResponseKeep;
+        var deleted = await db.WebhookResponses.Where(r => r.CreatedAt < responsesCutoff).ExecuteDeleteAsync(ct);
+        return deleted + await db.WebhookDedupe.Where(d => d.ExpiresAt < now).ExecuteDeleteAsync(ct);
+    }
+
+    /// <summary>Скільки зберігати відповідь webhook-у після запису.</summary>
+    public static readonly TimeSpan WebhookResponseKeep = TimeSpan.FromHours(1);
+
+    /// <summary>
     /// Видаляє записи журналу аудиту, старші за <see cref="ExecutionRetentionOptions.AuditDays"/> днів, пачками.
     /// Повертає кількість видалених записів.
     /// </summary>
@@ -205,6 +221,7 @@ public sealed partial class ExecutionRetentionJob(IServiceScopeFactory scopes, I
         var deleted = await service.PurgeAsync(cancellationToken);
         LogPurged(logger, deleted, options.Days);
         await service.PurgeNotificationsAsync(cancellationToken);
+        await service.PurgeWebhooksAsync(cancellationToken);
         var audit = await service.PurgeAuditAsync(cancellationToken);
         LogAuditPurged(logger, audit, options.AuditDays);
     }

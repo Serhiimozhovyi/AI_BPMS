@@ -157,6 +157,8 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
+| `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
+| `webhook_dedupe` | workflow_id, node_id, key (PK), execution_id, status_code?, headers?, body?, created_at, expires_at (індекс) — ключі ідемпотентності webhook-ів (F6-05) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |
 | `subscriptions` | workflow_id → workflows (cascade), node_id (PK разом), server_id, resource_uri, worker_id (null — вільна), leased_until (індекс), updated_at — підписки `mcp.subscribe`, оренда воркером (F6-13) |
 | `notification_channels` | id, name, type (`email`/`telegram`/`webhook`), config (jsonb: посилання на конектор чи credential, без секретів), events (jsonb), cooldown_sec, enabled, created_at, updated_at (F6-07) |
@@ -527,6 +529,21 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
 - коментар `: ping` кожні 15 с як keep-alive; `retry: 2000`.
 
 Для вже завершеного виконання потік віддає всі кроки після курсора і `status`, потім закривається.
+
+Відповідь webhook-у (F6-05, docs/workflow-format.md «Відповідь webhook-у й дедуплікація»). Маршрут `/webhook/{path}`
+анонімний, а `IExecutionEventSource` прив'язаний до користувача, тож `WebhookService` для `whenFinished`/`fromNode`
+опитує БД тим самим способом (кожні 100 мс): рядок `webhook_responses` виконання і статус `executions`, до
+`responseTimeoutSec`.
+- Відповідь пише воркер через `IWebhookResponder` (`PostgresWebhookResponder`, `INSERT … ON CONFLICT DO NOTHING` —
+  виграє перша): `core.respondToWebhook` під час виконання (виконання триває) або, для `whenFinished`,
+  `ExecutionJobProcessor` після успіху **до** фінального стану — тож Api, що побачило фінальний стан, уже бачить і
+  відповідь, навіть із `saveSuccessfulData: false`. Файл `binaryKey` читає воркер: в Api `IBinaryStore` немає.
+- Фінальний стан без відповіді: `whenFinished` — 500/409 за станом, `fromNode` — 500 `WEBHOOK_NO_RESPONSE`; не
+  дочекались — 504 `WEBHOOK_RESPONSE_TIMEOUT` з `executionId` (виконання триває).
+- Дедуплікація: `webhook_dedupe` з PK `(workflow_id, node_id, key)`; пошук і вставка — в одній транзакції під
+  `pg_advisory_xact_lock` ключа, тож два одночасні дублі не запускають двох виконань. Запис зберігає відому відповідь
+  (не 504) для повтору; дубль, що прийшов, поки відповіді ще немає, чекає на те саме виконання.
+- Ретеншн-job (F4-07) видаляє `webhook_responses`, старші за 1 год, і `webhook_dedupe` з `expires_at` у минулому.
 
 ### 10.6. Автентифікація і ролі
 

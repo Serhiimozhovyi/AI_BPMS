@@ -17,7 +17,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -38,6 +38,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -56,7 +62,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -77,6 +83,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -95,7 +107,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -116,6 +128,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -134,7 +152,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -156,6 +174,12 @@
               }
             }
           },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
+          },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
             "content": {
@@ -173,7 +197,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -194,6 +218,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",

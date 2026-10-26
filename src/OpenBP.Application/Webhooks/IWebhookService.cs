@@ -10,16 +10,19 @@ namespace OpenBP.Application.Webhooks;
 public interface IWebhookService
 {
     /// <summary>
-    /// Знаходить зареєстрований webhook за шляхом, перевіряє метод і автентифікацію та ставить виконання поточної
+    /// Знаходить зареєстрований webhook за шляхом, перевіряє метод і автентифікацію та ставить виконання опублікованої
     /// версії сценарію в чергу (<c>IExecutionLauncher</c>, режим <c>trigger</c>) з item'ом запиту
-    /// <c>{ headers, query, body }</c> як виходом вузла-тригера.
+    /// <c>{ headers, query, body }</c> як виходом вузла-тригера. Відповідь — за параметром <c>respond</c> (F6-05):
+    /// 202 з <c>executionId</c>, вихід останнього вузла після завершення або відповідь вузла <c>core.respondToWebhook</c>
+    /// (не дочекались за <c>responseTimeoutSec</c> — 504). З ключем ідемпотентності повтор у вікні повертає ту саму
+    /// відповідь без нового виконання.
     /// </summary>
     /// <param name="request">Вхідний HTTP-запит.</param>
     /// <param name="ct">Скасування.</param>
-    /// <returns>Id поставленого в чергу виконання.</returns>
+    /// <returns>Відповідь для викликача.</returns>
     /// <exception cref="Errors.NotFoundException">Шлях не зареєстровано (невідомий або сценарій неактивний) чи метод інший.</exception>
     /// <exception cref="Errors.UnauthenticatedException">Автентифікація webhook не пройдена.</exception>
-    Task<Guid> TriggerAsync(WebhookRequest request, CancellationToken ct);
+    Task<WebhookReply> TriggerAsync(WebhookRequest request, CancellationToken ct);
 }
 
 /// <summary>HTTP-запит до <c>/webhook/{path}</c>, уже розібраний хостом.</summary>
