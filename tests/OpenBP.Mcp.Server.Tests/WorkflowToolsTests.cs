@@ -156,6 +156,11 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         definition["connections"]!.AsArray().Add(JsonNode.Parse("""
             { "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_set", "input": 0 }, "business": { "label": "далі" } }
             """));
+        definition["stages"] = JsonNode.Parse("""
+            [ { "id": "st_start", "name": "Старт", "nodes": ["n_start", "n_set"], "owner": { "lane": "openbp" },
+                "due": { "amount": 1, "unit": "businessDays" },
+                "transitions": [ { "rules": [ { "id": "r_any", "condition": "{{ true }}", "mode": "warn", "message": "—" } ] } ] } ]
+            """);
 
         var validation = await CallAsync(client, "validate_workflow", new() { ["definition"] = definition, ["active"] = true });
         Assert.True((bool)validation["valid"]!, validation.ToJsonString());
@@ -170,17 +175,19 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         Assert.True(JsonNode.DeepEquals(definition["nodes"]![0]!["business"], saved["nodes"]![0]!["business"]));
         Assert.True(JsonNode.DeepEquals(definition["nodes"]![1]!["business"], saved["nodes"]![1]!["business"]));
         Assert.True(JsonNode.DeepEquals(definition["connections"]![0]!["business"], saved["connections"]![0]!["business"]));
+        Assert.True(JsonNode.DeepEquals(definition["stages"], saved["stages"]), saved["stages"]?.ToJsonString());
         var resource = await client.ReadResourceAsync($"openbp://workflows/{id}");
         var text = Assert.IsType<TextResourceContents>(Assert.Single(resource.Contents));
         Assert.True(JsonNode.DeepEquals(definition["business"], JsonNode.Parse(text.Text)!["business"]));
 
         definition["business"]!["steps"]![0]!["links"]![0]!["node"] = "n_ghost";
         definition["nodes"]![0]!["business"]!["lane"] = "nowhere";
+        definition["stages"]![0]!["nodes"]![1] = "n_ghost";
         var invalid = await CallAsync(client, "validate_workflow", new() { ["definition"] = definition });
         Assert.False((bool)invalid["valid"]!);
         var errors = invalid["errors"]!.AsArray();
-        Assert.Equal(["BUSINESS_LINK_NODE_UNKNOWN", "BUSINESS_LANE_UNKNOWN"], errors.Select(e => (string?)e!["code"]));
-        Assert.Equal(["/business/steps/0/links/0/node", "/nodes/0/business/lane"], errors.Select(e => (string?)e!["path"]));
+        Assert.Equal(["BUSINESS_LINK_NODE_UNKNOWN", "BUSINESS_LANE_UNKNOWN", "STAGE_NODE_UNKNOWN"], errors.Select(e => (string?)e!["code"]));
+        Assert.Equal(["/business/steps/0/links/0/node", "/nodes/0/business/lane", "/stages/0/nodes/1"], errors.Select(e => (string?)e!["path"]));
         var failed = await ErrorAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
         Assert.Equal("WORKFLOW_INVALID", (string?)failed["code"]);
     }

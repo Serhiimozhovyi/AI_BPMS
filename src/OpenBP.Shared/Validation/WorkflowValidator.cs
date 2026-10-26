@@ -99,6 +99,7 @@ public sealed class WorkflowValidator
         ValidateNodes(workflow, errors);
         ValidateConnections(workflow, graph, errors);
         ValidateBusiness(workflow, graph, errors);
+        ValidateStages(workflow, graph, errors);
         ValidateAcyclic(workflow, graph, errors);
         if (options.IsActive)
         {
@@ -330,6 +331,119 @@ public sealed class WorkflowValidator
         }
     }
 
+    /// <summary>
+    /// Технічні вузли, через які етап лишається зв'язним, хоч вони йому не належать (ті самі, що згортає
+    /// бізнес-вигляд, docs/business-view.md §«Правила за замовчуванням»).
+    /// </summary>
+    private static readonly HashSet<string> PassThroughTypes = new(StringComparer.Ordinal) { "core.set", "core.code", "core.merge" };
+
+    /// <summary>
+    /// Етапи (ADR-004 §1): id етапів унікальні; <c>nodes[]</c> — існуючі вузли, кожен щонайбільше в одному етапі;
+    /// вузли етапу зв'язані між собою (без урахування напряму ребер), шлях може проходити через технічні або вимкнені
+    /// вузли без етапу; <c>transitions[].to</c> — існуючий етап; id правил унікальні в межах етапу;
+    /// <c>owner.lane</c> — доріжка з <c>business.lanes</c>.
+    /// </summary>
+    private static void ValidateStages(WorkflowDefinition workflow, Graph graph, List<WorkflowValidationError> errors)
+    {
+        var stages = workflow.Stages;
+        if (stages is null || stages.Count == 0)
+        {
+            return;
+        }
+
+        var stageIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var stage in stages)
+        {
+            stageIds.Add(stage.Id);
+        }
+
+        var lanes = new HashSet<string>(workflow.Business?.Lanes?.Select(l => l.Id) ?? [], StringComparer.Ordinal);
+
+        // Належність вузлів етапам — наперед (перший етап у документі виграє), щоб перевірка зв'язності знала,
+        // які технічні вузли вже зайняті іншим етапом.
+        var nodeStage = new Dictionary<int, int>();
+        for (var i = 0; i < stages.Count; i++)
+        {
+            foreach (var nodeId in stages[i].Nodes)
+            {
+                if (graph.IndexOf(nodeId) is { } index)
+                {
+                    nodeStage.TryAdd(index, i);
+                }
+            }
+        }
+
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < stages.Count; i++)
+        {
+            var stage = stages[i];
+            if (!seenIds.Add(stage.Id))
+            {
+                errors.Add(new(WorkflowValidationCodes.StageIdDuplicate,
+                    $"Етап з id «{stage.Id}» уже є; id етапу має бути унікальним.", Path: $"/stages/{i}/id"));
+            }
+
+            var members = new HashSet<int>();
+            for (var j = 0; j < stage.Nodes.Count; j++)
+            {
+                var nodeId = stage.Nodes[j];
+                if (graph.IndexOf(nodeId) is not { } index)
+                {
+                    errors.Add(new(WorkflowValidationCodes.StageNodeUnknown,
+                        $"Етап «{stage.Name}» містить невідомий вузол «{nodeId}».", nodeId, $"/stages/{i}/nodes/{j}"));
+                    continue;
+                }
+
+                if (nodeStage[index] != i)
+                {
+                    errors.Add(new(WorkflowValidationCodes.StageNodeInTwoStages,
+                        $"Вузол «{workflow.Nodes[index].Name}» уже належить етапу «{stages[nodeStage[index]].Id}»; вузол може бути лише в одному етапі.",
+                        nodeId, $"/stages/{i}/nodes/{j}"));
+                    continue;
+                }
+
+                members.Add(index);
+            }
+
+            if (members.Count > 1 && !graph.IsConnected(members, index =>
+                    !nodeStage.ContainsKey(index) &&
+                    (workflow.Nodes[index].Disabled == true || PassThroughTypes.Contains(workflow.Nodes[index].Type))))
+            {
+                errors.Add(new(WorkflowValidationCodes.StageNotConnected,
+                    $"Вузли етапу «{stage.Name}» не зв'язані між собою ребрами; етап має бути однією зв'язною частиною графа.",
+                    Path: $"/stages/{i}/nodes"));
+            }
+
+            if (stage.Owner?.Lane is { } lane && !lanes.Contains(lane))
+            {
+                errors.Add(new(WorkflowValidationCodes.BusinessLaneUnknown,
+                    $"Етап «{stage.Name}» призначено доріжці «{lane}», якої немає в business.lanes.",
+                    Path: $"/stages/{i}/owner/lane"));
+            }
+
+            var ruleIds = new HashSet<string>(StringComparer.Ordinal);
+            for (var k = 0; k < (stage.Transitions?.Count ?? 0); k++)
+            {
+                var transition = stage.Transitions![k];
+                if (transition.To is { } to && !stageIds.Contains(to))
+                {
+                    errors.Add(new(WorkflowValidationCodes.StageTransitionUnknown,
+                        $"Перехід з етапу «{stage.Name}» веде в невідомий етап «{to}».", Path: $"/stages/{i}/transitions/{k}/to"));
+                }
+
+                for (var r = 0; r < transition.Rules.Count; r++)
+                {
+                    if (!ruleIds.Add(transition.Rules[r].Id))
+                    {
+                        errors.Add(new(WorkflowValidationCodes.StageRuleIdDuplicate,
+                            $"Правило з id «{transition.Rules[r].Id}» уже є в етапі «{stage.Name}»; id правила має бути унікальним у межах етапу.",
+                            Path: $"/stages/{i}/transitions/{k}/rules/{r}/id"));
+                    }
+                }
+            }
+        }
+    }
+
     private static void ValidateAcyclic(WorkflowDefinition workflow, Graph graph, List<WorkflowValidationError> errors)
     {
         foreach (var cycle in graph.FindCycles())
@@ -389,6 +503,51 @@ public sealed class WorkflowValidator
         }
 
         public int? IndexOf(string id) => _index.TryGetValue(id, out var i) ? i : null;
+
+        /// <summary>
+        /// Чи всі <paramref name="members"/> досяжні один з одного без урахування напряму ребер, якщо проміжними
+        /// можуть бути лише члени або вузли, для яких <paramref name="passThrough"/> істинне.
+        /// </summary>
+        public bool IsConnected(HashSet<int> members, Func<int, bool> passThrough)
+        {
+            if (members.Count == 0)
+            {
+                return true;
+            }
+
+            var undirected = new HashSet<int>[_next.Length];
+            for (var i = 0; i < _next.Length; i++)
+            {
+                undirected[i] ??= [];
+                foreach (var next in _next[i])
+                {
+                    undirected[i].Add(next);
+                    (undirected[next] ??= []).Add(i);
+                }
+            }
+
+            var start = members.Min();
+            var visited = new HashSet<int> { start };
+            var queue = new Queue<int>();
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                foreach (var neighbor in undirected[queue.Dequeue()])
+                {
+                    if (!visited.Add(neighbor))
+                    {
+                        continue;
+                    }
+
+                    if (members.Contains(neighbor) || passThrough(neighbor))
+                    {
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            return members.All(visited.Contains);
+        }
 
         /// <summary>
         /// По одному циклу на кожну сильно зв'язну компоненту з циклом: найкоротший шлях від вузла
