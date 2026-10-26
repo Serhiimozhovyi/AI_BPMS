@@ -111,6 +111,12 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 посилання: `BUSINESS_LANE_UNKNOWN`, `BUSINESS_LINK_NODE_UNKNOWN`, `BUSINESS_STEP_LINKS_MISSING`,
 `BUSINESS_LANE_ID_DUPLICATE`, `BUSINESS_STEP_ID_DUPLICATE` — з `path` на поле.
 
+Етапи (F7-01, [ADR-004](adr/ADR-004-stages.md)) — `stages[] { id, name, nodes[], owner?, due?, transitions[] { to?, rules[] } }`
+на рівні сценарію — переносяться так само без втрат, тож агент може розкласти процес на етапи зі строками й правилами
+переходу; схема полів — у `openbp://schema/workflow-format`. `validate_workflow` перевіряє `STAGE_ID_DUPLICATE`,
+`STAGE_NODE_UNKNOWN`, `STAGE_NODE_IN_TWO_STAGES`, `STAGE_NOT_CONNECTED`, `STAGE_TRANSITION_UNKNOWN`,
+`STAGE_RULE_ID_DUPLICATE` — з `path` на поле. Стан етапів виконання і дії над ними — F7-02/F7-05.
+
 ### Оцінки вузлів ШІ (F6-17)
 
 Оцінка — набір кейсів «вхід → очікуване» для одного вузла (зазвичай `ai.llm` чи `ai.agent`). `run_evaluation` виконує вузол на кожному кейсі по черзі тим самим механізмом, що `test_node` з `items`, на поточній (збереженій) версії і зберігає прогін з номером версії — так видно, чи зміна промпту покращила результат. Фактичне значення — `json` єдиного item'а виходу 0 (масив `json`-ів, якщо items кілька).

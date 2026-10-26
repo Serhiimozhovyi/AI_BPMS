@@ -797,7 +797,7 @@
 Чого бракує в Кіті (поза цим беклогом, лише за рішенням власника): воронка в `CrmSaleStages` (порядок, імовірність, виграно/програно, історія стадій), сутність дзвінків/активностей і телефонія, події назовні (Кіт їх не шле — OpenBP опитує), сервісний користувач у `Users` з роллю `CRM_user` для запису через OData.
 
 ### F5-01 · БП продажів на CRM Кіта: проєкт
-- model: `fable` · status: `ready` · depends: —
+- model: `fable` · status: `done` · depends: —
 - Що: документ `docs/kit-sales.md`: межі (OpenBP окремо, Кіт лише через OData, без змін у його коді); довге очікування — стан `waiting` виконання, `resume_at`, звільнення воркера, відновлення після рестарту, скасування; очікування дії людини (задача в Кіті закрита / умова виконана) поверх довгого очікування; ключ кореляції виконання з угодою чи контрагентом і правило «не дублювати активне»; конектор `kit-crm`: сутності й tools, автентифікація сервісним користувачем Keycloak (`client_credentials` або пароль сервісного користувача з env), заголовок `FrontPagePath` (без нього POST/PATCH дають 403), м'яке видалення `IsDelete`, відповідальні — `CrmPerson`, а не `Users`; опитування змін (`Updated gt …` для `mcp.poll`); два пілотні сценарії F5-06, F5-07.
 - DoD: `docs/kit-sales.md` погоджено власником; F5-02…F5-07 уточнено за ним.
 
@@ -953,7 +953,7 @@
 Порядок: F7-06, F7-07, F7-09 паралельно з F5-05; F7-01 (вдень з власником) → F7-02 → F7-03 → F7-04 → F7-05 → F7-08.
 
 ### F7-01 · ADR-004 і формат етапів: `stages[]`, валідатор, схема, `/mcp`
-- model: `fable` · status: `ready` · depends: —
+- model: `fable` · status: `done` · depends: —
 - Що: прийняти ADR-004 (статус «прийнято»); у `docs/workflow-format.md` розділ «Етапи» з таблицею полів `stages[] { id, name, nodes[], owner?, due?, transitions[] { to?, rules[] { id, condition, mode: block|warn, message } } }`; JSON Schema в `OpenBP.Shared`; `WorkflowValidator`: `STAGE_ID_DUPLICATE`, `STAGE_NODE_UNKNOWN`, `STAGE_NODE_IN_TWO_STAGES`, `STAGE_NOT_CONNECTED` (зв'язність після згортання технічних вузлів, як у бізнес-вигляді), `STAGE_TRANSITION_UNKNOWN`, `STAGE_RULE_ID_DUPLICATE`; `formatVersion` лишається 1 (поля необов'язкові); TS-типи в `apps/web`; `/mcp` і `openbp://schema/workflow-format` віддають поля без втрат; приклад `examples/kit-approval-stages.json` (на основі `kit-approval-business.json`).
 - DoD: тести валідатора на кожен код і на сценарій без `stages`; старі приклади валідні; `describe_nodes`/схема у MCP містять `stages`; `docs/workflow-format.md`, `architecture.md` §2 оновлено; рев'ю власником.
 
@@ -978,7 +978,7 @@
 - DoD: тести сервісу (Testcontainers): стан + дії + `unmet`; дія «завершити задачу» через контракт = `complete_task`; дія з `reason` на `warn`-правилі; viewer бачить лише свої дії; MCP tools; Vitest web-component; `docs/embedding.md`, `docs/mcp-server.md`, `docs/architecture.md` оновлено; OpenAPI перегенеровано.
 
 ### F7-06 · Гілки: `core.merge` `all|any|count`, скасування закриває очікування й задачі
-- model: `opus` · status: `ready` · depends: F5-02
+- model: `opus` · status: `done` · depends: F5-02
 - Що: `core.merge` typeVersion 2: `mode: all | any | count` (+ `count`), `any`/`count` пропускають першу/N-ту гілку, решту рушій скасовує (їхні `waiting` вузли → `cancelled`, подальші вузли не стартують); v1 працює як раніше. Завершення (`success`/`error`/`timed_out`) або скасування виконання закриває все незавершене: `core.wait`/`mcp.waitFor` у `waiting` → `cancelled`, job пробудження знімається; інваріант «немає `waiting` кроків і відкритих задач у завершеному виконанні» — у `IExecutionStore` як перевірка при `CompleteAsync`; для задач F6-02 — контракт у `architecture.md` §10.4 (статус задачі `cancelled` з `executionId` причини), який F6-02 реалізує. Бізнес-вигляд підписує merge «будь-яка з гілок»/«N з M».
 - DoD: тести движка: `any` з двома гілками, повільна гілка скасована; `count: 2` з трьох; скасування виконання під час `waiting` в обох гілках → усі кроки `cancelled`; інваріант перевіряється тестом з Testcontainers; `docs/workflow-format.md` (`core.merge` v2), `architecture.md` §2 і §10.4 оновлено; `describe_nodes` знає v2.
 

@@ -128,6 +128,43 @@ describe('canvas-model', () => {
     expect(byId.get('old')).toEqual(switchV1.outputs);
   });
 
+  it('core.merge v2: показує branches входів (типово 2) і кожен вхід з ребром; v1 — два входи', () => {
+    const mergeV2 = {
+      type: 'core.merge',
+      version: 2,
+      displayName: "Об'єднати",
+      group: 'logic' as const,
+      inputs: Array.from({ length: 8 }, (_, i) => `input${i + 1}`),
+      outputs: ['main'],
+      parametersSchema: { type: 'object' },
+      isTrigger: false,
+    };
+    const mergeV1 = { ...mergeV2, version: 1, inputs: ['input1', 'input2'] };
+    const node = (id: string, typeVersion: number, parameters: Record<string, unknown>) => ({
+      id,
+      name: id,
+      type: 'core.merge',
+      typeVersion,
+      position: [0, 0] as [number, number],
+      parameters,
+    });
+    const definition = {
+      formatVersion: 1,
+      name: 'merge',
+      settings: {},
+      pinData: {},
+      nodes: [node('three', 2, { mode: 'count', count: 2, branches: 3 }), node('plain', 2, {}), node('edge', 2, {}), node('old', 1, {})],
+      connections: [{ from: { node: 'plain', output: 0 }, to: { node: 'edge', input: 4 } }],
+    } as unknown as WorkflowDefinition;
+
+    const byId = new Map(toCanvasModel(definition, [mergeV1, mergeV2]).nodes.map((n) => [n.id, n.inputs]));
+
+    expect(byId.get('three')).toEqual(['input1', 'input2', 'input3']);
+    expect(byId.get('plain')).toEqual(['input1', 'input2']);
+    expect(byId.get('edge')).toEqual(mergeV2.inputs.slice(0, 5));
+    expect(byId.get('old')).toEqual(['input1', 'input2']);
+  });
+
   it('невідомий тип отримує порти за ребрами, щоб жодне ребро не зникло', () => {
     const model = toCanvasModel(workflowWithExtras(), SAMPLE_DESCRIPTORS);
     const future = model.nodes.find((n) => n.id === 'n_future')!;

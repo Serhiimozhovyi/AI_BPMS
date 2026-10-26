@@ -25,7 +25,12 @@
         "items": { "$ref": "#/$defs/item" }
       }
     },
-    "business": { "$ref": "#/$defs/business" }
+    "business": { "$ref": "#/$defs/business" },
+    "stages": {
+      "type": "array",
+      "description": "Етапи бізнес-процесу над графом (ADR-004, docs/workflow-format.md §«Етапи»). Необов'язкові; без них рушій працює як раніше. Валідатор перевіряє унікальність id, посилання на вузли й етапи, зв'язність етапу.",
+      "items": { "$ref": "#/$defs/stage" }
+    }
   },
   "$defs": {
     "settings": {
@@ -186,6 +191,62 @@
         "subtitle": { "type": "string" },
         "lane": { "type": "string", "minLength": 1, "description": "id доріжки з business.lanes." },
         "hidden": { "type": "boolean", "description": "true — не показувати вузол; false — показувати технічний вузол (core.set, core.code, core.merge), який інакше згорнувся б." }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "required": ["id", "name", "nodes"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "description": "id вузлів етапу; кожен вузол — щонайбільше в одному етапі.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "owner": {
+          "type": "object",
+          "description": "Хто виконує етап: доріжка бізнес-вигляду (id з business.lanes), роль або вираз.",
+          "properties": {
+            "lane": { "type": "string", "minLength": 1 },
+            "role": { "type": "string", "minLength": 1 },
+            "expression": { "type": "string", "minLength": 1 }
+          }
+        },
+        "due": {
+          "type": "object",
+          "description": "Строк від входу в етап: amount + unit або вираз дати until.",
+          "properties": {
+            "amount": { "type": "integer", "minimum": 1 },
+            "unit": { "enum": ["minutes", "hours", "days", "businessDays"], "description": "businessDays — пн–пт за settings.timezone." },
+            "until": { "type": "string", "minLength": 1, "description": "Вираз, що дає дату-час завершення." }
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "description": "Правила на переходах з етапу; без to — на всіх виходах.",
+          "items": {
+            "type": "object",
+            "required": ["rules"],
+            "properties": {
+              "to": { "type": "string", "minLength": 1, "description": "id етапу-призначення." },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "condition"],
+                  "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "condition": { "type": "string", "minLength": 1, "description": "Вираз над items переходу; true — правило виконане." },
+                    "mode": { "enum": ["block", "warn"], "description": "block — перехід чекає виправлення або відхилення з причиною; warn (типово) — проходить, порушення фіксується." },
+                    "message": { "type": "string", "description": "Повідомлення для людини, коли правило не виконане." }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "item": {

@@ -115,6 +115,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 - Вузол: `id`, `name`, `type`, `typeVersion` (≥ 1), `position` (`[x, y]`), `parameters` (об'єкт). Необов'язкові: `timeoutSec`, `retry` (`maxTries`, `waitMs`), `continueOnFail`, `disabled`, `notes`, `business` (див. «Бізнес-атрибути»).
 - Ребро: `from.node` + `from.output`, `to.node` + `to.input` (індекси від 0). Необов'язкове `business.label`.
 - Сценарій: необов'язкове `business` (`lanes`, `steps`) — див. «Бізнес-атрибути».
+- Сценарій: необов'язкове `stages[]` — етапи бізнес-процесу над графом, див. «Етапи».
 - Невідомі поля на будь-якому рівні дозволені й зберігаються при (де)серіалізації.
 
 ### Таймаут виконання і серверна межа
@@ -225,6 +226,31 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 над відповіддю tool'а конектора з інтервалом, між перевірками виконання теж у `waiting`; виходи `done` і `timeout`
 (docs/connectors.md §3.1). Різниця з `core.wait` у режимі `webhook`: там умову перевіряє сам сценарій через tool, тут
 зовнішня система чи людина викликає OpenBP.
+
+### Злиття гілок (`core.merge`)
+
+- Версія 1 (`typeVersion: 1`, збережені сценарії): два входи, вузол виконується, коли items є на обох; `mode: "append"`
+  (спершу вхід 1, потім вхід 2) або `"combineByPosition"` (попарно злити `json` items з однаковим індексом).
+- Версія 2 (`typeVersion: 2`, палітра пропонує її для нових вузлів, F7-06, ADR-004 §5): входи `input1…input8`, канвас
+  показує `branches` (2…8, типово 2). `mode`:
+  - `all` (типово) — чекати всі під'єднані гілки; виконується, коли items є на кожному під'єднаному вході;
+  - `any` — пропустити першу гілку, що дійшла з items, решту скасувати;
+  - `count` + `count` (1…8, не більше під'єднаних входів) — пропустити перші `count` гілок, решту скасувати.
+
+  Скасована гілка: її вузли, що ще не стартували або чекають (`core.wait`, `mcp.waitFor` у `waiting`), отримують крок
+  `cancelled` (`error.type: "BRANCH_CANCELLED"`), job пробудження не створюється, подальші вузли гілки не стартують.
+  Вузол гілки, що має ще й інший вихід (сповіщення поруч), не скасовується. Гілок з items менше, ніж треба, коли всі
+  завершились, — крок `skipped`, як у v1. `combine`: `append` (items гілок, що пройшли, одна за одною в порядку входів)
+  або `combineByPosition` (попарне злиття всіх таких входів, кількості items мають збігатися). Бізнес-вигляд підписує
+  ребра через злиття «будь-яка з гілок» (`any`) або «N з M» (`count`).
+
+```json
+{ "id": "n_first", "name": "Перша відповідь", "type": "core.merge", "typeVersion": 2, "position": [600, 0],
+  "parameters": { "mode": "any", "branches": 2 } }
+```
+
+Завершення або скасування виконання закриває все незавершене: вузли в `waiting` отримують крок `cancelled`
+(`error.type: "WAIT_CLOSED"`), job пробудження видаляється (docs/architecture.md §2, §10.4).
 
 ### Ключ кореляції
 
@@ -364,6 +390,46 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 як і будь-де у форматі. Редактор при видаленні вузла прибирає зв'язки кроків на нього; крок, що лишився без зв'язків,
 видаляється.
 
+## Етапи (F7-01, ADR-004)
+
+Необов'язковий шар над графом для бізнес-процесів ([ADR-004](adr/ADR-004-stages.md)): етап групує вузли того самого
+графа, має виконавця, строк і правила переходу. **Одиниця виконання лишається вузол**: без `stages` рушій працює як
+раніше, боти й шедулери етапів не мають. Стан етапу рушій обчислює з виконання (F7-02), правила перевіряє на ребрах, що
+виходять з етапу (F7-03), контракт «стан · дії · умови» — F7-05. Поля додано до `formatVersion` 1 як необов'язкові; REST,
+`/mcp` і експорт/імпорт переносять їх без втрат. Повний приклад — `examples/kit-approval-stages.json` (не входить у
+CLI-прогони, бо вузли Кіта без `serverId`).
+
+```json
+{
+  "stages": [
+    {
+      "id": "st_approval", "name": "Погодження",
+      "nodes": ["n_wait_decision", "n_read_decision", "n_decision"],
+      "owner": { "lane": "kit" },
+      "due": { "amount": 2, "unit": "businessDays" },
+      "transitions": [
+        { "to": "st_execution", "rules": [
+          { "id": "r_comment", "condition": "{{ $json.Comment != '' }}", "mode": "warn",
+            "message": "Погоджувач не залишив коментар до рішення." } ] }
+      ]
+    },
+    { "id": "st_execution", "name": "Виконання", "nodes": ["n_task_executor", "n_wait_data", "n_read_fields", "n_check"],
+      "owner": { "lane": "kit" }, "due": { "amount": 3, "unit": "businessDays" } }
+  ]
+}
+```
+
+| Поле | Значення |
+|---|---|
+| `id`, `name` | `id` унікальний у сценарії; на нього посилаються `transitions[].to` |
+| `nodes[]` | id вузлів етапу (≥ 1). Кожен вузол — щонайбільше в одному етапі; вузли без етапу дозволені (сповіщення, технічні кроки). Вузли етапу мають бути зв'язані між собою ребрами (без урахування напряму); шлях може проходити через `core.set`/`core.code`/`core.merge` і вимкнені вузли, що не належать жодному етапу |
+| `owner?` | хто виконує: `lane` (id з `business.lanes`), `role` або `expression` (вираз, що дає email чи id) |
+| `due?` | строк від входу в етап: `amount` (≥ 1) + `unit` (`minutes`, `hours`, `days`, `businessDays` — пн–пт за `settings.timezone`) або `until` (вираз дати) |
+| `transitions[]?` | правила на переходах: `to` — id етапу-призначення, без `to` — усі виходи з етапу; `rules[]` — `{ id, condition, mode?, message? }`: `id` унікальний у межах етапу, `condition` — вираз над items переходу (`true` — виконане), `mode` — `block` (перехід чекає виправлення або відхилення з причиною) чи `warn` (типово: проходить, порушення фіксується), `message` — текст для людини |
+
+Перехід — ребро з вузла етапу у вузол іншого етапу або без етапу; ребра між вузлами одного етапу внутрішні. Невідомі
+поля всередині `stages` зберігаються, як і будь-де у форматі.
+
 ## Item і BinaryRef
 
 Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байти файлу в item не потрапляють, лише посилання на файлове сховище:
@@ -395,6 +461,10 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
    (`/business/steps/{i}/id`), `BUSINESS_LANE_UNKNOWN` (`/business/steps/{i}/lane` або `/nodes/{i}/business/lane`),
    `BUSINESS_LINK_NODE_UNKNOWN` (`/business/steps/{i}/links/{j}/node`), `BUSINESS_STEP_LINKS_MISSING`
    (`/business/steps/{i}/links`).
+10. Етапи (ADR-004): `STAGE_ID_DUPLICATE` (`/stages/{i}/id`), `STAGE_NODE_UNKNOWN` (`/stages/{i}/nodes/{j}`),
+    `STAGE_NODE_IN_TWO_STAGES` (`/stages/{i}/nodes/{j}`, на другому етапі), `STAGE_NOT_CONNECTED` (`/stages/{i}/nodes`),
+    `STAGE_TRANSITION_UNKNOWN` (`/stages/{i}/transitions/{k}/to`), `STAGE_RULE_ID_DUPLICATE`
+    (`/stages/{i}/transitions/{k}/rules/{r}/id`); `owner.lane` без такої доріжки — `BUSINESS_LANE_UNKNOWN` (`/stages/{i}/owner/lane`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.
 
