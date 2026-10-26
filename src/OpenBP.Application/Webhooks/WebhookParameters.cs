@@ -13,6 +13,19 @@ internal enum WebhookAuthType
     Basic,
 }
 
+/// <summary>Коли webhook відповідає викликачу (параметр <c>respond</c>, F6-05).</summary>
+public enum WebhookRespondMode
+{
+    /// <summary>Одразу 202 з <c>executionId</c>.</summary>
+    Immediately,
+
+    /// <summary>Після завершення виконання: вихід останнього вузла.</summary>
+    WhenFinished,
+
+    /// <summary>Відповідь пише вузол <c>core.respondToWebhook</c>.</summary>
+    FromNode,
+}
+
 /// <summary>Автентифікація webhook.</summary>
 internal sealed record WebhookAuth(WebhookAuthType Type, string CredentialId, string HeaderName);
 
@@ -20,8 +33,28 @@ internal sealed record WebhookAuth(WebhookAuthType Type, string CredentialId, st
 /// Параметри вузла <c>core.webhook</c> (схема — <c>OpenBP.Nodes.Core/Schemas/webhook.schema.json</c>), прочитані з
 /// визначення сценарію. Визначення вже провалідоване схемою, тож тут лише безпечне читання зі значеннями за замовчуванням.
 /// </summary>
-internal sealed record WebhookParameters(string Method, string Path, WebhookAuth? Auth)
+/// <param name="Method">HTTP-метод.</param>
+/// <param name="Path">Шлях без <c>/</c> по краях.</param>
+/// <param name="Auth">Автентифікація; <c>null</c> — немає.</param>
+/// <param name="Respond">Режим відповіді (F6-05).</param>
+/// <param name="ResponseTimeoutSec">Скільки Api чекає відповіді в режимах <c>whenFinished</c>/<c>fromNode</c>.</param>
+/// <param name="IdempotencyKey">Вираз ключа дедуплікації; <c>null</c> — заголовок <c>Idempotency-Key</c>.</param>
+/// <param name="DedupeWindowSec">Вікно дедуплікації.</param>
+internal sealed record WebhookParameters(
+    string Method,
+    string Path,
+    WebhookAuth? Auth,
+    WebhookRespondMode Respond = WebhookRespondMode.Immediately,
+    int ResponseTimeoutSec = WebhookParameters.DefaultResponseTimeoutSec,
+    string? IdempotencyKey = null,
+    int DedupeWindowSec = WebhookParameters.DefaultDedupeWindowSec)
 {
+    /// <summary>Типовий час очікування відповіді, с.</summary>
+    public const int DefaultResponseTimeoutSec = 30;
+
+    /// <summary>Типове вікно дедуплікації — доба.</summary>
+    public const int DefaultDedupeWindowSec = 86400;
+
     /// <summary>Тип вузла-тригера.</summary>
     public const string NodeType = "core.webhook";
 
@@ -46,8 +79,27 @@ internal sealed record WebhookParameters(string Method, string Path, WebhookAuth
             auth = new WebhookAuth(type, Text(a, "credentialId") ?? "", Text(a, "headerName") ?? DefaultHeaderName);
         }
 
-        return new WebhookParameters(method, path, auth);
+        return new WebhookParameters(
+            method,
+            path,
+            auth,
+            RespondOf(node),
+            Integer(parameters, "responseTimeoutSec") ?? DefaultResponseTimeoutSec,
+            Text(parameters, "idempotencyKey"),
+            Integer(parameters, "dedupeWindowSec") ?? DefaultDedupeWindowSec);
     }
+
+    /// <summary>Режим відповіді вузла <c>core.webhook</c>; невідоме значення — <see cref="WebhookRespondMode.Immediately"/>.</summary>
+    /// <param name="node">Вузол.</param>
+    public static WebhookRespondMode RespondOf(NodeDefinition node) => Text(node.Parameters, "respond") switch
+    {
+        "whenFinished" => WebhookRespondMode.WhenFinished,
+        "fromNode" => WebhookRespondMode.FromNode,
+        _ => WebhookRespondMode.Immediately,
+    };
+
+    private static int? Integer(JsonObject obj, string name) =>
+        obj[name] is JsonValue v && v.TryGetValue<int>(out var i) ? i : null;
 
     /// <summary>Шлях без початкових і кінцевих <c>/</c>.</summary>
     public static string NormalizePath(string path) => path.Trim().Trim('/');

@@ -34,8 +34,13 @@ public static class WebhookEndpoints
             .Produces<WebhookAccepted>(StatusCodes.Status202Accepted);
         app.MapMethods("/webhook/{**path}", Methods, HandleAsync).AllowAnonymous()
             .WithTags(OpenApiSetup.Tags.Webhooks).WithSummary("Запустити активний сценарій з тригером core.webhook")
-            .WithDescription("`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.")
-            .Produces<WebhookAccepted>(StatusCodes.Status202Accepted);
+            .WithDescription("`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. " +
+                "Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; " +
+                "не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. " +
+                "404 — немає активного webhook-а, 401 — невдала автентифікація.")
+            .Produces<WebhookAccepted>(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status504GatewayTimeout);
         return app;
     }
 
@@ -56,8 +61,32 @@ public static class WebhookEndpoints
         }
 
         var body = await ReadBodyAsync(request, ct);
-        var executionId = await webhooks.TriggerAsync(new WebhookRequest(request.Method, path ?? "", headers, query, body), ct);
-        return Results.Accepted(null, new WebhookAccepted(executionId));
+        var reply = await webhooks.TriggerAsync(new WebhookRequest(request.Method, path ?? "", headers, query, body), ct);
+        return new ReplyResult(reply);
+    }
+
+    /// <summary>Відповідь сервісу як є: статус, заголовки (Content-Type окремо) і тіло.</summary>
+    private sealed class ReplyResult(WebhookReply reply) : IResult
+    {
+        public async Task ExecuteAsync(HttpContext httpContext)
+        {
+            var response = httpContext.Response;
+            response.StatusCode = reply.StatusCode;
+            foreach (var (name, value) in reply.Headers)
+            {
+                if (string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                {
+                    response.ContentType = value;
+                }
+                else
+                {
+                    response.Headers[name] = value;
+                }
+            }
+
+            response.ContentLength = reply.Body.Length;
+            await response.Body.WriteAsync(reply.Body, httpContext.RequestAborted);
+        }
     }
 
     private static async Task<IResult> ResumeAsync(string token, HttpContext http, IWaitResumeService resume)

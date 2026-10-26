@@ -115,7 +115,9 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 на рівні сценарію — переносяться так само без втрат, тож агент може розкласти процес на етапи зі строками й правилами
 переходу; схема полів — у `openbp://schema/workflow-format`. `validate_workflow` перевіряє `STAGE_ID_DUPLICATE`,
 `STAGE_NODE_UNKNOWN`, `STAGE_NODE_IN_TWO_STAGES`, `STAGE_NOT_CONNECTED`, `STAGE_TRANSITION_UNKNOWN`,
-`STAGE_RULE_ID_DUPLICATE` — з `path` на поле. Стан етапів виконання і дії над ними — F7-02/F7-05.
+`STAGE_RULE_ID_DUPLICATE` — з `path` на поле. Стан етапів виконання (F7-02) — у `ExecutionDetail.stages[]`, тож його
+віддають `run_workflow`, `get_execution` і `openbp://executions/{id}`: `{ stageId, name, position, status
+(pending|active|done|skipped|cancelled), overdue, enteredAt, dueAt, exitedAt }`. Дії над етапами — F7-05.
 
 ### Оцінки вузлів ШІ (F6-17)
 

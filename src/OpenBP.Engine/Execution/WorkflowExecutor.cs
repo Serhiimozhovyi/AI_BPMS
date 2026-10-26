@@ -49,6 +49,7 @@ public sealed class WorkflowExecutor
 
     private readonly INodeRegistry _registry;
     private readonly IExecutionStore _store;
+    private readonly IStageStore? _stages;
     private readonly EngineServices _services;
     private readonly TimeProvider _time;
 
@@ -60,6 +61,9 @@ public sealed class WorkflowExecutor
     /// <param name="binary">Файлове сховище.</param>
     /// <param name="logger">Журнал виконання.</param>
     /// <param name="timeProvider">Годинник для <c>$now</c>, міток кроків і таймауту; за замовчуванням системний.</param>
+    /// <param name="stageStore">
+    /// Сховище стану етапів (ADR-004 §2); <c>null</c> — стан етапів лише в <see cref="ExecutionResult.Stages"/>.
+    /// </param>
     public WorkflowExecutor(
         INodeRegistry registry,
         IExecutionStore store,
@@ -67,7 +71,8 @@ public sealed class WorkflowExecutor
         ICredentialProvider credentials,
         IBinaryStore binary,
         IExecutionLogger logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IStageStore? stageStore = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(store);
@@ -79,6 +84,7 @@ public sealed class WorkflowExecutor
         _store = store;
         _services = new EngineServices(expressions, credentials, binary, logger);
         _time = timeProvider ?? TimeProvider.System;
+        _stages = stageStore;
     }
 
     /// <summary>
@@ -177,7 +183,7 @@ public sealed class WorkflowExecutor
             .Where(p => plan.Nodes.TryGetValue(p.Key, out var node) && IsCompleted(node, p.Value))
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
 
-        var run = new RunState(request);
+        var run = new RunState(request) { Stages = snapshot.Stages.Count > 0 ? snapshot.Stages : null };
         foreach (var (nodeId, step) in latest)
         {
             if (step.Status == StepStatus.Waiting)
@@ -203,8 +209,86 @@ public sealed class WorkflowExecutor
         return await ExecuteAsync(plan, run, restored, snapshot.StartedAt, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Спільний цикл черги готових вузлів для запуску і відновлення.</summary>
+    /// <summary>Цикл черги вузлів і підсумковий стан етапів.</summary>
     private async Task<ExecutionResult> ExecuteAsync(
+        ExecutionPlan plan,
+        RunState run,
+        IReadOnlyDictionary<string, StepRecord> restored,
+        DateTimeOffset startedAt,
+        CancellationToken ct)
+    {
+        var result = await ExecuteCoreAsync(plan, run, restored, startedAt, ct).ConfigureAwait(false);
+        if (run.Request.Workflow.Stages is not { Count: > 0 })
+        {
+            return result;
+        }
+
+        var stages = await SyncStagesAsync(run, result.Status, result.FinishedAt).ConfigureAwait(false);
+        return result with { Stages = stages };
+    }
+
+    /// <summary>
+    /// Перераховує стан етапів (ADR-004 §2) за кроками запуску і, якщо він змінився, зберігає в <see cref="IStageStore"/>.
+    /// Сценарій без етапів нічого не пише.
+    /// </summary>
+    private async Task<IReadOnlyList<StageState>> SyncStagesAsync(RunState run, ExecutionStatus? final, DateTimeOffset now)
+    {
+        var workflow = run.Request.Workflow;
+        if (workflow.Stages is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var stages = StageTracker.Compute(workflow, run.Steps, final, now, run.Stages, (expression, enteredAt) => EvaluateUntil(run, expression, enteredAt));
+        if (run.Stages is null || !run.Stages.SequenceEqual(stages))
+        {
+            if (_stages is not null)
+            {
+                await _stages.SaveStagesAsync(run.Request.ExecutionId, stages, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            run.Stages = stages;
+        }
+
+        return stages;
+    }
+
+    /// <summary>
+    /// Обчислює <c>due.until</c> етапу: <c>$now</c> — час входу в етап, <c>$node</c> — виходи вже виконаних вузлів.
+    /// Вираз, що не обчислився або дав не дату, — етап без строку і попередження в журналі.
+    /// </summary>
+    private DateTimeOffset? EvaluateUntil(RunState run, string expression, DateTimeOffset enteredAt)
+    {
+        var request = run.Request;
+        try
+        {
+            var value = _services.Expressions.Evaluate(expression, new Expressions.ExpressionScope
+            {
+                Item = new Item(),
+                Nodes = run.NodeOutputsByName(),
+                Now = enteredAt,
+                Timezone = request.Workflow.Settings.Timezone,
+                Env = request.Env,
+                Vars = request.Vars,
+                ExecutionId = request.ExecutionId,
+            });
+            var due = value is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var text) ? StageTracker.ParseUntil(text) : null;
+            if (due is null)
+            {
+                _services.Logger.Log(LogLevel.Warning, null, $"Строк етапу «{expression}» не є датою — етап без строку.");
+            }
+
+            return due;
+        }
+        catch (Expressions.ExpressionException ex)
+        {
+            _services.Logger.Log(LogLevel.Warning, null, $"Строк етапу «{expression}» не обчислився: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Спільний цикл черги готових вузлів для запуску і відновлення.</summary>
+    private async Task<ExecutionResult> ExecuteCoreAsync(
         ExecutionPlan plan,
         RunState run,
         IReadOnlyDictionary<string, StepRecord> restored,
@@ -241,6 +325,7 @@ public sealed class WorkflowExecutor
                 run.Steps.Add(step);
                 await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
                 run.OpenWaits.Remove(node.Definition.Id);
+                await SyncStagesAsync(run, null, _time.GetUtcNow()).ConfigureAwait(false);
 
                 if (step.Status == StepStatus.Cancelled)
                 {
@@ -750,6 +835,9 @@ public sealed class WorkflowExecutor
 
         /// <summary>Пробудження вузлів, що чекали (з останніх кроків <see cref="StepStatus.Waiting"/> знімка).</summary>
         public Dictionary<string, Nodes.NodeResumption> Resumptions { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Останній збережений стан етапів; <c>null</c> — ще не зберігався.</summary>
+        public IReadOnlyList<StageState>? Stages { get; set; }
 
         public Dictionary<string, JsonObject> NodeStates { get; } =
             request.NodeStates.ToDictionary(p => p.Key, p => (JsonObject)p.Value.DeepClone(), StringComparer.Ordinal);

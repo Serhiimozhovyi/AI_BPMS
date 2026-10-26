@@ -1,6 +1,7 @@
 using OpenBP.Engine.Data;
 using OpenBP.Engine.Nodes;
 using OpenBP.Engine.SubWorkflows;
+using OpenBP.Engine.Webhooks;
 
 namespace OpenBP.Nodes.Core;
 
@@ -14,7 +15,9 @@ public static class CoreNodes
     /// <param name="time">Джерело часу для <c>core.wait</c> і <c>core.schedule</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
     /// <param name="dataTables">Сховище для <c>core.dataTable</c>; <c>null</c> — вузол лише описаний (палітра, валідація) і при виконанні дає помилку.</param>
     /// <param name="subWorkflows">Запуск підсценаріїв для <c>core.executeWorkflow</c>; <c>null</c> — так само лише описаний.</param>
-    public static IReadOnlyList<INode> All(TimeProvider? time = null, IDataTableStore? dataTables = null, ISubWorkflowLauncher? subWorkflows = null) =>
+    /// <param name="webhookResponder">Відповіді webhook-ам для <c>core.respondToWebhook</c>; <c>null</c> — так само лише описаний.</param>
+    public static IReadOnlyList<INode> All(
+        TimeProvider? time = null, IDataTableStore? dataTables = null, ISubWorkflowLauncher? subWorkflows = null, IWebhookResponder? webhookResponder = null) =>
     [
         new ManualTriggerNode(),
         new WebhookNode(),
@@ -35,5 +38,6 @@ public static class CoreNodes
         new CodeNode(),
         new DataTableNode(dataTables),
         new ExecuteWorkflowNode(subWorkflows, time),
+        new RespondToWebhookNode(webhookResponder),
     ];
 }

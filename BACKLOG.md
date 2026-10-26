@@ -865,7 +865,7 @@
 - DoD: тести: `wait` повертає output дочірнього; помилка дочірнього → помилка вузла (і `continueOnFail` працює); `fireAndForget`; `inputSchema` відхиляє неправильні items; цикл A→B→A → помилка валідації; глибина 9 → помилка виконання; UI показує зв'язок; `docs/workflow-format.md`, `architecture.md` §10.4, `describe_nodes` оновлено.
 
 ### F6-05 · Відповідь вебхука й дедуплікація
-- model: `opus` · status: `ready` · depends: F2-10, F2-09, F5-04
+- model: `opus` · status: `done` · depends: F2-10, F2-09, F5-04
 - Що: у `core.webhook` параметр `respond: immediately | whenFinished | fromNode` (типово `immediately` — поведінка як зараз, 202 з `executionId`); `whenFinished` — Api чекає фінального стану через `IExecutionEventSource` (як `run_workflow wait`) і віддає 200 з output останнього вузла (`responseTimeoutSec`, типово 30 → 504); `fromNode` — новий вузол `core.respondToWebhook { statusCode, headers, body | binaryKey }`: воркер пише подію `respond`, Api відповідає нею, виконання триває. Дедуплікація: `idempotencyKey` (вираз, напр. `{{ $json.body.update_id }}`) або заголовок `Idempotency-Key`; таблиця `webhook_dedupe (webhook, key, execution_id, response, expires_at)`, вікно `dedupeWindowSec` (типово 86400): повторний запит повертає ту саму відповідь без нового виконання; чистить ретеншн-job F4-07. Не плутати з `correlationKey` (F5-04): той забороняє друге **активне** виконання з тим самим ключем, цей — повторний **HTTP-запит** у вікні часу, незалежно від стану виконання; у вузлі обидва поля поруч. Валідатор: `fromNode` без `core.respondToWebhook` у графі → помилка.
 - DoD: тести Api + Worker (Testcontainers): три режими; таймаут `whenFinished` → 504; `respondToWebhook` з бінарним файлом; дубль за ключем → та сама відповідь, одне виконання; після вікна → нове виконання; валідатор; `docs/workflow-format.md`, `docs/connectors.md` §6, `architecture.md` §10.5 оновлено.
 
@@ -978,7 +978,7 @@
 - DoD: тести валідатора на кожен код і на сценарій без `stages`; старі приклади валідні; `describe_nodes`/схема у MCP містять `stages`; `docs/workflow-format.md`, `architecture.md` §2 оновлено; рев'ю власником.
 
 ### F7-02 · Рушій: стан етапу, строки, таблиця `execution_stages`
-- model: `opus` · status: `ready` · depends: F7-01
+- model: `opus` · status: `done` · depends: F7-01
 - Що: `OpenBP.Engine` обчислює стан етапів за ADR-004 §2 (`pending`/`active`/`done`/`skipped`/`cancelled`, підстан `overdue`) при кожному `SaveStepAsync`; інтерфейс `IStageStore` (правило 1), реалізація в `OpenBP.Data`: таблиця `execution_stages (execution_id, stage_id, status, entered_at, due_at, exited_at)` + міграція; `due` з `businessDays` (пн–пт за `settings.timezone`) і `until`; ретеншн F4-07 чистить разом із виконанням; `ExecutionDetail` отримує `stages[]`; журнал виконань `/executions/:id` показує етапи (AC-Kit «Етап N», як у F3-69); бізнес-вигляд виконання фарбує етапи за станом.
 - DoD: тести движка: послідовні етапи, гілка не дійшла → `skipped`, скасування під час `active` → `cancelled`, `overdue` з `TimeProvider`-фейком, `businessDays` через вихідні; інтеграційний тест (Testcontainers) запису `execution_stages` і відновлення після рестарту воркера; Vitest журналу; сценарії без `stages` не пишуть у таблицю.
 

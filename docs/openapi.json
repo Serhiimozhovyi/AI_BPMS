@@ -58,7 +58,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -79,6 +79,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -97,7 +103,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -118,6 +124,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -136,7 +148,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -157,6 +169,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -175,7 +193,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -197,6 +215,12 @@
               }
             }
           },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
+          },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
             "content": {
@@ -214,7 +238,7 @@
           "Webhook"
         ],
         "summary": "Запустити активний сценарій з тригером core.webhook",
-        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
+        "description": "`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. Відповідь — за `respond` вузла: `immediately` — 202 з `executionId`; `whenFinished` — 200 з виходом останнього вузла; `fromNode` — те, що віддав вузол `core.respondToWebhook`; не дочекались за `responseTimeoutSec` — 504. Повтор з тим самим ключем ідемпотентності (`idempotencyKey` вузла або заголовок `Idempotency-Key`) у вікні `dedupeWindowSec` — та сама відповідь із заголовком `Idempotent-Replayed: true`, без нового виконання. 404 — немає активного webhook-а, 401 — невдала автентифікація.",
         "parameters": [
           {
             "name": "path",
@@ -235,6 +259,12 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           },
           "4XX": {
             "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
@@ -6692,7 +6722,8 @@
       "ExecutionDetail": {
         "required": [
           "summary",
-          "steps"
+          "steps",
+          "stages"
         ],
         "type": "object",
         "properties": {
@@ -6703,6 +6734,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExecutionStepDto"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionStageDto"
             }
           },
           "children": {
@@ -6726,6 +6763,62 @@
           "sub"
         ],
         "description": "Режим запуску виконання (поле `executions.mode`, docs/architecture.md §6)."
+      },
+      "ExecutionStageDto": {
+        "required": [
+          "stageId",
+          "name",
+          "position",
+          "status",
+          "overdue",
+          "enteredAt",
+          "dueAt",
+          "exitedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "stageId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StageStatus"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "enteredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "dueAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "exitedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
       },
       "ExecutionState": {
         "enum": [
@@ -7798,6 +7891,16 @@
             }
           }
         }
+      },
+      "StageStatus": {
+        "enum": [
+          "pending",
+          "active",
+          "done",
+          "skipped",
+          "cancelled"
+        ],
+        "description": "Стан етапу бізнес-процесу у виконанні (ADR-004 §2)."
       },
       "StartExecutionRequest": {
         "examples": [

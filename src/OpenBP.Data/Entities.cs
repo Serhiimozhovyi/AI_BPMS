@@ -382,6 +382,21 @@ public sealed class ExecutionStepEntity
     public DateTimeOffset? FinishedAt { get; set; }
 }
 
+/// <summary>Стан етапу виконання (ADR-004 §2, F7-02); рядок на кожен етап сценарію з <c>stages</c>.</summary>
+public sealed class ExecutionStageEntity
+{
+    public Guid ExecutionId { get; set; }
+    public string StageId { get; set; } = "";
+    /// <summary>Порядковий номер етапу в <c>stages[]</c>, з 0.</summary>
+    public int Position { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary><c>pending</c> | <c>active</c> | <c>done</c> | <c>skipped</c> | <c>cancelled</c>.</summary>
+    public string Status { get; set; } = "";
+    public DateTimeOffset? EnteredAt { get; set; }
+    public DateTimeOffset? DueAt { get; set; }
+    public DateTimeOffset? ExitedAt { get; set; }
+}
+
 public sealed class JobEntity
 {
     public Guid Id { get; set; }
@@ -419,6 +434,39 @@ public sealed class ResumeTokenEntity
     public DateTimeOffset CreatedAt { get; set; }
     /// <summary>Коли токен використано; <c>null</c> — ще ні.</summary>
     public DateTimeOffset? UsedAt { get; set; }
+}
+
+/// <summary>
+/// Відповідь webhook-а з виконання (F6-05): пише воркер (<c>core.respondToWebhook</c> або <c>respond: whenFinished</c>),
+/// читає Api, що тримає HTTP-запит. Одна на виконання — перша виграє.
+/// </summary>
+public sealed class WebhookResponseEntity
+{
+    public Guid ExecutionId { get; set; }
+    public int StatusCode { get; set; }
+    /// <summary>Заголовки відповіді — JSON-об'єкт ім'я → значення.</summary>
+    public string Headers { get; set; } = "{}";
+    public byte[] Body { get; set; } = [];
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>
+/// Дедуплікація запитів webhook-а (F6-05): ключ ідемпотентності запиту → виконання, яке він запустив, і відповідь,
+/// щойно вона відома. До <see cref="ExpiresAt"/> повторний запит отримує ту саму відповідь без нового виконання.
+/// </summary>
+public sealed class WebhookDedupeEntity
+{
+    public Guid WorkflowId { get; set; }
+    /// <summary>Вузол <c>core.webhook</c>.</summary>
+    public string NodeId { get; set; } = "";
+    public string Key { get; set; } = "";
+    public Guid ExecutionId { get; set; }
+    /// <summary>Статус збереженої відповіді; <c>null</c> — відповідь ще не відома (перший запит чекає на виконання).</summary>
+    public int? StatusCode { get; set; }
+    public string? Headers { get; set; }
+    public byte[]? Body { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
 }
 
 public sealed class NodeStateEntity

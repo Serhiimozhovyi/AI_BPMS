@@ -69,6 +69,38 @@ public sealed class JoinTests
     }
 
     [Fact]
+    public async Task Stage_of_branch_cancelled_by_join_is_cancelled_and_unstarted_one_is_skipped()
+    {
+        // F7-02: етап гілки, що програла, — перерваний; етап, до якого гілка так і не дійшла, — не знадобився.
+        var g = Graph()
+            .Node("t", Trigger, new JsonObject { ["count"] = 2 })
+            .Node("slow", Sleep, Hours(48))
+            .Node("slowAfter", Pass)
+            .Node("fast", Pass)
+            .Node("j", Join, Required(1))
+            .Node("end", Pass)
+            .Edge("t", "slow")
+            .Edge("slow", "slowAfter")
+            .Edge("slowAfter", "j", input: 0)
+            .Edge("t", "fast")
+            .Edge("fast", "j", input: 1)
+            .Edge("j", "end")
+            .Stage("st_slow", ["slow"])
+            .Stage("st_slow_after", ["slowAfter"])
+            .Stage("st_fast", ["fast"])
+            .Stage("st_end", ["j", "end"]);
+
+        var result = await g.RunAsync();
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        Assert.Equal(
+            [StageStatus.Cancelled, StageStatus.Skipped, StageStatus.Done, StageStatus.Done],
+            result.Stages.Select(s => s.Status));
+        Assert.Equal(result.StepOf("slow")!.FinishedAt, result.Stages[0].ExitedAt);
+        Assert.Null(result.Stages[1].EnteredAt);
+    }
+
+    [Fact]
     public async Task Any_with_two_waiting_branches_wakes_on_earlier_and_cancels_later()
     {
         var g = Graph()

@@ -79,6 +79,17 @@
   credentials, `required` з `inputSchema` tool'а) картка позначає «не заповнено: N» ще до збереження.
 - `CancellationToken` прокидається у кожен вузол; скасування з UI/API і таймаути працюють через нього.
 - Етапи (`stages[]`, [ADR-004](adr/ADR-004-stages.md), F7-01) — шар над графом, не одиниця виконання: рушій обчислює їхній стан з кроків виконання (F7-02) і перевіряє правила переходу на ребрах, що виходять з етапу (F7-03). Сценарій без `stages` виконується без змін.
+- Стан етапів (F7-02) рахує чиста функція `StageTracker.Compute` з кроків запуску: `active` — є крок вузла етапу (крім
+  `skipped`), `entered_at` — найраніший його старт; `done` — вихід вузла етапу, з'єднаний з вузлом поза етапом, отримав
+  items, або вузол етапу без вихідних ребер завершився успішно (`exited_at` — найраніше таке завершення); після успішного
+  виконання етап, що почався, — `done`, після помилки/скасування/таймауту — `cancelled`; етап, що не почався, — `pending`,
+  а після завершення виконання — `skipped`. Вузол етапу, який рушій закрив без запуску (`BRANCH_CANCELLED` від злиття,
+  `WAIT_CLOSED` у кінці виконання, ADR-004 §5), стартом не вважається, а етап, що почався, стає `cancelled`. Виконавець перераховує стан після кожного `SaveStepAsync` і в кінці та
+  передає в `IStageStore`, лише коли стан змінився і лише для сценаріїв з `stages`. Строк `due_at` рахується від входу:
+  `minutes`/`hours` — від моменту, `days`/`businessDays` — у `settings.timezone` зі збереженням часу доби (робочі дні —
+  пн–пт, вхід у вихідні рахується з понеділка), `until` — вираз з `$now` = час входу; раз пораховано — не
+  перераховується (при відновленні береться з `ExecutionSnapshot.Stages`). Підстан `overdue` не зберігається:
+  `active` і `now > due_at` на момент читання.
 
 ### Інтерфейси Engine (все зовнішнє — тільки через них)
 
@@ -88,6 +99,7 @@ public interface ICredentialProvider { Task<JsonObject> GetAsync(string credenti
 public interface INodeRegistry      { INode Resolve(string type, int typeVersion); }
 public interface IExpressionEvaluator { JsonNode? Evaluate(string expr, ExpressionScope scope); }
 public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string message, object? data = null); }
+public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IReadOnlyList<StageState> stages, CancellationToken ct); } // F7-02, необов'язковий
 ```
 
 `InMemoryExecutionStore` і `FakeCredentialProvider` живуть у `OpenBP.Engine.Testing` і використовуються CLI та тестами.
@@ -158,6 +170,9 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01); унікальний `(execution_id, node_id)` |
+| `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
+| `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
+| `webhook_dedupe` | workflow_id, node_id, key (PK), execution_id, status_code?, headers?, body?, created_at, expires_at (індекс) — ключі ідемпотентності webhook-ів (F6-05) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |
 | `subscriptions` | workflow_id → workflows (cascade), node_id (PK разом), server_id, resource_uri, worker_id (null — вільна), leased_until (індекс), updated_at — підписки `mcp.subscribe`, оренда воркером (F6-13) |
 | `notification_channels` | id, name, type (`email`/`telegram`/`webhook`), config (jsonb: посилання на конектор чи credential, без секретів), events (jsonb), cooldown_sec, enabled, created_at, updated_at (F6-07) |
@@ -541,6 +556,21 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
 - коментар `: ping` кожні 15 с як keep-alive; `retry: 2000`.
 
 Для вже завершеного виконання потік віддає всі кроки після курсора і `status`, потім закривається.
+
+Відповідь webhook-у (F6-05, docs/workflow-format.md «Відповідь webhook-у й дедуплікація»). Маршрут `/webhook/{path}`
+анонімний, а `IExecutionEventSource` прив'язаний до користувача, тож `WebhookService` для `whenFinished`/`fromNode`
+опитує БД тим самим способом (кожні 100 мс): рядок `webhook_responses` виконання і статус `executions`, до
+`responseTimeoutSec`.
+- Відповідь пише воркер через `IWebhookResponder` (`PostgresWebhookResponder`, `INSERT … ON CONFLICT DO NOTHING` —
+  виграє перша): `core.respondToWebhook` під час виконання (виконання триває) або, для `whenFinished`,
+  `ExecutionJobProcessor` після успіху **до** фінального стану — тож Api, що побачило фінальний стан, уже бачить і
+  відповідь, навіть із `saveSuccessfulData: false`. Файл `binaryKey` читає воркер: в Api `IBinaryStore` немає.
+- Фінальний стан без відповіді: `whenFinished` — 500/409 за станом, `fromNode` — 500 `WEBHOOK_NO_RESPONSE`; не
+  дочекались — 504 `WEBHOOK_RESPONSE_TIMEOUT` з `executionId` (виконання триває).
+- Дедуплікація: `webhook_dedupe` з PK `(workflow_id, node_id, key)`; пошук і вставка — в одній транзакції під
+  `pg_advisory_xact_lock` ключа, тож два одночасні дублі не запускають двох виконань. Запис зберігає відому відповідь
+  (не 504) для повтору; дубль, що прийшов, поки відповіді ще немає, чекає на те саме виконання.
+- Ретеншн-job (F4-07) видаляє `webhook_responses`, старші за 1 год, і `webhook_dedupe` з `expires_at` у минулому.
 
 ### 10.6. Автентифікація і ролі
 

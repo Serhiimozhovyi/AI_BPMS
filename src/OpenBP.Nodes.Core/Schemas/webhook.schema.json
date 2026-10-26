@@ -25,6 +25,34 @@
       "type": "string",
       "maxLength": 500
     },
+    "respond": {
+      "title": "Відповідь",
+      "description": "immediately — одразу 202 з executionId; whenFinished — дочекатися кінця й віддати вихід останнього вузла; fromNode — відповідає вузол «Відповідь webhook-у».",
+      "type": "string",
+      "enum": ["immediately", "whenFinished", "fromNode"],
+      "default": "immediately"
+    },
+    "responseTimeoutSec": {
+      "title": "Чекати відповіді, с",
+      "description": "Для whenFinished і fromNode: не дочекались — 504.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300,
+      "default": 30
+    },
+    "idempotencyKey": {
+      "title": "Ключ ідемпотентності",
+      "description": "Вираз над запитом, напр. {{ $json.body.update_id }}: повторний запит з тим самим ключем у вікні dedupeWindowSec отримує ту саму відповідь без нового виконання. Без виразу — заголовок Idempotency-Key, якщо є.",
+      "type": "string",
+      "maxLength": 500
+    },
+    "dedupeWindowSec": {
+      "title": "Вікно дедуплікації, с",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2592000,
+      "default": 86400
+    },
     "auth": {
       "title": "Автентифікація",
       "description": "Без неї webhook приймає будь-який запит. Секрет — у credential: header → { token }, basic → { username, password }.",

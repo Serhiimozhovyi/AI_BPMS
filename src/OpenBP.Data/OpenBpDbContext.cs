@@ -23,8 +23,11 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<McpServerEntity> McpServers => Set<McpServerEntity>();
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
     public DbSet<ExecutionStepEntity> ExecutionSteps => Set<ExecutionStepEntity>();
+    public DbSet<ExecutionStageEntity> ExecutionStages => Set<ExecutionStageEntity>();
     public DbSet<JobEntity> Jobs => Set<JobEntity>();
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
+    public DbSet<WebhookResponseEntity> WebhookResponses => Set<WebhookResponseEntity>();
+    public DbSet<WebhookDedupeEntity> WebhookDedupe => Set<WebhookDedupeEntity>();
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
     public DbSet<ResumeTokenEntity> ResumeTokens => Set<ResumeTokenEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
@@ -221,6 +224,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.WaitState).HasColumnType("jsonb");
             e.HasIndex(x => x.ExecutionId);
         });
+        b.Entity<ExecutionStageEntity>(e =>
+        {
+            e.ToTable("execution_stages");
+            e.HasKey(x => new { x.ExecutionId, x.StageId });
+            // Прострочені етапи (SLA, F7-04): активні зі строком.
+            e.HasIndex(x => x.DueAt).HasFilter("status = 'active'");
+        });
         b.Entity<JobEntity>(e =>
         {
             e.ToTable("jobs");
@@ -241,6 +251,21 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.Kind).HasMaxLength(20);
             e.HasIndex(x => new { x.ExecutionId, x.NodeId }).IsUnique();
             e.HasOne<ExecutionEntity>().WithMany().HasForeignKey(x => x.ExecutionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<WebhookResponseEntity>(e =>
+        {
+            e.ToTable("webhook_responses");
+            e.HasKey(x => x.ExecutionId);
+            e.Property(x => x.Headers).HasColumnType("jsonb");
+        });
+        b.Entity<WebhookDedupeEntity>(e =>
+        {
+            e.ToTable("webhook_dedupe");
+            e.HasKey(x => new { x.WorkflowId, x.NodeId, x.Key });
+            e.Property(x => x.NodeId).HasMaxLength(200);
+            e.Property(x => x.Key).HasMaxLength(200);
+            e.Property(x => x.Headers).HasColumnType("jsonb");
+            e.HasIndex(x => x.ExpiresAt);
         });
         b.Entity<NodeStateEntity>(e =>
         {
