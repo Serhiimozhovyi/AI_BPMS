@@ -845,7 +845,7 @@
 Порядок: після F5-02 — F6-01 → F6-02 → F6-03; паралельно F6-05, F6-06; далі F6-04, F6-07; потім F6-08…F6-10; F6-11, F6-12; решта за попитом пілоту.
 
 ### F6-01 · Довге очікування: `core.wait` з пробудженням за часом, вебхуком або формою
-- model: `fable` · status: `ready` · depends: F5-02
+- model: `fable` · status: `review #164` · depends: F5-02
 - Що: поверх F5-02 (стан `waiting`, `resume_at`, звільнення воркера, пробудження за часом — там) `core.wait` отримує ще два режими пробудження: `webhook` і `form` (форма — F6-03); ліміт очікування `maxWaitSec` з виходом `timeout`; таймер `executionTimeoutSec` на час очікування зупиняється (узгодити з F5-02, якщо там вирішено інакше). Пробудження: `POST /webhook/resume/{token}` з одноразовим токеном на (виконання, вузол), тіло запиту стає output вузла; у виразах `$execution.resumeUrl` (лише всередині виконання з `core.wait` у режимі `webhook`). Продовження — той самий `ResumeAsync`, що й після падіння воркера; скасування `waiting` працює; `waiting` видно в REST/SSE/MCP/журналі. Зміна формату: `docs/workflow-format.md` (параметри, `$execution.resumeUrl`), JSON Schema, `architecture.md` §10.4, `describe_nodes`.
 - DoD: рев'ю власником формату і механізму пробудження; тести: режими F5-02 працюють як раніше; `webhook` → `resumeUrl` → POST продовжує з тілом запиту, повторний POST → 409, чужий токен → 404; `maxWaitSec` → вихід `timeout`; слот воркера вільний під час очікування (паралельний запуск іде); скасування у `waiting`; воркер впав під час `waiting` → новий воркер пробуджує; `workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 
