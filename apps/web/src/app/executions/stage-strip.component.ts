@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { ExecutionStage, StageStatus } from './executions-api.service';
 
 /** Підпис стану етапу для людини. */
-export function stageStatusLabel(stage: ExecutionStage): string {
+export function stageStatusLabel(stage: Pick<ExecutionStage, 'status' | 'overdue'>): string {
   if (stage.overdue) return $localize`:@@stages.status.overdue:Прострочено`;
   const labels: Record<StageStatus, string> = {
     pending: $localize`:@@stages.status.pending:Ще не почався`,

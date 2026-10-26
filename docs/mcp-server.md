@@ -12,7 +12,7 @@ OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
   - `viewer` — читання (`describe_connectors`, `describe_nodes`, `list_*`, `get_*`, `validate_workflow`, resources);
-  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`, `override_rule`, `save_workflow_explanation`;
+  - `editor` — ще `create_workflow`, `update_workflow`, `publish_workflow`, `run_workflow`, `test_node`, `cancel_execution`, `resume_execution`, `override_rule`, `save_workflow_explanation`; дії `act_on_stage` перевіряються за правами самої дії (рішення задачі — виконавець, відхилення й пробудження — editor);
   - `admin` — те саме (керування конекторами й користувачами в MCP не винесено).
 - Без ключа або з відкликаним ключем — HTTP 401 ще до MCP-обміну. Cookie-сесія UI для `/mcp` не діє.
 
@@ -103,6 +103,8 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `list_tasks` | viewer | `scope?` (`mine` — типово, `all` — лише admin), `status?` (`open`/`done`/`expired`/`cancelled`), `workflowId?`, `executionId?`, `page?`, `pageSize?` | сторінка задач погодження `core.approval` (F6-02), новіші першими: `{ id, executionId, workflowName, title, status, assignee, decision, escalated, canComplete, dueAt, … }`; «мої» — виконавець я, мій email або моя роль |
 | `get_task` | viewer | `id` (id задачі або токен з `$execution.taskUrl`) | картка: `{ task, description, decisions: [{ key, label }], fields (JSON Schema даних), data, completedBy, cancelledByExecutionId }`; чужа задача — `TASK_FORBIDDEN` |
 | `complete_task` | viewer | `id`, `decision`, `data?` | рішення: задача `done`, виконання продовжується виходом рішення з `{ decision, data, completedBy, completedAt }`. Невідоме рішення — `TASK_DECISION_INVALID`, дані не за `fields` — `FORM_INVALID` з `errors[]`, чужа задача — `TASK_FORBIDDEN` (зовнішню задачу, напр. з Telegram id, закриває editor і вище), уже закрита — `TASK_CLOSED` |
+| `get_execution_stages` | viewer | `id` | контракт етапів (F7-05, ADR-004 §4), той самий, що `GET /executions/{id}/stages`: `{ execution, stages[] { id, name, position, status, overdue, enteredAt, dueAt, exitedAt, owner, violations[], actions[], unmet[] } }`; `actions` — лише доступні тобі: `task:{taskId}` (з `decisions`, `fields`, `reasonRequired`), `override:{ruleId}`, `resume:{nodeId}`; `unmet` — невиконані правила наступного переходу на поточних items. Виконання за об'єктом зовнішньої системи — `list_executions(correlationKey)` |
+| `act_on_stage` | за дією | `id`, `stageId`, `actionId`, `decision?`, `data?`, `reason?` | виконати дію з `actions[]` і отримати етапи після неї: `task` — як `complete_task` (ті самі коди), а коли рішення лишає правила переходу невиконаними — ще й `reason` (стає відхиленням цих правил), інакше `STAGE_RULE_REASON_REQUIRED`; `override` — як `override_rule`; `resume` — `data` як тіло пробудження. Недоступна дія — `NOT_FOUND` |
 | `override_rule` | editor | `id`, `ruleId`, `reason`, `stageId?` | відхилити порушене правило переходу з причиною (F7-03, ADR-004 §3): відкрите порушення стає `overridden` з автором і причиною; для `block` виконання, що чекає на переході, прокидається одразу. Порожня причина — `STAGE_RULE_REASON_REQUIRED`, порушення немає — `STAGE_RULE_NOT_VIOLATED`, той самий `ruleId` у кількох етапах без `stageId` — `STAGE_RULE_AMBIGUOUS` |
 
 `definition` — сценарій у форматі [workflow-format.md](workflow-format.md); схема — resource
@@ -125,7 +127,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 (pending|active|done|skipped|cancelled), overdue, enteredAt, dueAt, exitedAt }`, а порушення правил переходу (F7-03) — у
 `violations[]`: `{ id, stageId, ruleId, mode, status (open|resolved|overridden), message, reason, actorUserId, createdAt,
 resolvedAt }`; виконання, зупинене `block`-правилом, — `waiting` з кроком `waitState.reason = STAGE_RULE_BLOCKED`, і
-агент може відхилити правило з причиною через `override_rule`. Дії над етапами — F7-05.
+агент може відхилити правило з причиною через `override_rule`. Стан, дії й невиконані умови етапів одним викликом — `get_execution_stages` / `act_on_stage` (F7-05).
 
 ### Оцінки вузлів ШІ (F6-17)
 
@@ -184,6 +186,7 @@ resolvedAt }`; виконання, зупинене `block`-правилом, �
 | `openbp://nodes` | те саме, що `describe_nodes` |
 | `openbp://workflows/{id}` | визначення поточної версії сценарію |
 | `openbp://executions/{id}` | знімок виконання з кроками, як `get_execution` |
+| `openbp://executions/{id}/stages` | етапи виконання з порушеннями, діями й невиконаними правилами, як `get_execution_stages` |
 | `openbp://tables/{id}` | таблиця даних (id або назва) з першими 100 рядками, як `query_table` без умов |
 
 Невідомий id → JSON-RPC помилка `ResourceNotFound`.

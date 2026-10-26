@@ -99,7 +99,8 @@ public sealed class TaskService(OpenBpDbContext db, IWaitResumeService resume, I
     {
         ArgumentNullException.ThrowIfNull(request);
         user.Require(UserRole.Viewer);
-        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        // Контракт етапів (F7-05) закриває задачу в своїй транзакції разом із відхиленнями правил.
+        await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false) : null;
         var task = await FindAsync(idOrToken, tracked: true, ct).ConfigureAwait(false);
         RequireAccess(task);
         if (task.Status != TaskStatuses.Open)
@@ -150,7 +151,10 @@ public sealed class TaskService(OpenBpDbContext db, IWaitResumeService resume, I
             ["completedAt"] = now.ToUniversalTime(),
         };
         await resume.ResumeAsync(task.Token, signal, ResumeTokens.TaskKind, ct).ConfigureAwait(false);
-        await tx.CommitAsync(ct).ConfigureAwait(false);
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
 
         var fresh = await FindAsync(task.Id.ToString(), tracked: false, ct).ConfigureAwait(false);
         return await DetailAsync(fresh, ct).ConfigureAwait(false);

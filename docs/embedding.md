@@ -29,6 +29,8 @@ npm run build:element      # → dist/element/openbp-canvas.js (один фай�
 | `token` | `token` | API-ключ OpenBP або OIDC access token для `Authorization: Bearer`. Без нього — cookie сесії. |
 | `readonly` | `readonly` | Лише перегляд: без палітри, редагування, запусків і збереження; вузли можна виділяти й дивитися. |
 | `locale` | `locale` | Мова інтерфейсу. Зараз є лише `uk`, інші значення показують українську. |
+| `view` | `view` | `business` разом з `execution-id` — етапи виконання замість редактора (F7-05). Інше значення або без `execution-id` — редактор сценарію. |
+| `execution-id` | `executionId` | Виконання для `view="business"`. Елемент малює етапи колонками: стан, строк, виконавця, порушення правил, невиконані умови наступного переходу й дії, доступні користувачу з `token`/cookie: рішення задачі (поля й кнопка на кожне рішення), відхилення правила з причиною, «Продовжити» для очікування вебхука. Причину елемент просить, коли сервер відповідає 422 `STAGE_RULE_REASON_REQUIRED`. Усе — з контракту `GET /api/v1/executions/{id}/stages` і `POST …/stages/{stageId}/actions/{actionId}`, тих самих, що `get_execution_stages`/`act_on_stage` у `/mcp`. Виконання за об'єктом своєї системи хост знаходить через `GET /api/v1/executions?correlationKey=`. |
 
 `api-base` і `token` спільні для всіх `<openbp-canvas>` на сторінці: діє останнє встановлене значення.
 
@@ -40,7 +42,8 @@ npm run build:element      # → dist/element/openbp-canvas.js (один фай�
 |---|---|---|
 | `openbp-saved` | `{ workflowId, version }` | Автозбереження записало нову версію сценарію. |
 | `openbp-run` | `{ executionId }` | Почався тестовий запуск («Виконати» або «Виконати вузол»). |
-| `openbp-error` | `{ code, message }` | Не вдалося завантажити, зберегти чи запустити. `code` — код Api (`NOT_FOUND`, `FORBIDDEN`, `WORKFLOW_INVALID`…), `NETWORK_ERROR` (Api недоступний) або `RUN_FAILED`. |
+| `openbp-action` | `{ executionId, stageId, actionId, kind, decision }` | Дію етапу виконано (`view="business"`): `kind` — `task`, `override` або `resume`, `decision` — ключ рішення задачі. |
+| `openbp-error` | `{ code, message }` | Не вдалося завантажити, зберегти чи запустити, а у `view="business"` — завантажити етапи чи виконати дію (`STAGE_RULE_REASON_REQUIRED`, `TASK_CLOSED`…). `code` — код Api (`NOT_FOUND`, `FORBIDDEN`, `WORKFLOW_INVALID`…), `NETWORK_ERROR` (Api недоступний) або `RUN_FAILED`. |
 
 ## Чистий HTML
 
@@ -123,7 +126,7 @@ export class WorkflowsModule {}
 ## Демо і перевірка
 
 - `apps/web/element-demo/index.html` — сторінка-хост з навмисно «агресивними» стилями. Параметри адреси:
-  `?workflow-id=…&api-base=…&token=…&readonly`.
+  `?workflow-id=…&api-base=…&token=…&readonly`, для етапів виконання — `?view=business&execution-id=…&api-base=…&token=…`.
 - `npm run e2e:element` збирає елемент і проганяє Playwright на демо з підміненим Api. Перевіряються:
   - збереження з подією `openbp-saved`;
   - токен у запитах і SSE;

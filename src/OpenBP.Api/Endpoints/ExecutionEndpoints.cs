@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using OpenBP.Api.OpenApi;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Paging;
+using OpenBP.Application.Stages;
 using HttpJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace OpenBP.Api.Endpoints;
@@ -55,6 +56,20 @@ public static class ExecutionEndpoints
             service.ListViolationsAsync(id, ct))
             .WithSummary("Порушення правил переходу виконання")
             .WithDescription("ADR-004 §3: відкриті (`open`), виправлені (`resolved`) і відхилені з причиною (`overridden`; `reason`, `actorUserId`, `resolvedAt`) порушення, у порядку виникнення.");
+
+        executions.MapGet("/{id:guid}/stages", (Guid id, IStageService service, CancellationToken ct) =>
+            service.GetAsync(id, ct))
+            .WithSummary("Етапи виконання: стан, порушення, дії, невиконані правила")
+            .WithDescription("Контракт ADR-004 §4 (F7-05), той самий для `/mcp` (`get_execution_stages`) і `<openbp-canvas view=\"business\" execution-id>`. " +
+                             "`actions` — дії, доступні поточному користувачу: `task` (відкрита задача етапу, яку він може закрити), `override` (відхилити відкрите порушення, editor), " +
+                             "`resume` (пробудити `core.wait` у режимі webhook, editor). `unmet` — невиконані правила наступного переходу активного етапу на поточних items. " +
+                             "Виконання за об'єктом зовнішньої системи — `GET /executions?correlationKey=`.");
+
+        executions.MapPost("/{id:guid}/stages/{stageId}/actions/{actionId}", (Guid id, string stageId, string actionId, StageActionRequest? body, IStageService service, CancellationToken ct) =>
+            service.ActAsync(id, stageId, actionId, body ?? new StageActionRequest(), ct))
+            .WithSummary("Виконати дію етапу")
+            .WithDescription("Дія з `actions` етапу; відповідь — етапи після неї. `task` — `{ decision, data? }` (як `POST /tasks/{id}/complete`); якщо `unmet` не порожній — ще `reason`, інакше 422 STAGE_RULE_REASON_REQUIRED (причина стає відхиленням цих правил). " +
+                             "`override` — `{ reason }` (як `POST /executions/{id}/overrides`). `resume` — `data` іде у виконання як тіло пробудження. Дії, недоступної користувачу, немає — 404.");
 
         executions.MapPost("/{id:guid}/cancel", async (Guid id, IExecutionService service, CancellationToken ct) =>
             Results.Accepted($"/api/v1/executions/{id}", await service.CancelAsync(id, ct)))

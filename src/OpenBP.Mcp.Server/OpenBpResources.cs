@@ -5,6 +5,7 @@ using OpenBP.Application.Connectors;
 using OpenBP.Application.DataTables;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Nodes;
+using OpenBP.Application.Stages;
 using OpenBP.Application.Workflows;
 using OpenBP.Shared.Workflow;
 
@@ -28,6 +29,9 @@ public sealed class OpenBpResources
 
     /// <summary>Шаблон URI виконання.</summary>
     public const string ExecutionUriTemplate = "openbp://executions/{id}";
+
+    /// <summary>Шаблон URI етапів виконання (F7-05).</summary>
+    public const string ExecutionStagesUriTemplate = "openbp://executions/{id}/stages";
 
     /// <summary>Шаблон URI таблиці даних.</summary>
     public const string DataTableUriTemplate = "openbp://tables/{id}";
@@ -73,6 +77,15 @@ public sealed class OpenBpResources
     [Description("Snapshot of an execution with its steps; same content as the get_execution tool.")]
     public static async Task<string> Execution(IExecutionService executions, Guid id, CancellationToken ct) =>
         JsonSerializer.Serialize(await executions.GetAsync(id, ct).ConfigureAwait(false), McpJson.Options);
+
+    /// <summary>Етапи виконання (те саме, що <c>get_execution_stages</c>).</summary>
+    /// <param name="stages">Сервіс етапів.</param>
+    /// <param name="id">Id виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerResource(UriTemplate = ExecutionStagesUriTemplate, Name = "execution-stages", Title = "Execution stages", MimeType = "application/json")]
+    [Description("Business stages of an execution with violations, available actions and unmet rules; same content as get_execution_stages.")]
+    public static async Task<string> ExecutionStages(IStageService stages, Guid id, CancellationToken ct) =>
+        JsonSerializer.Serialize(await stages.GetAsync(id, ct).ConfigureAwait(false), McpJson.Options);
 
     /// <summary>Структура таблиці і перші <see cref="DataTableResourceRows"/> рядків (те саме, що <c>query_table</c> без умов).</summary>
     /// <param name="tables">Сервіс таблиць.</param>
