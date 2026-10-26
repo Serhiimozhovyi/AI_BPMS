@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Ai;
 using OpenBP.Application.Assistant;
 using OpenBP.Application.DataTables;
+using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
@@ -101,8 +102,14 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<DataTableLimits>(),
             sp.GetRequiredService<TimeProvider>()));
+        // Відповіді webhook-ів (F6-05): core.respondToWebhook і respond: whenFinished пишуть у webhook_responses.
+        services.AddSingleton(sp => new PostgresWebhookResponder(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
-            CoreNodes.All(dataTables: sp.GetRequiredService<PostgresDataTableStore>())
+            CoreNodes.All(
+                dataTables: sp.GetRequiredService<PostgresDataTableStore>(),
+                webhookResponder: sp.GetRequiredService<PostgresWebhookResponder>())
                 .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>(), sp.GetRequiredService<TimeProvider>()))
                 .Concat(AiNodes.All(
                     sp.GetRequiredService<HttpClient>(),
@@ -122,7 +129,8 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExecutionJobProcessor>>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<WorkflowLimits>(),
-            sp.GetRequiredService<WorkerMetrics>()));
+            sp.GetRequiredService<WorkerMetrics>(),
+            sp.GetRequiredService<PostgresWebhookResponder>()));
         services.AddSingleton(sp => new PollJobProcessor(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<JobQueue>(),

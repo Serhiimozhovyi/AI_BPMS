@@ -9,12 +9,14 @@ using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
 using OpenBP.Application.Notifications;
 using OpenBP.Application.Variables;
+using OpenBP.Application.Webhooks;
 using OpenBP.Application.Workflows;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Diagnostics;
 using OpenBP.Engine.Execution;
+using OpenBP.Engine.Webhooks;
 using OpenBP.Mcp.Client;
 using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
@@ -56,6 +58,7 @@ public sealed partial class ExecutionJobProcessor
     private readonly TimeProvider _time;
     private readonly WorkflowLimits _limits;
     private readonly WorkerMetrics? _metrics;
+    private readonly IWebhookResponder? _webhookResponder;
 
     /// <summary>Створює обробник.</summary>
     /// <param name="contexts">Фабрика контекстів БД.</param>
@@ -70,6 +73,7 @@ public sealed partial class ExecutionJobProcessor
     /// <param name="time">Годинник; за замовчуванням системний.</param>
     /// <param name="limits">Серверні межі виконання; за замовчуванням типові (<see cref="WorkflowLimits"/>).</param>
     /// <param name="metrics">Лічильники для <c>/metrics</c> воркера; <c>null</c> — не рахувати.</param>
+    /// <param name="webhookResponder">Запис відповідей webhook-ів <c>whenFinished</c> (F6-05); <c>null</c> — не писати.</param>
     public ExecutionJobProcessor(
         IDbContextFactory<OpenBpDbContext> contexts,
         JobQueue queue,
@@ -82,7 +86,8 @@ public sealed partial class ExecutionJobProcessor
         ILogger<ExecutionJobProcessor> logger,
         TimeProvider? time = null,
         WorkflowLimits? limits = null,
-        WorkerMetrics? metrics = null)
+        WorkerMetrics? metrics = null,
+        IWebhookResponder? webhookResponder = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -98,6 +103,7 @@ public sealed partial class ExecutionJobProcessor
         _time = time ?? TimeProvider.System;
         _limits = limits ?? new WorkflowLimits();
         _metrics = metrics;
+        _webhookResponder = webhookResponder;
     }
 
     private const int MaxNotificationError = 500;
@@ -320,6 +326,7 @@ public sealed partial class ExecutionJobProcessor
         }
         else
         {
+            await RespondToWebhookAsync(payload, workflow, result!).ConfigureAwait(false);
             await store.FinishAsync(result!, CancellationToken.None).ConfigureAwait(false);
             await SaveNodeStatesAsync(payload.WorkflowId, loadedStates, result!.NodeStates).ConfigureAwait(false);
         }
@@ -329,6 +336,31 @@ public sealed partial class ExecutionJobProcessor
         await LaunchErrorWorkflowAsync(payload, workflow, result?.FailedNodeId).ConfigureAwait(false);
         await TripCircuitBreakerAsync(payload, workflow).ConfigureAwait(false);
         await CompleteJobAsync(job).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Webhook з <c>respond: whenFinished</c> (F6-05): успішне виконання — 200 з виходом останнього вузла пишеться в
+    /// <c>webhook_responses</c> <b>до</b> фінального стану, тож Api, що чекає на запит, бачить відповідь разом зі
+    /// станом (навіть із <c>saveSuccessfulData: false</c>). Відповідь, яку вже дав <c>core.respondToWebhook</c>, не
+    /// перезаписується. Збій запису лише пишеться в журнал — Api відповість за станом.
+    /// </summary>
+    private async Task RespondToWebhookAsync(ExecutionJobPayload payload, WorkflowDefinition workflow, ExecutionResult result)
+    {
+        if (_webhookResponder is null || result.Status != ExecutionStatus.Success
+            || payload.Mode is not (ExecutionMode.Trigger or ExecutionMode.Resume)
+            || !WebhookReplies.RespondsWhenFinished(workflow, payload.StartNodeId ?? result.Steps.FirstOrDefault()?.NodeId))
+        {
+            return;
+        }
+
+        try
+        {
+            await _webhookResponder.RespondAsync(result.ExecutionId, WebhookReplies.FromSteps(result.Steps), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or NpgsqlException or InvalidOperationException)
+        {
+            LogWebhookResponseFailed(_logger, result.ExecutionId, ex.Message);
+        }
     }
 
     /// <summary>
@@ -788,4 +820,7 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Job {JobId}: lock уже не належить воркеру при завершенні.")]
     private static partial void LogJobLockLost(ILogger logger, Guid jobId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: не вдалося записати відповідь webhook-у — {Reason}.")]
+    private static partial void LogWebhookResponseFailed(ILogger logger, Guid executionId, string reason);
 }

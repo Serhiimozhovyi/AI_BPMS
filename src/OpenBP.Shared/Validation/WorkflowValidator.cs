@@ -100,6 +100,7 @@ public sealed class WorkflowValidator
         ValidateBusiness(workflow, graph, errors);
         ValidateStages(workflow, graph, errors);
         ValidateAcyclic(workflow, graph, errors);
+        ValidateWebhookResponses(workflow, graph, errors);
         if (options.IsActive)
         {
             ValidateTrigger(workflow, errors);
@@ -455,6 +456,30 @@ public sealed class WorkflowValidator
         }
     }
 
+    /// <summary>
+    /// <c>core.webhook</c> з <c>respond: "fromNode"</c> (F6-05): після нього має бути досяжний увімкнений
+    /// <c>core.respondToWebhook</c> — інакше кожен запит чекав би до таймауту.
+    /// </summary>
+    private static void ValidateWebhookResponses(WorkflowDefinition workflow, Graph graph, List<WorkflowValidationError> errors)
+    {
+        for (var i = 0; i < workflow.Nodes.Count; i++)
+        {
+            var node = workflow.Nodes[i];
+            if (node.Type != "core.webhook" || node.Disabled == true
+                || node.Parameters["respond"] is not JsonValue respond || !respond.TryGetValue<string>(out var mode) || mode != "fromNode")
+            {
+                continue;
+            }
+
+            if (!graph.ReachableFrom(i).Any(j => workflow.Nodes[j] is { Type: "core.respondToWebhook", Disabled: not true }))
+            {
+                errors.Add(new(WorkflowValidationCodes.WebhookRespondNodeMissing,
+                    $"Webhook «{node.Name}» відповідає з вузла (respond: fromNode), але після нього немає увімкненого core.respondToWebhook.",
+                    node.Id, $"/nodes/{i}/parameters/respond"));
+            }
+        }
+    }
+
     private void ValidateTrigger(WorkflowDefinition workflow, List<WorkflowValidationError> errors)
     {
         if (!workflow.Nodes.Any(n => n.Disabled != true && IsTrigger(n)))
@@ -502,6 +527,25 @@ public sealed class WorkflowValidator
         }
 
         public int? IndexOf(string id) => _index.TryGetValue(id, out var i) ? i : null;
+
+        /// <summary>Вузли, досяжні з <paramref name="start"/> за напрямом ребер (без нього самого).</summary>
+        public IEnumerable<int> ReachableFrom(int start)
+        {
+            var visited = new HashSet<int> { start };
+            var stack = new Stack<int>();
+            stack.Push(start);
+            while (stack.Count > 0)
+            {
+                foreach (var next in _next[stack.Pop()])
+                {
+                    if (visited.Add(next))
+                    {
+                        stack.Push(next);
+                        yield return next;
+                    }
+                }
+            }
+        }
 
         /// <summary>
         /// Чи всі <paramref name="members"/> досяжні один з одного без урахування напряму ребер, якщо проміжними
