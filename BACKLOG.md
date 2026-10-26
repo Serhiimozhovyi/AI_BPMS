@@ -980,7 +980,7 @@
 - DoD: тести конектора з Bot API-моком (погоджено, відхилено, чужий токен, повторне натискання); CLI-тест сценарію `send_approval → waitFor → if` з моком і перемотуванням часу; `docs/connectors.md` — розділ про погодження.
 
 ### F6-28 · Конвертер n8n: нові конектори і доробки
-- model: `sonnet` · status: `ready` · depends: F6-25, F6-26, F6-27
+- model: `sonnet` · status: `review` · depends: F6-25, F6-26, F6-27
 - Що: `N8nWorkflowConverter` (F6-24) перетворює Read RSS → `mcp.tool rss_read`, HTTP Request → `mcp.tool http_request`, Telegram «Send Photo» → `send_photo`, «Send and Wait» → `send_approval` + `mcp.waitFor get_approval` (вихід `data.approved` як у n8n) замість заглушок; конектори HTTP і Telegram — у `manifest`. Доробки: типові вирази Luxon (`$now.setZone(tz).toISODate()`, `.toFormat(…)`, `$today`) → еквіваленти на `Date`/`Intl`; «Execute Once» → вставлений `core.code` з першим item'ом; відповідь `ai.llm` для коду, що читав вихід Ollama (`$json.response`/`message.content`), — сумісне поле або зауваження з точним місцем.
 - DoD: unit-тести на кожен новий мапінг і вирази Luxon; сценарій «Аграрії — MVP» (знеособлена копія у тестах) перетворюється без заглушок; `docs/workflow-format.md` §«Імпорт з n8n» оновлено.
 

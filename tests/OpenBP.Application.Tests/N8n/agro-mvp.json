@@ -1,0 +1,1042 @@
+{
+  "name": "Аграрії — MVP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 6,18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a07e9ab5-01ea-4758-9b15-7e90c72b6fdb",
+      "name": "6:30, 18:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -2912,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://agrotimes.ua/feed/",
+        "options": {}
+      },
+      "id": "8fcec60f-2941-4d19-9f08-e9688dc82587",
+      "name": "AgroTimes",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -2688,
+        576
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "id": "1e43e617-73c5-4dfe-a4af-a6872eb138ea",
+      "name": "Merge feeds",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2416,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://superagronom.com/rss/novosti",
+        "options": {}
+      },
+      "id": "3c0aeedd-48da-4f39-9b44-2e13bb3ab36c",
+      "name": "SuperAgronom новини",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -2688,
+        768
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://superagronom.com/rss/articles",
+        "options": {}
+      },
+      "id": "c6e748e6-e9a3-4a0d-b264-a90638a686a3",
+      "name": "SuperAgronom статті",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -2688,
+        960
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "XyZ",
+          "cachedResultName": "agro_history"
+        },
+        "returnAll": true
+      },
+      "id": "9c410d92-587c-4380-930a-e5070bb622bf",
+      "name": "Get history",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "position": [
+        -2240,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = Date.now();\nconst norm = (u) => { const m = String(u || '').trim().match(/^https?:\\/\\/(?:www\\.)?([^\\/?#]+)([^?#]*)(?:\\?[^#]*)?(#\\S*)?/i); return m ? (m[1] + m[2].replace(/\\/+$/, '') + (m[3] || '')).toLowerCase() : null; };\nconst hostOf = (u) => { const m = String(u || '').match(/^https?:\\/\\/(?:www\\.)?([^\\/?#]+)/i); return m ? m[1].toLowerCase() : ''; };\nconst hist = $('Get history').all().map(i => i.json);\nconst seen = new Set(hist.flatMap(r => String(r.urls || '').split(' ')).filter(Boolean));\nconst names = { 'agrotimes.ua': 'AgroTimes', 'superagronom.com': 'SuperAgronom', 'latifundist.com': 'Latifundist' };\nconst WINDOW_HOURS = 24;\nconst items = $('Merge feeds').all().map(i => i.json).sort((a, b) => (Date.parse(b.isoDate || b.pubDate || '') || 0) - (Date.parse(a.isoDate || a.pubDate || '') || 0));\nconst out = [];\nfor (const j of items) {\n  const u = norm(j.link);\n  const t = Date.parse(j.isoDate || j.pubDate || '');\n  if (!u || !j.title || seen.has(u)) continue;\n  if (!t || now - t > WINDOW_HOURS * 3600 * 1000) continue;\n  seen.add(u);\n  const host = hostOf(j.link);\n  out.push({ id: 'c' + (out.length + 1), title: j.title, summary: String(j['content:encodedSnippet'] || j.contentSnippet || '').replace(/\\s+/g, ' ').slice(0, 1200), published_at: new Date(t).toISOString(), source_name: names[host] || host, url: j.link });\n}\nreturn [{ json: { candidates: out.slice(0, 25) } }];\n"
+      },
+      "id": "8e6a0b43-25da-456f-b81f-acdd07dbc74d",
+      "name": "Prepare candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2016,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.candidates.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a9945a5e-1dfd-4eb8-8034-9b2823957bf9",
+      "name": "Has candidates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1792,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cands = $('Prepare candidates').first().json.candidates;\nconst byId = Object.fromEntries(cands.map(c => [c.id, c]));\nconst norm = (u) => { const m = String(u || '').trim().match(/^https?:\\/\\/(?:www\\.)?([^\\/?#]+)([^?#]*)(?:\\?[^#]*)?(#\\S*)?/i); return m ? (m[1] + m[2].replace(/\\/+$/, '') + (m[3] || '')).toLowerCase() : null; };\nconst repair = (s) => {\n  let t = String(s).replace(/```(?:json)?/gi, '').trim();\n  const a = t.indexOf('{'); if (a < 0) return null; t = t.slice(a);\n  try { return JSON.parse(t); } catch (e) {}\n  const stack = []; let inStr = false, escp = false;\n  for (const ch of t) {\n    if (inStr) { if (escp) escp = false; else if (ch === '\\\\') escp = true; else if (ch === '\"') inStr = false; continue; }\n    if (ch === '\"') inStr = true;\n    else if (ch === '{' || ch === '[') stack.push(ch);\n    else if (ch === '}' || ch === ']') stack.pop();\n  }\n  let fixed = t + (inStr ? '\"' : '');\n  for (let i = stack.length - 1; i >= 0; i--) fixed += stack[i] === '{' ? '}' : ']';\n  try { return JSON.parse(fixed); } catch (e) {}\n  const cut = fixed.replace(/,[^,{\\[]*$/, '');\n  try { return JSON.parse(cut); } catch (e) {}\n  return null;\n};\nconst lift = (post) => {\n  if (!post || !Array.isArray(post.blocks)) return post;\n  for (const b of post.blocks) {\n    if (!b || typeof b !== 'object') continue;\n    for (const k of ['closing_line', 'hashtags', 'image_prompt', 'headline', 'post_type']) {\n      if (k in b && (post[k] === undefined || post[k] === null || post[k] === '')) post[k] = b[k];\n    }\n  }\n  return post;\n};\nconst pairs = (raw) => {\n  const out = [], seen = new Set();\n  const re = /\"news_id\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"|\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*,\\s*\"news_id\"\\s*:\\s*\"([^\"]+)\"/g;\n  let m;\n  while ((m = re.exec(String(raw))) !== null) {\n    const id = m[1] || m[4];\n    const txt = m[2] !== undefined ? m[2] : m[3];\n    if (!id || txt === undefined || seen.has(id)) continue;\n    seen.add(id);\n    try { out.push({ news_id: id, text: JSON.parse('\"' + txt + '\"') }); } catch (e) {}\n  }\n  return out;\n};\nconst rawText = (() => {\n  const j = $input.first().json;\n  if (typeof j.content === 'string') return j.content;\n  const st = [j];\n  while (st.length) {\n    const v = st.pop();\n    if (typeof v === 'string' && v.includes('news_id')) return v;\n    if (v && typeof v === 'object') st.push(...Object.values(v));\n  }\n  return '';\n})();\nconst find = (root, key) => {\n  const st = [root];\n  while (st.length) {\n    const v = st.pop();\n    if (v && typeof v === 'object') { if (!Array.isArray(v) && key in v) return v; st.push(...Object.values(v)); }\n    else if (typeof v === 'string' && v.includes(key)) { const p = repair(v); if (p && key in p) return p; }\n  }\n  return null;\n};\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst attr = s => esc(s).replace(/\"/g, '&quot;');\nlet post = find($input.first().json, 'blocks');\npost = lift(post);\nif (post) {\n  const parsedBlocks = Array.isArray(post.blocks) ? post.blocks.filter(b => b && b.text) : [];\n  const extracted = pairs(rawText);\n  if (extracted.length > parsedBlocks.length) post.blocks = extracted;\n}\nif (!post) return [{ json: { skip: true, reason: 'модель повернула некоректну відповідь' } }];\nif (post.status !== 'ok' || !Array.isArray(post.blocks)) return [{ json: { skip: true, reason: post.skip_reason || 'нічого важливого' } }];\nconst blocks = post.blocks.filter(b => b && b.text && byId[b.news_id]);\nif (!blocks.length || !post.headline) return [{ json: { skip: true, reason: 'порожній текст від моделі' } }];\nconst last = {};\nblocks.forEach((b, i) => { last[b.news_id] = i; });\nconst bullet = post.post_type === 'digest' ? '• ' : '';\nconst html = ['<b>' + esc(post.headline) + '</b>'];\nconst plain = [String(post.headline)];\nblocks.forEach((b, i) => {\n  let h = bullet + esc(b.text);\n  let p = bullet + b.text;\n  if (last[b.news_id] === i) {\n    const c = byId[b.news_id];\n    h += '\\nДжерело: <a href=\"' + attr(c.url) + '\">' + esc(c.source_name) + '</a>';\n    p += '\\nДжерело: ' + c.source_name;\n  }\n  html.push(h); plain.push(p);\n});\nif (post.closing_line) { html.push(esc(post.closing_line)); plain.push(post.closing_line); }\nconst tags = (post.hashtags || []).slice(0, 3).join(' ');\nif (tags) { html.push(esc(tags)); plain.push(tags); }\nconst used = [...new Set(blocks.map(b => b.news_id))];\nconst image_prompt = String(post.image_prompt || '').trim();\nreturn [{ json: {\n  skip: false,\n  draft_id: Date.now().toString(36),\n  final_html: html.join('\\n\\n'),\n  image_prompt,\n  with_image: image_prompt.length > 30 && plain.join('\\n\\n').length <= 1024,\n  urls: used.map(id => norm(byId[id].url)).filter(Boolean).join(' '),\n  titles: used.map(id => byId[id].title).join(' | ')\n} }];\n"
+      },
+      "id": "7c5d66e2-ed25-4a36-91bd-1378996a1ffa",
+      "name": "Assemble post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1344,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e16d2b7d-ee25-4713-a9db-7a3a9e901a7b",
+      "name": "Has post?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "-100",
+        "text": "=🌾 Агро-чернетка {{ $json.draft_id }}\n\n{{ $json.final_html }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "3cd0cced-bcf8-498f-b962-3b24d95e5d14",
+      "name": "Send preview",
+      "webhookId": "e0a0cd69-cb1c-459b-9da1-687e01c7c6fe",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -896,
+        640
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "t1",
+          "name": "agrobot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "-100",
+        "message": "=Опублікувати агро-чернетку {{ $('Assemble post').item.json.draft_id }}?",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "✅ Опублікувати",
+            "disapproveLabel": "❌ Відхилити"
+          }
+        },
+        "chatApproval": true,
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 4
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "fd7dc746-c5e1-4077-86d0-a86bcacce36e",
+      "name": "Approve?",
+      "webhookId": "b52b8e51-2915-4616-8d5c-0d3db7b3cf9c",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -672,
+        640
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "t1",
+          "name": "agrobot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4616cb47-7fb4-47fa-a352-5e1ce484b432",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "-200",
+        "text": "={{ $('Assemble post').item.json.final_html }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "52438ba2-68c4-4002-b5fc-e4b1f77af5a3",
+      "name": "Post to channel",
+      "webhookId": "0dc1f9fa-bcae-4a7b-9dcd-72a7252ce060",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        544
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "t1",
+          "name": "agrobot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "XyZ",
+          "cachedResultName": "agro_history"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "draft_id": "={{ $('Assemble post').item.json.draft_id }}",
+            "status": "published",
+            "urls": "={{ $('Assemble post').item.json.urls }}",
+            "titles": "={{ $('Assemble post').item.json.titles }}",
+            "post_html": "={{ $('Assemble post').item.json.final_html }}"
+          },
+          "schema": [
+            {
+              "id": "draft_id",
+              "displayName": "draft_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "urls",
+              "displayName": "urls",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titles",
+              "displayName": "titles",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_html",
+              "displayName": "post_html",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bc61376c-da83-48c4-aac8-07a37bbdb3be",
+      "name": "Save published",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        144,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "XyZ",
+          "cachedResultName": "agro_history"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "draft_id": "={{ $('Assemble post').item.json.draft_id }}",
+            "status": "rejected",
+            "urls": "={{ $('Assemble post').item.json.urls }}",
+            "titles": "={{ $('Assemble post').item.json.titles }}",
+            "post_html": "={{ $('Assemble post').item.json.final_html }}"
+          },
+          "schema": [
+            {
+              "id": "draft_id",
+              "displayName": "draft_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "urls",
+              "displayName": "urls",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titles",
+              "displayName": "titles",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_html",
+              "displayName": "post_html",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0888ba2a-c10a-4db9-a253-ab394b36a216",
+      "name": "Save rejected",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "-100",
+        "text": "=⚪️ Агро: цього разу без поста — {{ $json.reason || 'нових новин немає' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "841a4e77-5692-4e85-ba16-663747543714",
+      "name": "Notify skip",
+      "webhookId": "27d87cdc-4133-4dd6-bcee-fd764dddce64",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -896,
+        864
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "t1",
+          "name": "agrobot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://latifundist.com/rss/novosti",
+        "options": {}
+      },
+      "id": "e7a5f1cd-2c6f-4384-b6c3-4a6c0fbfdbc1",
+      "name": "Latifundist",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -2688,
+        1184
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ String($('Assemble post').item.json.image_prompt || '').length > 2 && $('Assemble post').item.json.final_html.length < 900 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ea2fd8cd-381f-4aa5-818a-f8bbc78af69e",
+      "name": "With image?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "-200",
+        "file": "={{ $('Pick photo').item.json.url }}",
+        "additionalFields": {
+          "caption": "={{ $('Assemble post').item.json.final_html }}\n\n<i>{{ $('Pick photo').item.json.credit }}</i>",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "02dc028f-1850-4273-b955-bd855027c62a",
+      "name": "Post photo",
+      "webhookId": "a5c7c9b8-f6eb-4625-9322-b72b540a7868",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "t1",
+          "name": "agrobot"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.openverse.org/v1/images/?page_size=10&mature=false&license_type=commercial&aspect_ratio=wide&q=' + encodeURIComponent($('Assemble post').item.json.image_prompt) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "df0fded2-a7ec-4dfe-bb58-855f8ad6cf34",
+      "name": "Search photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        32
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = ($input.first().json.results || []).filter(r => r.url && /\\.(jpe?g|png)(\\?|$)/i.test(r.url) && (!r.width || r.width >= 800));\nconst r = res[Math.floor(Math.random() * Math.min(res.length, 5))];\nif (!r) return [{ json: { url: 'invalid://none', credit: '' } }];\nconst lic = String(r.license || '').toUpperCase();\nconst credit = '📷 ' + String(r.creator || 'unknown').replace(/[<>&]/g, '') + ' / ' + (r.source || 'Openverse') + ', CC ' + lic;\nreturn [{ json: { url: r.url, credit } }];"
+      },
+      "id": "c8e6be2d-6bab-47b0-a19f-32e5c3d372b1",
+      "name": "Pick photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "qwen3.5:4b"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Сьогодні: {{ $now.setZone('Europe/Kyiv').toISODate() }}\n\nДОДАТКОВІ ПРАВИЛА МОВИ\n- Пиши «сівба» або «посів», ніколи не «сів» у значенні сівби: читач плутає з дієсловом «сісти». Так само уникай інших агрожаргонних скорочень, які звучать двозначно.\n- Кожне речення має бути зрозуміле без знання фахового сленгу; якщо сумніваєшся — пиши повним словом або дієсловом («одразу сіють»).\n\nСвіжі новини (JSON):\n{{ JSON.stringify($json.candidates) }}"
+            }
+          ]
+        },
+        "options": {
+          "system": "Ти — редактор українськомовного Telegram-каналу «Аграрії🇺🇦 Одноосібники та Фермер» для фермерів, одноосібників і невеликих господарств. Тема — практика і технології: агрономія, посів і збирання, захист рослин, добрива, ґрунт, техніка, тваринництво, погодні ризики. Ти отримуєш список свіжих новин з українських агроЗМІ і пишеш з них ОДИН пост.\n\nВІДБІР\n1. Обери 1–3 новини з практичною користю для невеликого господарства: що зробити в полі чи на фермі, на що зважати зараз, які ризики (заморозки, хвороби, шкідники), нові підходи, які можна застосувати без великих інвестицій.\n2. Пропускай: великий агрохолдинговий бізнес, корпоративні угоди, біржові котирування без практичних висновків, рекламу, політику, чутки.\n3. Якщо корисного нічого немає — поверни status \"skip\".\n4. Одна новина значно важливіша → post_type \"single\"; 2–3 рівнозначні → \"digest\".\n\nФАКТИ\n- Використовуй лише title і summary новин. Жодних нових цифр, дат, норм внесення, назв препаратів, яких немає у вхідних даних.\n- Не давай власних агрономічних рекомендацій чи доз. Якщо у джерелі є порада — передай її як «за даними джерела / фахівці радять».\n- Дати, регіони, врожайність, ціни — точно як у джерелі.\n- Переказуй своїми словами, не копіюй абзаци з джерела.\n- Не пиши посилань, URL, markdown чи HTML — посилання додасть система.\n\nСТИЛЬ\n- Проста, жива українська для людей, які працюють на землі. Без канцеляриту, без суржику, без складних термінів без пояснення.\n- Дружньо і по-діловому: «що сталося → що це означає для вашого господарства → що варто зробити або перевірити».\n- Речення 8–18 слів. Без клікбейту, «Шок», «Увага!», закликів підписатися.\n- Емодзі: 0–2 на пост (🌾, 🚜 доречні), не в заголовку.\n- headline до 90 символів; single: 2–3 блоки; digest: 1 блок на новину (1–2 речення); hashtags 0–3 (#агрономія, #тваринництво, #погода).\n- Перед відповіддю перечитай кожне слово: орфографія, узгодження, жодних вигаданих слів.\n- Загальний обсяг (headline + blocks + closing_line) до 750 символів.\n\nКАРТИНКА\nПоле image_prompt: 2–4 англійські слова для пошуку стокового фото за темою (наприклад \"wheat field harvest\", \"tractor soil\", \"dairy cows farm\"). Без брендів, без війни, пожеж, хворих тварин.\n\nФОРМАТ\nТільки валідний JSON:\n{\"status\":\"ok\",\"skip_reason\":null,\"post_type\":\"digest\",\"headline\":\"...\",\"blocks\":[{\"news_id\":\"c1\",\"text\":\"...\"}],\"closing_line\":\"\",\"hashtags\":[\"#агрономія\"],\"image_prompt\":\"...\"}\n- news_id — точно id новини з вхідних даних.\n- Лапки всередині тексту — лише «ялинки».\n- Якщо skip: headline \"\", blocks [], closing_line \"\", hashtags [], image_prompt \"\", skip_reason — коротка причина.",
+          "temperature": 0.3,
+          "think": false,
+          "num_predict": 1600,
+          "num_ctx": 8192,
+          "keep_alive": "0s",
+          "format": "json"
+        }
+      },
+      "id": "3de875f7-6675-4b03-ba77-ce1c6812b8fd",
+      "name": "Ollama: пише пост",
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        -1568,
+        496
+      ],
+      "credentials": {
+        "ollamaApi": {
+          "id": "o1",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:7860/sdapi/v1/txt2img",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $('Assemble post').item.json.image_prompt, negative_prompt: 'text, watermark, logo, signature, letters, blurry, deformed', width: 1216, height: 832, seed: -1 }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "generate-image-flux",
+      "name": "Generate image (FLUX)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        -176
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst b64 = (resp.images && resp.images[0]) || null;\nif (!b64) throw new Error('Draw Things returned no image: ' + JSON.stringify(resp).slice(0, 200));\nconst buf = Buffer.from(String(b64).replace(/^data:image\\/\\w+;base64,/, ''), 'base64');\nif (buf.length < 2000) throw new Error('Generated image too small: ' + buf.length + ' bytes');\nconst bin = await this.helpers.prepareBinaryData(buf, 'ai-image.png', 'image/png');\nreturn [{ json: { generated: true, bytes: buf.length }, binary: { data: bin } }];"
+      },
+      "id": "image-to-binary",
+      "name": "Image to binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -224
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "-200",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{ $('Assemble post').item.json.final_html }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "post-photo-flux",
+      "name": "Post photo (FLUX)",
+      "webhookId": "7f3f58b9-b801-40e3-a70d-6e73ffa29976",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        368,
+        -224
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "t1",
+          "name": "agrobot"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "AgroTimes": {
+      "main": [
+        [
+          {
+            "node": "Merge feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge feeds": {
+      "main": [
+        [
+          {
+            "node": "Get history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SuperAgronom новини": {
+      "main": [
+        [
+          {
+            "node": "Merge feeds",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SuperAgronom статті": {
+      "main": [
+        [
+          {
+            "node": "Merge feeds",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Get history": {
+      "main": [
+        [
+          {
+            "node": "Prepare candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare candidates": {
+      "main": [
+        [
+          {
+            "node": "Has candidates?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has candidates?": {
+      "main": [
+        [
+          {
+            "node": "Ollama: пише пост",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble post": {
+      "main": [
+        [
+          {
+            "node": "Has post?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has post?": {
+      "main": [
+        [
+          {
+            "node": "Send preview",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send preview": {
+      "main": [
+        [
+          {
+            "node": "Approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve?": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "With image?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to channel": {
+      "main": [
+        [
+          {
+            "node": "Save published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Latifundist": {
+      "main": [
+        [
+          {
+            "node": "Merge feeds",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "With image?": {
+      "main": [
+        [
+          {
+            "node": "Generate image (FLUX)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post photo": {
+      "main": [
+        [
+          {
+            "node": "Save published",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6:30, 18:30": {
+      "main": [
+        [
+          {
+            "node": "AgroTimes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SuperAgronom новини",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SuperAgronom статті",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Latifundist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search photo": {
+      "main": [
+        [
+          {
+            "node": "Pick photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick photo": {
+      "main": [
+        [
+          {
+            "node": "Post photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama: пише пост": {
+      "main": [
+        [
+          {
+            "node": "Assemble post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate image (FLUX)": {
+      "main": [
+        [
+          {
+            "node": "Image to binary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image to binary": {
+      "main": [
+        [
+          {
+            "node": "Post photo (FLUX)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post photo (FLUX)": {
+      "main": [
+        [
+          {
+            "node": "Save published",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "timezone": "Europe/Kyiv"
+  }
+}
