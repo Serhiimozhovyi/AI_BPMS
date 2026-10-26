@@ -99,6 +99,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 - Discovery: `tools/list` при реєстрації і за кнопкою «Оновити»; схеми зберігаються в `tools_cache`, щоб канвас будував форми без живого з'єднання.
 - Вузол `mcp.tool` (див. [connectors.md](connectors.md)): параметри `serverId`, `toolName`, `arguments` (object за `inputSchema`, рядки можуть бути `{{ }}`). Результат: якщо є `structuredContent` — один item з ним; інакше по item на кожен `content`-блок (`text` → `{ text }`, `resource` → binary).
 - Polling-тригер `mcp.poll`: викликає tool за розкладом, порівнює з `nodeState` за ключовим полем, віддає лише нові записи.
+- Push-тригер `mcp.subscribe` (F6-13, [connectors.md §9](connectors.md#9-push-тригери-подій-mcpsubscribe-f6-13)): воркер тримає `resources/subscribe` на ресурс подій конектора в окремій сесії поза пулом (`OpenSessionAsync`); сповіщення `resources/updated` — сигнал виконати вузол тим самим шляхом, що й `mcp.poll` (читання, дедуплікація за ключем, виконання).
 
 ## 4. MCP-сервер (`/mcp`)
 
@@ -156,7 +157,8 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
-| `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |
+| `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |
+| `subscriptions` | workflow_id → workflows (cascade), node_id (PK разом), server_id, resource_uri, worker_id (null — вільна), leased_until (індекс), updated_at — підписки `mcp.subscribe`, оренда воркером (F6-13) |
 | `notification_channels` | id, name, type (`email`/`telegram`/`webhook`), config (jsonb: посилання на конектор чи credential, без секретів), events (jsonb), cooldown_sec, enabled, created_at, updated_at (F6-07) |
 | `notifications` | id, created_at, event, subject (id сценарію, конектора, воркера або `backup`), title, details (jsonb без секретів), processed_at (null — ще не розіслано; частковий індекс) — черга сповіщень F6-07 |
 | `notification_sends` | channel_id → notification_channels (cascade), key (`подія:subject`), sent_at — для `cooldown_sec` |
@@ -487,6 +489,15 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
   Тривалість — у кошиках гістограми, тож p50/p95 у «Огляді» — верхня межа кошика. Видалення старих виконань
   ретеншном агрегати не зменшує.
 - Quartz-job `notifications` в Api — див. §8 (сповіщення адміністратору).
+
+Підписки (F6-13, connectors.md §9.4): `SubscriptionService` воркера раз на `Worker:SubscriptionScanInterval` (10 с)
+звіряє `subscriptions` з вузлами `mcp.subscribe` опублікованих версій активних сценаріїв, продовжує свої оренди
+(`worker_id`, `leased_until = now + Worker:SubscriptionLease`, 30 с) і бере вільні чи протухлі — так підписку впалого
+воркера за строк оренди підхоплює інший. Для орендованої відкриває окрему сесію з конектором (протокол `2025-11-25`,
+`resources/subscribe`) і одразу читає «надолужити». Сповіщення `notifications/resources/updated` → `PollJobProcessor.PollAsync`
+для цього вузла без job'а в черзі: той самий шлях, що й `poll` (виконання вузла зі станом з `node_state`, нові записи →
+`IExecutionLauncher` в одній транзакції з новим станом, конфлікт стану → записи відкинуто). Штатна зупинка воркера
+закриває сесії і звільняє оренди; обрив сесії — повторне відкриття наступним проходом з наростаючою паузою після невдач.
 
 ### 10.5. SSE
 

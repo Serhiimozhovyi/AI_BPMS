@@ -129,6 +129,16 @@ OpenBP сам є MCP-сервером: агент бачить ваш конек
 `Changes_since_returns_records_after_the_cursor_and_a_new_cursor` перевіряє курсор і фільтр — оновіть його під свої
 сутності. Контракт — `docs/connectors.md` §8.
 
+## Push-події
+
+Щоб OpenBP реагував на події без опитування (вузол `mcp.subscribe`, `docs/connectors.md` §9), конектор віддає **ресурс
+подій** (JSON зі списком останніх подій, у кожної — стабільний ключ), оголошує `resources.subscribe` і на кожну нову
+подію шле `notifications/resources/updated` підписаним сесіям; сповіщення — лише сигнал, події OpenBP читає сам і
+відсікає вже бачені за ключем. Для Streamable HTTP потрібні сесії для клієнтів з `initialize`
+(`WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)`); stdio-екземплярів може
+бути кілька одночасно. Пресет тригера для палітри — `triggers[]` у `connector.json`. Еталон — `FakeEvents` у тестовому
+сервері OpenBP; заготовка в шаблоні з'явиться окремою задачею.
+
 ## Розробка шаблону
 
 Шаблон живе поза `OpenBP.sln`: власні `Directory.Build.props`, `Directory.Packages.props` (ті самі версії пакетів,

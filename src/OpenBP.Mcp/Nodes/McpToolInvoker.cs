@@ -248,7 +248,7 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
     /// Розгортає масив за <paramref name="itemsPath"/> у <c>structuredContent</c> в item на елемент:
     /// об'єкт → <c>json</c> як є, інше (рядок, число, масив) → <c>{ "value": … }</c>.
     /// </summary>
-    private static List<Item> Expand(JsonObject structured, string itemsPath, string toolName)
+    internal static List<Item> Expand(JsonObject structured, string itemsPath, string toolName)
     {
         var node = ResolvePath(structured, itemsPath);
         if (node is not JsonArray array)
@@ -313,7 +313,7 @@ internal sealed class McpToolInvoker(IMcpServerRegistry servers)
     }
 }
 
-/// <summary>Параметри виклику tool'а, спільні для <c>mcp.tool</c> і <c>mcp.poll</c>.</summary>
+/// <summary>Параметри виклику tool'а, спільні для <c>mcp.tool</c>, <c>mcp.poll</c> і <c>mcp.subscribe</c>.</summary>
 internal class McpCallParameters
 {
     public string ServerId { get; set; } = "";

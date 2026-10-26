@@ -13,6 +13,7 @@ using OpenBP.Data.Credentials;
 using OpenBP.Engine;
 using OpenBP.Engine.Execution;
 using OpenBP.Engine.Expressions;
+using OpenBP.Mcp.Validation;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Worker;
@@ -151,7 +152,10 @@ public sealed partial class PollJobProcessor
         return result;
     }
 
-    /// <summary>Опитує вузол <c>mcp.poll</c> опублікованої версії (F6-10) активного сценарію і за нових записів ставить виконання.</summary>
+    /// <summary>
+    /// Опитує вузол <c>mcp.poll</c> (або <c>mcp.subscribe</c> — так його «будить» <see cref="SubscriptionService"/>, F6-13)
+    /// опублікованої версії (F6-10) активного сценарію і за нових записів ставить виконання.
+    /// </summary>
     /// <param name="payload">Який вузол опитати.</param>
     /// <param name="ct">Скасування.</param>
     public async Task<PollResult> PollAsync(PollJobPayload payload, CancellationToken ct)
@@ -303,8 +307,8 @@ public sealed partial class PollJobProcessor
     }
 
     /// <summary>
-    /// Сценарій з одним вузлом <c>mcp.poll</c> опублікованої версії (налаштування — сценарію); <c>null</c> — опитувати нічого:
-    /// сценарію немає, він неактивний або вузла немає / він вимкнений.
+    /// Сценарій з одним вузлом <c>mcp.poll</c>/<c>mcp.subscribe</c> опублікованої версії (налаштування — сценарію); <c>null</c> —
+    /// опитувати нічого: сценарію немає, він неактивний або вузла немає / він вимкнений.
     /// </summary>
     private async Task<WorkflowDefinition?> LoadPollWorkflowAsync(PollJobPayload payload, CancellationToken ct)
     {
@@ -321,7 +325,7 @@ public sealed partial class PollJobProcessor
 
         var workflow = WorkflowJson.Deserialize(definition);
         var node = workflow.Nodes.SingleOrDefault(n => n.Id == payload.NodeId);
-        if (node is null || node.Type != ScheduleParameters.PollNodeType || node.Disabled == true)
+        if (node is null || node.Type is not (ScheduleParameters.PollNodeType or McpNodeSchemaProvider.SubscribeNodeType) || node.Disabled == true)
         {
             return null;
         }
