@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using OpenBP.Ai;
 using OpenBP.Application.DataTables;
+using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
@@ -93,7 +94,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
         Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(EncryptionKey));
         Servers = new McpServerSync(Db, _mcp, Credentials);
         DataTables = new PostgresDataTableStore(Db, new DataTableLimits(), TimeProvider.System);
-        var nodes = CoreNodes.All(time, DataTables).Concat(McpNodes.All(_mcp, time)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
+        SubWorkflows = new PostgresSubWorkflowLauncher(Db, time ?? TimeProvider.System, TimeSpan.FromMilliseconds(50));
+        var nodes = CoreNodes.All(time, DataTables, SubWorkflows).Concat(McpNodes.All(_mcp, time)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
 
         // core.webhook з'явиться в F2-10; до того прикладу telegram-1c.json потрібна заглушка (він запускається з pinData).
         if (!nodes.Any(n => n.Descriptor.Type == WebhookStub.Type))
@@ -131,6 +133,9 @@ internal sealed class WorkerHarness : IAsyncDisposable
 
     /// <summary>Сховище таблиць даних для <c>core.dataTable</c> (F6-11).</summary>
     public PostgresDataTableStore DataTables { get; }
+
+    /// <summary>Запуск підсценаріїв для <c>core.executeWorkflow</c> (F6-04).</summary>
+    public PostgresSubWorkflowLauncher SubWorkflows { get; }
 
     /// <summary>Ключ шифрування credentials (base64): <see cref="RestartAsync"/> передає його новому воркеру.</summary>
     public string EncryptionKey { get; }

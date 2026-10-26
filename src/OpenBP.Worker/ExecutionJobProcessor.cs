@@ -235,9 +235,10 @@ public sealed partial class ExecutionJobProcessor
         var loadedStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false);
         var vars = await LoadVariablesAsync(stoppingToken).ConfigureAwait(false);
         // Ручний тестовий запуск з канвасу показує дані вузлів завжди; решта — за settings.saveSuccessfulData (F4-07).
+        // Підсценарій (F6-04) теж зберігає дані: його вихід забирає батьківський вузол core.executeWorkflow.
         var store = new PostgresExecutionStore(_contexts, _time, scrubber)
         {
-            KeepSuccessfulData = workflow.Settings.SaveSuccessfulData || payload.Mode == ExecutionMode.Manual,
+            KeepSuccessfulData = workflow.Settings.SaveSuccessfulData || payload.Mode is ExecutionMode.Manual or ExecutionMode.Sub,
         };
         var executor = new WorkflowExecutor(
             _nodes,
@@ -325,6 +326,7 @@ public sealed partial class ExecutionJobProcessor
         }
 
         _metrics?.Record(finalStatus, result is null ? null : result.FinishedAt - result.StartedAt);
+        await WakeParentAsync(payload).ConfigureAwait(false);
         await NotifyFailureAsync(payload, workflow, finalStatus, result, engineError is null ? result?.Error?.Message : engineError, scrubber).ConfigureAwait(false);
         await LaunchErrorWorkflowAsync(payload, workflow, result?.FailedNodeId).ConfigureAwait(false);
         await TripCircuitBreakerAsync(payload, workflow).ConfigureAwait(false);
@@ -391,6 +393,46 @@ public sealed partial class ExecutionJobProcessor
         catch (Exception ex) when (ex is DbUpdateException or NpgsqlException or InvalidOperationException)
         {
             LogNotifyFailure(_logger, ex, payload.ExecutionId);
+        }
+    }
+
+    /// <summary>
+    /// Підсценарій (F6-04) завершився — будимо батьківське виконання, що чекає на нього у <c>waiting</c>: job пробудження
+    /// переноситься на зараз, і вузол <c>core.executeWorkflow</c> забирає результат без очікування запасної перевірки.
+    /// Батьківське ще не встигло призупинитись — його розбудить запасна перевірка вузла. Збій лише пишеться в журнал.
+    /// </summary>
+    private async Task WakeParentAsync(ExecutionJobPayload payload)
+    {
+        if (payload.Mode != ExecutionMode.Sub)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var db = await _contexts.CreateDbContextAsync().ConfigureAwait(false);
+            var parentId = await db.Executions.AsNoTracking()
+                .Where(e => e.Id == payload.ExecutionId)
+                .Select(e => e.ParentExecutionId)
+                .SingleOrDefaultAsync()
+                .ConfigureAwait(false);
+            if (parentId is not { } parent)
+            {
+                return;
+            }
+
+            var now = _time.GetUtcNow();
+            var parentText = parent.ToString();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE jobs SET run_at = {now}
+                 WHERE kind = {JobKinds.Execution} AND locked_by IS NULL AND run_at > {now}
+                   AND payload->>'executionId' = {parentText}
+                   AND EXISTS (SELECT 1 FROM executions e WHERE e.id = {parent} AND e.status = {ExecutionStatuses.Waiting})
+                """).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or NpgsqlException or InvalidOperationException)
+        {
+            LogWakeParentFailure(_logger, ex, payload.ExecutionId);
         }
     }
 
@@ -770,6 +812,9 @@ public sealed partial class ExecutionJobProcessor
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Сценарій {WorkflowId}: не вдалося перевірити запобіжник disableAfterErrors.")]
     private static partial void LogCircuitBreakerFailure(ILogger logger, Exception exception, Guid workflowId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Підсценарій {ExecutionId}: не вдалося розбудити батьківське виконання.")]
+    private static partial void LogWakeParentFailure(ILogger logger, Exception error, Guid executionId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Виконання {ExecutionId}: не вдалося записати подію сповіщення.")]
     private static partial void LogNotifyFailure(ILogger logger, Exception error, Guid executionId);

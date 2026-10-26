@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Ai;
 using OpenBP.Application.Assistant;
 using OpenBP.Application.DataTables;
+using OpenBP.Application.Executions;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine;
@@ -101,8 +102,15 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<DataTableLimits>(),
             sp.GetRequiredService<TimeProvider>()));
+        // Підсценарії (F6-04): core.executeWorkflow ставить дочірні виконання в ту саму чергу.
+        services.AddSingleton(sp => new PostgresSubWorkflowLauncher(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
-            CoreNodes.All(dataTables: sp.GetRequiredService<PostgresDataTableStore>())
+            CoreNodes.All(
+                    sp.GetRequiredService<TimeProvider>(),
+                    sp.GetRequiredService<PostgresDataTableStore>(),
+                    sp.GetRequiredService<PostgresSubWorkflowLauncher>())
                 .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>(), sp.GetRequiredService<TimeProvider>()))
                 .Concat(AiNodes.All(
                     sp.GetRequiredService<HttpClient>(),

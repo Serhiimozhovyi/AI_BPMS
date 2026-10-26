@@ -59,7 +59,8 @@ public sealed class ExecutionTools
     /// <param name="id">Виконання.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "get_execution", Title = "Get execution", ReadOnly = true, UseStructuredContent = true)]
-    [Description("Returns an execution with its state, error and steps (input/output items per port of every executed node; same as the resource openbp://executions/{id}).")]
+    [Description("Returns an execution with its state, error and steps (input/output items per port of every executed node; same as the resource openbp://executions/{id}) " +
+        "and `children`: sub-workflow executions it started via core.executeWorkflow (mode sub, parentNodeId).")]
     public static Task<ExecutionDetail> GetExecution(
         IExecutionService executions,
         [Description("Execution id.")] Guid id,

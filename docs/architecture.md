@@ -138,7 +138,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
-| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`) |
+| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`), parent_execution_id і parent_node_id (F6-04, підсценарій `mode = sub`; індекс за `parent_execution_id`) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
@@ -396,6 +396,21 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   `waiting` не рахує; `correlation.skipIfActive` (F5-04) — рахує як активне.
 - SSE не закривається на `waiting`; MCP `run_workflow`, помічник і оцінки перестають чекати на `waiting`
   (`ExecutionStates.IsSettled`).
+
+Підсценарії (F6-04, docs/workflow-format.md «Підсценарії»):
+- `core.executeWorkflow` викликає `ISubWorkflowLauncher` (інтерфейс движка; у воркері — `PostgresSubWorkflowLauncher`).
+  `StartAsync`: глибина батьківського за ланцюжком `parent_execution_id` (дочірнє глибше за 8 — помилка), сценарій
+  існує і спільний або того самого проєкту, версія `published ?? current` має увімкнений `core.workflowTrigger`,
+  items відповідають його `inputSchema`; далі `ExecutionLauncher` з `mode = sub`, `startNodeId` = тригер,
+  `startItems` = items, `parent_execution_id`/`parent_node_id`. Ліміти сценарію (F6-06) діють, як на тригер.
+- `wait`: `WaitAsync` опитує рядок дочірнього до 10 с; не завершилось — вузол викликає `ctx.Suspend` зі станом
+  `{ executionId, checks }` і запасним пробудженням через 5 с, 10 с … до 1 хв. Коли воркер записав фінальний стан
+  виконання `sub`, він переносить `run_at` незаблокованого job'а батьківського (якщо воно `waiting`) на зараз — і
+  батьківське прокидається одразу. Вихід — items останнього успішного кроку дочірнього; тому воркер зберігає дані
+  кроків `sub` незалежно від `saveSuccessfulData`.
+- Падіння воркера між створенням дочірнього і призупиненням батьківського дає повторний запуск вузла (і друге дочірнє)
+  — так само, як повтор інших вузлів із побічною дією. Скасування батьківського дочірні не скасовує.
+- `IExecutionService.GetAsync` віддає `children` (виконання з `parent_execution_id` = id) у порядку запуску.
 
 Відновлення (F2-08): `ReleaseStaleLocksAsync` раз на `LockTimeout / 2` повертає job'и впалих воркерів;
 виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)

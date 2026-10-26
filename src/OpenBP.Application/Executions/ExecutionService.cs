@@ -131,7 +131,12 @@ public sealed class ExecutionService(
             .Where(s => s.ExecutionId == id)
             .OrderBy(s => s.Id)
             .ToListAsync(ct);
-        return new ExecutionDetail(ExecutionMapping.ToSummary(execution), [.. steps.Select(ExecutionMapping.ToStep)]);
+        var children = await db.Executions.AsNoTracking()
+            .Where(e => e.ParentExecutionId == id)
+            .OrderBy(e => e.Id)
+            .ToListAsync(ct);
+        return new ExecutionDetail(
+            ExecutionMapping.ToSummary(execution), [.. steps.Select(ExecutionMapping.ToStep)], [.. children.Select(ExecutionMapping.ToSummary)]);
     }
 
     /// <inheritdoc />

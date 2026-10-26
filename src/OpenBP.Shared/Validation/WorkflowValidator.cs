@@ -39,6 +39,7 @@ public sealed class WorkflowValidator
         "core.schedule",
         "mcp.poll",
         "core.errorTrigger",
+        "core.workflowTrigger",
     };
 
     /// <summary>Схема будується з власним реєстром, щоб не конфліктувати з глобальним за <c>$id</c>.</summary>
@@ -352,7 +353,8 @@ public sealed class WorkflowValidator
     }
 
     /// <summary>Тригер — вузол без входів за дескриптором; якщо провайдер тип не знає — за <see cref="TriggerTypes"/>.</summary>
-    private bool IsTrigger(NodeDefinition node) =>
+    /// <param name="node">Вузол.</param>
+    public bool IsTrigger(NodeDefinition node) =>
         _provider.GetPorts(node.Type, node.TypeVersion) is { } ports
             ? ports.Inputs == 0
             : TriggerTypes.Contains(node.Type);
