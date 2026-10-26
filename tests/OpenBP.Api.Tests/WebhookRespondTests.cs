@@ -246,7 +246,11 @@ public class WebhookRespondTests(ApiFactory api)
         {
             db.WebhookResponses.Add(new WebhookResponseEntity
             {
-                ExecutionId = executionId, StatusCode = code, Headers = headers, Body = body ?? [], CreatedAt = DateTimeOffset.UtcNow,
+                ExecutionId = executionId,
+                StatusCode = code,
+                Headers = headers,
+                Body = body ?? [],
+                CreatedAt = DateTimeOffset.UtcNow,
             });
             await db.SaveChangesAsync();
         }
