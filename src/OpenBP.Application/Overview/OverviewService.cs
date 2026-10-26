@@ -25,6 +25,7 @@ public sealed record OverviewFailingWorkflow(Guid WorkflowId, string? Name, int 
 /// <param name="Queued">Зараз у черзі.</param>
 /// <param name="Running">Зараз виконуються (разом зі скасовуваними).</param>
 /// <param name="Waiting">Зараз чекають події чи часу.</param>
+/// <param name="OpenViolations">Виконань з відкритими порушеннями правил переходу між етапами (F7-04).</param>
 public sealed record OverviewResult(
     string Range,
     DateTimeOffset From,
@@ -38,7 +39,8 @@ public sealed record OverviewResult(
     IReadOnlyList<OverviewFailingWorkflow> TopFailing,
     int Queued,
     int Running,
-    int Waiting);
+    int Waiting,
+    int OpenViolations = 0);
 
 /// <summary>Дані сторінки «Огляд».</summary>
 public interface IOverviewService
@@ -115,6 +117,14 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
             .ToDictionaryAsync(g => g.Status, g => g.Count, ct);
         int Current(string status) => current.TryGetValue(status, out var count) ? count : 0;
 
+        var openViolations = await db.Violations.AsNoTracking()
+            .Where(v => v.Status == ViolationStatuses.Open)
+            .Join(db.Executions.AsNoTracking(), v => v.ExecutionId, e => e.Id, (v, e) => new { v.ExecutionId, e.WorkflowId })
+            .Where(x => !restricted || visible.Contains(x.WorkflowId))
+            .Select(x => x.ExecutionId)
+            .Distinct()
+            .CountAsync(ct);
+
         return new OverviewResult(
             range!,
             from,
@@ -128,6 +138,7 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
             [.. byWorkflow.Select(w => new OverviewFailingWorkflow(w.Id, names.GetValueOrDefault(w.Id), w.Failed, w.Total))],
             Current(ExecutionStatuses.Queued),
             Current(ExecutionStatuses.Running) + Current(ExecutionStatuses.Cancelling),
-            Current(WaitingStatus));
+            Current(WaitingStatus),
+            openViolations);
     }
 }

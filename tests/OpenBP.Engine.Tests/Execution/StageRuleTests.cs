@@ -125,6 +125,55 @@ public sealed class StageRuleTests
         Assert.Equal(2, g.Stages.RuleChecks.Count);
     }
 
+    /// <summary>t → a (s1) → b (s2, виправляє дані) → c (s2); правило s1 → s2 хибне, доки b не виконається.</summary>
+    private static TestGraph FixingGraph(string mode, bool fixes)
+    {
+        var g = new TestGraph { Time = new StepTime(Start) };
+        g.Registry.Register(new FuncNode(Descriptor("test.fix", ["main"], ["main"]), (ctx, _) =>
+        {
+            if (fixes)
+            {
+                g.Expressions.Set(Ok, true);
+            }
+
+            return Task.FromResult<Item[][]>([[.. ctx.Items()]]);
+        }));
+        g.Node("t", Trigger).Node("a", Pass).Node("b", "test.fix").Node("c", Pass)
+            .Edge("t", "a").Edge("a", "b").Edge("b", "c")
+            .Stage("s1", ["a"], null, Rule("r1", mode, "s2"))
+            .Stage("s2", ["b", "c"]);
+        g.Expressions.Set(Ok, false);
+        return g;
+    }
+
+    [Theory]
+    [InlineData(StageRuleModes.Warn)]
+    [InlineData(null)]
+    public async Task Open_warning_is_resolved_when_condition_becomes_true_on_a_later_step(string? mode)
+    {
+        var g = FixingGraph(mode ?? StageRuleModes.Warn, fixes: true);
+
+        var result = await g.RunAsync();
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        Assert.Equal([false, true], g.Stages.RuleChecks.Select(c => c.Check.Passed));
+        Assert.All(g.Stages.RuleChecks, c => Assert.Equal(("s1", "r1", "b"), (c.Check.StageId, c.Check.RuleId, c.Check.NodeId)));
+    }
+
+    [Fact]
+    public async Task Unmet_warning_stays_open_and_resolution_is_reported_once()
+    {
+        var failing = FixingGraph(StageRuleModes.Warn, fixes: false);
+        await failing.RunAsync();
+        Assert.Equal([false], failing.Stages.RuleChecks.Select(c => c.Check.Passed));
+
+        // Правило, виконане одразу при переході, повторно не звітується.
+        var passing = FixingGraph(StageRuleModes.Warn, fixes: false);
+        passing.Expressions.Set(Ok, true);
+        await passing.RunAsync();
+        Assert.Equal([true], passing.Stages.RuleChecks.Select(c => c.Check.Passed));
+    }
+
     [Fact]
     public async Task Warn_rule_lets_transition_pass_and_reports_unmet_rule()
     {

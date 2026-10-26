@@ -22,6 +22,7 @@ const day: Overview = {
   queued: 4,
   running: 2,
   waiting: 1,
+  openViolations: 3,
 };
 
 describe('formatDuration і formatRate', () => {
@@ -65,6 +66,9 @@ describe('OverviewPage', () => {
     expect(host.querySelector('[data-testid="now-running"]')?.textContent).toContain('2');
     expect(host.querySelector('[data-testid="now-waiting"]')?.textContent).toContain('1');
     expect(host.querySelector('[data-testid="now-queued"]')?.textContent).toContain('4');
+    const violations = host.querySelector<HTMLAnchorElement>('[data-testid="now-violations"]')!;
+    expect(violations.textContent).toContain('3');
+    expect(violations.getAttribute('href')).toBe('/executions?hasOpenViolations=true');
     const rows = host.querySelectorAll('[data-workflow]');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('Звіт продажів');

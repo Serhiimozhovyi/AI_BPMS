@@ -31,6 +31,8 @@ export interface Overview {
   queued: number;
   running: number;
   waiting: number;
+  /** Виконань з відкритими порушеннями правил переходу (F7-04). */
+  openViolations?: number;
 }
 
 /** Назва періоду для людей. */

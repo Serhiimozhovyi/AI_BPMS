@@ -82,11 +82,26 @@ public sealed class ExecutionTools
         [Description("Only in this state: queued, running, waiting, cancelling, success, error, cancelled, timed_out.")] string? status = null,
         [Description("Page number, starting at 1.")] int page = 1,
         [Description("Only executions with this correlation key (exact match), e.g. all processes of one deal.")] string? correlationKey = null,
+        [Description("true — only executions with open stage-rule violations (F7-04); false — only without.")] bool? hasOpenViolations = null,
         CancellationToken ct = default) =>
         executions.ListAsync(
-            new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), CorrelationKey: correlationKey),
+            new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), CorrelationKey: correlationKey, HasOpenViolations: hasOpenViolations),
             new PageRequest { Page = page },
             ct);
+
+    /// <summary><c>list_violations</c> (F7-04).</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "list_violations", Title = "List stage rule violations", ReadOnly = true, UseStructuredContent = true)]
+    [Description(
+        "Lists stage transition rule violations of an execution (ADR-004 §3): open ones, resolved ones and those overridden " +
+        "with a reason (reason, actorUserId, resolvedAt), in order of occurrence. Use override_rule to override an open one.")]
+    public static async Task<ViolationList> ListViolations(
+        IExecutionService executions,
+        [Description("Execution id.")] Guid id,
+        CancellationToken ct = default) =>
+        new(await executions.ListViolationsAsync(id, ct));
 
     /// <summary><c>cancel_execution</c>.</summary>
     /// <param name="executions">Сервіс виконань.</param>

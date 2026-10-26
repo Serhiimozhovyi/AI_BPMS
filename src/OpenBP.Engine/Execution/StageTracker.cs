@@ -204,7 +204,9 @@ public static class StageTracker
     }
 
     /// <summary>Вузол справді стартував: не згас, не закритий рушієм і не стоїть перед зупиненим переходом.</summary>
-    private static bool IsStart(StepRecord step) => step.Status != StepStatus.Skipped && !IsClosing(step) && !IsRuleBlock(step);
+    /// <summary>Крок справді запустив вузол (не пропущений, не закритий рушієм і не зупинений правилом переходу).</summary>
+    /// <param name="step">Крок.</param>
+    public static bool IsStart(StepRecord step) => step.Status != StepStatus.Skipped && !IsClosing(step) && !IsRuleBlock(step);
 
     private static DateTimeOffset? ExitOf(
         List<StepRecord> started,

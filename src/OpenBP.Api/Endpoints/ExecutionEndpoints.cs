@@ -40,16 +40,21 @@ public static class ExecutionEndpoints
         var executions = api.MapGroup("/executions").WithTags(OpenApiSetup.Tags.Executions);
 
         executions.MapGet("/", (IExecutionService service, CancellationToken ct,
-                Guid? workflowId, string? status, DateTimeOffset? from, DateTimeOffset? to, string? correlationKey, int? page, int? pageSize) =>
+                Guid? workflowId, string? status, DateTimeOffset? from, DateTimeOffset? to, string? correlationKey, bool? hasOpenViolations, int? page, int? pageSize) =>
             service.ListAsync(
-                new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), from, to, correlationKey),
+                new ExecutionFilter(workflowId, status is null ? null : ExecutionStates.FromDb(status), from, to, correlationKey, hasOpenViolations),
                 new PageRequest { Page = page ?? 1, PageSize = pageSize ?? PageRequest.DefaultPageSize },
                 ct))
-            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг).");
+            .WithSummary("Історія виконань").WithDescription("Фільтри: `workflowId`, `status` (queued, running, waiting, cancelling, success, error, cancelled, timed_out), період `from`–`to`, `correlationKey` (точний збіг), `hasOpenViolations` (лише з відкритими порушеннями правил переходу — або лише без них).");
 
         executions.MapGet("/{id:guid}", (Guid id, IExecutionService service, CancellationToken ct) =>
             service.GetAsync(id, ct))
             .WithSummary("Виконання з кроками (входи й виходи вузлів)");
+
+        executions.MapGet("/{id:guid}/violations", (Guid id, IExecutionService service, CancellationToken ct) =>
+            service.ListViolationsAsync(id, ct))
+            .WithSummary("Порушення правил переходу виконання")
+            .WithDescription("ADR-004 §3: відкриті (`open`), виправлені (`resolved`) і відхилені з причиною (`overridden`; `reason`, `actorUserId`, `resolvedAt`) порушення, у порядку виникнення.");
 
         executions.MapPost("/{id:guid}/cancel", async (Guid id, IExecutionService service, CancellationToken ct) =>
             Results.Accepted($"/api/v1/executions/{id}", await service.CancelAsync(id, ct)))
