@@ -171,6 +171,9 @@ public sealed class FakeTelegramApprovals : IDisposable
                         }
                         : Array.Empty<object>();
                     break;
+                case "sendPhoto":
+                    result = new { message_id = Interlocked.Increment(ref _messageId) + 900, date = 1761200000, chat = new { id = 42, type = "private" }, caption = body["caption"]?.GetValue<string>(), photo = new[] { new { file_id = "f1", width = 90, height = 90 } } };
+                    break;
                 case "answerCallbackQuery":
                     result = true;
                     break;
