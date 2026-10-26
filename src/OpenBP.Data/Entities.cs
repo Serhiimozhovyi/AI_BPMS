@@ -342,6 +342,10 @@ public sealed class ExecutionEntity
     public DateTimeOffset? HeartbeatAt { get; set; }
     /// <summary>Виконання, яке продовжує це (<c>mode = resume</c>, F6-08).</summary>
     public Guid? ResumedFromExecutionId { get; set; }
+    /// <summary>Для підсценарію (<c>mode = sub</c>, F6-04) — виконання, вузол <c>core.executeWorkflow</c> якого його створив.</summary>
+    public Guid? ParentExecutionId { get; set; }
+    /// <summary>Для підсценарію — id вузла <c>core.executeWorkflow</c> у батьківському виконанні.</summary>
+    public string? ParentNodeId { get; set; }
     /// <summary>Ключ кореляції (F5-04): Id угоди, контрагента тощо; до 200 символів.</summary>
     public string? CorrelationKey { get; set; }
     /// <summary>Для <c>waiting</c> — коли розбудити (F5-02); інакше <c>null</c>.</summary>

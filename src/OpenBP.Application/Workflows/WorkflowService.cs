@@ -48,6 +48,7 @@ public sealed class WorkflowService(
 
     /// <summary>Тип тригера сценарію помилок (<c>OpenBP.Nodes.Core.ErrorTriggerNode</c>).</summary>
     private const string ErrorTriggerType = "core.errorTrigger";
+    private const string WorkflowTriggerType = "core.workflowTrigger";
 
     private readonly WorkflowValidator _validator = new(schemaProvider);
     private readonly ProjectAccess _access = new(db, currentUser);
@@ -315,6 +316,7 @@ public sealed class WorkflowService(
                           .SingleOrDefaultAsync(v => v.Id == (workflow.PublishedVersionId ?? workflow.CurrentVersionId), ct)
                       ?? throw new InvalidOperationException($"Сценарій «{workflow.Id}» без поточної версії.");
         await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct, workflow.Id, new(workflow.GroupId));
+        ThrowIfOnlyWorkflowTrigger(WorkflowJson.Deserialize(version.Definition));
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
         workflow.PublishedVersionId = version.Id;
@@ -479,6 +481,12 @@ public sealed class WorkflowService(
             return [errorWorkflowError];
         }
 
+        var subWorkflowErrors = await SubWorkflowReferences.ValidateAsync(db, document, workflowId, project is not null, project?.ProjectId, ct);
+        if (subWorkflowErrors.Count > 0)
+        {
+            return subWorkflowErrors;
+        }
+
         ScheduleParameters.Read(document, out var scheduleErrors);
         return scheduleErrors;
     }
@@ -538,6 +546,23 @@ public sealed class WorkflowService(
         return WorkflowJson.Deserialize(definition).Nodes.Any(n => n.Type == ErrorTriggerType)
             ? null
             : new(WorkflowValidationCodes.ErrorWorkflowInvalid, "Сценарій помилок має містити вузол «Помилка сценарію» (core.errorTrigger).", Path: path);
+    }
+
+    /// <summary>
+    /// Підсценарій (F6-04) сам не запускається: активувати можна, лише якщо крім <c>core.workflowTrigger</c> є інший
+    /// увімкнений тригер. Викликати підсценарій активація не потрібна.
+    /// </summary>
+    private void ThrowIfOnlyWorkflowTrigger(WorkflowDefinition definition)
+    {
+        var triggers = definition.Nodes.Where(n => n.Disabled != true && _validator.IsTrigger(n)).ToList();
+        if (triggers.Count > 0 && triggers.All(n => n.Type == WorkflowTriggerType))
+        {
+            throw new WorkflowValidationException([new WorkflowValidationError(
+                WorkflowValidationCodes.WorkflowTriggerStandalone,
+                "Підсценарій не активується сам: його запускають інші сценарії вузлом «Підсценарій». Активувати потрібно сценарій, що його викликає, або додайте інший тригер.",
+                triggers[0].Id,
+                "/nodes")]);
+        }
     }
 
     /// <summary>Сценарій для зміни: чужий проєкт — 404, бракує ролі в проєкті — 403.</summary>

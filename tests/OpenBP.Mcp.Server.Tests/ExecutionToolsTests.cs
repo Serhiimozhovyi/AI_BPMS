@@ -116,6 +116,52 @@ public class ExecutionToolsTests(McpServerFactory mcp)
     }
 
     [Fact]
+    public async Task Get_execution_lists_sub_workflow_children()
+    {
+        await mcp.EnsureWorkerAsync();
+        await using var editor = await mcp.ConnectAsync(UserRole.Editor);
+        var child = JsonNode.Parse($$"""
+            {
+              "formatVersion": 1, "name": "Підсценарій {{Guid.NewGuid():N}}",
+              "settings": { "timezone": "UTC", "executionTimeoutSec": 60, "errorWorkflowId": null, "saveSuccessfulData": true },
+              "nodes": [
+                { "id": "n_in", "name": "Вхід", "type": "core.workflowTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+                { "id": "n_set", "name": "Поле", "type": "core.set", "typeVersion": 1, "position": [200, 0], "parameters": { "fields": [ { "name": "done", "value": "так" } ] } }
+              ],
+              "connections": [ { "from": { "node": "n_in", "output": 0 }, "to": { "node": "n_set", "input": 0 } } ]
+            }
+            """)!;
+        var childId = (string)(await CallAsync(editor, "create_workflow", new() { ["definition"] = child }))["id"]!;
+        var parent = JsonNode.Parse($$"""
+            {
+              "formatVersion": 1, "name": "Викликає {{Guid.NewGuid():N}}",
+              "settings": { "timezone": "UTC", "executionTimeoutSec": 60, "errorWorkflowId": null, "saveSuccessfulData": true },
+              "nodes": [
+                { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+                { "id": "n_call", "name": "Підсценарій", "type": "core.executeWorkflow", "typeVersion": 1, "position": [200, 0], "parameters": { "workflowId": "{{childId}}" } }
+              ],
+              "connections": [ { "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_call", "input": 0 } } ]
+            }
+            """)!;
+        var parentId = (string)(await CallAsync(editor, "create_workflow", new() { ["definition"] = parent }))["id"]!;
+
+        var execution = await CallAsync(editor, "run_workflow", new() { ["id"] = parentId, ["timeoutSec"] = 120 });
+
+        Assert.Equal("success", (string?)execution["summary"]!["state"]);
+        var call = execution["steps"]!.AsArray().Single(s => (string?)s!["nodeId"] == "n_call")!;
+        Assert.Equal("так", (string?)call["output"]![0]![0]!["json"]!["done"]);
+        var children = execution["children"]!.AsArray();
+        var summary = Assert.Single(children)!;
+        Assert.Equal(childId, (string?)summary["workflowId"]);
+        Assert.Equal("sub", (string?)summary["mode"]);
+        Assert.Equal("n_call", (string?)summary["parentNodeId"]);
+
+        var childExecution = await CallAsync(editor, "get_execution", new() { ["id"] = (string)summary["id"]! });
+        Assert.Equal((string?)execution["summary"]!["id"], (string?)childExecution["summary"]!["parentExecutionId"]);
+        Assert.Empty(childExecution["children"]!.AsArray());
+    }
+
+    [Fact]
     public async Task Viewer_cannot_run_or_cancel_but_reads()
     {
         await using var editor = await mcp.ConnectAsync(UserRole.Editor);

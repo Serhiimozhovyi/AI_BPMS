@@ -208,6 +208,8 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.CorrelationKey).HasMaxLength(200);
             e.Property(x => x.WaitingNodeId).HasMaxLength(200);
             e.HasIndex(x => new { x.WorkflowId, x.CorrelationKey }).HasFilter("correlation_key IS NOT NULL");
+            e.Property(x => x.ParentNodeId).HasMaxLength(200);
+            e.HasIndex(x => x.ParentExecutionId).HasFilter("parent_execution_id IS NOT NULL");
         });
         b.Entity<ExecutionStepEntity>(e =>
         {
