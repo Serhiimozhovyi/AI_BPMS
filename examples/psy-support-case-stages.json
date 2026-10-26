@@ -1,0 +1,201 @@
+{
+  "formatVersion": 1,
+  "name": "Психологічна підтримка · звернення з підвищеним ризиком (етапи)",
+  "description": "Звернення проходить етапи «Прийом» → «Оцінка психолога» → «Закриття». Приклад до критерію незалежності продукту (docs/admin/independence-check.md): застосунок psy-support працює з етапами лише через контракт стану й дій — GET /executions/{id}/stages, POST …/stages/{stageId}/actions/{actionId}, MCP get_execution_stages/act_on_stage.",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 0,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "pinData": {},
+  "nodes": [
+    {
+      "id": "n_start",
+      "name": "Звернення",
+      "type": "core.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "n_intake",
+      "name": "Картка звернення",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "fields": [
+          {
+            "name": "risk",
+            "value": "4"
+          },
+          {
+            "name": "contacted",
+            "value": "false"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_review",
+      "name": "Оцінка психолога",
+      "type": "core.approval",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "title": "Оцінити звернення",
+        "assignee": {
+          "role": "editor"
+        },
+        "decisions": [
+          {
+            "key": "plan",
+            "label": "Скласти план підтримки"
+          },
+          {
+            "key": "close",
+            "label": "Закрити без плану"
+          }
+        ],
+        "fields": {
+          "type": "object",
+          "properties": {
+            "conclusion": {
+              "type": "string",
+              "title": "Висновок"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "n_close",
+      "name": "Закрити звернення",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "fields": [
+          {
+            "name": "closed",
+            "value": "true"
+          }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_start",
+        "output": 0
+      },
+      "to": {
+        "node": "n_intake",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_intake",
+        "output": 0
+      },
+      "to": {
+        "node": "n_review",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_review",
+        "output": 1
+      },
+      "to": {
+        "node": "n_close",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_review",
+        "output": 2
+      },
+      "to": {
+        "node": "n_close",
+        "input": 0
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "st_intake",
+      "name": "Прийом",
+      "nodes": [
+        "n_intake"
+      ],
+      "owner": {
+        "role": "editor"
+      },
+      "transitions": [
+        {
+          "to": "st_review",
+          "rules": [
+            {
+              "id": "r_risk",
+              "condition": "{{ $json.risk <= 3 }}",
+              "mode": "warn",
+              "message": "Високий рівень ризику: звернення потребує пріоритетної оцінки."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "st_review",
+      "name": "Оцінка психолога",
+      "nodes": [
+        "n_review"
+      ],
+      "owner": {
+        "role": "editor"
+      },
+      "due": {
+        "amount": 1,
+        "unit": "businessDays"
+      },
+      "transitions": [
+        {
+          "to": "st_close",
+          "rules": [
+            {
+              "id": "r_conclusion",
+              "condition": "{{ !!$json.data.conclusion }}",
+              "mode": "warn",
+              "message": "Немає висновку психолога."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "st_close",
+      "name": "Закриття",
+      "nodes": [
+        "n_close"
+      ]
+    }
+  ]
+}

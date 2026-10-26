@@ -61,6 +61,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenBP.Mcp.Server", "src\Op
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenBP.Mcp.Server.Tests", "tests\OpenBP.Mcp.Server.Tests\OpenBP.Mcp.Server.Tests.csproj", "{E67C8245-3A3E-4D12-9E2A-DA28BBD9AC34}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenBP.Architecture.Tests", "tests\OpenBP.Architecture.Tests\OpenBP.Architecture.Tests.csproj", "{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -395,6 +397,18 @@ Global
 		{E67C8245-3A3E-4D12-9E2A-DA28BBD9AC34}.Release|x64.Build.0 = Release|Any CPU
 		{E67C8245-3A3E-4D12-9E2A-DA28BBD9AC34}.Release|x86.ActiveCfg = Release|Any CPU
 		{E67C8245-3A3E-4D12-9E2A-DA28BBD9AC34}.Release|x86.Build.0 = Release|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Debug|x64.Build.0 = Debug|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Debug|x86.Build.0 = Debug|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Release|x64.ActiveCfg = Release|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Release|x64.Build.0 = Release|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Release|x86.ActiveCfg = Release|Any CPU
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -427,5 +441,6 @@ Global
 		{BD89DDBA-3E95-42A0-97D8-617E1956428C} = {90D890CB-B873-5B7A-B1C8-C910B9974658}
 		{C37CE136-AC10-4BFF-9D3B-B9C1AEE8710B} = {442E4C3B-E942-56F3-AD0A-629B28890F54}
 		{E67C8245-3A3E-4D12-9E2A-DA28BBD9AC34} = {90D890CB-B873-5B7A-B1C8-C910B9974658}
+		{AAC94DD5-767E-43AF-91FB-2F5288C06BE9} = {90D890CB-B873-5B7A-B1C8-C910B9974658}
 	EndGlobalSection
 EndGlobal

@@ -131,6 +131,15 @@ public class WorkflowStagesTests
         Assert.Contains(workflow.Nodes, n => !staged.Contains(n.Id));
     }
 
+    [Fact]
+    public async Task PsySupportCaseStagesExampleIsValid()
+    {
+        var json = await File.ReadAllTextAsync(Path.Combine(WorkflowTestData.RepoRoot(), "examples", "psy-support-case-stages.json"));
+
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(JsonNode.Parse(json)!, Active));
+        Assert.Equal(["st_intake", "st_review", "st_close"], WorkflowJson.Deserialize(json).Stages!.Select(s => s.Id));
+    }
+
     // ---------- Схема ----------
 
     public static TheoryData<string> BrokenVariants =>
