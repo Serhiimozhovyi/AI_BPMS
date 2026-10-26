@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mcp.subscribe",
+  "type": "object",
+  "required": [
+    "serverId",
+    "resourceUri",
+    "keyField"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "serverId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resourceUri": {
+      "title": "Ресурс подій",
+      "description": "URI ресурсу конектора, на який воркер підписується (resources/subscribe); сповіщення про його зміну — сигнал прочитати нові події.",
+      "type": "string",
+      "minLength": 1
+    },
+    "toolName": {
+      "title": "Дія для читання",
+      "description": "Необов'язково: tool, яким читаються події після сповіщення (напр. changes_since). Без нього читається сам ресурс.",
+      "type": "string",
+      "minLength": 1
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "itemsPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "keyField": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationKey": {
+      "title": "Ключ кореляції",
+      "description": "Вираз над новою подією, напр. {{ $json.id }}: кожна подія запускає окреме виконання з цим ключем; з settings.correlation.skipIfActive подія з ключем активного виконання пропускається.",
+      "type": "string",
+      "maxLength": 500
+    }
+  }
+}

@@ -38,6 +38,7 @@ public sealed class WorkflowValidator
         "core.webhook",
         "core.schedule",
         "mcp.poll",
+        "mcp.subscribe",
         "core.errorTrigger",
     };
 
