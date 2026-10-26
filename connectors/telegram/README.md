@@ -19,6 +19,8 @@ MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), 
 | `get_updates` | `getUpdates` | `offset?`, `limit?` (1–100) | `{ "result": [Update, …] }`, кожне з унікальним `update_id` |
 | `get_chat` | `getChat` | `chat_id` | `id`, `type`, `title`/`username`/`first_name` |
 
+У конструкторі OpenBP `reply_markup` редагується візуально (інлайн-кнопки чи клавіатура, `x-openbp-widget: keyboard`), `commands` — таблицею, `parse_mode` — списком, `text`/`caption` мають лічильник символів (docs/connectors.md §2).
+
 `chat_id` — числовий id чату або `@username` каналу. `reply_markup` — об'єкт Bot API як є (рядок з JSON теж
 підходить), з рівно одним з полів:
 

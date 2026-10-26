@@ -126,6 +126,40 @@ export const FAKE_ORDER_TOOL: McpToolInfo = {
   },
 };
 
+/** Аргументи Telegram `send_message` з анотаціями `x-openbp-widget` і межами довжини (F6-30). */
+export const FAKE_MESSAGE_TOOL: McpToolInfo = {
+  name: 'send_message',
+  description: 'Надсилає повідомлення.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      chat_id: { type: ['string', 'integer'], 'x-openbp-widget': 'chat' },
+      text: { type: 'string', maxLength: 4096 },
+      parse_mode: { type: ['string', 'null'], enum: ['HTML', 'MarkdownV2', 'Markdown'] },
+      reply_markup: { description: 'Кнопки', 'x-openbp-widget': 'keyboard' },
+    },
+    required: ['chat_id', 'text'],
+  },
+};
+
+/** `set_my_commands` і `set_webhook` (F6-30): таблиця команд і множинний вибір. */
+export const FAKE_COMMANDS_TOOL: McpToolInfo = {
+  name: 'set_my_commands',
+  description: 'Меню команд.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      commands: {
+        type: 'array',
+        'x-openbp-widget': 'commands',
+        items: { type: 'object', properties: { command: { type: 'string' }, description: { type: 'string' } }, required: ['command', 'description'] },
+      },
+      allowed_updates: { type: 'array', items: { type: 'string', enum: ['message', 'callback_query', 'channel_post'] } },
+    },
+    required: ['commands'],
+  },
+};
+
 /** `core.decisionTable` (F6-19) — копія `decisionTable.schema.json`. */
 export const DECISION_TABLE_SCHEMA: JsonSchema = {
   "title": "core.decisionTable",

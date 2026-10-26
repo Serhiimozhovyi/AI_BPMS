@@ -151,6 +151,26 @@ workflow не змінюється. Список вантажиться чере
 
 Розклад (F2-12): активний сценарій отримує Quartz-тригер за `cron` вузла (формат і перевірка — як у `core.schedule`, §6; часовий пояс — `settings.timezone`). Спрацювання ставить job `poll`; воркер виконує лише цей вузол зі станом з `node_state`. Нових записів немає — виконання не створюється; є — новий стан і виконання (`trigger`, `startItems` = нові записи) комітяться однією транзакцією. Помилка вузла не змінює стан, повтор — наступним спрацюванням.
 
+
+### Редактори полів: `x-openbp-widget` (F6-30)
+
+Необов'язкова анотація властивості `inputSchema`: підказує формі вузла, яким редактором показати значення. Схема —
+`tools/connector-template/schemas/x-openbp-widget.schema.json`; значення — рядок:
+
+| Значення | Редактор у формі | Значення в сценарії |
+|---|---|---|
+| `keyboard` | «Кнопки»: перемикач **Без кнопок / Інлайн-кнопки / Клавіатура / Прибрати клавіатуру**; рядки й кнопки з додаванням, видаленням і перестановкою; інлайн — текст і дія (`callback_data` або `url`), клавіатура — текст, «запросити контакт» / «геолокацію», `resize` і `one_time`; зауваження (порожній текст, `callback_data` понад 64 байти, поганий `url`, понад 8 кнопок в інлайн-рядку чи 100 усього); живий перегляд кнопок | об'єкт Bot API як є: `{ "inline_keyboard": [[{ "text", "callback_data" \| "url" }]] }`, `{ "keyboard": [[{ "text", "request_contact"? }]], "resize_keyboard"?, "one_time_keyboard"? }` або `{ "remove_keyboard": true }`; без кнопок поле не пишеться |
+| `commands` | таблиця «команда — опис» з підказками правил Bot API (1–32 малі латинські літери, цифри, `_`; опис 3–256 символів) | масив `[{ "command", "description" }]` |
+| `chat` | вибір чату (разом з `x-openbp-options`, див. вище) | id чату |
+
+Решта підказок — звичайні ключові слова JSON Schema, окремої анотації не потребують: `enum` — список (`parse_mode`:
+HTML, MarkdownV2, Markdown), `maxLength` рядка — лічильник символів під полем (понад 200 — багаторядкове поле), `items.enum`
+масиву рядків — множинний вибір (`allowed_updates`). Тексти й вирази `{{ }}` у кнопках зберігаються рядками і
+обчислюються під час виконання; розмітка, яку редактор не вміє показати без втрат (вираз, `web_app`, `login_url`,
+`input_field_placeholder` тощо), лишається «як є» в режимі «Код» і не змінюється. Невідоме значення анотації
+ігнорується — поле редагується звичайним способом. Формат workflow анотація не змінює; продукт не знає конкретних
+конекторів: аргумент з такою анотацією у будь-якого конектора отримує той самий редактор.
+
 ### 3.1. `mcp.waitFor` — чекати умову (F5-03)
 
 «Чекати, доки умова виконається» в зовнішній системі (задача закрита в Кіті, оплата надійшла). Параметри: `serverId`,
@@ -347,7 +367,7 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26), `send_approval`/`get_approval` (погодження кнопками, F6-27, §3.1),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
-  `get_chat`; `chat_id` має `x-openbp-options` на `get_updates` (§2); токен — лише змінна
+  `get_chat`; `chat_id` має `x-openbp-options` на `get_updates`, `reply_markup` — `x-openbp-widget: keyboard`, `commands` — `commands`, `parse_mode` — `enum`, `text`/`caption` — `maxLength` 4096/1024 (§2, F6-30; в `edit_message_text` Telegram приймає лише інлайн-кнопки); токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
 - `connectors/http` — HTTP і RSS (F6-25): `rss_read` (`{ feedTitle, feedLink, items }` з полями як у n8n «RSS Read»; RSS 2.0/1.0 і
   Atom; у `mcp.tool` — `itemsPath: "items"`) і `http_request` (`{ status, ok, reason, url, headers, contentType }` + `json`/`text`/`base64`;

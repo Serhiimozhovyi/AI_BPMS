@@ -76,6 +76,37 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Tool_schemas_carry_widget_annotations_and_limits_for_the_builder_forms()
+    {
+        var client = await ConnectAsync();
+        var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
+        JsonElement Property(string tool, string name) => tools[tool].InputSchema.GetProperty("properties").GetProperty(name);
+
+        // x-openbp-widget (docs/connectors.md §2): кнопки, таблиця команд, вибір чату.
+        foreach (var name in new[] { "send_message", "edit_message_text", "send_photo" })
+        {
+            Assert.Equal("keyboard", Property(name, "reply_markup").GetProperty("x-openbp-widget").GetString());
+        }
+
+        Assert.Equal("commands", Property("set_my_commands", "commands").GetProperty("x-openbp-widget").GetString());
+        Assert.Equal("chat", Property("send_message", "chat_id").GetProperty("x-openbp-widget").GetString());
+        Assert.False(tools["send_approval"].InputSchema.GetProperty("properties").TryGetProperty("reply_markup", out _));
+
+        // parse_mode — список, text/caption — межі Bot API, allowed_updates — множинний вибір.
+        Assert.Equal(["HTML", "MarkdownV2", "Markdown"], Property("send_message", "parse_mode").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(4096, Property("send_message", "text").GetProperty("maxLength").GetInt32());
+        Assert.Equal(4096, Property("send_approval", "text").GetProperty("maxLength").GetInt32());
+        Assert.Equal(200, Property("answer_callback_query", "text").GetProperty("maxLength").GetInt32());
+        Assert.Equal(1024, Property("send_photo", "caption").GetProperty("maxLength").GetInt32());
+        var updates = Property("set_webhook", "allowed_updates").GetProperty("items").GetProperty("enum").EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Contains("callback_query", updates);
+        Assert.Contains("message", updates);
+
+        // Анотації — лише метадані: виклик з довгим text не відхиляється схемою на боці конектора.
+        Assert.NotEqual(true, (await client.CallToolAsync("send_message", new Dictionary<string, object?> { ["chat_id"] = 42, ["text"] = "ok", ["parse_mode"] = "Markdown" })).IsError);
+    }
+
+    [Fact]
     public async Task Send_message_posts_json_and_returns_the_message()
     {
         var client = await ConnectAsync();

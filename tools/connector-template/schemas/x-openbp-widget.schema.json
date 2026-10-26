@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbp.dev/schemas/x-openbp-widget.schema.json",
+  "title": "x-openbp-widget",
+  "description": "Анотація властивості inputSchema tool'а: яким редактором форма OpenBP показує значення (docs/connectors.md §2). Невідоме значення форма ігнорує.",
+  "type": "string",
+  "enum": [
+    "keyboard",
+    "commands",
+    "chat"
+  ]
+}
