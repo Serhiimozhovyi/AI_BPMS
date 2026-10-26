@@ -227,6 +227,46 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 (docs/connectors.md §3.1). Різниця з `core.wait` у режимі `webhook`: там умову перевіряє сам сценарій через tool, тут
 зовнішня система чи людина викликає OpenBP.
 
+### Підсценарії (`core.executeWorkflow`, `core.workflowTrigger`)
+
+Спільну частину процесу (перевірити склад, створити задачу в CRM) можна винести в окремий сценарій і викликати з
+інших (F6-04).
+
+```json
+{ "id": "n_in", "name": "Вхід", "type": "core.workflowTrigger", "typeVersion": 1, "position": [0, 0],
+  "parameters": { "inputSchema": { "type": "object", "required": ["dealId"] } } }
+```
+
+```json
+{ "id": "n_call", "name": "Перевірити склад", "type": "core.executeWorkflow", "typeVersion": 1, "position": [400, 0],
+  "parameters": { "workflowId": "0199…", "mode": "wait", "items": "{{ $json.lines }}" } }
+```
+
+- `core.workflowTrigger` — тригер підсценарію. `inputSchema` (необов'язково) — JSON Schema для `json` кожного вхідного
+  item'а. Сценарій, єдиний тригер якого — цей, **не активується** (`WORKFLOW_TRIGGER_STANDALONE`): викликати його можна
+  й неактивним, а публікувати — як звичайно. Для тесту з канвасу — `pinData` на цьому вузлі; без неї він віддає один
+  порожній item.
+- `core.executeWorkflow` — один запуск вузла дає одне дочірнє виконання (`mode = sub`) **опублікованої** (без публікації —
+  поточної) версії сценарію `workflowId`; items вузла стають виходом його `core.workflowTrigger` (сам тригер не
+  виконується). `items` — вираз для кожного вхідного item'а: масив — по item'у на елемент, об'єкт — один item, інше
+  значення — `{ "value": … }`; без виразу — усі вхідні items як є. `workflowId` і `mode` беруться з першого item'а.
+- `mode: "wait"` (типово) — вихід вузла = вихід дочірнього виконання: items останнього успішного вузла (порт 0, а якщо він
+  порожній — перший непорожній). До 10 с вузол чекає в пам'яті, далі виконання переходить у `waiting`, воркер вільний;
+  щойно дочірнє завершилось, батьківське прокидається (запасна перевірка — з інтервалом 5 с … 1 хв). Помилка,
+  скасування чи таймаут дочірнього — помилка вузла з текстом і id дочірнього виконання: працюють `retry` і
+  `continueOnFail`.
+- `mode: "fireAndForget"` — вузол одразу віддає один item `{ "executionId": "…" }` і не чекає.
+- Items не за `inputSchema`, сценарій без увімкненого `core.workflowTrigger`, сценарій іншого проєкту, глибина вкладення
+  більша за 8 (виконання верхнього рівня — 0) — помилка вузла, дочірнє виконання не створюється.
+- Підсценарій зберігає дані кроків навіть із `saveSuccessfulData: false` — його вихід забирає батьківський вузол.
+- Валідація (при збереженні, публікації, активації): для літерального `workflowId` — сценарій існує, спільний або того
+  самого проєкту і має увімкнений `core.workflowTrigger` (`SUBWORKFLOW_INVALID`); виклики між сценаріями (за версіями,
+  які виконає запуск) не утворюють циклу A → B → A, зокрема виклик самого себе (`SUBWORKFLOW_CYCLE`). `workflowId`-вираз
+  перевіряє лише воркер під час виконання.
+- Журнал виконань: у деталях батьківського — список запущених підсценаріїв (вузол, стан, посилання), у деталях
+  дочірнього — посилання на батьківське; REST `GET /executions/{id}` і MCP `get_execution` віддають `children[]`, а
+  `summary` дочірнього — `parentExecutionId`, `parentNodeId`.
+
 ### Злиття гілок (`core.merge`)
 
 - Версія 1 (`typeVersion: 1`, збережені сценарії): два входи, вузол виконується, коли items є на обох; `mode: "append"`
@@ -457,6 +497,8 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
    `validate_workflow` без сценарію).
 7. `settings.executionTimeoutSec` не більший за серверну межу `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` (`EXECUTION_TIMEOUT_TOO_LARGE`).
 8. `settings.errorWorkflowId` — інший існуючий сценарій з `core.errorTrigger` (`ERROR_WORKFLOW_INVALID`).
+   `core.executeWorkflow` — доступний сценарій з `core.workflowTrigger` (`SUBWORKFLOW_INVALID`), без циклу викликів
+   (`SUBWORKFLOW_CYCLE`); див. «Підсценарії».
 9. Бізнес-атрибути: `BUSINESS_LANE_ID_DUPLICATE` (`/business/lanes/{i}/id`), `BUSINESS_STEP_ID_DUPLICATE`
    (`/business/steps/{i}/id`), `BUSINESS_LANE_UNKNOWN` (`/business/steps/{i}/lane` або `/nodes/{i}/business/lane`),
    `BUSINESS_LINK_NODE_UNKNOWN` (`/business/steps/{i}/links/{j}/node`), `BUSINESS_STEP_LINKS_MISSING`

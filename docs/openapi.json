@@ -6704,6 +6704,15 @@
             "items": {
               "$ref": "#/components/schemas/ExecutionStepDto"
             }
+          },
+          "children": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ExecutionSummary"
+            }
           }
         }
       },
@@ -6713,7 +6722,8 @@
           "trigger",
           "retry",
           "error",
-          "resume"
+          "resume",
+          "sub"
         ],
         "description": "Режим запуску виконання (поле `executions.mode`, docs/architecture.md §6)."
       },
@@ -6887,6 +6897,19 @@
             "format": "date-time"
           },
           "waitingNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "parentExecutionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "parentNodeId": {
             "type": [
               "null",
               "string"

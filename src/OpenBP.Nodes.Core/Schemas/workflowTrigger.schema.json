@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.workflowTrigger",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "inputSchema": {
+      "title": "Схема вхідних items",
+      "description": "JSON Schema, якій має відповідати json кожного item'а від сценарію, що викликає, напр. { \"type\": \"object\", \"required\": [\"dealId\"] }. Без схеми приймаються будь-які items.",
+      "type": "object"
+    }
+  }
+}

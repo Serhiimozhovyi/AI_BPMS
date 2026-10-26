@@ -11,6 +11,10 @@ public class CoreNodesTests
     public static TheoryData<string, string> ValidParameters => new()
     {
         { "core.manualTrigger", "{}" },
+        { "core.workflowTrigger", "{}" },
+        { "core.workflowTrigger", """{"inputSchema":{"type":"object","required":["dealId"]}}""" },
+        { "core.executeWorkflow", """{"workflowId":"0199f0a0-0000-7000-8000-000000000001"}""" },
+        { "core.executeWorkflow", """{"workflowId":"{{ $json.flow }}","mode":"fireAndForget","items":"{{ $json.lines }}"}""" },
         { "core.webhook", """{"path":"telegram-in"}""" },
         { "core.webhook", """{"method":"GET","path":"orders/new","auth":{"type":"header","credentialId":"cred_1","headerName":"X-Token"}}""" },
         { "core.webhook", """{"method":"POST","path":"a.b~c_d-1","auth":{"type":"basic","credentialId":"cred_1"}}""" },
@@ -31,6 +35,9 @@ public class CoreNodesTests
     public static TheoryData<string, string> InvalidParameters => new()
     {
         { "core.manualTrigger", """{"x":1}""" },
+        { "core.workflowTrigger", """{"inputSchema":"object"}""" },
+        { "core.executeWorkflow", "{}" },
+        { "core.executeWorkflow", """{"workflowId":"x","mode":"later"}""" },
         { "core.webhook", "{}" },
         { "core.webhook", """{"path":"/leading-slash"}""" },
         { "core.webhook", """{"path":"a b"}""" },
@@ -66,7 +73,7 @@ public class CoreNodesTests
             registry.Register(node);
         }
 
-        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable", "core.decisionTable"];
+        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable", "core.decisionTable", "core.workflowTrigger", "core.executeWorkflow"];
         Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Distinct().Order());
         foreach (var type in expected)
         {
@@ -81,6 +88,8 @@ public class CoreNodesTests
         Assert.True(registry.Resolve("core.webhook", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.schedule", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.errorTrigger", 1).Descriptor.IsTrigger);
+        Assert.True(registry.Resolve("core.workflowTrigger", 1).Descriptor.IsTrigger);
+        Assert.False(registry.Resolve("core.executeWorkflow", 1).Descriptor.IsTrigger);
         Assert.Equal(2, registry.Resolve("core.merge", 1).Descriptor.Inputs.Count);
         Assert.Equal(8, registry.Resolve("core.merge", 2).Descriptor.Inputs.Count);
         Assert.Equal(5, registry.Resolve("core.switch", 1).Descriptor.Outputs.Count);

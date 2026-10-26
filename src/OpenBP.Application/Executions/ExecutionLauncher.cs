@@ -52,6 +52,11 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             throw new ArgumentException("resumedFromExecutionId і inputOverrides — лише для продовження (resume).", nameof(launch));
         }
 
+        if ((launch.Mode == ExecutionMode.Sub) != (launch.ParentExecutionId is not null && launch.ParentNodeId is not null))
+        {
+            throw new ArgumentException("parentExecutionId і parentNodeId задаються разом і лише для підсценарію (sub).", nameof(launch));
+        }
+
         var workflow = await db.Workflows.AsNoTracking()
             .Where(w => w.Id == launch.WorkflowId)
             .Select(w => new { w.Active, w.CurrentVersionId, w.PublishedVersionId })
@@ -63,9 +68,9 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             throw new ConflictException(WorkflowInactiveCode, $"Сценарій «{launch.WorkflowId}» неактивний; тригери його не запускають.");
         }
 
-        // Тригери і сценарій помилок виконують опубліковану версію, тестовий запуск з канвасу — чернетку (F6-10).
+        // Тригери, сценарій помилок і підсценарії виконують опубліковану версію, тестовий запуск з канвасу — чернетку (F6-10).
         var versionId = launch.VersionId
-                        ?? (launch.Mode is ExecutionMode.Trigger or ExecutionMode.Error ? workflow.PublishedVersionId : null)
+                        ?? (launch.Mode is ExecutionMode.Trigger or ExecutionMode.Error or ExecutionMode.Sub ? workflow.PublishedVersionId : null)
                         ?? workflow.CurrentVersionId
                         ?? throw new InvalidOperationException($"Сценарій «{launch.WorkflowId}» без поточної версії.");
         // Ліміти сценарію (F6-06) діють на все, крім ручного тестового запуску з канвасу.
@@ -147,6 +152,8 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
                 Status = ExecutionStatuses.Queued,
                 ScheduledAt = scheduledAt,
                 ResumedFromExecutionId = launch.ResumedFromExecutionId,
+                ParentExecutionId = launch.ParentExecutionId,
+                ParentNodeId = launch.ParentNodeId,
                 CorrelationKey = correlationKey,
             };
             if (dropReason is not null)
