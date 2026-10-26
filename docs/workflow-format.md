@@ -588,3 +588,29 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 `unmapped: [{ kind: connector | credential | workflow, ref, name, type, reason: not_found | ambiguous | invalid }]`, і
 нічого не створюється. Після перемапінгу сценарій проходить звичайну валідацію (422 `WORKFLOW_INVALID`). Відповідь
 успіху — `{ workflow, mapping, missingVariables }`: `missingVariables` — ключі `$vars`, яких тут ще немає.
+
+### Імпорт з n8n
+
+`POST /api/v1/workflows/convert/n8n` (F6-24) приймає JSON сценарію n8n (файл з «Download» або копію вузлів з полотна) і
+нічого не зберігає: відповідь `{ definition, manifest, notes }` — готове тіло для `POST /workflows/import`. UI-діалог
+«Імпорт» сам розпізнає n8n (`connections` — об'єкт за назвами вузлів або типи `n8n-nodes-base.*` / `@n8n/*`), перетворює,
+імпортує і показує `notes`. Код n8n не використовується — лише формат його JSON.
+
+| n8n | OpenBP |
+| --- | --- |
+| Manual Trigger, Schedule Trigger (cron, хвилини/години/дні/тижні/місяці), Webhook | `core.manualTrigger`, `core.schedule`, `core.webhook` |
+| Code (JavaScript) | `core.code`; `$input`, `$('Назва')`, legacy `items` і результат `[{ json }]` емулюються обгорткою |
+| If (v1, v2), Merge (append, combine by position), Set, No Op, Wait (інтервал, дата) | `core.if`, `core.merge` v2, `core.set`, `core.wait` v2 |
+| Data Table (insert, get, update, upsert, delete) | `core.dataTable` (таблицю шукає за назвою з n8n) |
+| Telegram «Send Message» | `mcp.tool` конектора Telegram, `send_message` |
+| Ollama (`@n8n/n8n-nodes-langchain.ollama`) | `ai.llm`, провайдер `openai-compatible` |
+
+- Вирази `={{ … }}` → `{{ … }}`; `$('Назва').item.json`, `.first().json`, `.last().json` → `$node["Назва"].json`.
+- Вузол без відповідника (RSS, HTTP Request, Telegram «Send and Wait», «Send Photo», інші ШІ-вузли…) стає заглушкою
+  `core.code` з тією самою назвою, що кидає помилку; зв'язки зберігаються, у `notes` вузла — тип і параметри n8n.
+- `onError: continueErrorOutput` → `continueOnFail` і вихід помилки; `continueRegularOutput` → `continueOnFail`, а вихід
+  помилки веде туди ж, куди основний. `retryOnFail` → `retry`. Ребро, що замикає цикл, відкидається (DAG).
+- Конектор Telegram і credential Ollama потрапляють у `manifest` з назвами credentials n8n; транспорт конектора порожній —
+  при імпорті підходить будь-який, а без збігу за назвою діалог просить вибрати відповідник.
+- `notes: [{ level, node, message }]`: `replace` — заглушка, яку треба замінити; `check` — перенесено, але варто
+  перевірити (Execute Once, Luxon у виразах, `Buffer` у коді, таблиці даних, які треба створити, тощо).

@@ -68,6 +68,13 @@ public static class WorkflowEndpoints
                              "422 IMPORT_UNMAPPED з `unmapped[]`, нічого не створено. `missingVariables` — ключі `$vars`, яких тут немає.")
             .Produces<WorkflowImportResult>(StatusCodes.Status201Created);
 
+        workflows.MapPost("/convert/n8n", (JsonObject body, IWorkflowTransferService service) => service.ConvertN8n(body))
+            .WithSummary("Перетворити сценарій n8n на тіло імпорту")
+            .WithDescription("Приймає JSON сценарію n8n (експорт або копію з полотна), нічого не зберігає. Відповідь — `definition` і " +
+                             "`manifest` для `POST /workflows/import` (конектор Telegram і credential Ollama — з назвами credentials n8n) та " +
+                             "`notes[]`: `replace` — вузол без відповідника став заглушкою `core.code`, `check` — перенесено, перевірте.")
+            .Produces<N8nConversion>();
+
         workflows.MapGet("/{id:guid}/export", (Guid id, IWorkflowTransferService service, CancellationToken ct) =>
             service.ExportAsync(id, ct))
             .WithSummary("Експортувати сценарій з маніфестом залежностей")

@@ -959,6 +959,11 @@
 - Що: після оновлення `ModelContextProtocol` до версії з клієнтським API `subscriptions/listen { resourceSubscriptions }` воркер відкриває сесію підписки на поточному протоколі (`2026-07-28`+) і падає на `resources/subscribe` з `McpSubscriptions.ProtocolVersion` лише для старих серверів (за `NegotiatedProtocolVersion`); FakeServer і шаблон Connector Kit підтримують обидва шляхи (`SubscriptionsListenHandler` з доставкою `resources/updated` у потік запиту), stateless HTTP тоді теж працює.
 - DoD: тести реєстру й воркера на обох протоколах; `docs/connectors.md` §9.2 п. 3 оновлено; `architecture.md` §10.4.
 
+### F6-24 · Імпорт сценарію з n8n
+- model: `opus` · status: `review` · depends: F6-09
+- Що: запит власника 2026-10-26 — імпорт JSON сценарію n8n («Аграрії — MVP») не спрацьовував: діалог «Імпорт» розумів лише власний формат експорту. `POST /api/v1/workflows/convert/n8n` (application-шар `N8nWorkflowConverter`) перетворює сценарій n8n на `{ definition, manifest, notes }`: тригери, Code (з емуляцією `$input`/`$('…')`), If, Merge, Set, Wait, Data Table, Telegram «Send Message» → `mcp.tool`, Ollama → `ai.llm`; вирази `={{ }}` і `$('Назва').item.json`; `onError`, `retryOnFail`; вузли без відповідника — заглушки `core.code` з поясненням. Діалог імпорту розпізнає n8n, перетворює, імпортує і показує, що доробити.
+- DoD: unit-тести конвертера (валідація результату, зв'язки й виходи помилок, маніфест, цикли, cron, виконання коду n8n через движок); Vitest діалогу; `docs/workflow-format.md` §«Імпорт з n8n».
+
 ## Фаза 7 — Етапи й правила
 
 Нарізано 2026-10-26 за рекомендацією власника щодо розвитку OpenBP (2026-10-25): окремий продукт, Кіт — перший пілот, базова сутність для бізнесу — етап БП. Рішення — [ADR-004](docs/adr/ADR-004-stages.md): етап — необов'язковий шар над графом, одиниця виконання лишається вузол; PRD v0.3 §5a. Розбір пунктів рекомендації і що з них уже є: https://claude.ai/artifact/HE5eYpzLyNBpp9AJ6d7smA

@@ -2,8 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { ImportWorkflowDialog, parseExport } from './import-workflow-dialog.component';
-import { WorkflowExport, WorkflowImportResult, emptyWorkflowDefinition } from './workflows-api.service';
+import { ImportWorkflowDialog, isN8nWorkflow, parseExport } from './import-workflow-dialog.component';
+import { N8nConversion, WorkflowExport, WorkflowImportResult, emptyWorkflowDefinition } from './workflows-api.service';
 
 const exported: WorkflowExport = {
   definition: emptyWorkflowDefinition('Заявки'),
@@ -28,6 +28,13 @@ describe('parseExport', () => {
     expect(parseExport(JSON.stringify(exported.definition))).toEqual({ definition: exported.definition, manifest: null });
     expect(parseExport('{ "name": "без вузлів" }')).toBeNull();
     expect(parseExport('не json')).toBeNull();
+  });
+
+  it('розпізнає сценарій n8n за connections-об\'єктом або типами вузлів', () => {
+    const n8n = { name: 'n8n', nodes: [{ name: 'A', type: 'n8n-nodes-base.manualTrigger' }], connections: {} };
+    expect(parseExport(JSON.stringify(n8n))).toEqual({ definition: null, manifest: null, n8n });
+    expect(isN8nWorkflow({ nodes: [{ type: '@n8n/n8n-nodes-langchain.ollama' }] })).toBe(true);
+    expect(isN8nWorkflow(exported.definition)).toBe(false);
   });
 });
 
@@ -67,6 +74,42 @@ describe('ImportWorkflowDialog', () => {
     await render(fixture);
     expect(host.querySelector('[data-testid="import-parse-error"]')).not.toBeNull();
     expect(submit(host).disabled).toBe(true);
+  });
+
+  it('сценарій n8n: перетворення, імпорт і список того, що доробити', async () => {
+    const { fixture, close, http, host } = await setup();
+    const n8n = { name: 'Агро', nodes: [{ name: 'RSS', type: 'n8n-nodes-base.rssFeedRead' }], connections: {} };
+    paste(host, JSON.stringify(n8n));
+    await render(fixture);
+    expect(host.querySelector('[data-testid="import-n8n"]')).not.toBeNull();
+    submit(host).click();
+
+    const conversion: N8nConversion = {
+      definition: exported.definition,
+      manifest: { connectors: [{ ref: 'n8n:telegramApi:t1', name: 'radarbot', transport: '' }], credentials: [], variables: [] },
+      notes: [
+        { level: 'replace', node: 'RSS', message: 'Читання RSS у OpenBP немає' },
+        { level: 'check', node: null, message: 'Створіть таблицю даних «agro_history»' },
+      ],
+    };
+    const convert = http.expectOne({ method: 'POST', url: '/api/v1/workflows/convert/n8n' });
+    expect(convert.request.body).toEqual(n8n);
+    convert.flush(conversion);
+    const req = http.expectOne({ method: 'POST', url: '/api/v1/workflows/import' });
+    expect(req.request.body).toEqual({
+      definition: conversion.definition,
+      manifest: conversion.manifest,
+      mapping: { connectors: {}, credentials: {}, workflows: {} },
+      groupId: 'g1',
+    });
+    req.flush(result());
+    await render(fixture);
+
+    expect(close).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="import-missing-vars"]')).toBeNull();
+    const items = [...host.querySelectorAll('[data-testid="import-notes"] li')];
+    expect(items.map((li) => li.getAttribute('data-level'))).toEqual(['replace', 'check']);
+    expect(items[0].textContent).toContain('RSS');
   });
 
   it('усе знайдено автоматично — закривається результатом', async () => {

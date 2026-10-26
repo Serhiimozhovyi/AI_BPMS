@@ -247,6 +247,59 @@ public class WorkflowTransferTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task N8n_workflow_converts_and_imports()
+    {
+        var editor = await LoginAsync(api, UserRole.Editor);
+        var n8n = """
+            {
+              "name": "З n8n",
+              "nodes": [
+                { "id": "1", "name": "Старт", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+                { "id": "2", "name": "Код", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [200, 0],
+                  "parameters": { "jsCode": "return [{ json: { ok: true } }];" } },
+                { "id": "3", "name": "RSS", "type": "n8n-nodes-base.rssFeedRead", "typeVersion": 1.2, "position": [400, 0], "parameters": { "url": "https://example.com/rss" } }
+              ],
+              "connections": {
+                "Старт": { "main": [[{ "node": "Код", "type": "main", "index": 0 }]] },
+                "Код": { "main": [[{ "node": "RSS", "type": "main", "index": 0 }]] }
+              }
+            }
+            """;
+
+        var converted = await editor.PostAsync($"{Workflows}/convert/n8n", Json(n8n));
+        Assert.Equal(HttpStatusCode.OK, converted.StatusCode);
+        var conversion = await JsonAsync(converted);
+        var note = Assert.Single(conversion.GetProperty("notes").EnumerateArray(), n => n.GetProperty("level").GetString() == "replace");
+        Assert.Equal("RSS", note.GetProperty("node").GetString());
+
+        var imported = await editor.PostAsync($"{Workflows}/import", Json($$"""
+            { "definition": {{conversion.GetProperty("definition").GetRawText()}}, "manifest": {{conversion.GetProperty("manifest").GetRawText()}} }
+            """));
+        Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
+        var workflow = (await JsonAsync(imported)).GetProperty("workflow");
+        Assert.Equal("З n8n", workflow.GetProperty("name").GetString());
+        Assert.False(workflow.GetProperty("active").GetBoolean());
+
+        // Telegram — конектор з назвою credential'а n8n і будь-яким транспортом; без збігу — вибір відповідника.
+        var bot = $"bot-{Guid.NewGuid():N}";
+        var telegram = $$"""
+            { "name": "Бот", "connections": {}, "nodes": [{ "id": "1", "name": "Надіслати", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2,
+              "position": [0, 0], "parameters": { "chatId": "1", "text": "привіт" }, "credentials": { "telegramApi": { "id": "t1", "name": "{{bot}}" } } }] }
+            """;
+        conversion = await JsonAsync(await editor.PostAsync($"{Workflows}/convert/n8n", Json(telegram)));
+        var unmapped = await editor.PostAsync($"{Workflows}/import", Json($$"""
+            { "definition": {{conversion.GetProperty("definition").GetRawText()}}, "manifest": {{conversion.GetProperty("manifest").GetRawText()}} }
+            """));
+        var problem = await AssertProblemAsync(unmapped, HttpStatusCode.UnprocessableEntity, "IMPORT_UNMAPPED");
+        var reference = Assert.Single(problem.GetProperty("unmapped").EnumerateArray());
+        Assert.Equal(("connector", bot, JsonValueKind.Null),
+            (reference.GetProperty("kind").GetString(), reference.GetProperty("name").GetString(), reference.GetProperty("type").ValueKind));
+
+        await AssertProblemAsync(
+            await editor.PostAsync($"{Workflows}/convert/n8n", Json("""{ "nodes": [], "connections": [] }""")), HttpStatusCode.BadRequest, "BAD_REQUEST");
+    }
+
+    [Fact]
     public async Task Viewer_cannot_export_or_import()
     {
         var editor = await LoginAsync(api, UserRole.Editor);
