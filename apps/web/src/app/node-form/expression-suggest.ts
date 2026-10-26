@@ -51,7 +51,7 @@ export const ROOT_VARIABLES: readonly { name: string; detail: string }[] = [
 
 const INPUT_MEMBERS = ['item', 'all()', 'first()', 'last()'];
 const ITEM_MEMBERS = ['json', 'binary'];
-const EXECUTION_MEMBERS = ['id'];
+const EXECUTION_MEMBERS = ['id', 'resumeUrl', 'resumeUrls'];
 const NOW_MEMBERS = ['toISOString()', 'getTime()', 'getFullYear()', 'getMonth()', 'getDate()', 'getHours()', 'getMinutes()', 'getDay()'];
 
 /** Максимум підказок у списку. */

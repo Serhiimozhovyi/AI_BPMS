@@ -45,6 +45,13 @@ public sealed record ExpressionScope
     /// <summary>Ідентифікатор виконання — <c>$execution.id</c>.</summary>
     public Guid ExecutionId { get; init; }
 
+    /// <summary>
+    /// Адреси пробудження вузлів <c>core.wait</c> у режимі <c>webhook</c>/<c>form</c> за <b>назвою</b> вузла (F6-01):
+    /// <c>$execution.resumeUrls["Назва"]</c>; якщо такий вузол один — ще й <c>$execution.resumeUrl</c>.
+    /// Порожньо — у виконанні немає таких вузлів або хост не видав адрес (CLI, попередній перегляд).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResumeUrls { get; init; } = EmptyEnv;
+
     /// <summary>Зручний доступ до <c>$json</c> поточного item'а.</summary>
     public JsonObject Json => Item.Json;
 }

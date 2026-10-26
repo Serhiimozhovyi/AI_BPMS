@@ -275,6 +275,19 @@ public class WebhookTests(ApiFactory api)
         Assert.Contains(problem.GetProperty("errors").EnumerateArray(), e => e.GetProperty("code").GetString() == "PARAMETER_INVALID");
     }
 
+    [Fact]
+    public async Task Path_under_resume_prefix_is_rejected_on_activation()
+    {
+        var editor = await LoginAsync();
+        var id = await CreateAsync(editor, WebhookNode("resume/" + UniquePath()));
+
+        var problem = await AssertProblemAsync(await editor.PostAsync($"{Base}/{id}/activate", null), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+
+        var error = Assert.Single(problem.GetProperty("errors").EnumerateArray());
+        Assert.Equal("PARAMETER_INVALID", error.GetProperty("code").GetString());
+        Assert.Equal("/nodes/0/parameters/path", error.GetProperty("path").GetString());
+    }
+
     // ---------- допоміжне ----------
 
     private static string UniquePath() => $"hook-{Guid.NewGuid():N}";

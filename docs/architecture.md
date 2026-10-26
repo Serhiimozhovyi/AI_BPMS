@@ -140,7 +140,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 
 ## 5. Вирази і Code-вузол
 
-- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$vars` (змінні інстансу з таблиці `variables`, F6-09; невідомий ключ — `undefined`), `$execution.id`.
+- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$vars` (змінні інстансу з таблиці `variables`, F6-09; невідомий ключ — `undefined`), `$execution.id`, `$execution.resumeUrl` / `$execution.resumeUrls["Назва"]` (адреси пробудження вузлів `core.wait` у режимі `webhook`/`form`, F6-01; `ExecutionRequest.ResumeUrls` → `ExpressionScope.ResumeUrls`).
 - Обчислення — Jint з лімітами: 50 мс, 16 МБ, глибина рекурсії 64, без `require`, без доступу до CLR. Code-вузол: ті ж обмеження, ліміт 5 с.
 - Code-вузол (`core.code`, F3-30): `$json`, `$index` (eachItem) або `items` (allItems), а також `$node["Назва"].json` (як у
   виразах: item з тим самим індексом або перший) і `$node["Назва"].all` (усі items) — копії виходів, лише читання;
@@ -175,11 +175,12 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`), parent_execution_id і parent_node_id (F6-04, підсценарій `mode = sub`; індекс за `parent_execution_id`) |
-| `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
-| `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
-| `violations` | id, execution_id, stage_id, rule_id, workflow_version_id, mode (`block`/`warn`), status (`open`/`resolved`/`overridden`), message, actor_user_id, actor_system (`engine`), reason, context jsonb (items переходу після scrubbing), created_at, resolved_at (F7-03, ADR-004 §3; індекси (execution_id, stage_id, rule_id) і execution_id для `open`). Пише `PostgresExecutionStore.SaveRuleChecksAsync`: невиконане правило відкриває порушення (одне відкрите на правило), виконане закриває (`resolved`); `POST /executions/{id}/overrides` переводить у `overridden` з автором і причиною й будить job виконання, що чекає на `block`. Кожна зміна — `violation.opened/resolved/overridden` в `audit_log` (`entity_type = execution`). `GET /executions/{id}` віддає `violations[]`; ретеншн і видалення сценарію чистять разом із кроками |
+| `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає), resume_at, wait_state (jsonb) — для кроку `waiting` (F5-02) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
+| `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01); унікальний `(execution_id, node_id)` |
+| `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
+| `violations` | id, execution_id, stage_id, rule_id, workflow_version_id, mode (`block`/`warn`), status (`open`/`resolved`/`overridden`), message, actor_user_id, actor_system (`engine`), reason, context jsonb (items переходу після scrubbing), created_at, resolved_at (F7-03, ADR-004 §3; індекси (execution_id, stage_id, rule_id) і execution_id для `open`). Пише `PostgresExecutionStore.SaveRuleChecksAsync`: невиконане правило відкриває порушення (одне відкрите на правило), виконане закриває (`resolved`); `POST /executions/{id}/overrides` переводить у `overridden` з автором і причиною й будить job виконання, що чекає на `block`. Кожна зміна — `violation.opened/resolved/overridden` в `audit_log` (`entity_type = execution`). `GET /executions/{id}` віддає `violations[]`; ретеншн і видалення сценарію чистять разом із кроками |
 | `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
 | `webhook_dedupe` | workflow_id, node_id, key (PK), execution_id, status_code?, headers?, body?, created_at, expires_at (індекс) — ключі ідемпотентності webhook-ів (F6-05) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |
@@ -332,7 +333,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ### 10.3. REST
 
-Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}` і `/mcp` — поза префіксом.
+Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}`, `/webhook/resume/{token}` (F6-01) і `/mcp` — поза префіксом.
 
 Машиночитний опис — OpenAPI 3.1 за адресою `/openapi/v1.json` (без входу, лише схеми); знімок у репозиторії —
 [`docs/openapi.json`](openapi.json), тест `OpenApiTests` звіряє його з живим документом (F4-12).
@@ -401,7 +402,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 | `kind` | payload | Хто ставить | Що робить воркер |
 |---|---|---|---|
-| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax?, inputOverrides? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію»; `inputOverrides` — лише `resume`) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
+| `execution` | `ExecutionJobPayload { executionId, workflowId, versionId, mode, startNodeId?, startItems?, destinationNodeId?, runData?, concurrencyKey?, concurrencyMax?, inputOverrides?, signals? }` (`destinationNodeId`/`runData` — лише `manual`; `concurrency*` — див. «Ліміти сценарію»; `inputOverrides` — лише `resume`; `signals` — лише в job'і пробудження після `POST /webhook/resume/{token}`, F6-01) | `IExecutionLauncher` | виконує сценарій версії `versionId` (див. нижче) |
 | `poll` | `PollJobPayload { workflowId, nodeId }` | Quartz за `cron` вузла `mcp.poll` (F2-12) | виконує poll із `node_state`; є нові записи → `IExecutionLauncher` з `startNodeId`/`startItems` у **тій самій** транзакції; немає → нічого |
 | `explain` | `ExplainJobPayload { workflowId, version }` | `IWorkflowService` при збереженні (з паузою 15 с), `POST /workflows/{id}/explanation` (одразу) | `WorkflowExplainer`: версія вже не поточна → нічого; інакше пояснення моделлю помічника в `workflow_explanations` (F3-72, §10.8) |
 
@@ -442,6 +443,19 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   завершеному виконанні — F6-02 додає це до тесту інваріанту.
 - `executionTimeoutSec` рахується на кожен прохід окремо, тож час у `waiting` не входить. Ліміт `concurrency` (F6-06)
   `waiting` не рахує; `correlation.skipIfActive` (F5-04) — рахує як активне.
+- Пробудження зовні (F6-01, `core.wait` v3 у режимі `webhook`/`form`): перед стартом графа воркер створює в
+  `resume_tokens` по одноразовому випадковому токену на кожен такий вузол сценарію (`ResumeTokens.EnsureAsync`,
+  ідемпотентно) і передає адреси `OPENBP_PUBLIC_URL + /webhook/resume/{token}` у `ExecutionRequest.ResumeUrls`, звідки вони
+  доступні виразам як `$execution.resumeUrl(s)` ще до вузла очікування. Сам вузол призупиняється як за часом —
+  `ctx.Suspend(deadline = now + maxWaitSec, { mode, deadline })`, тож job пробудження на строк уже стоїть у черзі й
+  спрацьовує як таймаут. `POST /webhook/resume/{token}` → `IWaitResumeService.ResumeAsync` однією транзакцією: токен ще не
+  використано, виконання `waiting`, останній крок вузла `waiting`, інакше 409; потім `used_at = now`, а **той самий**
+  незаблокований job пробудження отримує `payload.signals[nodeId] = тіло` і `run_at = now` (дубля на строк не лишається;
+  падіння воркера після пробудження повторює job із сигналом). Движок (`ResumeAsync`) віддає сигнал лише вузлу з останнім
+  кроком `waiting` як `NodeResumption.Signal`; вузол кладе дані сигналу на вихід `main`, без сигналу після строку —
+  вхідні items на `timeout`, до строку (рестарт) — чекає далі. Токени видаляються разом із виконанням (FK cascade); скасоване
+  чи завершене виконання пробудити не можна (409 `EXECUTION_NOT_WAITING`). Форма (F6-03) будить тим самим сервісом з
+  даними форми як сигналом.
 - SSE не закривається на `waiting`; MCP `run_workflow`, помічник і оцінки перестають чекати на `waiting`
   (`ExecutionStates.IsSettled`).
 

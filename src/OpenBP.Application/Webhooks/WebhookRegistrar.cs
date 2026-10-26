@@ -14,6 +14,14 @@ namespace OpenBP.Application.Webhooks;
 /// </summary>
 internal static class WebhookRegistrar
 {
+    /// <summary>Сегмент після <c>/webhook/</c>, зайнятий адресами пробудження <c>/webhook/resume/{token}</c> (F6-01).</summary>
+    private const string ReservedPrefix = "resume";
+
+    /// <summary>Чи збігається шлях тригера з маршрутом пробудження (<c>resume</c> або <c>resume/…</c>).</summary>
+    private static bool IsReserved(string path) =>
+        string.Equals(path, ReservedPrefix, StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith(ReservedPrefix + "/", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Перевіряє шляхи увімкнених вузлів <c>core.webhook</c> сценарію і замінює ними рядки <c>webhooks</c>
     /// цього сценарію (без <c>SaveChanges</c> для нових рядків — їх зберігає викликач).
@@ -53,6 +61,11 @@ internal static class WebhookRegistrar
             {
                 errors.Add(new(WorkflowValidationCodes.ParameterInvalid,
                     $"Шлях webhook вузла «{node.Name}» має бути сталим рядком, без виразів {{{{ }}}}.", node.Id, pointer));
+            }
+            else if (IsReserved(parameters.Path))
+            {
+                errors.Add(new(WorkflowValidationCodes.ParameterInvalid,
+                    $"Шлях webhook вузла «{node.Name}» не може починатися з «{ReservedPrefix}»: ці адреси будять виконання, що чекають (core.wait).", node.Id, pointer));
             }
             else if (taken.TryGetValue(parameters.Path, out var other))
             {

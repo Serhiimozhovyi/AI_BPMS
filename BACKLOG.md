@@ -845,7 +845,7 @@
 Порядок: після F5-02 — F6-01 → F6-02 → F6-03; паралельно F6-05, F6-06; далі F6-04, F6-07; потім F6-08…F6-10; F6-11, F6-12; решта за попитом пілоту.
 
 ### F6-01 · Довге очікування: `core.wait` з пробудженням за часом, вебхуком або формою
-- model: `fable` · status: `ready` · depends: F5-02
+- model: `fable` · status: `done` · depends: F5-02
 - Що: поверх F5-02 (стан `waiting`, `resume_at`, звільнення воркера, пробудження за часом — там) `core.wait` отримує ще два режими пробудження: `webhook` і `form` (форма — F6-03); ліміт очікування `maxWaitSec` з виходом `timeout`; таймер `executionTimeoutSec` на час очікування зупиняється (узгодити з F5-02, якщо там вирішено інакше). Пробудження: `POST /webhook/resume/{token}` з одноразовим токеном на (виконання, вузол), тіло запиту стає output вузла; у виразах `$execution.resumeUrl` (лише всередині виконання з `core.wait` у режимі `webhook`). Продовження — той самий `ResumeAsync`, що й після падіння воркера; скасування `waiting` працює; `waiting` видно в REST/SSE/MCP/журналі. Зміна формату: `docs/workflow-format.md` (параметри, `$execution.resumeUrl`), JSON Schema, `architecture.md` §10.4, `describe_nodes`.
 - DoD: рев'ю власником формату і механізму пробудження; тести: режими F5-02 працюють як раніше; `webhook` → `resumeUrl` → POST продовжує з тілом запиту, повторний POST → 409, чужий токен → 404; `maxWaitSec` → вихід `timeout`; слот воркера вільний під час очікування (паралельний запуск іде); скасування у `waiting`; воркер впав під час `waiting` → новий воркер пробуджує; `workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 
@@ -978,7 +978,7 @@
 - DoD: тести валідатора на кожен код і на сценарій без `stages`; старі приклади валідні; `describe_nodes`/схема у MCP містять `stages`; `docs/workflow-format.md`, `architecture.md` §2 оновлено; рев'ю власником.
 
 ### F7-02 · Рушій: стан етапу, строки, таблиця `execution_stages`
-- model: `opus` · status: `review #165` · depends: F7-01
+- model: `opus` · status: `done` · depends: F7-01
 - Що: `OpenBP.Engine` обчислює стан етапів за ADR-004 §2 (`pending`/`active`/`done`/`skipped`/`cancelled`, підстан `overdue`) при кожному `SaveStepAsync`; інтерфейс `IStageStore` (правило 1), реалізація в `OpenBP.Data`: таблиця `execution_stages (execution_id, stage_id, status, entered_at, due_at, exited_at)` + міграція; `due` з `businessDays` (пн–пт за `settings.timezone`) і `until`; ретеншн F4-07 чистить разом із виконанням; `ExecutionDetail` отримує `stages[]`; журнал виконань `/executions/:id` показує етапи (AC-Kit «Етап N», як у F3-69); бізнес-вигляд виконання фарбує етапи за станом.
 - DoD: тести движка: послідовні етапи, гілка не дійшла → `skipped`, скасування під час `active` → `cancelled`, `overdue` з `TimeProvider`-фейком, `businessDays` через вихідні; інтеграційний тест (Testcontainers) запису `execution_stages` і відновлення після рестарту воркера; Vitest журналу; сценарії без `stages` не пишуть у таблицю.
 

@@ -10,6 +10,7 @@ public sealed record ExecutionRequest
     private static readonly IReadOnlyDictionary<string, JsonObject> EmptyStates = new Dictionary<string, JsonObject>();
     private static readonly IReadOnlyDictionary<string, Item[][]> EmptyRunData = new Dictionary<string, Item[][]>();
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<Item>> EmptyInputOverrides = new Dictionary<string, IReadOnlyList<Item>>();
+    private static readonly IReadOnlyDictionary<string, JsonNode> EmptySignals = new Dictionary<string, JsonNode>();
 
     /// <summary>
     /// Ідентифікатор виконання. Рядок <c>executions</c> створює хост до запуску (у тестах і CLI —
@@ -70,4 +71,18 @@ public sealed record ExecutionRequest
     /// Хост бере їх з порушень виконання зі станом <c>overridden</c>.
     /// </summary>
     public IReadOnlyCollection<RuleOverride> RuleOverrides { get; init; } = [];
+
+    /// <summary>
+    /// Зовнішні пробудження (F6-01): id вузла, чий останній крок <see cref="StepStatus.Waiting"/>, → дані, що його розбудили
+    /// (тіло <c>POST /webhook/resume/{token}</c>, дані форми). Лише для <see cref="WorkflowExecutor.ResumeAsync(ExecutionSnapshot, ExecutionRequest, CancellationToken)"/>:
+    /// вузол отримує їх як <c>INodeContext.Resumption.Signal</c>. Вузли без запису прокидаються за часом.
+    /// </summary>
+    public IReadOnlyDictionary<string, JsonNode> Signals { get; init; } = EmptySignals;
+
+    /// <summary>
+    /// Адреси пробудження (F6-01): id вузла <c>core.wait</c> у режимі <c>webhook</c>/<c>form</c> → публічна адреса
+    /// (<c>/webhook/resume/{token}</c>), яку хост видав цьому виконанню. У виразах — <c>$execution.resumeUrl</c>
+    /// (єдиний такий вузол) і <c>$execution.resumeUrls["Назва вузла"]</c>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResumeUrls { get; init; } = EmptyEnv;
 }

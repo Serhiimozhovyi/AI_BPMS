@@ -30,6 +30,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WebhookResponseEntity> WebhookResponses => Set<WebhookResponseEntity>();
     public DbSet<WebhookDedupeEntity> WebhookDedupe => Set<WebhookDedupeEntity>();
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
+    public DbSet<ResumeTokenEntity> ResumeTokens => Set<ResumeTokenEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
     public DbSet<AuditEntryEntity> AuditLog => Set<AuditEntryEntity>();
     public DbSet<NotificationChannelEntity> NotificationChannels => Set<NotificationChannelEntity>();
@@ -249,6 +250,16 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("webhooks");
             e.HasIndex(x => x.Path).IsUnique();
+        });
+        b.Entity<ResumeTokenEntity>(e =>
+        {
+            e.ToTable("resume_tokens");
+            e.HasKey(x => x.Token);
+            e.Property(x => x.Token).HasMaxLength(64);
+            e.Property(x => x.NodeId).HasMaxLength(200);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.HasIndex(x => new { x.ExecutionId, x.NodeId }).IsUnique();
+            e.HasOne<ExecutionEntity>().WithMany().HasForeignKey(x => x.ExecutionId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<WebhookResponseEntity>(e =>
         {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using OpenBP.Engine.Execution;
 using OpenBP.Shared.Workflow;
@@ -59,6 +60,13 @@ public sealed record ExecutionJobPayload
 
     /// <summary>Нові items на вхід 0 вузла (<see cref="ExecutionRequest.InputOverrides"/>); лише <see cref="ExecutionMode.Resume"/>.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides { get; init; }
+
+    /// <summary>
+    /// Зовнішні пробудження (F6-01, <see cref="ExecutionRequest.Signals"/>): id вузла <c>core.wait</c>, що чекає, → дані,
+    /// з якими його розбудили (тіло <c>POST /webhook/resume/{token}</c>). Ставить <c>IWaitResumeService</c> у job
+    /// пробудження виконання в стані <c>waiting</c>; в інших job'ах відсутнє.
+    /// </summary>
+    public IReadOnlyDictionary<string, JsonNode>? Signals { get; init; }
 }
 
 /// <summary>Payload job <see cref="JobKinds.Poll"/>: який вузол опитати. Стан вузла воркер читає з <c>node_state</c>.</summary>

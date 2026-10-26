@@ -86,7 +86,7 @@ describe('suggestExpression', () => {
 
   it('$now, $execution, $env', () => {
     expect(labels('{{ $now.toI| }}')).toEqual(['toISOString()']);
-    expect(labels('{{ $execution.| }}')).toEqual(['id']);
+    expect(labels('{{ $execution.| }}')).toEqual(['id', 'resumeUrl', 'resumeUrls']);
     expect(labels('{{ $env.| }}')).toEqual(['API_URL', 'REGION']);
     expect(labels('{{ $env.| }}', { nodes: [] })).toEqual([]);
   });

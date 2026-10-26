@@ -11,6 +11,47 @@
     }
   ],
   "paths": {
+    "/webhook/resume/{token}": {
+      "post": {
+        "tags": [
+          "Webhook"
+        ],
+        "summary": "Розбудити виконання, що чекає у вузлі core.wait (режим webhook)",
+        "description": "`token` — з `$execution.resumeUrl` сценарію, одноразовий. Тіло (JSON, форма або текст) стає виходом вузла очікування. 404 — невідомий токен; 409 — токен уже використано (`RESUME_TOKEN_USED`), виконання не чекає (`EXECUTION_NOT_WAITING`) або чекає інший вузол (`NODE_NOT_WAITING`).",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookAccepted"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту (400, 401, 404 …), тіло — Problem.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook/{path}": {
       "get": {
         "tags": [

@@ -200,7 +200,9 @@ public sealed class WorkflowExecutor
             // а вузол, якщо перехід пройде, виконується вперше, без Resumption.
             if (step.Status == StepStatus.Waiting && !StageTracker.IsRuleBlock(step))
             {
-                run.Resumptions[nodeId] = new Nodes.NodeResumption(step.ResumeAt ?? step.FinishedAt, step.WaitState ?? []);
+                // Зовнішнє пробудження (F6-01): дані з payload job'а потрапляють лише вузлу, що справді чекає.
+                var signal = request.Signals.TryGetValue(nodeId, out var s) ? s.DeepClone() : null;
+                run.Resumptions[nodeId] = new Nodes.NodeResumption(step.ResumeAt ?? step.FinishedAt, step.WaitState ?? [], signal);
                 run.OpenWaits[nodeId] = step;
             }
             else if (step.Status == StepStatus.Cancelled && step.Error?.Type == BranchCancelledType)
@@ -699,7 +701,7 @@ public sealed class WorkflowExecutor
             IReadOnlyList<Item>[] attemptInputs = [.. inputs.Select(i => (IReadOnlyList<Item>)[.. i.Select(RunState.Clone)])];
             var ctx = new EngineNodeContext(
                 definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
-                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state)
+                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state, run.ResumeUrlsByName)
             {
                 Resumption = run.Resumptions.GetValueOrDefault(definition.Id),
             };
@@ -982,6 +984,12 @@ public sealed class WorkflowExecutor
 
         public Dictionary<string, JsonObject> NodeStates { get; } =
             request.NodeStates.ToDictionary(p => p.Key, p => (JsonObject)p.Value.DeepClone(), StringComparer.Ordinal);
+
+        /// <summary>Адреси пробудження (F6-01) за назвою вузла — для <c>$execution.resumeUrl(s)</c>.</summary>
+        public IReadOnlyDictionary<string, string> ResumeUrlsByName { get; } = request.Workflow.Nodes
+            .Where(n => request.ResumeUrls.ContainsKey(n.Id))
+            .GroupBy(n => n.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => request.ResumeUrls[g.First().Id], StringComparer.Ordinal);
 
         public static Item Clone(Item item) => new()
         {
