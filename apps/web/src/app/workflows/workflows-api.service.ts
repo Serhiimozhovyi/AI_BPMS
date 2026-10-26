@@ -407,6 +407,11 @@ export class WorkflowsApiService {
     return this.http.post<WorkflowImportResult>(`${this.base}/import`, request);
   }
 
+  /** Сценарій n8n → тіло імпорту і зауваження (F6-24); нічого не зберігає. */
+  convertN8n(workflow: unknown): Observable<N8nConversion> {
+    return this.http.post<N8nConversion>(`${this.base}/convert/n8n`, workflow);
+  }
+
   private url(id: string): string {
     return `${this.base}/${encodeURIComponent(id)}`;
   }
@@ -463,6 +468,20 @@ export interface WorkflowImportResult {
   workflow: WorkflowDetail;
   mapping: ImportMapping;
   missingVariables: string[];
+}
+
+/** Зауваження перетворення n8n: `replace` — вузол став заглушкою, `check` — перевірте. */
+export interface N8nConversionNote {
+  level: 'replace' | 'check';
+  node: string | null;
+  message: string;
+}
+
+/** `POST /workflows/convert/n8n`. */
+export interface N8nConversion {
+  definition: WorkflowDefinition;
+  manifest: WorkflowManifest;
+  notes: N8nConversionNote[];
 }
 
 /** `unmapped[]` з відповіді 422 `IMPORT_UNMAPPED`; інша помилка — `null`. */
