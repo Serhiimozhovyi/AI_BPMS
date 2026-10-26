@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using OpenBP.Ai;
 using OpenBP.Application.DataTables;
+using OpenBP.Application.Executions;
 using OpenBP.Application.Jobs;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
@@ -15,6 +16,7 @@ using OpenBP.Engine.Execution;
 using OpenBP.Engine.Nodes;
 using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
+using OpenBP.Mcp.FakeServer;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
@@ -93,7 +95,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
         Credentials = new CredentialStore(Db, CredentialEncryptionKey.FromBase64(EncryptionKey));
         Servers = new McpServerSync(Db, _mcp, Credentials);
         DataTables = new PostgresDataTableStore(Db, new DataTableLimits(), TimeProvider.System);
-        var nodes = CoreNodes.All(time, DataTables).Concat(McpNodes.All(_mcp, time)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
+        SubWorkflows = new PostgresSubWorkflowLauncher(Db, time ?? TimeProvider.System, TimeSpan.FromMilliseconds(50));
+        var nodes = CoreNodes.All(time, DataTables, SubWorkflows).Concat(McpNodes.All(_mcp, time)).Concat(AiNodes.All(_http, _mcp, DataTables)).ToList();
 
         // core.webhook з'явиться в F2-10; до того прикладу telegram-1c.json потрібна заглушка (він запускається з pinData).
         if (!nodes.Any(n => n.Descriptor.Type == WebhookStub.Type))
@@ -124,13 +127,20 @@ internal sealed class WorkerHarness : IAsyncDisposable
             binary,
             options,
             NullLogger<PollJobProcessor>.Instance);
+        Subscriptions = new SubscriptionService(Db, _mcp, Servers, Poll, options, NullLogger<SubscriptionService>.Instance);
     }
+
+    /// <summary>Підписки <c>mcp.subscribe</c> (F6-13); проходи запускає тест через <see cref="SubscriptionService.ScanAsync"/>.</summary>
+    public SubscriptionService Subscriptions { get; }
 
     /// <summary>Годинник черги, обробника й <c>core.wait</c>; <c>null</c> — системний.</summary>
     public TimeProvider? Time { get; }
 
     /// <summary>Сховище таблиць даних для <c>core.dataTable</c> (F6-11).</summary>
     public PostgresDataTableStore DataTables { get; }
+
+    /// <summary>Запуск підсценаріїв для <c>core.executeWorkflow</c> (F6-04).</summary>
+    public PostgresSubWorkflowLauncher SubWorkflows { get; }
 
     /// <summary>Ключ шифрування credentials (base64): <see cref="RestartAsync"/> передає його новому воркеру.</summary>
     public string EncryptionKey { get; }
@@ -173,7 +183,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
     /// <param name="limits">Серверні межі виконання (<c>OPENBP_MAX_EXECUTION_TIMEOUT_SEC</c>); <c>null</c> — типові.</param>
     /// <param name="loggers">Журнали обробника виконань; <c>null</c> — без журналу.</param>
     /// <param name="time">Годинник черги, обробника й <c>core.wait</c>; <c>null</c> — системний.</param>
-    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null, TimeProvider? time = null)
+    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null, TimeProvider? time = null, TimeSpan? subscriptionLease = null)
     {
         var cs = await postgres.NewMigratedDatabaseAsync();
         return new WorkerHarness(
@@ -184,6 +194,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
                 MaxConcurrentExecutions = maxConcurrent,
                 HeartbeatInterval = TimeSpan.FromMilliseconds(100),
                 PollInterval = TimeSpan.FromMilliseconds(50),
+                SubscriptionScanInterval = TimeSpan.FromMilliseconds(200),
+                SubscriptionLease = subscriptionLease ?? TimeSpan.FromSeconds(30),
             },
             new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) },
             binary: binary,
@@ -215,6 +227,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
                 MaxConcurrentExecutions = Options.MaxConcurrentExecutions,
                 HeartbeatInterval = Options.HeartbeatInterval,
                 PollInterval = Options.PollInterval,
+                SubscriptionScanInterval = Options.SubscriptionScanInterval,
+                SubscriptionLease = Options.SubscriptionLease,
             },
             QueueOptions,
             EncryptionKey,
@@ -387,6 +401,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
+        await Subscriptions.DropAsync();
+        Subscriptions.Dispose();
         await _mcp.DisposeAsync();
         _http.Dispose();
 
@@ -435,6 +451,16 @@ internal static class Workflows
             .Replace("\"srv_telegram\"", $"\"{telegramServerId}\"", StringComparison.Ordinal);
         return WorkflowJson.Deserialize(json);
     }
+
+    /// <summary>Рядок <c>mcp_servers</c> для HTTP FakeServer, що живе в процесі тестів (<see cref="FakeServerApp.BuildHttp"/>).</summary>
+    public static McpServerEntity HttpServer(string name, Uri url) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = name,
+        Transport = "http",
+        Config = new JsonObject { ["url"] = url.ToString() }.ToJsonString(),
+        Status = "new",
+    };
 
     /// <summary>Рядок <c>mcp_servers</c> для stdio-моку FakeServer (<c>--mock 1c|telegram</c>, без моку — загальні tools).</summary>
     public static McpServerEntity FakeServer(string name, string? mock = null, Guid? credentialId = null)

@@ -81,6 +81,10 @@ public sealed class NodeTools
         "`mcp.waitFor` calls a tool every `intervalMinutes` until `conditions` (`field` is a dot path into the tool's result, " +
         "operators as in `core.if`) hold, or `timeoutHours` passes: output 0 `done` carries the last result, output 1 `timeout` " +
         "the input item; between checks the execution is in state waiting. " +
+        "`core.executeWorkflow` runs another workflow that starts with `core.workflowTrigger` (optional `inputSchema` for each item's json; " +
+        "such a workflow cannot be activated alone): `items` is an expression per input item (array → one item per element; empty → the input " +
+        "items), `mode: wait` outputs the child's last successful node output (a failed child is a node error), `mode: fireAndForget` outputs " +
+        "{ executionId } at once; calls must not form a cycle and nest at most 8 deep; get_execution lists `children`. " +
         "Tools of connected systems are listed by describe_connectors. " +
         "In `core.code` JavaScript the same `$node[\"Node name\"].json` is available (plus `.all` with every item), " +
         "and `Date` uses the workflow's `settings.timezone`. " +

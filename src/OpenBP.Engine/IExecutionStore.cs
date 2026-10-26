@@ -7,6 +7,9 @@ namespace OpenBP.Engine;
 /// після кожного вузла, а при відновленні читає знімок через <see cref="LoadAsync"/>
 /// і продовжує з останнього збереженого кроку.
 /// Реалізації: <c>PostgresExecutionStore</c> (F2-A) і <c>InMemoryExecutionStore</c> у <c>OpenBP.Engine.Testing</c>.
+/// Інваріант ADR-004 §5 (F7-06): у завершеному виконанні останній крок жодного вузла не <see cref="StepStatus.Waiting"/> —
+/// движок закриває очікування кроками <see cref="StepStatus.Cancelled"/>, а реалізація, що записує підсумок виконання
+/// (<c>PostgresExecutionStore.FinishAsync</c>), закриває залишки тією ж транзакцією.
 /// </summary>
 public interface IExecutionStore
 {

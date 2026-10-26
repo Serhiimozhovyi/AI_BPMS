@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.executeWorkflow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workflowId"],
+  "properties": {
+    "workflowId": {
+      "title": "Підсценарій",
+      "description": "Id сценарію з вузлом «Виклик з іншого сценарію» (core.workflowTrigger).",
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "title": "Режим",
+      "description": "wait — дочекатися завершення й передати далі його результат; fireAndForget — запустити й одразу йти далі з { executionId }.",
+      "type": "string",
+      "enum": ["wait", "fireAndForget"],
+      "default": "wait"
+    },
+    "items": {
+      "title": "Items для підсценарію",
+      "description": "Вираз для кожного вхідного item'а, напр. {{ $json.lines }}: масив — по item'у на елемент, об'єкт — один item. Порожньо — усі вхідні items як є."
+    }
+  }
+}

@@ -16,6 +16,7 @@ public static class McpNodes
     [
         new McpToolNode(servers),
         new McpPollNode(servers),
+        new McpSubscribeNode(servers),
         new McpWaitForNode(servers, time),
     ];
 }

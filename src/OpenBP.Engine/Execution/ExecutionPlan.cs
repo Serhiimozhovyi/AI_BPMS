@@ -60,6 +60,7 @@ internal sealed class ExecutionPlan
         foreach (var node in all.Values)
         {
             node.ResolvePorts();
+            node.ResolveJoin();
         }
 
         foreach (var node in all.Values)
@@ -217,6 +218,12 @@ internal sealed class PlannedNode(NodeDefinition definition, INode? impl, int or
 
     public bool Disabled => Definition.Disabled == true;
 
+    /// <summary>Правило злиття (<see cref="IJoinNode"/>, F7-06); <c>null</c> — звичайний вузол.</summary>
+    public JoinRule? Join { get; private set; }
+
+    /// <summary>Індекси входів, до яких іде хоча б одне ребро, за зростанням.</summary>
+    public IReadOnlyList<int> ConnectedInputs { get; private set; } = [];
+
     public bool ContinueOnFail => Definition.ContinueOnFail == true;
 
     /// <summary>
@@ -225,6 +232,26 @@ internal sealed class PlannedNode(NodeDefinition definition, INode? impl, int or
     /// </summary>
     public bool AlwaysRun =>
         Definition.ExtensionData?.TryGetValue(AlwaysRunField, out var value) == true && value.ValueKind == JsonValueKind.True;
+
+    /// <summary>
+    /// Правило злиття вузла <see cref="IJoinNode"/>: N гілок з <see cref="JoinRule.Required"/> не може бути більше, ніж
+    /// під'єднаних входів. Вимкнений вузол — без правила (items проходять наскрізь).
+    /// </summary>
+    public void ResolveJoin()
+    {
+        ConnectedInputs = [.. Incoming.Select(e => e.ToInput).Distinct().Order()];
+        if (Impl is not IJoinNode join || Disabled)
+        {
+            return;
+        }
+
+        Join = join.GetJoinRule(Definition);
+        if (Join.Required is { } required && (required < 1 || required > ConnectedInputs.Count))
+        {
+            throw new EngineException(
+                $"Вузол «{Definition.Name}» чекає {required} гілок, а під'єднано {ConnectedInputs.Count}. Під'єднайте більше гілок або зменшіть count.");
+        }
+    }
 
     public void ResolvePorts()
     {

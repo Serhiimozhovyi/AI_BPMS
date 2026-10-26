@@ -432,6 +432,15 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("mode");
 
+                    b.Property<Guid?>("ParentExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_execution_id");
+
+                    b.Property<string>("ParentNodeId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("parent_node_id");
+
                     b.Property<DateTimeOffset?>("ResumeAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("resume_at");
@@ -469,6 +478,9 @@ namespace OpenBP.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FinishedAt");
+
+                    b.HasIndex("ParentExecutionId")
+                        .HasFilter("parent_execution_id IS NOT NULL");
 
                     b.HasIndex("WorkflowId", "CorrelationKey")
                         .HasFilter("correlation_key IS NOT NULL");
@@ -869,6 +881,45 @@ namespace OpenBP.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("project_members", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.SubscriptionEntity", b =>
+                {
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.Property<string>("NodeId")
+                        .HasColumnType("text")
+                        .HasColumnName("node_id");
+
+                    b.Property<DateTimeOffset?>("LeasedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("leased_until");
+
+                    b.Property<string>("ResourceUri")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("resource_uri");
+
+                    b.Property<string>("ServerId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("server_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("WorkerId")
+                        .HasColumnType("text")
+                        .HasColumnName("worker_id");
+
+                    b.HasKey("WorkflowId", "NodeId");
+
+                    b.HasIndex("LeasedUntil");
+
+                    b.ToTable("subscriptions", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.UserEntity", b =>
@@ -1335,6 +1386,15 @@ namespace OpenBP.Data.Migrations
                     b.HasOne("OpenBP.Data.UserEntity", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.SubscriptionEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowEntity", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

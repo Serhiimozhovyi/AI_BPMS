@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Ai;
 using OpenBP.Application.Assistant;
 using OpenBP.Application.DataTables;
+using OpenBP.Application.Executions;
 using OpenBP.Application.Webhooks;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
@@ -102,14 +103,20 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<DataTableLimits>(),
             sp.GetRequiredService<TimeProvider>()));
+        // Підсценарії (F6-04): core.executeWorkflow ставить дочірні виконання в ту саму чергу.
+        services.AddSingleton(sp => new PostgresSubWorkflowLauncher(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<TimeProvider>()));
         // Відповіді webhook-ів (F6-05): core.respondToWebhook і respond: whenFinished пишуть у webhook_responses.
         services.AddSingleton(sp => new PostgresWebhookResponder(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<INodeRegistry>(sp => new WorkerNodeRegistry(
             CoreNodes.All(
-                dataTables: sp.GetRequiredService<PostgresDataTableStore>(),
-                webhookResponder: sp.GetRequiredService<PostgresWebhookResponder>())
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<PostgresDataTableStore>(),
+                sp.GetRequiredService<PostgresSubWorkflowLauncher>(),
+                sp.GetRequiredService<PostgresWebhookResponder>())
                 .Concat(McpNodes.All(sp.GetRequiredService<IMcpServerRegistry>(), sp.GetRequiredService<TimeProvider>()))
                 .Concat(AiNodes.All(
                     sp.GetRequiredService<HttpClient>(),
@@ -162,6 +169,15 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<PollJobProcessor>(),
             sp.GetRequiredService<WorkerLiveness>(),
             sp.GetRequiredService<ExplainJobProcessor>()));
+        // Підписки push-тригерів mcp.subscribe (F6-13).
+        services.AddHostedService(sp => new SubscriptionService(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<IMcpServerRegistry>(),
+            sp.GetRequiredService<McpServerSync>(),
+            sp.GetRequiredService<PollJobProcessor>(),
+            sp.GetRequiredService<WorkerOptions>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SubscriptionService>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddHostedService(sp => new WorkerHeartbeatService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<WorkerLiveness>(),

@@ -52,6 +52,19 @@
 - Дані між вузлами — масив **items**: `Item { JsonObject Json; Dictionary<string, BinaryRef>? Binary }`.
 - Вузол отримує items з кожного вхідного порту, повертає `Item[][]` — по масиву на кожен вихідний порт. IF — 2 виходи, Switch — N.
 - Виконання — **черга готових вузлів**, не рекурсія. Вузол готовий, коли на всіх обов'язкових входах є дані (Merge чекає всі входи; решта — будь-який).
+- Злиття гілок (F7-06, ADR-004 §5): вузол `IJoinNode` (`core.merge` v2) віддає движку `JoinRule` при побудові плану.
+  `all` — чекати всі гілки й виконувати, коли дані є на всіх **під'єднаних** входах. `any`/`count` (`Required = N`) —
+  вузол стає в чергу, щойно дані прийшли на N під'єднаних входів (у порядку надходження), і отримує лише їх; решта гілок
+  скасовується: кожен незавершений вузол, усі ребра якого ведуть лише до входів, що програли (або до інших таких вузлів),
+  отримує крок `cancelled` з `error.type = BRANCH_CANCELLED` — і той, що в `waiting`, і той, що ще не стартував; вузол з
+  іншим виходом лишається живим. Після падіння воркера такі кроки відновлюються, а вузли не запускаються знову. Даних
+  менше, ніж N, коли всі гілки завершились, — крок `skipped`. `count` більший за кількість під'єднаних входів —
+  структурна помилка (`EngineException`).
+- Завершене виконання не лишає очікувань (інваріант ADR-004 §5): за будь-якого результату, крім `waiting`, кожен вузол,
+  чий останній крок `waiting`, отримує крок `cancelled` з `error.type = WAIT_CLOSED`. Це робить движок для свого проходу;
+  поза ним — `ExecutionWaits.CloseAsync` (`OpenBP.Data`), який викликають `PostgresExecutionStore.FinishAsync`, скасування
+  `queued`/`waiting` у `IExecutionService.CancelAsync` і фінальні стани воркера без результату движка — тією ж
+  транзакцією, що й стан виконання; він же видаляє ще не взятий job пробудження цього виконання.
 - Порожній вхід → вузол не виконується (гілка згасає), крім `alwaysRun: true`.
 - Після кожного вузла — `IExecutionStore.SaveStepAsync(...)`. Воркер при старті підбирає `running`-виконання без heartbeat і продовжує з останнього збереженого кроку.
 - Помилка вузла: retry за налаштуваннями → якщо `continueOnFail` — помилка стає item на виході `error`; інакше виконання `error` і старт error-workflow.
@@ -86,6 +99,7 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 - Discovery: `tools/list` при реєстрації і за кнопкою «Оновити»; схеми зберігаються в `tools_cache`, щоб канвас будував форми без живого з'єднання.
 - Вузол `mcp.tool` (див. [connectors.md](connectors.md)): параметри `serverId`, `toolName`, `arguments` (object за `inputSchema`, рядки можуть бути `{{ }}`). Результат: якщо є `structuredContent` — один item з ним; інакше по item на кожен `content`-блок (`text` → `{ text }`, `resource` → binary).
 - Polling-тригер `mcp.poll`: викликає tool за розкладом, порівнює з `nodeState` за ключовим полем, віддає лише нові записи.
+- Push-тригер `mcp.subscribe` (F6-13, [connectors.md §9](connectors.md#9-push-тригери-подій-mcpsubscribe-f6-13)): воркер тримає `resources/subscribe` на ресурс подій конектора в окремій сесії поза пулом (`OpenSessionAsync`); сповіщення `resources/updated` — сигнал виконати вузол тим самим шляхом, що й `mcp.poll` (читання, дедуплікація за ключем, виконання).
 
 ## 4. MCP-сервер (`/mcp`)
 
@@ -139,13 +153,14 @@ public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
 | `mcp_servers` | id, name, transport, config (jsonb), credential_id, status, tools_cache (jsonb), tools_cached_at, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
-| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`) |
+| `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`), parent_execution_id і parent_node_id (F6-04, підсценарій `mode = sub`; індекс за `parent_execution_id`) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
 | `webhook_dedupe` | workflow_id, node_id, key (PK), execution_id, status_code?, headers?, body?, created_at, expires_at (індекс) — ключі ідемпотентності webhook-ів (F6-05) |
-| `node_state` | workflow_id, node_id, state (jsonb) — для polling-тригерів |
+| `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |
+| `subscriptions` | workflow_id → workflows (cascade), node_id (PK разом), server_id, resource_uri, worker_id (null — вільна), leased_until (індекс), updated_at — підписки `mcp.subscribe`, оренда воркером (F6-13) |
 | `notification_channels` | id, name, type (`email`/`telegram`/`webhook`), config (jsonb: посилання на конектор чи credential, без секретів), events (jsonb), cooldown_sec, enabled, created_at, updated_at (F6-07) |
 | `notifications` | id, created_at, event, subject (id сценарію, конектора, воркера або `backup`), title, details (jsonb без секретів), processed_at (null — ще не розіслано; частковий індекс) — черга сповіщень F6-07 |
 | `notification_sends` | channel_id → notification_channels (cascade), key (`подія:subject`), sent_at — для `cooldown_sec` |
@@ -393,12 +408,34 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 - Job пробудження бере будь-який воркер, коли настає `run_at`: `waiting` → `running` (`resume_at`/`waiting_node_id`
   очищаються) і `ResumeAsync` зі знімка. Вузол, чий останній крок `waiting`, виконується знову з `ctx.Resumption`
   (стан і запланований час) і сам вирішує: віддати items далі чи призупинитись ще раз.
-- Скасування `waiting` через API — одразу `cancelled` (воркер не потрібен); job пробудження побачить фінальний стан і
-  завершиться без виконання. Повтор (`retry`) `waiting` — 409, як для незавершеного.
+- Скасування `waiting` через API — одразу `cancelled` (воркер не потрібен) однією транзакцією з закриттям очікувань
+  (кроки `cancelled`, `WAIT_CLOSED`) і видаленням job'а пробудження (F7-06). Повтор (`retry`) `waiting` — 409, як для
+  незавершеного.
+- Інваріант завершення (F7-06, ADR-004 §5): у виконанні `success`/`error`/`timed_out`/`cancelled` немає вузлів, чий
+  останній крок `waiting`, і немає job'а пробудження (§2). Контракт для задач `tasks` (F6-02): та сама точка
+  (`ExecutionWaits.CloseAsync` + закриття в движку) переводить відкриті задачі виконання в `cancelled` і пише
+  `cancelled_by_execution_id` — id виконання, чиє завершення чи скасування їх закрило; задачі вузлів зі скасованої гілки
+  `core.merge` `any`/`count` закриваються так само в момент скасування гілки. Задача не може лишитись `open` у
+  завершеному виконанні — F6-02 додає це до тесту інваріанту.
 - `executionTimeoutSec` рахується на кожен прохід окремо, тож час у `waiting` не входить. Ліміт `concurrency` (F6-06)
   `waiting` не рахує; `correlation.skipIfActive` (F5-04) — рахує як активне.
 - SSE не закривається на `waiting`; MCP `run_workflow`, помічник і оцінки перестають чекати на `waiting`
   (`ExecutionStates.IsSettled`).
+
+Підсценарії (F6-04, docs/workflow-format.md «Підсценарії»):
+- `core.executeWorkflow` викликає `ISubWorkflowLauncher` (інтерфейс движка; у воркері — `PostgresSubWorkflowLauncher`).
+  `StartAsync`: глибина батьківського за ланцюжком `parent_execution_id` (дочірнє глибше за 8 — помилка), сценарій
+  існує і спільний або того самого проєкту, версія `published ?? current` має увімкнений `core.workflowTrigger`,
+  items відповідають його `inputSchema`; далі `ExecutionLauncher` з `mode = sub`, `startNodeId` = тригер,
+  `startItems` = items, `parent_execution_id`/`parent_node_id`. Ліміти сценарію (F6-06) діють, як на тригер.
+- `wait`: `WaitAsync` опитує рядок дочірнього до 10 с; не завершилось — вузол викликає `ctx.Suspend` зі станом
+  `{ executionId, checks }` і запасним пробудженням через 5 с, 10 с … до 1 хв. Коли воркер записав фінальний стан
+  виконання `sub`, він переносить `run_at` незаблокованого job'а батьківського (якщо воно `waiting`) на зараз — і
+  батьківське прокидається одразу. Вихід — items останнього успішного кроку дочірнього; тому воркер зберігає дані
+  кроків `sub` незалежно від `saveSuccessfulData`.
+- Падіння воркера між створенням дочірнього і призупиненням батьківського дає повторний запуск вузла (і друге дочірнє)
+  — так само, як повтор інших вузлів із побічною дією. Скасування батьківського дочірні не скасовує.
+- `IExecutionService.GetAsync` віддає `children` (виконання з `parent_execution_id` = id) у порядку запуску.
 
 Відновлення (F2-08): `ReleaseStaleLocksAsync` раз на `LockTimeout / 2` повертає job'и впалих воркерів;
 виконання `running` без heartbeat довше за `LockTimeout` і **без** job у черзі (job вилучено після `MaxAttempts`)
@@ -469,6 +506,15 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
   Тривалість — у кошиках гістограми, тож p50/p95 у «Огляді» — верхня межа кошика. Видалення старих виконань
   ретеншном агрегати не зменшує.
 - Quartz-job `notifications` в Api — див. §8 (сповіщення адміністратору).
+
+Підписки (F6-13, connectors.md §9.4): `SubscriptionService` воркера раз на `Worker:SubscriptionScanInterval` (10 с)
+звіряє `subscriptions` з вузлами `mcp.subscribe` опублікованих версій активних сценаріїв, продовжує свої оренди
+(`worker_id`, `leased_until = now + Worker:SubscriptionLease`, 30 с) і бере вільні чи протухлі — так підписку впалого
+воркера за строк оренди підхоплює інший. Для орендованої відкриває окрему сесію з конектором (протокол `2025-11-25`,
+`resources/subscribe`) і одразу читає «надолужити». Сповіщення `notifications/resources/updated` → `PollJobProcessor.PollAsync`
+для цього вузла без job'а в черзі: той самий шлях, що й `poll` (виконання вузла зі станом з `node_state`, нові записи →
+`IExecutionLauncher` в одній транзакції з новим станом, конфлікт стану → записи відкинуто). Штатна зупинка воркера
+закриває сесії і звільняє оренди; обрив сесії — повторне відкриття наступним проходом з наростаючою паузою після невдач.
 
 ### 10.5. SSE
 

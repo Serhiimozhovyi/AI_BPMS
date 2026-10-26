@@ -22,4 +22,10 @@ public enum ExecutionMode
     /// скопійовано в нове виконання, хост відновлює його через <c>ResumeAsync</c>.
     /// </summary>
     Resume = 4,
+
+    /// <summary>
+    /// Підсценарій (F6-04): дочірнє виконання, створене вузлом <c>core.executeWorkflow</c> іншого виконання; стартує з
+    /// <c>core.workflowTrigger</c> з items батьківського вузла.
+    /// </summary>
+    Sub = 5,
 }

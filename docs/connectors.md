@@ -147,7 +147,7 @@ workflow не змінюється. Список вантажиться чере
 
 ## 3. `mcp.poll` (тригер)
 
-Параметри: `serverId`, `toolName`, `arguments`, `cron`, `keyField` (шлях до унікального поля у `json` item'а), `itemsPath` (як у `mcp.tool`; для списку записів у `structuredContent` обов'язковий, інакше вся відповідь — один item). Викликає tool за розкладом, перетворює результат на items як `mcp.tool`, порівнює ключі з `NodeState.seenKeys` (кільцевий буфер 1000), віддає лише нові items. Item без ключа — помилка вузла, стан не змінюється.
+Параметри: `serverId`, `toolName`, `arguments`, `cron`, `keyField` (шлях до унікального поля у `json` item'а), `itemsPath` (як у `mcp.tool`; для списку записів у `structuredContent` обов'язковий, інакше вся відповідь — один item). Викликає tool за розкладом, перетворює результат на items як `mcp.tool`, порівнює ключі з `NodeState.seenKeys` (кільцевий буфер 1000), віддає лише нові items. Item без ключа — помилка вузла, стан не змінюється. Та сама дедуплікація — у push-тригера `mcp.subscribe` (§9).
 
 Розклад (F2-12): активний сценарій отримує Quartz-тригер за `cron` вузла (формат і перевірка — як у `core.schedule`, §6; часовий пояс — `settings.timezone`). Спрацювання ставить job `poll`; воркер виконує лише цей вузол зі станом з `node_state`. Нових записів немає — виконання не створюється; є — новий стан і виконання (`trigger`, `startItems` = нові записи) комітяться однією транзакцією. Помилка вузла не змінює стан, повтор — наступним спрацюванням.
 
@@ -277,6 +277,7 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 - README «від нуля до підключеного в OpenBP за годину».
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.
+Push-події (ресурс подій + `resources/subscribe`) — контракт у §9.2; у шаблоні заготовка з'явиться окремою задачею.
 
 ### 5.1. Маніфест `connector.json` і каталог (F6-16)
 
@@ -371,6 +372,7 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   Спрацювання → виконання з item'ом `{ timestamp, timezone }` (запланований час, ISO 8601 зі зміщенням поясу); пропущені, поки api не працював, спрацювання не доганяються.
   У тестовому запуску вузол віддає такий самий item з поточним часом.
 - `mcp.poll` — див. вище.
+- `mcp.subscribe` — push від конектора: підписка на ресурс подій, §9.
 - `core.errorTrigger` — без параметрів; старт сценарію помилок (F4-06), коли інший сценарій з цим у
   `settings.errorWorkflowId` завершився `error` або `timed_out`. Вихід і правила — docs/workflow-format.md, «Сценарій помилок».
 
@@ -417,4 +419,107 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 - еталон — `connectors/kit-crm` (`sales`, `tasks`, `contractors`, `persons`); заготовка з тестом — у шаблоні Connector Kit
   (`ItemTools.ChangesSince`, `Changes_since_returns_records_after_the_cursor_and_a_new_cursor`).
 
-Push-тригери подій (F6-13) цей контракт не замінюють, а доповнюють: див. [consistency.md §3](consistency.md#3-правила-для-авторів-сценаріїв).
+Push-тригери подій (`mcp.subscribe`, §9) цей контракт не замінюють, а доповнюють: див. [consistency.md §3](consistency.md#3-правила-для-авторів-сценаріїв).
+
+## 9. Push-тригери подій: `mcp.subscribe` (F6-13)
+
+### 9.1. Рішення
+
+Конектор віддає події **без polling** стандартним механізмом MCP: клієнт підписується на ресурс
+(`resources/subscribe { uri }`), сервер шле `notifications/resources/updated { uri }`, коли ресурс змінився. Обрано
+саме цей варіант, а не «тригер-tool» (довгий `tools/call` зі стрімом через `notifications/progress`: нестандартно, тримає
+сесію зайнятою, подію в `progress` не покласти без домовленостей) і не лише `POST /webhook` OpenBP від конектора (працює,
+але конектор мусить знати адресу й токен OpenBP, а запущений воркером stdio-процес — ще й пробитися до Api). Вебхук
+лишається **запасним шляхом** для систем, які самі вміють слати HTTP (Telegram `set_webhook` → `core.webhook`):
+docs/consistency.md §3.
+
+Ключова властивість: **сповіщення — лише сигнал, не дані.** Отримавши його, воркер виконує вузол `mcp.subscribe` так само,
+як `mcp.poll` за розкладом: читає події (ресурсом або tool'ом), відсікає вже бачені за `keyField` (`NodeState.seenKeys`,
+§3) і запускає виконання з новими. Тому:
+
+- пропущене сповіщення (рестарт воркера, обрив сесії) не губить подію — наступне читання віддасть усе, чого ще не бачили;
+  одразу після (пере)відкриття підписки воркер читає «надолужити»;
+- повторне чи подвоєне сповіщення (два воркери на мить тримають одну підписку) другого виконання не дає — стан і
+  виконання комітяться однією транзакцією з перевіркою, що `node_state` не змінився (`PollJobProcessor`, architecture.md
+  §10.4);
+- `mcp.poll`-звірка на `changes_since` поруч із `mcp.subscribe` (consistency.md §3, п. 4) лишається страхівкою на випадок,
+  коли буфер подій конектора коротший за простій.
+
+### 9.2. Контракт конектора
+
+Щоб конектор давав push-події, він має:
+
+1. **Ресурс подій** — URI на кшталт `telegram://updates`, `kit://changes/sales`, `msgraph://mail/inbox`. `resources/read`
+   віддає `TextResourceContents` з JSON: об'єкт зі списком останніх подій (`{ "result": [...] }`, від старих до нових,
+   буфер щонайменше на кілька хвилин роботи; у `mcp.subscribe` — `itemsPath = result`) або масив (OpenBP загортає його
+   в `{ "result": [...] }`). Кожна подія має стабільний ключ (`keyField`: `update_id`, `id`, час зміни + id). Секретів у
+   подіях немає.
+2. **Підписку**: capability `resources.subscribe = true`, обробники `resources/subscribe` / `resources/unsubscribe`, і
+   на кожну нову подію — `notifications/resources/updated { uri }` **усім** сесіям, що підписані на цей URI. Можна
+   групувати (одне сповіщення на пачку подій): воркер усе одно читає ресурс. Альтернатива для великих буферів —
+   параметр `toolName` вузла: після сповіщення воркер викликає tool (напр. `changes_since`, §8) замість читання ресурсу.
+3. **Сесію з ініціалізацією.** Воркер запитує для сесії підписки протокол `2025-11-25` (`McpSubscriptions.ProtocolVersion`):
+   останню ревізію з `resources/subscribe`; ревізія `2026-07-28` (SEP-2575) замінила її на `subscriptions/listen`, яку
+   C# SDK 2.3 на клієнті ще не підтримує — перехід є окремою задачею беклогу після M-01. Для Streamable HTTP сервер має
+   тримати сесії для таких клієнтів: у C# SDK — `WithHttpTransport(o => o.SessionMode = StatefulForInitializeClients)`;
+   у stateless-режимі сервер не може сам нічого надіслати (сповіщення йдуть через standalone GET-потік сесії).
+   Для stdio сесія підписки — окремий процес конектора (пул сесій `mcp.tool` її не ділить і не закриває за простоєм),
+   тож конектор має допускати кілька екземплярів одночасно.
+4. У маніфесті `connector.json` (§5.1) — **пресет тригера** (`triggers[]`), щоб у палітрі з'явилась картка «Нове
+   повідомлення» замість порожнього вузла:
+
+```json
+"triggers": [
+  { "id": "new_update", "title": "Нове повідомлення Telegram", "description": "Вхідні повідомлення й натискання кнопок бота.",
+    "node": { "type": "mcp.subscribe", "parameters": { "resourceUri": "telegram://updates", "itemsPath": "result", "keyField": "update_id" } } },
+  { "id": "new_update_poll", "title": "Нове повідомлення (опитування)",
+    "node": { "type": "mcp.poll", "parameters": { "toolName": "get_updates", "itemsPath": "result", "keyField": "update_id", "cron": "*/1 * * * *" } } }
+]
+```
+
+`node.type` — `mcp.subscribe` або `mcp.poll`; `parameters` — усе, крім `serverId` (його підставляє палітра за обраним
+конектором). Еталон і заготовка — `FakeEvents` у тестовому сервері (`tests/OpenBP.Mcp.Tests/FakeServer/FakeEvents.cs`:
+ресурс `fake://events`, tool `emit_event`); у шаблоні Connector Kit — задача беклогу.
+
+### 9.3. Вузол `mcp.subscribe`
+
+Тригер, група `trigger`, без входів, вихід `main`. Параметри: `serverId`, `resourceUri` (що слухати), `keyField`
+(обов'язкові); `toolName`, `arguments`, `itemsPath` — як у `mcp.poll`, якщо події читати tool'ом; без `toolName` читається
+сам ресурс (`itemsPath` розгортає список). `correlationKey` — як у `mcp.poll` (окреме виконання на подію). Вузол
+повертає лише нові записи; помилка читання — помилка вузла, стан не змінюється. У тестовому запуску і `run_workflow`
+вузол «спрацьовує» переданими items, як `mcp.poll`. Валідатор: `resourceUri`/`keyField` обов'язкові; `toolName`, якщо
+задано, перевіряється за кешем tools як у `mcp.tool`.
+
+```json
+{ "id": "n_new_msg", "name": "Нове повідомлення", "type": "mcp.subscribe", "typeVersion": 1, "position": [0, 0],
+  "parameters": { "serverId": "srv_telegram", "resourceUri": "telegram://updates", "itemsPath": "result",
+    "keyField": "update_id", "correlationKey": "{{ $json.message.chat.id }}" } }
+```
+
+### 9.4. Хто тримає підписку (воркер)
+
+`SubscriptionService` у кожному воркері (architecture.md §10.4, «Підписки»):
+
+- **Реєстр.** Таблиця `subscriptions (workflow_id, node_id, server_id, resource_uri, worker_id?, leased_until?)` — рядок
+  на вузол `mcp.subscribe` опублікованої версії активного сценарію. Прототип: рядки звіряє сам воркер раз на
+  `Worker:SubscriptionScanInterval` (10 с) з `workflows.active`; реєстрація при активації з Api (як `webhooks`) — задача
+  беклогу.
+- **Власник — оренда.** Підписку тримає **один** воркер: `UPDATE … SET worker_id = me, leased_until = now + Lease WHERE
+  worker_id = me OR leased_until IS NULL OR leased_until < now`. Оренда (`Worker:SubscriptionLease`, 30 с) продовжується
+  кожним проходом; воркер, що впав чи завис, її не продовжує — і за ≤ 30 с підписку бере інший воркер, одразу читаючи
+  «надолужити». Штатна зупинка закриває сесії і звільняє оренди одразу. Тест:
+  `tests/OpenBP.Worker.Tests/SubscriptionTests.cs`.
+- **Сесія.** Окрема сесія з конектором поза пулом (`IMcpServerRegistry.OpenSessionAsync`), `resources/subscribe` на
+  `resourceUri`. Обрив сесії → наступний прохід відкриває її знову; невдале підключення повторюється з наростаючою паузою
+  (до 5 хв), оренда при цьому не втрачається — інший воркер її не візьме, бо підключитись не зможе так само.
+- **Подія.** Сповіщення → `PollJobProcessor.PollAsync` для цього вузла (поза чергою jobs, одразу; подія → виконання
+  ≤ 1 с у тесті). Сповіщення, що прийшло під час читання, не губиться: після читання воркер читає ще раз. Кілька
+  сповіщень поспіль зливаються в одне читання.
+- Зміна `serverId`/`resourceUri` у вузлі, деактивація чи видалення сценарію — підписка закривається на наступному
+  проході; `serverId` або `resourceUri` з виразом `{{ }}` — підписки немає (вузол у палітрі показує це як помилку
+  валідації).
+
+Що **не** входить у прототип (задачі беклогу): реєстрація рядків `subscriptions` з Api при активації; вузол і пресети в
+палітрі та панель вузла в редакторі; події в реальних конекторах (`telegram`, `kit-crm`, `msgraph`) і заготовка в
+шаблоні Connector Kit; `subscriptions/listen` (SEP-2575) після оновлення SDK; сторінка «Огляд» з переліком підписок і
+їхніх власників.

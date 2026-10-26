@@ -100,6 +100,21 @@ public static class WorkflowValidationCodes
     /// </summary>
     public const string ProjectReferenceForbidden = "PROJECT_REFERENCE_FORBIDDEN";
 
+    /// <summary>
+    /// <c>core.executeWorkflow</c> (F6-04): <c>workflowId</c> не id, сценарію немає, він іншого проєкту або в ньому немає
+    /// увімкненого <c>core.workflowTrigger</c>.
+    /// </summary>
+    public const string SubWorkflowInvalid = "SUBWORKFLOW_INVALID";
+
+    /// <summary><c>core.executeWorkflow</c> (F6-04): виклики підсценаріїв утворюють цикл (A → B → A).</summary>
+    public const string SubWorkflowCycle = "SUBWORKFLOW_CYCLE";
+
+    /// <summary>
+    /// Активація сценарію, єдиний тригер якого — <c>core.workflowTrigger</c> (F6-04): підсценарій не запускається сам,
+    /// його викликають інші сценарії.
+    /// </summary>
+    public const string WorkflowTriggerStandalone = "WORKFLOW_TRIGGER_STANDALONE";
+
     /// <summary>Попередження (не помилка): <c>$vars.key</c> посилається на змінну інстансу, якої немає (F6-09).</summary>
     public const string VariableUnknown = "VARIABLE_UNKNOWN";
 }

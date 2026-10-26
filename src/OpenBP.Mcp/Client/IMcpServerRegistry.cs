@@ -45,4 +45,15 @@ public interface IMcpServerRegistry
     /// <exception cref="McpServerUnknownException">Сервер не зареєстровано.</exception>
     /// <exception cref="McpUnavailableException">Сервер недоступний або не відповів за таймаут.</exception>
     Task<T> RunAsync<T>(string serverId, Func<McpClient, CancellationToken, Task<T>> action, TimeSpan? timeout = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Окрема сесія поза пулом (для підписок <c>mcp.subscribe</c>, F6-13): власник сам тримає й закриває клієнта; пул її
+    /// не прибирає за простоєм і не ділить з <see cref="RunAsync{T}"/>. Для stdio це окремий процес конектора.
+    /// </summary>
+    /// <param name="serverId">Сервер з реєстру.</param>
+    /// <param name="protocolVersion">Версія протоколу MCP, яку запросити (<c>null</c> — найновіша, яку підтримує сервер).</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="McpServerUnknownException">Сервер не зареєстровано.</exception>
+    /// <exception cref="McpUnavailableException">Не вдалося підключитися.</exception>
+    Task<McpClient> OpenSessionAsync(string serverId, string? protocolVersion = null, CancellationToken ct = default);
 }

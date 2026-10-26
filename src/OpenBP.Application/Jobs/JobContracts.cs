@@ -67,7 +67,7 @@ public sealed record PollJobPayload
     /// <summary><c>workflows.id</c>; опитується поточна версія активного сценарію.</summary>
     public required Guid WorkflowId { get; init; }
 
-    /// <summary>Id вузла <c>mcp.poll</c>.</summary>
+    /// <summary>Id вузла <c>mcp.poll</c> (або <c>mcp.subscribe</c>, коли вузол будить підписка воркера, F6-13).</summary>
     public required string NodeId { get; init; }
 }
 

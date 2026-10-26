@@ -114,7 +114,8 @@ public sealed class PostgresExecutionStore(
 
     /// <summary>
     /// Записує підсумок виконання: <c>status</c> за <see cref="ExecutionResult.Status"/>, <c>finished_at</c>,
-    /// <c>error</c> — повідомлення <see cref="ExecutionResult.Error"/> (або <c>null</c>).
+    /// <c>error</c> — повідомлення <see cref="ExecutionResult.Error"/> (або <c>null</c>). Для будь-якого статусу, крім
+    /// <see cref="ExecutionStatus.Waiting"/>, тією ж транзакцією закриває відкриті очікування (<see cref="ExecutionWaits"/>).
     /// </summary>
     /// <param name="result">Результат <c>RunAsync</c>/<c>ResumeAsync</c>.</param>
     /// <param name="ct">Скасування.</param>
@@ -132,6 +133,14 @@ public sealed class PostgresExecutionStore(
             await db.ExecutionSteps
                 .Where(st => st.ExecutionId == result.ExecutionId)
                 .ExecuteUpdateAsync(u => u.SetProperty(st => st.Input, (string?)null).SetProperty(st => st.Output, (string?)null).SetProperty(st => st.SubSteps, (string?)null), ct)
+                .ConfigureAwait(false);
+        }
+
+        if (result.Status != ExecutionStatus.Waiting)
+        {
+            // Інваріант ADR-004 §5: движок сам закриває очікування; тут — страховка для кроків, яких він не бачив.
+            await ExecutionWaits
+                .CloseAsync(db, result.ExecutionId, $"Очікування закрито: виконання завершилось зі статусом {ExecutionStatuses.ToDb(result.Status)}.", time, ct)
                 .ConfigureAwait(false);
         }
 

@@ -34,6 +34,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
     public DbSet<NotificationSendEntity> NotificationSends => Set<NotificationSendEntity>();
     public DbSet<WorkerHeartbeatEntity> WorkerHeartbeats => Set<WorkerHeartbeatEntity>();
+    public DbSet<SubscriptionEntity> Subscriptions => Set<SubscriptionEntity>();
     public DbSet<BackupRunEntity> BackupRuns => Set<BackupRunEntity>();
     public DbSet<ExecutionStatEntity> ExecutionStats => Set<ExecutionStatEntity>();
 
@@ -182,6 +183,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("worker_heartbeats");
             e.HasKey(x => x.WorkerId);
         });
+        b.Entity<SubscriptionEntity>(e =>
+        {
+            e.ToTable("subscriptions");
+            e.HasKey(x => new { x.WorkflowId, x.NodeId });
+            e.HasOne<WorkflowEntity>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.LeasedUntil);
+        });
         b.Entity<BackupRunEntity>(e =>
         {
             e.ToTable("backup_runs");
@@ -202,6 +210,8 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.CorrelationKey).HasMaxLength(200);
             e.Property(x => x.WaitingNodeId).HasMaxLength(200);
             e.HasIndex(x => new { x.WorkflowId, x.CorrelationKey }).HasFilter("correlation_key IS NOT NULL");
+            e.Property(x => x.ParentNodeId).HasMaxLength(200);
+            e.HasIndex(x => x.ParentExecutionId).HasFilter("parent_execution_id IS NOT NULL");
         });
         b.Entity<ExecutionStepEntity>(e =>
         {

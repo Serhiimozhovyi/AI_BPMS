@@ -168,6 +168,24 @@ public sealed class WorkerHeartbeatEntity
     public DateTimeOffset SeenAt { get; set; }
 }
 
+/// <summary>
+/// Підписка push-тригера <c>mcp.subscribe</c> (F6-13, docs/connectors.md §9): один рядок на вузол активного сценарію;
+/// воркер-власник орендує її (<see cref="WorkerId"/>, <see cref="LeasedUntil"/>) і тримає сесію з конектором.
+/// Протухла оренда — підписку підхоплює інший воркер.
+/// </summary>
+public sealed class SubscriptionEntity
+{
+    public Guid WorkflowId { get; set; }
+    public string NodeId { get; set; } = "";
+    /// <summary><c>mcp_servers.id</c> конектора (текстом, як у <c>parameters.serverId</c>).</summary>
+    public string ServerId { get; set; } = "";
+    public string ResourceUri { get; set; } = "";
+    /// <summary>Воркер, що тримає підписку; <c>null</c> — вільна.</summary>
+    public string? WorkerId { get; set; }
+    public DateTimeOffset? LeasedUntil { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>Результат запуску бекапу (F6-07): рядок додає скрипт сервісу backup через <c>psql</c>.</summary>
 public sealed class BackupRunEntity
 {
@@ -324,6 +342,10 @@ public sealed class ExecutionEntity
     public DateTimeOffset? HeartbeatAt { get; set; }
     /// <summary>Виконання, яке продовжує це (<c>mode = resume</c>, F6-08).</summary>
     public Guid? ResumedFromExecutionId { get; set; }
+    /// <summary>Для підсценарію (<c>mode = sub</c>, F6-04) — виконання, вузол <c>core.executeWorkflow</c> якого його створив.</summary>
+    public Guid? ParentExecutionId { get; set; }
+    /// <summary>Для підсценарію — id вузла <c>core.executeWorkflow</c> у батьківському виконанні.</summary>
+    public string? ParentNodeId { get; set; }
     /// <summary>Ключ кореляції (F5-04): Id угоди, контрагента тощо; до 200 символів.</summary>
     public string? CorrelationKey { get; set; }
     /// <summary>Для <c>waiting</c> — коли розбудити (F5-02); інакше <c>null</c>.</summary>
