@@ -2,16 +2,18 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using OpenBP.Api.OpenApi;
+using OpenBP.Application.Executions;
 using OpenBP.Application.Webhooks;
 
 namespace OpenBP.Api.Endpoints;
 
 /// <summary>Відповідь на прийнятий webhook.</summary>
-/// <param name="ExecutionId">Виконання, поставлене в чергу.</param>
+/// <param name="ExecutionId">Виконання, поставлене в чергу (для <c>/webhook/resume/{token}</c> — розбуджене).</param>
 public sealed record WebhookAccepted(Guid ExecutionId);
 
 /// <summary>
-/// Маршрут тригера <c>core.webhook</c> (docs/architecture.md §10.3: <c>/webhook/{path}</c> поза <c>/api/v1</c>).
+/// Маршрут тригера <c>core.webhook</c> (docs/architecture.md §10.3: <c>/webhook/{path}</c> поза <c>/api/v1</c>) і
+/// пробудження <c>core.wait</c> у режимі <c>webhook</c> (<c>POST /webhook/resume/{token}</c>, F6-01).
 /// Анонімний: автентифікацію (header-токен / Basic) перевіряє <see cref="IWebhookService"/> за параметром <c>auth</c> вузла.
 /// Невідомий/неактивний шлях або інший метод → 404, невдала автентифікація → 401, прийнято → 202.
 /// </summary>
@@ -24,6 +26,12 @@ public static class WebhookEndpoints
     /// <param name="app">Маршрутизатор застосунку.</param>
     public static IEndpointRouteBuilder MapWebhookEndpoints(this IEndpointRouteBuilder app)
     {
+        // Пробудження core.wait (F6-01): маршрут конкретніший за catch-all нижче, а шляхи тригерів з «resume/…» відхиляє валідація.
+        app.MapPost("/" + ResumeTokens.PathPrefix + "/{token}", ResumeAsync).AllowAnonymous()
+            .WithTags(OpenApiSetup.Tags.Webhooks).WithSummary("Розбудити виконання, що чекає у вузлі core.wait (режим webhook)")
+            .WithDescription("`token` — з `$execution.resumeUrl` сценарію, одноразовий. Тіло (JSON, форма або текст) стає виходом вузла очікування. " +
+                "404 — невідомий токен; 409 — токен уже використано (`RESUME_TOKEN_USED`), виконання не чекає (`EXECUTION_NOT_WAITING`) або чекає інший вузол (`NODE_NOT_WAITING`).")
+            .Produces<WebhookAccepted>(StatusCodes.Status202Accepted);
         app.MapMethods("/webhook/{**path}", Methods, HandleAsync).AllowAnonymous()
             .WithTags(OpenApiSetup.Tags.Webhooks).WithSummary("Запустити активний сценарій з тригером core.webhook")
             .WithDescription("`path` і метод — з параметрів вузла. Тіло: JSON, форма або текст. Автентифікація (заголовок з токеном або Basic) — за налаштуванням вузла. " +
@@ -79,6 +87,13 @@ public static class WebhookEndpoints
             response.ContentLength = reply.Body.Length;
             await response.Body.WriteAsync(reply.Body, httpContext.RequestAborted);
         }
+    }
+
+    private static async Task<IResult> ResumeAsync(string token, HttpContext http, IWaitResumeService resume)
+    {
+        var body = await ReadBodyAsync(http.Request, http.RequestAborted);
+        var execution = await resume.ResumeAsync(token, body, http.RequestAborted);
+        return Results.Accepted(null, new WebhookAccepted(execution.Id));
     }
 
     /// <summary>JSON → дерево, форма → об'єкт полів, інше → рядок, порожнє тіло → <c>null</c>.</summary>

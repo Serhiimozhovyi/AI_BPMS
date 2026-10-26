@@ -34,6 +34,7 @@ public static class CoreNodes
         new LoopNode(),
         new WaitNode(time, 1),
         new WaitNode(time, 2),
+        new WaitNode(time, 3),
         new CodeNode(),
         new DataTableNode(dataTables),
         new ExecuteWorkflowNode(subWorkflows, time),

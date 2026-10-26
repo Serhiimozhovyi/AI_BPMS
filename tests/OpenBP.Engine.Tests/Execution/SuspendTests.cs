@@ -119,4 +119,62 @@ public sealed class SuspendTests
         Assert.Equal(2, third.OutputOf("m").Count);
         Assert.Equal(5, seen.Count);
     }
+
+    /// <summary>
+    /// F6-01: вузол, що чекає зовнішнього сигналу — віддає його дані далі; без сигналу — чекає ще. Перед призупиненням
+    /// читає параметр <c>link</c> (вираз), щоб тест побачив <c>ResumeUrls</c> у контексті виразів.
+    /// </summary>
+    private static FuncNode SignalNode(List<NodeResumption?> seen) =>
+        new(Descriptor("test.signal", ["main"], ["main"]), (ctx, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            seen.Add(ctx.Resumption);
+            ctx.Params<JsonObject>(0);
+            if (ctx.Resumption is not { Signal: { } signal })
+            {
+                return Task.FromResult(ctx.Suspend(Wake));
+            }
+
+            return Task.FromResult<Item[][]>([[ItemOf((JsonObject)signal.DeepClone())]]);
+        });
+
+    [Fact]
+    public async Task Signal_from_request_reaches_only_the_waiting_node_and_resume_urls_are_in_expression_scope()
+    {
+        var seen = new List<NodeResumption?>();
+        var g = new TestGraph();
+        g.Registry.Register(SignalNode(seen));
+        g.Expressions.Set("{{ $execution.resumeUrl }}", JsonValue.Create("https://openbp.test/webhook/resume/tok"));
+        g.Node("t", Trigger, new JsonObject { ["count"] = 1 })
+            .Node("s", "test.signal", new JsonObject { ["link"] = "{{ $execution.resumeUrl }}" })
+            .Node("after", Pass)
+            .Edge("t", "s")
+            .Edge("s", "after");
+        var request = g.Request(r => r with
+        {
+            ResumeUrls = new Dictionary<string, string> { ["s"] = "https://openbp.test/webhook/resume/tok" },
+            Signals = new Dictionary<string, JsonNode> { ["after"] = new JsonObject { ["ignored"] = true } },
+        });
+        g.Register(request);
+
+        var first = await g.Executor().RunAsync(request, CancellationToken.None);
+        Assert.Equal(ExecutionStatus.Waiting, first.Status);
+        var scope = Assert.Single(g.Expressions.Calls, c => c.Expression == "{{ $execution.resumeUrl }}").Scope;
+        Assert.Equal("https://openbp.test/webhook/resume/tok", Assert.Single(scope.ResumeUrls).Value);
+        Assert.Equal("Вузол s", Assert.Single(scope.ResumeUrls).Key);
+
+        // Пробудження без сигналу для «s» (інший вузол у Signals не рахується) — чекає далі.
+        var snapshot = (await g.Store.LoadAsync(request.ExecutionId, CancellationToken.None))!;
+        var again = await g.Executor().ResumeAsync(snapshot, request, CancellationToken.None);
+        Assert.Equal(ExecutionStatus.Waiting, again.Status);
+        Assert.Null(seen[1]!.Signal);
+
+        var signalled = request with { Signals = new Dictionary<string, JsonNode> { ["s"] = new JsonObject { ["decision"] = "approve" } } };
+        snapshot = (await g.Store.LoadAsync(request.ExecutionId, CancellationToken.None))!;
+        var resumed = await g.Executor().ResumeAsync(snapshot, signalled, CancellationToken.None);
+
+        Assert.Equal(ExecutionStatus.Success, resumed.Status);
+        Assert.Equal("approve", seen[2]!.Signal!["decision"]!.GetValue<string>());
+        Assert.Equal("approve", Assert.Single(resumed.OutputOf("after")).Json["decision"]!.GetValue<string>());
+    }
 }

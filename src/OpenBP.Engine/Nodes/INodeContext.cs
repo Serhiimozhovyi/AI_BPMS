@@ -93,4 +93,8 @@ public interface INodeContext
 /// <summary>Пробудження вузла після призупинення (F5-02).</summary>
 /// <param name="ResumeAt">Запланований час пробудження.</param>
 /// <param name="State">Стан, переданий у <see cref="INodeContext.Suspend"/> (порожній, якщо не передано).</param>
-public sealed record NodeResumption(DateTimeOffset ResumeAt, JsonObject State);
+/// <param name="Signal">
+/// Дані зовнішнього пробудження (F6-01): тіло <c>POST /webhook/resume/{token}</c> або дані форми, які хост передав через
+/// <c>ExecutionRequest.Signals</c>; <c>null</c> — пробудження за часом (<see cref="ResumeAt"/>) чи після падіння воркера.
+/// </param>
+public sealed record NodeResumption(DateTimeOffset ResumeAt, JsonObject State, JsonNode? Signal = null);

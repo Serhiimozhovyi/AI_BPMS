@@ -927,6 +927,45 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("project_members", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.ResumeTokenEntity", b =>
+                {
+                    b.Property<string>("Token")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("NodeId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("node_id");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.HasKey("Token");
+
+                    b.HasIndex("ExecutionId", "NodeId")
+                        .IsUnique();
+
+                    b.ToTable("resume_tokens", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.SubscriptionEntity", b =>
                 {
                     b.Property<Guid>("WorkflowId")
@@ -1430,6 +1469,15 @@ namespace OpenBP.Data.Migrations
                     b.HasOne("OpenBP.Data.UserEntity", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.ResumeTokenEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.ExecutionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

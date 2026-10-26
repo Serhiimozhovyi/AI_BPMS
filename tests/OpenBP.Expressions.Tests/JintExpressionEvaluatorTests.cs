@@ -254,6 +254,20 @@ public class JintExpressionEvaluatorTests
         Assert.Equal(ExecutionId.ToString(), result!.GetValue<string>());
     }
 
+    [Fact]
+    public void Execution_ExposesResumeUrlOnlyForSingleWaitNode()
+    {
+        var one = Scope() with { ResumeUrls = new Dictionary<string, string> { ["Чекати відповідь"] = "https://openbp.test/webhook/resume/t1" } };
+        Assert.Equal("https://openbp.test/webhook/resume/t1", _evaluator.Evaluate("{{ $execution.resumeUrl }}", one)!.GetValue<string>());
+        Assert.Equal("https://openbp.test/webhook/resume/t1", _evaluator.Evaluate("{{ $execution.resumeUrls['Чекати відповідь'] }}", one)!.GetValue<string>());
+
+        var two = Scope() with { ResumeUrls = new Dictionary<string, string> { ["A"] = "https://openbp.test/webhook/resume/a", ["B"] = "https://openbp.test/webhook/resume/b" } };
+        Assert.Equal("undefined", _evaluator.Evaluate("{{ typeof $execution.resumeUrl }}", two)!.GetValue<string>());
+        Assert.Equal("https://openbp.test/webhook/resume/b", _evaluator.Evaluate("{{ $execution.resumeUrls.B }}", two)!.GetValue<string>());
+
+        Assert.Equal("undefined", _evaluator.Evaluate("{{ typeof $execution.resumeUrl }}", Scope())!.GetValue<string>());
+    }
+
     // ---- Помилки ----
 
     [Theory]

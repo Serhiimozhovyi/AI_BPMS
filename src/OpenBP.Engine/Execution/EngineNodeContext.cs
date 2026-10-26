@@ -16,6 +16,7 @@ internal sealed class EngineNodeContext : INodeContext
     private readonly IReadOnlyDictionary<string, IReadOnlyList<Item>> _nodes;
     private readonly IReadOnlyDictionary<string, string> _env;
     private readonly IReadOnlyDictionary<string, string> _vars;
+    private readonly IReadOnlyDictionary<string, string> _resumeUrls;
     private readonly string _timezone;
     private readonly DateTimeOffset _now;
 
@@ -30,7 +31,8 @@ internal sealed class EngineNodeContext : INodeContext
         IReadOnlyDictionary<string, string> vars,
         string timezone,
         DateTimeOffset now,
-        JsonObject nodeState)
+        JsonObject nodeState,
+        IReadOnlyDictionary<string, string>? resumeUrls = null)
     {
         Node = node;
         _descriptor = descriptor;
@@ -43,6 +45,7 @@ internal sealed class EngineNodeContext : INodeContext
         _nodes = nodes;
         _env = env;
         _vars = vars;
+        _resumeUrls = resumeUrls ?? new Dictionary<string, string>();
         _timezone = timezone;
         _now = now;
         NodeState = nodeState;
@@ -163,6 +166,7 @@ internal sealed class EngineNodeContext : INodeContext
             Env = _env,
             Vars = _vars,
             ExecutionId = ExecutionId,
+            ResumeUrls = _resumeUrls,
         };
     }
 
