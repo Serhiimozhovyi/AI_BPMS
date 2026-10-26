@@ -106,6 +106,9 @@ public sealed class FakeBotApi : IAsyncDisposable
                 json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
                 caption: json?.TryGetProperty("caption", out var c) == true ? c.GetString() : form.GetValueOrDefault("caption"),
                 document: new { file_id = "BQACAgIAAxk", file_name = form.TryGetValue("document", out var f) ? f.Split(':')[0] : "remote.pdf" }),
+            "sendPhoto" => PhotoMessage(
+                json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
+                json?.TryGetProperty("caption", out var pc) == true ? pc.GetString() : form.GetValueOrDefault("caption")),
             "getUpdates" => new object[]
             {
                 new { update_id = 9001, message = new { message_id = 1, date = 1761200000, chat = new { id = 42, type = "private" }, text = "Привіт" } },
@@ -125,6 +128,17 @@ public sealed class FakeBotApi : IAsyncDisposable
 
         await ctx.Response.WriteAsJsonAsync(new { ok = true, result });
     }
+
+    private static object PhotoMessage(JsonElement chat, string? caption) => new
+    {
+        message_id = 78,
+        date = 1761200000,
+        chat = chat.ValueKind == JsonValueKind.Number
+            ? (object)new { id = chat.GetInt64(), type = "private" }
+            : new { id = -1001234567890, type = "channel", username = chat.GetString()!.TrimStart('@') },
+        caption,
+        photo = new[] { new { file_id = "AgACAgIAAxk-small", width = 90, height = 90 }, new { file_id = "AgACAgIAAxk-big", width = 1280, height = 1280 } },
+    };
 
     private static object Message(JsonElement chat, string? text = null, string? caption = null, object? document = null) => new
     {

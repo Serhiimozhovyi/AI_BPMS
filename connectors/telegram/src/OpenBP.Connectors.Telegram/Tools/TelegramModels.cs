@@ -9,13 +9,24 @@ namespace OpenBP.Connectors.Telegram.Tools;
 /// <param name="Text">Текст.</param>
 /// <param name="Caption">Підпис до файлу.</param>
 /// <param name="Document">Надісланий документ.</param>
+/// <param name="Photo">Розміри надісланого фото (від меншого до більшого).</param>
 public sealed record TelegramMessage(
     [property: JsonPropertyName("message_id")] long MessageId,
     [property: JsonPropertyName("chat")] TelegramChat Chat,
     [property: JsonPropertyName("date")] long Date,
     [property: JsonPropertyName("text")] string? Text = null,
     [property: JsonPropertyName("caption")] string? Caption = null,
-    [property: JsonPropertyName("document")] TelegramDocument? Document = null);
+    [property: JsonPropertyName("document")] TelegramDocument? Document = null,
+    [property: JsonPropertyName("photo")] IReadOnlyList<TelegramPhotoSize>? Photo = null);
+
+/// <summary>Розмір фото в повідомленні.</summary>
+/// <param name="FileId">Ідентифікатор файлу в Telegram.</param>
+/// <param name="Width">Ширина, пікселів.</param>
+/// <param name="Height">Висота, пікселів.</param>
+public sealed record TelegramPhotoSize(
+    [property: JsonPropertyName("file_id")] string FileId,
+    [property: JsonPropertyName("width")] int Width = 0,
+    [property: JsonPropertyName("height")] int Height = 0);
 
 /// <summary>Чат.</summary>
 /// <param name="Id">Id чату.</param>

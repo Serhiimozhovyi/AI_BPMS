@@ -337,7 +337,7 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 
 - `connectors/telegram` — Telegram Bot API (F3-13, F3-27): `send_message` (з `reply_markup`: `inline_keyboard`,
   `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_messages` (до 100 повідомлень
-  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64),
+  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
   `get_chat`; `chat_id` має `x-openbp-options` на `get_updates` (§2); токен — лише змінна
