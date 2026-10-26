@@ -158,6 +158,56 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("backup_runs", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.BinaryFileEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("mime_type");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ExecutionId");
+
+                    b.ToTable("binary_files", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.CredentialEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1229,6 +1279,14 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("webhook")
+                        .HasColumnName("kind");
+
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1250,7 +1308,7 @@ namespace OpenBP.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Path")
+                    b.HasIndex("Kind", "Path")
                         .IsUnique();
 
                     b.ToTable("webhooks", (string)null);
@@ -1462,6 +1520,14 @@ namespace OpenBP.Data.Migrations
                     b.HasOne("OpenBP.Data.WorkflowGroupEntity", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("OpenBP.Data.BinaryFileEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.ExecutionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 

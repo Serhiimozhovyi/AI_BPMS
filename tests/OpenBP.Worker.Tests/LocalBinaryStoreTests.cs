@@ -67,7 +67,7 @@ public sealed class LocalBinaryStoreTests : IDisposable
     }
 
     [Fact]
-    public void Worker_registers_local_store_only_when_LocalPath_is_set()
+    public async Task Worker_writes_to_local_store_only_when_LocalPath_is_set()
     {
         static IServiceProvider Build(string? path)
         {
@@ -79,8 +79,18 @@ public sealed class LocalBinaryStoreTests : IDisposable
             return new ServiceCollection().AddLogging().AddOpenBpWorker(configuration).BuildServiceProvider();
         }
 
-        Assert.IsType<LocalBinaryStore>(Build(_root).GetService<IBinaryStore>());
-        Assert.Null(Build(null).GetService<IBinaryStore>());
+        // Сховище завжди маршрутизує читання за storage (файли форм F6-03 — з Postgres), а пише — у локальну папку, якщо вона є.
+        var local = Build(_root).GetRequiredService<IBinaryStore>();
+        var written = await local.PutAsync(new MemoryStream([1, 2]), "text/plain", "a.txt", CancellationToken.None);
+        Assert.Equal(LocalBinaryStore.StorageName, written.Storage);
+        await using (var read = await local.OpenReadAsync(written, CancellationToken.None))
+        {
+            Assert.Equal(2, read.Length);
+        }
+
+        var none = Build(null).GetRequiredService<IBinaryStore>();
+        await Assert.ThrowsAsync<NotSupportedException>(() => none.PutAsync(new MemoryStream([1]), "text/plain", null, CancellationToken.None));
+        await Assert.ThrowsAsync<NotSupportedException>(() => none.OpenReadAsync(written, CancellationToken.None));
     }
 
     private sealed class FixedTime(DateTimeOffset now) : TimeProvider

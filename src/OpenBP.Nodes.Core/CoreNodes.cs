@@ -21,6 +21,7 @@ public static class CoreNodes
     [
         new ManualTriggerNode(),
         new WebhookNode(),
+        new FormTriggerNode(),
         new ScheduleNode(time),
         new ErrorTriggerNode(),
         new WorkflowTriggerNode(),

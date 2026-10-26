@@ -31,6 +31,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WebhookDedupeEntity> WebhookDedupe => Set<WebhookDedupeEntity>();
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
     public DbSet<ResumeTokenEntity> ResumeTokens => Set<ResumeTokenEntity>();
+    public DbSet<BinaryFileEntity> BinaryFiles => Set<BinaryFileEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
     public DbSet<AuditEntryEntity> AuditLog => Set<AuditEntryEntity>();
     public DbSet<NotificationChannelEntity> NotificationChannels => Set<NotificationChannelEntity>();
@@ -249,7 +250,20 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         b.Entity<WebhookEntity>(e =>
         {
             e.ToTable("webhooks");
-            e.HasIndex(x => x.Path).IsUnique();
+            e.Property(x => x.Kind).HasMaxLength(20).HasDefaultValue(WebhookEntity.WebhookKind);
+            e.HasIndex(x => new { x.Kind, x.Path }).IsUnique();
+        });
+        b.Entity<BinaryFileEntity>(e =>
+        {
+            e.ToTable("binary_files");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(64);
+            e.Property(x => x.MimeType).HasMaxLength(255);
+            e.Property(x => x.FileName).HasMaxLength(255);
+            e.Property(x => x.Sha256).HasMaxLength(64);
+            e.HasIndex(x => x.ExecutionId);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasOne<ExecutionEntity>().WithMany().HasForeignKey(x => x.ExecutionId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ResumeTokenEntity>(e =>
         {

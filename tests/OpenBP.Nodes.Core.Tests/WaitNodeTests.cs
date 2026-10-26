@@ -240,6 +240,51 @@ public class WaitNodeTests
         Assert.Empty(output[1]);
     }
 
+    [Fact]
+    public async Task V3_form_mode_keeps_form_in_state_and_defaults_title_to_node_name()
+    {
+        var node = V3();
+        var ctx = Ctx.For(node,
+            """{"mode":"form","form":{"title":"Заявка 7","schema":{"type":"object","required":["ok"],"properties":{"ok":{"type":"boolean"}}},"message":"Дякуємо"}}""",
+            """{"a":7}""");
+
+        await node.ExecuteAsync(ctx, CancellationToken.None);
+
+        var form = ctx.Suspension!.Value.State["form"]!.AsObject();
+        Assert.Equal("Заявка 7", form["title"]!.GetValue<string>());
+        Assert.Equal("Дякуємо", form["message"]!.GetValue<string>());
+        Assert.Equal("ok", form["schema"]!["required"]![0]!.GetValue<string>());
+
+        var bare = Ctx.For(node, """{"mode":"form"}""", "{}");
+        await node.ExecuteAsync(bare, CancellationToken.None);
+        var defaults = bare.Suspension!.Value.State["form"]!.AsObject();
+        Assert.Equal(bare.Node.Name, defaults["title"]!.GetValue<string>());
+        Assert.Equal("object", defaults["schema"]!["type"]!.GetValue<string>());
+
+        var hook = Ctx.For(node, """{"mode":"webhook"}""", "{}");
+        await node.ExecuteAsync(hook, CancellationToken.None);
+        Assert.Null(hook.Suspension!.Value.State["form"]);
+    }
+
+    [Fact]
+    public async Task V3_form_signal_envelope_becomes_item_with_binary()
+    {
+        var deadline = Now.AddDays(1);
+        var state = new JsonObject { ["mode"] = "form", ["deadline"] = deadline };
+        var node = V3();
+        var ctx = Ctx.For(node, """{"mode":"form"}""", """{"a":1}""");
+        ctx.Resumption = new NodeResumption(deadline, state, JsonNode.Parse(
+            """{"json":{"fields":{"ok":true,"scan":"act.pdf"},"submittedAt":"2026-10-26T08:00:00+00:00"},"binary":{"scan":{"id":"f1","mimeType":"application/pdf","fileName":"act.pdf","fileSize":3,"storage":"postgres"}}}"""));
+
+        var output = await node.ExecuteAsync(ctx, CancellationToken.None);
+
+        var item = Assert.Single(output[0]);
+        Assert.True(item.Json["fields"]!["ok"]!.GetValue<bool>());
+        var file = item.Binary!["scan"];
+        Assert.Equal(("f1", "application/pdf", "act.pdf", "postgres"), (file.Id, file.MimeType, file.FileName, file.Storage));
+        Assert.Empty(output[1]);
+    }
+
     [Theory]
     [InlineData("""{"mode":"webhook","maxWaitSec":0}""")]
     [InlineData("""{"mode":"webhook","maxWaitSec":-5}""")]

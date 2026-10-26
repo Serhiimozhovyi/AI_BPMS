@@ -140,7 +140,7 @@ public class MigrationTests(PostgresFixture postgres)
             }
         }
 
-        Assert.Contains(defs, d => d.StartsWith("webhooks:", StringComparison.Ordinal) && d.Contains("UNIQUE", StringComparison.Ordinal) && d.Contains("(path)", StringComparison.Ordinal));
+        Assert.Contains(defs, d => d.StartsWith("webhooks:", StringComparison.Ordinal) && d.Contains("UNIQUE", StringComparison.Ordinal) && d.Contains("(kind, path)", StringComparison.Ordinal));
         Assert.Contains(defs, d => d.StartsWith("jobs:", StringComparison.Ordinal) && d.Contains("(run_at)", StringComparison.Ordinal) && d.Contains("WHERE (locked_by IS NULL)", StringComparison.Ordinal));
         Assert.Contains(defs, d => d.StartsWith("execution_steps:", StringComparison.Ordinal) && d.Contains("(execution_id)", StringComparison.Ordinal));
     }

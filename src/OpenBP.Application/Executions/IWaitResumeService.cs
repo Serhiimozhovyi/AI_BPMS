@@ -14,12 +14,16 @@ public interface IWaitResumeService
     /// </summary>
     /// <param name="token">Токен з адреси пробудження.</param>
     /// <param name="signal">Дані пробудження (тіло запиту); <c>null</c> — порожнє тіло.</param>
+    /// <param name="kind">
+    /// Режим, якого чекає адреса (<see cref="ResumeTokens.WebhookKind"/> для <c>/webhook/resume</c>, <see cref="ResumeTokens.FormKind"/>
+    /// для сторінки форми): токен іншого режиму — як невідомий; <c>null</c> — будь-який.
+    /// </param>
     /// <param name="ct">Скасування.</param>
     /// <returns>Зведення виконання після пробудження (стан <c>waiting</c>, доки воркер не візьме job).</returns>
-    /// <exception cref="Errors.NotFoundException">Такого токена немає (чужий, вигаданий або виконання вже видалено).</exception>
+    /// <exception cref="Errors.NotFoundException">Такого токена немає (чужий, вигаданий, іншого режиму або виконання вже видалено).</exception>
     /// <exception cref="Errors.ConflictException">
     /// <c>RESUME_TOKEN_USED</c> — токен уже використано; <c>EXECUTION_NOT_WAITING</c> — виконання не в стані <c>waiting</c>
     /// (ще виконується, завершене чи скасоване); <c>NODE_NOT_WAITING</c> — чекає інший вузол або строк цього вже вийшов.
     /// </exception>
-    Task<ExecutionSummary> ResumeAsync(string token, JsonNode? signal, CancellationToken ct);
+    Task<ExecutionSummary> ResumeAsync(string token, JsonNode? signal, string? kind, CancellationToken ct);
 }

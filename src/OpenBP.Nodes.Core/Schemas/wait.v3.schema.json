@@ -39,6 +39,37 @@
       "minimum": 1,
       "maximum": 7776000,
       "description": "Для mode = webhook | form: скільки секунд чекати пробудження (до 90 днів; без значення — 90 днів). Коли час вийшов, вхідні items ідуть на вихід timeout"
+    },
+    "form": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Для mode = form: що показати на сторінці за $execution.resumeUrl. Можна вирази {{ }} — обчислюються, коли виконання доходить до вузла",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Заголовок форми; без значення — назва вузла"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Текст над полями"
+        },
+        "schema": {
+          "type": "object",
+          "description": "Поля форми (JSON Schema), як у core.formTrigger; без полів — лише кнопка"
+        },
+        "submitLabel": {
+          "type": "string",
+          "maxLength": 60,
+          "default": "Надіслати"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Текст після надсилання"
+        }
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using OpenBP.Application.Errors;
+using OpenBP.Application.Forms;
 
 namespace OpenBP.Api.Errors;
 
@@ -34,6 +35,14 @@ public sealed class OpenBpExceptionHandler(IProblemDetailsService problems) : IE
         else if (exception is CredentialValidationException credential)
         {
             problem.Extensions["errors"] = credential.Errors;
+        }
+        else if (exception is FormValidationException form)
+        {
+            problem.Extensions["errors"] = form.Errors;
+        }
+        else if (exception is FormLoginRequiredException login)
+        {
+            problem.Extensions["loginUrl"] = login.LoginUrl;
         }
         else if (exception is ImportUnmappedException unmapped)
         {

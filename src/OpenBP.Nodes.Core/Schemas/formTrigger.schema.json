@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.formTrigger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path", "title", "schema"],
+  "properties": {
+    "path": {
+      "title": "Шлях",
+      "description": "Частина адреси після /form/, напр. leave-request або hr/onboarding. Унікальна серед активних сценаріїв.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*$"
+    },
+    "title": {
+      "title": "Заголовок форми",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "title": "Опис",
+      "description": "Текст над полями форми.",
+      "type": "string",
+      "maxLength": 2000
+    },
+    "schema": {
+      "title": "Поля форми (JSON Schema)",
+      "description": "Об'єкт з properties: string (format email | date | date-time | uri | textarea | binary — файл), number, integer, boolean, enum — список. title — підпис поля, required — обов'язкові.",
+      "type": "object"
+    },
+    "submitLabel": {
+      "title": "Текст кнопки",
+      "type": "string",
+      "maxLength": 60,
+      "default": "Надіслати"
+    },
+    "auth": {
+      "title": "Хто може надіслати",
+      "description": "none — будь-хто за посиланням; login — лише користувач OpenBP після входу; token — посилання з ?token=…, токен — у credential { token }.",
+      "type": "string",
+      "enum": ["none", "login", "token"],
+      "default": "none"
+    },
+    "credentialId": {
+      "title": "Credential з токеном (для token)",
+      "type": "string",
+      "minLength": 1
+    },
+    "onSubmit": {
+      "title": "Після надсилання",
+      "description": "message — показати текст; redirectUrl — перейти на адресу.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message": { "title": "Повідомлення", "type": "string", "maxLength": 2000 },
+        "redirectUrl": { "title": "Перейти на адресу", "type": "string", "format": "uri", "pattern": "^https?://" }
+      }
+    }
+  },
+  "if": { "properties": { "auth": { "const": "token" } }, "required": ["auth"] },
+  "then": { "required": ["credentialId"] }
+}

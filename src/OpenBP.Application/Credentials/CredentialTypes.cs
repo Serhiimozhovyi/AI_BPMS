@@ -85,6 +85,8 @@ public static class CredentialTypes
             [new("token", "Токен", CredentialFieldKind.Secret, true)]),
         Build("webhook.basic", "Webhook: Basic", "Тригер core.webhook з auth.type = basic.",
             [new("username", "Користувач", CredentialFieldKind.Text, true), new("password", "Пароль", CredentialFieldKind.Secret, true)]),
+        Build("form.token", "Форма: токен посилання", "Тригер core.formTrigger з auth = token: посилання /form/{path}?token=….",
+            [new("token", "Токен", CredentialFieldKind.Secret, true)]),
         Build(Generic, "Інше: довільні пари", "Будь-які секрети «назва → значення».", []),
     ];
 

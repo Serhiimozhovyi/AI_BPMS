@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using OpenBP.Engine.Nodes;
 using OpenBP.Shared.Workflow;
@@ -14,7 +15,8 @@ namespace OpenBP.Nodes.Core;
 /// до <see cref="MaxLongDelay"/>. До <see cref="InMemoryLimit"/> чекає в пам'яті, довше — призупиняє виконання
 /// (<see cref="INodeContext.Suspend"/>): воркер вільний, виконання прокидається в потрібний час;</item>
 /// <item>версія 3 (F6-01) — ті самі режими плюс пробудження зовні: <c>mode: webhook</c> (POST на
-/// <c>$execution.resumeUrl</c>) і <c>mode: form</c> (надіслана форма за тією ж адресою, F6-03). Вузол призупиняє виконання
+/// <c>$execution.resumeUrl</c>) і <c>mode: form</c> (сторінка форми за <c>$execution.resumeUrl</c>, F6-03: опис форми —
+/// у стані очікування, дані з файлами — item виходу). Вузол призупиняє виконання
 /// до <c>maxWaitSec</c> (типово і не довше <see cref="MaxLongDelay"/>); хост будить його з
 /// <see cref="NodeResumption.Signal"/> — дані сигналу стають items виходу <c>main</c>, а коли час вийшов без сигналу —
 /// вхідні items ідуть на вихід <c>timeout</c>. Режими за часом у версії 3 вихід <c>timeout</c> не використовують.</item>
@@ -40,6 +42,9 @@ public sealed class WaitNode : INode
     private const string ResumeAtKey = "resumeAt";
     private const string DeadlineKey = "deadline";
     private const string ModeKey = "mode";
+
+    /// <summary>Ключ стану очікування з описом форми для сторінки <c>/form/resume/{token}</c> (F6-03).</summary>
+    public const string FormStateKey = "form";
 
     private readonly TimeProvider _time;
     private readonly int _version;
@@ -130,16 +135,23 @@ public sealed class WaitNode : INode
     {
         if (ctx.Resumption is not { } resumption)
         {
-            var deadline = now.Add(MaxWait(ctx.Params<WaitParametersV2>(0)));
+            var parameters = ctx.Params<WaitParametersV2>(0);
+            var deadline = now.Add(MaxWait(parameters));
             ctx.Logger.Log(Engine.LogLevel.Info, ctx.Node.Id, mode == FormMode
                 ? $"Чекає надіслану форму до {deadline:u}."
                 : $"Чекає POST на адресу пробудження до {deadline:u}.");
-            return ctx.Suspend(deadline, new JsonObject { [ModeKey] = mode, [DeadlineKey] = deadline.ToUniversalTime() });
+            var state = new JsonObject { [ModeKey] = mode, [DeadlineKey] = deadline.ToUniversalTime() };
+            if (mode == FormMode)
+            {
+                state[FormStateKey] = FormState(ctx.Node.Name, parameters.Form);
+            }
+
+            return ctx.Suspend(deadline, state);
         }
 
         if (resumption.Signal is { } signal)
         {
-            return [SignalItems(signal), []];
+            return [mode == FormMode && FormItem(signal) is { } item ? [item] : SignalItems(signal), []];
         }
 
         var until = resumption.State[DeadlineKey] is JsonValue saved && saved.TryGetValue<DateTimeOffset>(out var at) ? at : resumption.ResumeAt;
@@ -150,6 +162,36 @@ public sealed class WaitNode : INode
 
         ctx.Logger.Log(Engine.LogLevel.Info, ctx.Node.Id, "Час очікування вийшов: items ідуть на вихід timeout.");
         return [[], .. PassThrough(ctx)];
+    }
+
+    /// <summary>
+    /// Опис форми зі стану очікування (обчислені вирази): сторінка за <c>$execution.resumeUrl</c> бере його з кроку
+    /// <c>waiting</c>, тож заголовок і поля можуть залежати від даних, з якими виконання дійшло до вузла.
+    /// </summary>
+    private static JsonObject FormState(string nodeName, WaitForm? form) => new()
+    {
+        ["title"] = string.IsNullOrWhiteSpace(form?.Title) ? nodeName : form.Title,
+        ["description"] = form?.Description,
+        ["schema"] = form?.Schema?.DeepClone() ?? new JsonObject { ["type"] = "object", ["properties"] = new JsonObject() },
+        ["submitLabel"] = form?.SubmitLabel,
+        ["message"] = form?.Message,
+    };
+
+    /// <summary>
+    /// Сигнал форми — item як є: <c>{ "json": { fields, submittedAt, submittedBy? }, "binary": { поле: BinaryRef } }</c>
+    /// (так його кладе Api після перевірки за схемою); інша форма — <c>null</c>.
+    /// </summary>
+    private static Item? FormItem(JsonNode signal)
+    {
+        if (signal is not JsonObject { } envelope || envelope["json"] is not JsonObject json)
+        {
+            return null;
+        }
+
+        var binary = envelope["binary"] is JsonObject files && files.Count > 0
+            ? files.Deserialize<Dictionary<string, BinaryRef>>(JsonSerializerOptions.Web)
+            : null;
+        return new Item { Json = (JsonObject)json.DeepClone(), Binary = binary };
     }
 
     /// <summary>Дані сигналу як items: об'єкт — один item, масив об'єктів — item на елемент, інше — <c>{ "body": … }</c>.</summary>
@@ -299,5 +341,21 @@ public sealed class WaitNode : INode
         public string? Until { get; set; }
 
         public double? MaxWaitSec { get; set; }
+
+        public WaitForm? Form { get; set; }
+    }
+
+    /// <summary>Параметр <c>form</c> режиму <c>form</c> (F6-03).</summary>
+    private sealed class WaitForm
+    {
+        public string? Title { get; set; }
+
+        public string? Description { get; set; }
+
+        public JsonObject? Schema { get; set; }
+
+        public string? SubmitLabel { get; set; }
+
+        public string? Message { get; set; }
     }
 }

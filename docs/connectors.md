@@ -365,6 +365,10 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   Відповідь (F6-05) — за `respond`: `immediately` (типово) — 202 `{ executionId }`; `whenFinished` — 200 з виходом останнього вузла після завершення; `fromNode` — те, що віддав вузол `core.respondToWebhook { statusCode, headers, body | binaryKey }` (виконання триває далі). Не дочекались за `responseTimeoutSec` (типово 30) — 504.
   Дедуплікація: `idempotencyKey` (вираз, напр. `{{ $json.body.update_id }}`) або заголовок `Idempotency-Key`; повтор у вікні `dedupeWindowSec` (типово доба) повертає ту саму відповідь із заголовком `Idempotent-Replayed: true` без нового виконання. Деталі — docs/workflow-format.md «Відповідь webhook-у й дедуплікація».
   Заголовок із секретом автентифікації і `cookie` в item не потрапляють.
+- `core.formTrigger` (F6-03) — `{ path, title, description?, schema, submitLabel?, auth: none | login | token, credentialId?, onSubmit?: { message | redirectUrl } }`; api реєструє шлях у `webhooks` (`kind = form`, конфлікт — `WEBHOOK_PATH_CONFLICT`), публічна сторінка `/form/{path}` рендерить поля за JSON Schema `schema`.
+  Надсилання (`POST /api/v1/forms/{path}`) перевіряється за схемою (400 `FORM_INVALID` з помилками за полями) і створює виконання з item `{ fields, submittedAt, submittedBy? }`; файли полів `format: binary` — у `binary` (сховище `postgres`).
+  `auth: login` — лише користувач OpenBP (без сесії — 401 `FORM_LOGIN_REQUIRED`, сторінка веде на вхід); `auth: token` — `?token=…` з посилання, значення — у credential `form.token` (`{ token }`), інакше 401.
+  Та сама сторінка — для `core.wait` у режимі `form` (`/form/resume/{token}`). Деталі — docs/workflow-format.md «Форми».
 - `core.schedule` — `{ cron, timezone }`; api реєструє Quartz-job.
   `cron` — 5 полів crontab (`0 7 * * 1-5`, день тижня 0–7, 0 і 7 — неділя) або 6–7 полів Quartz із секундами (`0 0 7 ? * MON-FRI`); `timezone` — IANA, за замовчуванням `settings.timezone` сценарію.
   Некоректний cron чи часовий пояс, вираз `{{ }}` у `cron` — помилка валідації `PARAMETER_INVALID` уже при збереженні.

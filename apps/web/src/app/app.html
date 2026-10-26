@@ -1,81 +1,83 @@
-<mat-toolbar class="shell-top">
-  <a class="shell-brand" routerLink="/" aria-label="OpenBP — на головну" i18n-aria-label="@@app.brand.home">
-    <span class="shell-brand__sign" aria-hidden="true">BP</span>
-    <span class="shell-brand__name" i18n="@@app.brand">Open<b>BP</b></span>
-  </a>
-  @if (user(); as u) {
-    <div class="shell-project">
-      <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
-      <select
-        class="shell-project__select"
-        data-testid="project-select"
-        aria-label="Проєкт"
-        i18n-aria-label="@@app.project.label"
-        [value]="projects.current() ?? ''"
-        (change)="selectProject($any($event.target).value)"
-      >
-        <option value="" i18n="@@app.project.all" [selected]="projects.current() === null">Усі проєкти</option>
-        <option [value]="sharedSpace" i18n="@@app.project.shared" [selected]="projects.current() === sharedSpace">Спільний простір</option>
-        @for (p of projects.projects(); track p.id) {
-          <option [value]="p.id" [selected]="projects.current() === p.id">{{ p.name }}</option>
-        }
-      </select>
-      @if (projects.currentProject(); as current) {
-        <a
-          class="shell-icon-button"
-          data-testid="project-members"
-          title="Учасники проєкту"
-          i18n-title="@@app.project.members"
-          [routerLink]="['/projects', current.id]"
+@if (!bare()) {
+  <mat-toolbar class="shell-top">
+    <a class="shell-brand" routerLink="/" aria-label="OpenBP — на головну" i18n-aria-label="@@app.brand.home">
+      <span class="shell-brand__sign" aria-hidden="true">BP</span>
+      <span class="shell-brand__name" i18n="@@app.brand">Open<b>BP</b></span>
+    </a>
+    @if (user(); as u) {
+      <div class="shell-project">
+        <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
+        <select
+          class="shell-project__select"
+          data-testid="project-select"
+          aria-label="Проєкт"
+          i18n-aria-label="@@app.project.label"
+          [value]="projects.current() ?? ''"
+          (change)="selectProject($any($event.target).value)"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">group</span>
-          <span class="sr-only" i18n="@@app.project.members">Учасники проєкту</span>
-        </a>
-      }
-    </div>
-    <div class="shell-user">
-      <span class="shell-icon-button shell-icon-button--static" aria-hidden="true">
-        <span class="material-symbols-outlined">person</span>
-      </span>
-      <span class="shell-user__email" data-testid="current-user">{{ u.email }}</span>
-      <button type="button" class="shell-icon-button" data-testid="logout" title="Вийти" i18n-title="@@app.logout.title" (click)="logout()">
-        <span class="material-symbols-outlined" aria-hidden="true">logout</span>
-        <span class="sr-only" i18n="@@app.logout">Вийти</span>
-      </button>
-    </div>
+          <option value="" i18n="@@app.project.all" [selected]="projects.current() === null">Усі проєкти</option>
+          <option [value]="sharedSpace" i18n="@@app.project.shared" [selected]="projects.current() === sharedSpace">Спільний простір</option>
+          @for (p of projects.projects(); track p.id) {
+            <option [value]="p.id" [selected]="projects.current() === p.id">{{ p.name }}</option>
+          }
+        </select>
+        @if (projects.currentProject(); as current) {
+          <a
+            class="shell-icon-button"
+            data-testid="project-members"
+            title="Учасники проєкту"
+            i18n-title="@@app.project.members"
+            [routerLink]="['/projects', current.id]"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">group</span>
+            <span class="sr-only" i18n="@@app.project.members">Учасники проєкту</span>
+          </a>
+        }
+      </div>
+      <div class="shell-user">
+        <span class="shell-icon-button shell-icon-button--static" aria-hidden="true">
+          <span class="material-symbols-outlined">person</span>
+        </span>
+        <span class="shell-user__email" data-testid="current-user">{{ u.email }}</span>
+        <button type="button" class="shell-icon-button" data-testid="logout" title="Вийти" i18n-title="@@app.logout.title" (click)="logout()">
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          <span class="sr-only" i18n="@@app.logout">Вийти</span>
+        </button>
+      </div>
+    }
+  </mat-toolbar>
+  @if (user()) {
+    <nav class="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+      <a class="shell-nav__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+        <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+        <span i18n="@@nav.overview">Огляд</span>
+      </a>
+      <a class="shell-nav__link" routerLink="/workflows" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">account_tree</span>
+        <span i18n="@@nav.workflows">Сценарії</span>
+      </a>
+      <a class="shell-nav__link" routerLink="/executions" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">history</span>
+        <span i18n="@@nav.executions">Виконання</span>
+      </a>
+      <a class="shell-nav__link" routerLink="/tables" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">table</span>
+        <span i18n="@@nav.tables">Таблиці</span>
+      </a>
+      <a class="shell-nav__link" routerLink="/connectors" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">hub</span>
+        <span i18n="@@nav.connectors">Конектори</span>
+      </a>
+      <a class="shell-nav__link" routerLink="/credentials" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">key</span>
+        <span i18n="@@nav.credentials">Облікові дані</span>
+      </a>
+      <a class="shell-nav__link" routerLink="/settings" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+        <span i18n="@@nav.settings">Налаштування</span>
+      </a>
+    </nav>
   }
-</mat-toolbar>
-@if (user()) {
-  <nav class="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
-    <a class="shell-nav__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
-      <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
-      <span i18n="@@nav.overview">Огляд</span>
-    </a>
-    <a class="shell-nav__link" routerLink="/workflows" routerLinkActive="active">
-      <span class="material-symbols-outlined" aria-hidden="true">account_tree</span>
-      <span i18n="@@nav.workflows">Сценарії</span>
-    </a>
-    <a class="shell-nav__link" routerLink="/executions" routerLinkActive="active">
-      <span class="material-symbols-outlined" aria-hidden="true">history</span>
-      <span i18n="@@nav.executions">Виконання</span>
-    </a>
-    <a class="shell-nav__link" routerLink="/tables" routerLinkActive="active">
-      <span class="material-symbols-outlined" aria-hidden="true">table</span>
-      <span i18n="@@nav.tables">Таблиці</span>
-    </a>
-    <a class="shell-nav__link" routerLink="/connectors" routerLinkActive="active">
-      <span class="material-symbols-outlined" aria-hidden="true">hub</span>
-      <span i18n="@@nav.connectors">Конектори</span>
-    </a>
-    <a class="shell-nav__link" routerLink="/credentials" routerLinkActive="active">
-      <span class="material-symbols-outlined" aria-hidden="true">key</span>
-      <span i18n="@@nav.credentials">Облікові дані</span>
-    </a>
-    <a class="shell-nav__link" routerLink="/settings" routerLinkActive="active">
-      <span class="material-symbols-outlined" aria-hidden="true">settings</span>
-      <span i18n="@@nav.settings">Налаштування</span>
-    </a>
-  </nav>
 }
 <main>
   <router-outlet />

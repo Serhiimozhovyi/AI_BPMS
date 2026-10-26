@@ -3,8 +3,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { App } from './app';
-import { routes } from './app.routes';
+import { App, isBareUrl } from './app';
+import { formMatcher, routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
 import { AuthService, UserInfo } from './auth/auth.service';
 import { ProjectContextService } from './projects/project-context.service';
@@ -21,6 +21,23 @@ function configure(user: UserInfo | null = admin) {
 }
 
 describe('App', () => {
+  it('публічна форма /form/… — без шапки й меню і без входу (F6-03)', async () => {
+    expect(isBareUrl('/form/hr/leave?token=1')).toBe(true);
+    expect(isBareUrl('/workflows')).toBe(false);
+    expect(formMatcher([{ path: 'form' }, { path: 'hr' }, { path: 'leave' }] as never, null as never, null as never)?.consumed.length).toBe(3);
+    expect(formMatcher([{ path: 'form' }] as never, null as never, null as never)).toBeNull();
+
+    configure(null);
+    const fixture = TestBed.createComponent(App);
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/form/hr/leave');
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/forms/hr/leave');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/form/hr/leave');
+    expect((fixture.nativeElement as HTMLElement).querySelector('mat-toolbar')).toBeNull();
+  });
+
   it('створюється', () => {
     configure();
     const fixture = TestBed.createComponent(App);
@@ -64,9 +81,11 @@ describe('App', () => {
 });
 
 describe('routes', () => {
-  it('/login без guard\'а, сторінки з architecture.md §7 — під guard\'ом', () => {
-    expect(routes[0].path).toBe('login');
+  it('/login і публічна форма без guard\'а, сторінки з architecture.md §7 — під guard\'ом', () => {
+    expect(routes[0].matcher).toBe(formMatcher);
     expect(routes[0].canActivateChild).toBeUndefined();
+    expect(routes[1].path).toBe('login');
+    expect(routes[1].canActivateChild).toBeUndefined();
     const app = routes.find((r) => r.children)!;
     expect(app.canActivateChild).toHaveLength(1);
     expect(app.children!.filter((r) => r.loadComponent).map((r) => r.path)).toEqual([

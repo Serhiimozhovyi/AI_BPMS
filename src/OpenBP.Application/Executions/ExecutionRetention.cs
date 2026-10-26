@@ -158,15 +158,22 @@ public sealed class ExecutionRetentionService(OpenBpDbContext db, ExecutionReten
     /// <summary>
     /// Відповіді webhook-ів (F6-05): <c>webhook_responses</c> потрібні, лише поки Api чекає на запит (≤ 300 с), тож
     /// видаляються ті, що старші за <see cref="WebhookResponseKeep"/>; ключі дедуплікації <c>webhook_dedupe</c> — після
-    /// <c>expires_at</c>. Не залежить від <see cref="ExecutionRetentionOptions.Days"/>. Повертає кількість видалених.
+    /// <c>expires_at</c>; файли форм (F6-03) без виконання — старші за <see cref="UnattachedFileKeep"/> (Api впав між
+    /// збереженням файлу і запуском). Файли з виконанням видаляються разом із ним (cascade). Не залежить від
+    /// <see cref="ExecutionRetentionOptions.Days"/>. Повертає кількість видалених.
     /// </summary>
     public async Task<int> PurgeWebhooksAsync(CancellationToken ct)
     {
         var now = time.GetUtcNow();
         var responsesCutoff = now - WebhookResponseKeep;
+        var filesCutoff = now - UnattachedFileKeep;
         var deleted = await db.WebhookResponses.Where(r => r.CreatedAt < responsesCutoff).ExecuteDeleteAsync(ct);
+        deleted += await db.BinaryFiles.Where(f => f.ExecutionId == null && f.CreatedAt < filesCutoff).ExecuteDeleteAsync(ct);
         return deleted + await db.WebhookDedupe.Where(d => d.ExpiresAt < now).ExecuteDeleteAsync(ct);
     }
+
+    /// <summary>Скільки зберігати файл форми, не прив'язаний до виконання.</summary>
+    public static readonly TimeSpan UnattachedFileKeep = TimeSpan.FromDays(1);
 
     /// <summary>Скільки зберігати відповідь webhook-у після запису.</summary>
     public static readonly TimeSpan WebhookResponseKeep = TimeSpan.FromHours(1);

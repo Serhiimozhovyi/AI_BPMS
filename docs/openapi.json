@@ -17,7 +17,7 @@
           "Webhook"
         ],
         "summary": "Розбудити виконання, що чекає у вузлі core.wait (режим webhook)",
-        "description": "`token` — з `$execution.resumeUrl` сценарію, одноразовий. Тіло (JSON, форма або текст) стає виходом вузла очікування. 404 — невідомий токен; 409 — токен уже використано (`RESUME_TOKEN_USED`), виконання не чекає (`EXECUTION_NOT_WAITING`) або чекає інший вузол (`NODE_NOT_WAITING`).",
+        "description": "`token` — з `$execution.resumeUrl` сценарію, одноразовий. Тіло (JSON, форма або текст) стає виходом вузла очікування. 404 — невідомий токен (або токен форми: її надсилають зі сторінки `/form/resume/{token}`); 409 — токен уже використано (`RESUME_TOKEN_USED`), виконання не чекає (`EXECUTION_NOT_WAITING`) або чекає інший вузол (`NODE_NOT_WAITING`).",
         "parameters": [
           {
             "name": "token",
@@ -5227,6 +5227,102 @@
           }
         ]
       }
+    },
+    "/api/v1/forms/{path}": {
+      "get": {
+        "tags": [
+          "Форми"
+        ],
+        "summary": "Опис форми для сторінки /form/{path}",
+        "description": "`path` — шлях вузла core.formTrigger або `resume/{token}` кроку core.wait у режимі form. 404 — форми немає (шлях невідомий чи сценарій неактивний); 401 `FORM_LOGIN_REQUIRED` з `loginUrl` — форма для користувачів OpenBP, увійдіть; 401 `UNAUTHENTICATED` — потрібен правильний токен посилання (`?token=` або заголовок `X-Form-Token`); 409 — форму очікування вже надіслано або вона неактуальна.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDefinition"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Форми"
+        ],
+        "summary": "Надіслати форму",
+        "description": "Тіло — JSON `{ \"fields\": { … } }` або `multipart/form-data`: частина `fields` з JSON полів і файли за назвою поля (`format: binary` у схемі). Поля перевіряються за схемою форми: 400 `FORM_INVALID` з `errors[]` `{ field, message }`. Тригер ставить виконання в чергу з item `{ fields, submittedAt, submittedBy? }` (файли — у `binary`), крок очікування продовжує виконання з тими самими даними. 413 `FORM_TOO_LARGE` — тіло більше за OPENBP_FORM_MAX_BODY_MB.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormSubmitted"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -7213,6 +7309,62 @@
           }
         }
       },
+      "FormDefinition": {
+        "required": [
+          "kind",
+          "title",
+          "description",
+          "schema",
+          "submitLabel"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "schema": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "submitLabel": {
+            "type": "string"
+          }
+        }
+      },
+      "FormSubmitted": {
+        "required": [
+          "executionId",
+          "message",
+          "redirectUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "redirectUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ImportMapping": {
         "type": "object",
         "properties": {
@@ -9176,6 +9328,10 @@
     {
       "name": "Webhook",
       "description": "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."
+    },
+    {
+      "name": "Форми",
+      "description": "Публічні форми для сторінки `/form/{path}`: тригер core.formTrigger і крок core.wait (режим form, `resume/{token}`). Доступ задає вузол: none, login або token."
     },
     {
       "name": "Помічник",

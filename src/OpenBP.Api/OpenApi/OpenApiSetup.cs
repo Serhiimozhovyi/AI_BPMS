@@ -70,6 +70,9 @@ public static class OpenApiSetup
         /// <summary>Webhook-и.</summary>
         public const string Webhooks = "Webhook";
 
+        /// <summary>Публічні форми (F6-03).</summary>
+        public const string Forms = "Форми";
+
         /// <summary>Помічник у редакторі.</summary>
         public const string Assistant = "Помічник";
 
@@ -92,6 +95,7 @@ public static class OpenApiSetup
         (Tags.Notifications, "Канали сповіщень адміністратору (email, Telegram, webhook) про помилки виконань, вимкнені сценарії, недоступні конектори, воркери й бекапи. Лише admin."),
         (Tags.Overview, "Підсумки виконань за 24 год / 7 / 30 днів і поточний стан черги."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
+        (Tags.Forms, "Публічні форми для сторінки `/form/{path}`: тригер core.formTrigger і крок core.wait (режим form, `resume/{token}`). Доступ задає вузол: none, login або token."),
         (Tags.Assistant, "ШІ-помічник у редакторі: налаштування моделі (admin) і розмова над сценарієм (SSE). Модель не бачить значень credentials."),
         (Tags.Evaluations, "Набори кейсів «вхід → очікуване» для вузлів ai.llm/ai.agent, прогін на поточній версії й історія результатів за версіями. Читає viewer, змінює й запускає editor."),
     ];
