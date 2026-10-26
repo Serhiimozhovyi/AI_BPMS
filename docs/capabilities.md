@@ -36,7 +36,7 @@
 | Вебхук як тригер | `core.webhook` з секретом у заголовку | є | `examples/telegram-1c.json`; `tests/OpenBP.Nodes.Core.Tests/WebhookNodeTests.cs` |
 | Опитування (polling) конектора за розкладом | `mcp.poll` (F1-09, F2-12) | є | `examples/kit-approval-business.json`; `tests/OpenBP.Mcp.Tests/McpPollNodeTests.cs`, `tests/OpenBP.Worker.Tests/PollJobTests.cs` |
 | Дедуплікація при polling (запам'ятати вже оброблені записи) | немає власного курсора чи дедуплікації для `mcp.poll` | немає (задачі в беклозі немає, потрібне рішення власника) | — |
-| Push від конекторів (події без опитування) | тригери подій (F6-13) | немає (F6-13) | — |
+| Push від конекторів (події без опитування) | `mcp.subscribe` (F6-13): підписка на ресурс подій конектора, воркер тримає її в оренді | частково (прототип: вузол, воркер, FakeServer; палітра, реальні конектори — F6-20…F6-23) | `tests/OpenBP.Worker.Tests/SubscriptionTests.cs`, `tests/OpenBP.Mcp.Tests/McpSubscribeNodeTests.cs` |
 | Кореляція подій з виконанням | ключ кореляції (F5-04) | частково (приклад у `examples/` відсутній) | `tests/OpenBP.Api.Tests/CorrelationKeyTests.cs` |
 
 ## 4. Обробка даних

@@ -871,43 +871,43 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("project_members", (string)null);
                 });
 
-            modelBuilder.Entity("OpenBP.Data.ResumeTokenEntity", b =>
+            modelBuilder.Entity("OpenBP.Data.SubscriptionEntity", b =>
                 {
-                    b.Property<string>("Token")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("token");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("ExecutionId")
+                    b.Property<Guid>("WorkflowId")
                         .HasColumnType("uuid")
-                        .HasColumnName("execution_id");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("kind");
+                        .HasColumnName("workflow_id");
 
                     b.Property<string>("NodeId")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("text")
                         .HasColumnName("node_id");
 
-                    b.Property<DateTimeOffset?>("UsedAt")
+                    b.Property<DateTimeOffset?>("LeasedUntil")
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("used_at");
+                        .HasColumnName("leased_until");
 
-                    b.HasKey("Token");
+                    b.Property<string>("ResourceUri")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("resource_uri");
 
-                    b.HasIndex("ExecutionId", "NodeId")
-                        .IsUnique();
+                    b.Property<string>("ServerId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("server_id");
 
-                    b.ToTable("resume_tokens", (string)null);
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("WorkerId")
+                        .HasColumnType("text")
+                        .HasColumnName("worker_id");
+
+                    b.HasKey("WorkflowId", "NodeId");
+
+                    b.HasIndex("LeasedUntil");
+
+                    b.ToTable("subscriptions", (string)null);
                 });
 
             modelBuilder.Entity("OpenBP.Data.UserEntity", b =>
@@ -1301,11 +1301,11 @@ namespace OpenBP.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("OpenBP.Data.ResumeTokenEntity", b =>
+            modelBuilder.Entity("OpenBP.Data.SubscriptionEntity", b =>
                 {
-                    b.HasOne("OpenBP.Data.ExecutionEntity", null)
+                    b.HasOne("OpenBP.Data.WorkflowEntity", null)
                         .WithMany()
-                        .HasForeignKey("ExecutionId")
+                        .HasForeignKey("WorkflowId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

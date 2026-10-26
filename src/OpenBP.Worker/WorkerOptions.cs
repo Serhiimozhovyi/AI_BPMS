@@ -36,6 +36,18 @@ public sealed class WorkerOptions
     /// </summary>
     public string? PublicUrl { get; set; }
 
+    /// <summary>
+    /// Як часто <see cref="SubscriptionService"/> звіряє підписки <c>mcp.subscribe</c> з активними сценаріями, продовжує
+    /// свої оренди і намагається взяти вільні (F6-13).
+    /// </summary>
+    public TimeSpan SubscriptionScanInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Строк оренди підписки: воркер, що не продовжив оренду (упав, завис), втрачає її, і підписку бере інший воркер.
+    /// Має бути більшим за <see cref="SubscriptionScanInterval"/>.
+    /// </summary>
+    public TimeSpan SubscriptionLease { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>Перевіряє узгодженість налаштувань.</summary>
     /// <exception cref="ArgumentException">Значення поза допустимими межами.</exception>
     public void Validate()
@@ -45,6 +57,8 @@ public sealed class WorkerOptions
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(HeartbeatInterval, TimeSpan.Zero, nameof(HeartbeatInterval));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PollInterval, TimeSpan.Zero, nameof(PollInterval));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(HealthMaxPollAge, PollInterval, nameof(HealthMaxPollAge));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(SubscriptionScanInterval, TimeSpan.Zero, nameof(SubscriptionScanInterval));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(SubscriptionLease, SubscriptionScanInterval, nameof(SubscriptionLease));
     }
 }
 

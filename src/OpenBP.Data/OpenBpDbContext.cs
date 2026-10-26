@@ -33,6 +33,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
     public DbSet<NotificationSendEntity> NotificationSends => Set<NotificationSendEntity>();
     public DbSet<WorkerHeartbeatEntity> WorkerHeartbeats => Set<WorkerHeartbeatEntity>();
+    public DbSet<SubscriptionEntity> Subscriptions => Set<SubscriptionEntity>();
     public DbSet<BackupRunEntity> BackupRuns => Set<BackupRunEntity>();
     public DbSet<ExecutionStatEntity> ExecutionStats => Set<ExecutionStatEntity>();
 
@@ -180,6 +181,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("worker_heartbeats");
             e.HasKey(x => x.WorkerId);
+        });
+        b.Entity<SubscriptionEntity>(e =>
+        {
+            e.ToTable("subscriptions");
+            e.HasKey(x => new { x.WorkflowId, x.NodeId });
+            e.HasOne<WorkflowEntity>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.LeasedUntil);
         });
         b.Entity<BackupRunEntity>(e =>
         {

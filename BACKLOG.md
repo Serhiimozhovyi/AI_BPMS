@@ -905,7 +905,7 @@
 - DoD: тести проти фейкового HTTP моделі й FakeServer: агент викликає два tools і повертає відповідь за `outputSchema`; `maxIterations` → помилка з трасуванням; пам'ять зберігається між виконаннями за ключем; ключі API і credentials конекторів не потрапляють у підкроки; UI деталей кроку показує підкроки; `docs/connectors.md` §4, `describe_nodes` оновлено.
 
 ### F6-13 · Тригери подій: push від конекторів
-- model: `fable` · status: `ready` · depends: F1-08, F2-12
+- model: `fable` · status: `done` · depends: F1-08, F2-12
 - Що: рішення для Connector Kit і воркера, як конектор віддає події без polling: (а) `resources/subscribe` + `notifications/resources/updated` MCP; (б) «тригер-tool» — довгий `tools/call`, що стрімить події через `notifications/progress`/логування; (в) конектор сам викликає `POST /webhook/...` OpenBP (найпростіше, уже працює). Вибрати, описати у `docs/connectors.md` §7, зафіксувати вузол `mcp.subscribe { serverId, resourceUri | toolName, keyField }` і як воркер тримає підписки для активних сценаріїв (власник підписки, переподключення, дедуплікація за `keyField`, що буде при падінні воркера). Окремо (можна раніше, `sonnet`): **пресети тригерів** у палітрі — «Новий лист» (msgraph), «Нове повідомлення Telegram», «Новий документ 1С» — це `mcp.poll` з наперед заповненими `toolName`/`itemsPath`/`keyField`/`cron`, описані в маніфесті конектора.
 - DoD: ADR або розділ `connectors.md` погоджено власником; прототип підписки проти FakeServer (подія → виконання ≤ 1 с; падіння воркера → підписку підхоплює інший); задачі реалізації додано в беклог.
 
@@ -938,6 +938,26 @@
 - model: `sonnet` · status: `done` · depends: F3-53
 - Що: вузол `core.decisionTable { inputs: [{ name, expression }], outputs: [{ name }], rules: [{ when: [умова на вхід | "-"], then: [значення виходу] }], hitPolicy: first | all | collect }`: умови — ті самі оператори, що у `core.if` (конструктор F3-53), значення виходів — вирази; `first` → один item з виходами, `all`/`collect` → усі збіги; жодного збігу → вихід `noMatch`. Панель вузла — таблична правка (рядки = правила, колонки = входи/виходи) на основі formly-типів F3-53.
 - DoD: тести вузла: `first`, `all`, `collect`, `noMatch`, умова `-` (будь-яке), помилка виразу → помилка вузла з номером правила; Vitest табличного редактора; `describe_nodes` і `docs/workflow-format.md` (приклад) оновлено.
+
+### F6-20 · Підписки: реєстрація з Api при активації, панель вузла `mcp.subscribe`, «Огляд»
+- model: `sonnet` · status: `ready` · depends: F6-13
+- Що: `IWorkflowService` при активації/публікації/деактивації пише й видаляє рядки `subscriptions` (як `webhooks`) в тій самій транзакції; воркер лишає лише оренди й закриття зайвих рядків (звірку з `workflows.active` прибрати або лишити як страхівку раз на хвилину — зафіксувати в `architecture.md` §10.4). У редакторі вузол `mcp.subscribe` у палітрі («Подія конектора», група тригерів), панель вузла: конектор, ресурс (список `resources/list` з кешем, як tools), `keyField`, `itemsPath`, необов'язковий tool для читання, `correlationKey`; `MCP_TOOL_TYPES`/`canvas-model`/бізнес-вигляд знають новий тип (доріжка конектора). Сторінка «Огляд» (F6-07): блок «Підписки» — сценарій/вузол, конектор, ресурс, воркер-власник, строк оренди, стан (відкрита / повтор через N с).
+- DoD: інтеграційні тести Api: активація створює рядок, деактивація видаляє, збереження активного сценарію зі зміненим ресурсом оновлює; Vitest панелі й палітри; `describe_nodes` і `docs/connectors.md` §9.4 оновлено.
+
+### F6-21 · Пресети тригерів у маніфесті конектора й палітрі
+- model: `sonnet` · status: `ready` · depends: F6-16, F6-20
+- Що: `connector.json.triggers[]` за схемою `docs/connectors.md` §9.2 (`{ id, title, description?, node: { type: mcp.subscribe | mcp.poll, parameters без serverId } }`); `GET /api/v1/connectors/catalog` і `GET /connectors/{id}` віддають пресети; у палітрі для кожного встановленого конектора з пресетами — картки «Новий лист» (msgraph: `mcp.poll` на `list_messages`, `keyField = id`), «Нове повідомлення Telegram» (`mcp.poll` на `get_updates`, `keyField = update_id`; після F6-22 — `mcp.subscribe`), «Новий документ 1С» (`mcp.poll` на `list_<set>` з фільтром за датою зміни, `keyField` — ключ); вставка пресету підставляє `serverId` і параметри; `connectors/*/connector.json` заповнено.
+- DoD: тести каталогу (валідація пресету за схемою, невалідний → помилка завантаження з назвою конектора); Vitest палітри; приклад у `docs/guide/authors.md`.
+
+### F6-22 · Події в конекторах: Telegram, kit-crm, msgraph і заготовка в Connector Kit
+- model: `opus` · status: `ready` · depends: F6-13
+- Що: за контрактом `docs/connectors.md` §9.2: у шаблоні Connector Kit — `EventResource` (буфер подій на N записів, `resources/list`/`read`/`subscribe`/`unsubscribe`, розсилка `resources/updated`, `HttpServerSessionMode.StatefulForInitializeClients` для `--http`) з тестом «підписка → подія → сповіщення; `resources/read` віддає буфер»; `connectors/telegram` — ресурс `telegram://updates` (внутрішній long-polling `getUpdates` лише поки є підписники; з `set_webhook` ресурс недоступний — `isError` з поясненням); `connectors/kit-crm` — `kit://changes/{entity}` поверх `changes_since` з внутрішнім опитуванням раз на N с (налаштування `Connector:Events:IntervalSec`); `connectors/msgraph` — `msgraph://mail/{mailbox}/inbox` через Graph change notifications (webhook на адресу конектора) або внутрішнє опитування `list_messages`, якщо публічної адреси немає. Пресети `triggers[]` у маніфестах перевести на `mcp.subscribe`.
+- DoD: контрактні тести кожного конектора проти моків (FakeServer-стиль); e2e: `examples/telegram-1c.json` з `mcp.subscribe` замість `core.webhook` проходить у CLI-тесті з Telegram-моком; `docs/connectors.md` §9.2 — таблиця ресурсів подій по конекторах.
+
+### F6-23 · Підписки через `subscriptions/listen` (SEP-2575)
+- model: `opus` · status: `ready` · depends: F6-13, M-01
+- Що: після оновлення `ModelContextProtocol` до версії з клієнтським API `subscriptions/listen { resourceSubscriptions }` воркер відкриває сесію підписки на поточному протоколі (`2026-07-28`+) і падає на `resources/subscribe` з `McpSubscriptions.ProtocolVersion` лише для старих серверів (за `NegotiatedProtocolVersion`); FakeServer і шаблон Connector Kit підтримують обидва шляхи (`SubscriptionsListenHandler` з доставкою `resources/updated` у потік запиту), stateless HTTP тоді теж працює.
+- DoD: тести реєстру й воркера на обох протоколах; `docs/connectors.md` §9.2 п. 3 оновлено; `architecture.md` §10.4.
 
 ## Фаза 7 — Етапи й правила
 

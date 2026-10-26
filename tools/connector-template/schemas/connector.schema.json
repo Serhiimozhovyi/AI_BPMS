@@ -48,12 +48,31 @@
       }
     },
     "triggers": {
-      "description": "Пресети тригерів конектора (заповнює F6-13); поки порожній масив.",
+      "description": "Пресети тригерів конектора для палітри (docs/connectors.md §9.2): готовий вузол mcp.subscribe або mcp.poll без serverId.",
       "type": "array",
-      "items": { "type": "object" }
+      "items": { "$ref": "#/$defs/trigger" }
     }
   },
   "$defs": {
+    "trigger": {
+      "type": "object",
+      "required": ["id", "title", "node"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "node": {
+          "type": "object",
+          "required": ["type", "parameters"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "type": "string", "enum": ["mcp.subscribe", "mcp.poll"] },
+            "parameters": { "type": "object", "description": "Параметри вузла без serverId (підставляє палітра)." }
+          }
+        }
+      }
+    },
     "key": {
       "type": "object",
       "required": ["name"],

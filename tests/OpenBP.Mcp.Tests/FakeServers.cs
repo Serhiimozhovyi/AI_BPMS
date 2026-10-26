@@ -42,6 +42,9 @@ internal sealed class HttpFakeServer(WebApplication app, McpServerConfig config)
 {
     public McpServerConfig Config { get; } = config;
 
+    /// <summary>Застосунок сервера (сервіси, напр. <see cref="FakeEvents"/>).</summary>
+    public WebApplication App => app;
+
     public async Task StopAsync() => await app.StopAsync();
 
     public async ValueTask DisposeAsync()

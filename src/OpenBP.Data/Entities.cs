@@ -168,6 +168,24 @@ public sealed class WorkerHeartbeatEntity
     public DateTimeOffset SeenAt { get; set; }
 }
 
+/// <summary>
+/// Підписка push-тригера <c>mcp.subscribe</c> (F6-13, docs/connectors.md §9): один рядок на вузол активного сценарію;
+/// воркер-власник орендує її (<see cref="WorkerId"/>, <see cref="LeasedUntil"/>) і тримає сесію з конектором.
+/// Протухла оренда — підписку підхоплює інший воркер.
+/// </summary>
+public sealed class SubscriptionEntity
+{
+    public Guid WorkflowId { get; set; }
+    public string NodeId { get; set; } = "";
+    /// <summary><c>mcp_servers.id</c> конектора (текстом, як у <c>parameters.serverId</c>).</summary>
+    public string ServerId { get; set; } = "";
+    public string ResourceUri { get; set; } = "";
+    /// <summary>Воркер, що тримає підписку; <c>null</c> — вільна.</summary>
+    public string? WorkerId { get; set; }
+    public DateTimeOffset? LeasedUntil { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>Результат запуску бекапу (F6-07): рядок додає скрипт сервісу backup через <c>psql</c>.</summary>
 public sealed class BackupRunEntity
 {
