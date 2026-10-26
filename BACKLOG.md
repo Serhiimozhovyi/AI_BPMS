@@ -797,7 +797,7 @@
 Чого бракує в Кіті (поза цим беклогом, лише за рішенням власника): воронка в `CrmSaleStages` (порядок, імовірність, виграно/програно, історія стадій), сутність дзвінків/активностей і телефонія, події назовні (Кіт їх не шле — OpenBP опитує), сервісний користувач у `Users` з роллю `CRM_user` для запису через OData.
 
 ### F5-01 · БП продажів на CRM Кіта: проєкт
-- model: `fable` · status: `ready` · depends: —
+- model: `fable` · status: `done` · depends: —
 - Що: документ `docs/kit-sales.md`: межі (OpenBP окремо, Кіт лише через OData, без змін у його коді); довге очікування — стан `waiting` виконання, `resume_at`, звільнення воркера, відновлення після рестарту, скасування; очікування дії людини (задача в Кіті закрита / умова виконана) поверх довгого очікування; ключ кореляції виконання з угодою чи контрагентом і правило «не дублювати активне»; конектор `kit-crm`: сутності й tools, автентифікація сервісним користувачем Keycloak (`client_credentials` або пароль сервісного користувача з env), заголовок `FrontPagePath` (без нього POST/PATCH дають 403), м'яке видалення `IsDelete`, відповідальні — `CrmPerson`, а не `Users`; опитування змін (`Updated gt …` для `mcp.poll`); два пілотні сценарії F5-06, F5-07.
 - DoD: `docs/kit-sales.md` погоджено власником; F5-02…F5-07 уточнено за ним.
 
@@ -953,7 +953,7 @@
 Порядок: F7-06, F7-07, F7-09 паралельно з F5-05; F7-01 (вдень з власником) → F7-02 → F7-03 → F7-04 → F7-05 → F7-08.
 
 ### F7-01 · ADR-004 і формат етапів: `stages[]`, валідатор, схема, `/mcp`
-- model: `fable` · status: `ready` · depends: —
+- model: `fable` · status: `done` · depends: —
 - Що: прийняти ADR-004 (статус «прийнято»); у `docs/workflow-format.md` розділ «Етапи» з таблицею полів `stages[] { id, name, nodes[], owner?, due?, transitions[] { to?, rules[] { id, condition, mode: block|warn, message } } }`; JSON Schema в `OpenBP.Shared`; `WorkflowValidator`: `STAGE_ID_DUPLICATE`, `STAGE_NODE_UNKNOWN`, `STAGE_NODE_IN_TWO_STAGES`, `STAGE_NOT_CONNECTED` (зв'язність після згортання технічних вузлів, як у бізнес-вигляді), `STAGE_TRANSITION_UNKNOWN`, `STAGE_RULE_ID_DUPLICATE`; `formatVersion` лишається 1 (поля необов'язкові); TS-типи в `apps/web`; `/mcp` і `openbp://schema/workflow-format` віддають поля без втрат; приклад `examples/kit-approval-stages.json` (на основі `kit-approval-business.json`).
 - DoD: тести валідатора на кожен код і на сценарій без `stages`; старі приклади валідні; `describe_nodes`/схема у MCP містять `stages`; `docs/workflow-format.md`, `architecture.md` §2 оновлено; рев'ю власником.
 
