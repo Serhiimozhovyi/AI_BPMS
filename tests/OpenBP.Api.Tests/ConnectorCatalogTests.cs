@@ -133,6 +133,48 @@ public class ConnectorCatalogTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Builtin_connectors_ship_trigger_presets_without_server_id()
+    {
+        var entries = await ListAsync(await LoginAsync(UserRole.Viewer));
+
+        JsonElement Triggers(string id) => entries.Single(e => IdOf(e) == id).GetProperty("manifest").GetProperty("triggers");
+        var telegram = Assert.Single(Triggers("telegram").EnumerateArray());
+        Assert.Equal("new_update", telegram.GetProperty("id").GetString());
+        Assert.Equal("mcp.poll", telegram.GetProperty("node").GetProperty("type").GetString());
+        Assert.Equal("update_id", telegram.GetProperty("node").GetProperty("parameters").GetProperty("keyField").GetString());
+        Assert.Equal("list_messages", Assert.Single(Triggers("msgraph").EnumerateArray()).GetProperty("node").GetProperty("parameters").GetProperty("toolName").GetString());
+        Assert.Single(Triggers("onec").EnumerateArray());
+        Assert.Equal(2, Triggers("kit-crm").GetArrayLength());
+        Assert.All(entries.SelectMany(e => e.GetProperty("manifest").GetProperty("triggers").EnumerateArray()),
+            t => Assert.False(t.GetProperty("node").GetProperty("parameters").TryGetProperty("serverId", out _)));
+    }
+
+    [Theory]
+    [InlineData("""{ "id": "t", "title": "T", "node": { "type": "core.set", "parameters": {} } }""", "mcp.subscribe або mcp.poll")]
+    [InlineData("""{ "id": "t", "title": "T", "node": { "type": "mcp.poll", "parameters": { "serverId": "x", "toolName": "a", "keyField": "id", "cron": "* * * * *" } } }""", "serverId")]
+    [InlineData("""{ "id": "t", "title": "T", "node": { "type": "mcp.poll", "parameters": { "toolName": "a", "keyField": "id" } } }""", "«cron»")]
+    [InlineData("""{ "id": "t", "title": "T", "node": { "type": "mcp.subscribe", "parameters": { "keyField": "id" } } }""", "«resourceUri»")]
+    [InlineData("""{ "title": "T", "node": { "type": "mcp.subscribe", "parameters": {} } }""", "потрібен id")]
+    public void Invalid_trigger_preset_fails_manifest_load_naming_the_connector(string trigger, string expected)
+    {
+        var json = $$"""{ "id": "demo", "name": "Demo", "transport": "http", "http": { "url": "http://demo/mcp" }, "triggers": [ {{trigger}} ] }""";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConnectorCatalog.Parse(json, "demo"));
+
+        Assert.Contains("«demo»", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(expected, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Duplicate_trigger_ids_fail_manifest_load()
+    {
+        const string one = """{ "id": "t", "title": "T", "node": { "type": "mcp.subscribe", "parameters": { "resourceUri": "a://b", "keyField": "id" } } }""";
+        var json = $$"""{ "id": "demo", "name": "Demo", "transport": "http", "http": { "url": "http://demo/mcp" }, "triggers": [ {{one}}, {{one}} ] }""";
+
+        Assert.Contains("повторюється", Assert.Throws<InvalidOperationException>(() => ConnectorCatalog.Parse(json, "demo")).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Templates_declare_connectors_that_exist_in_the_catalog()
     {
         var client = await LoginAsync(UserRole.Viewer);

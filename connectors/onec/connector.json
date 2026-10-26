@@ -37,5 +37,21 @@
     ],
     "headers": []
   },
-  "triggers": []
+  "triggers": [
+    {
+      "id": "new_document",
+      "title": "Новий документ 1С",
+      "description": "Нові документи «Замовлення покупця»; назву tool'а (list_<набір>) звірте зі своїм Connector:Source.",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "list_document_orders",
+          "arguments": {},
+          "itemsPath": "value",
+          "keyField": "Ref_Key",
+          "cron": "*/5 * * * *"
+        }
+      }
+    }
+  ]
 }

@@ -55,5 +55,43 @@
     ],
     "headers": []
   },
-  "triggers": []
+  "triggers": [
+    {
+      "id": "new_sale",
+      "title": "Нова угода в Кіті",
+      "description": "Нові угоди CRM; перевірка раз на 5 хвилин.",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "changes_since",
+          "arguments": {
+            "entity": "sales",
+            "withinMinutes": 10,
+            "createdOnly": true
+          },
+          "itemsPath": "result",
+          "keyField": "id",
+          "cron": "*/5 * * * *"
+        }
+      }
+    },
+    {
+      "id": "changed_task",
+      "title": "Нова чи змінена задача в Кіті",
+      "description": "Задачі Кіта, створені або змінені за останні хвилини.",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "changes_since",
+          "arguments": {
+            "entity": "tasks",
+            "withinMinutes": 10
+          },
+          "itemsPath": "result",
+          "keyField": "id",
+          "cron": "*/5 * * * *"
+        }
+      }
+    }
+  ]
 }

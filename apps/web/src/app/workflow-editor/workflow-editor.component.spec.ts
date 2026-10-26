@@ -96,6 +96,29 @@ describe('WorkflowEditorComponent', () => {
     await vi.waitFor(() => expect(document.activeElement?.closest('[data-field="customer"]')).not.toBeNull());
   });
 
+  it('палітра отримує пресети тригерів із каталогу для конекторів, встановлених з нього (F6-21)', async () => {
+    const { fixture, http } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    const installed = { ...withTools, name: 'Telegram', catalogId: 'telegram' };
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [installed], page: 1, pageSize: 200, total: 1 });
+    http.expectOne('/api/v1/connectors/c1').flush({ ...detail1c, summary: installed });
+    http.expectOne('/api/v1/connectors/catalog').flush([
+      {
+        manifest: {
+          id: 'telegram',
+          triggers: [{ id: 'new_update', title: 'Нове повідомлення Telegram', node: { type: 'mcp.poll', parameters: { toolName: 'get_updates', keyField: 'update_id', cron: '*/1 * * * *' } } }],
+        },
+        source: 'builtin',
+        installed: [installed],
+      },
+    ]);
+    await render(fixture);
+
+    const palette = (fixture.componentInstance as unknown as { palette(): { id: string; items: { key: string }[] }[] }).palette();
+    expect(palette.find((s) => s.id === 'trigger-presets')?.items.map((i) => i.key)).toEqual(['trigger:c1/new_update']);
+  });
+
   async function loaded() {
     const ctx = setup();
     ctx.http.expectOne('/api/v1/workflows/w1').flush(workflow);

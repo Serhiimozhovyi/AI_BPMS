@@ -1,4 +1,4 @@
-import { McpToolInfo } from '../connectors/connectors-api.service';
+import { ConnectorTriggerPreset, McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeGroup, NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowNode } from '../workflows/workflows-api.service';
 import { DescriptorIndex, parsePosition } from './canvas-model';
@@ -26,6 +26,8 @@ export interface PaletteItem {
   nodeName?: string;
   /** Конектор: його дії — не показуються, але знаходяться пошуком. */
   actions?: PaletteItem[];
+  /** Пресет тригера конектора (F6-21): параметри нового вузла без `serverId` (його підставляє `createNode`). */
+  presetParameters?: Record<string, unknown>;
 }
 
 export interface PaletteSection {
@@ -40,9 +42,14 @@ export interface PaletteServer {
   id: string;
   name: string;
   tools: McpToolInfo[];
+  /** Пресети тригерів з запису каталогу, з якого встановлено конектор (F6-21). */
+  triggers?: ConnectorTriggerPreset[];
 }
 
 export const MCP_TOOL = 'mcp.tool';
+
+/** Секція карток-пресетів тригерів встановлених конекторів (F6-21). */
+export const TRIGGER_PRESETS_SECTION = 'trigger-presets';
 
 /** Порядок і назви груп палітри. */
 export const GROUP_ORDER: readonly NodeGroup[] = ['trigger', 'logic', 'transform', 'ai', 'integration'];
@@ -142,6 +149,10 @@ export function buildPalette(descriptors: readonly NodeTypeInfo[], servers: read
       actions: serverActions,
     });
   }
+  const presets = triggerPresetItems(servers, index);
+  if (presets.length > 0) {
+    sections.push({ id: TRIGGER_PRESETS_SECTION, label: $localize`:@@canvas.palette.triggerPresets:Події конекторів`, kind: 'core', items: presets });
+  }
   if (connectors.length > 0) {
     sections.push({ id: CONNECTORS_SECTION, label: $localize`:@@canvas.palette.connectors:Конектори`, kind: 'core', items: connectors });
   }
@@ -153,6 +164,29 @@ export function buildPalette(descriptors: readonly NodeTypeInfo[], servers: read
     sections.push({ id: FREQUENT_SECTION, label: $localize`:@@canvas.palette.frequent:Часті дії`, kind: 'core', items: frequent });
   }
   return sections;
+}
+
+/** Картки «Новий лист», «Нове повідомлення Telegram» тощо: по пресету на кожен встановлений конектор. */
+function triggerPresetItems(servers: readonly PaletteServer[], index: DescriptorIndex): PaletteItem[] {
+  const items: PaletteItem[] = [];
+  for (const server of [...servers].sort((a, b) => a.name.localeCompare(b.name, 'uk'))) {
+    for (const preset of server.triggers ?? []) {
+      const descriptor = index.latest(preset.node.type);
+      if (!descriptor) continue;
+      items.push({
+        key: `trigger:${server.id}/${preset.id}`,
+        label: preset.title,
+        nodeName: preset.title,
+        description: preset.description ?? server.name,
+        type: preset.node.type,
+        typeVersion: descriptor.version,
+        group: 'trigger',
+        serverId: server.id,
+        presetParameters: preset.node.parameters,
+      });
+    }
+  }
+  return items;
 }
 
 /**
@@ -223,8 +257,11 @@ export function createNode(
   let name = label;
   for (let i = 2; names.has(name); i++) name = `${label} ${i}`;
 
-  const parameters: Record<string, unknown> =
-    item.type === MCP_TOOL ? { serverId: item.serverId, toolName: item.toolName, arguments: {} } : {};
+  const parameters: Record<string, unknown> = item.presetParameters
+    ? { serverId: item.serverId, ...structuredClone(item.presetParameters) }
+    : item.type === MCP_TOOL
+      ? { serverId: item.serverId, toolName: item.toolName, arguments: {} }
+      : {};
   return { id, name, type: item.type, typeVersion: item.typeVersion, position, parameters };
 }
 
