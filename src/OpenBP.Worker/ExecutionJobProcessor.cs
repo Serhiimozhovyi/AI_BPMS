@@ -249,7 +249,11 @@ public sealed partial class ExecutionJobProcessor
         }
 
         // Адреси пробудження (F6-01) видаються до старту графа, щоб $execution.resumeUrl був відомий ще до вузла очікування.
-        var resumeUrls = await EnsureResumeTokensAsync(executionId, workflow, stoppingToken).ConfigureAwait(false);
+        // Так само адреси задач core.approval (F6-02) — для $execution.taskUrl.
+        var wakeUrls = await EnsureResumeTokensAsync(executionId, workflow, stoppingToken).ConfigureAwait(false);
+        var approvals = workflow.Nodes.Where(n => n.Type == ResumeTokens.ApprovalNodeType).Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+        var resumeUrls = wakeUrls.Where(p => !approvals.Contains(p.Key)).ToDictionary(StringComparer.Ordinal);
+        var taskUrls = wakeUrls.Where(p => approvals.Contains(p.Key)).ToDictionary(StringComparer.Ordinal);
         // Ручний тестовий запуск з канвасу показує дані вузлів завжди; решта — за settings.saveSuccessfulData (F4-07).
         // Підсценарій (F6-04) теж зберігає дані: його вихід забирає батьківський вузол core.executeWorkflow.
         var store = new PostgresExecutionStore(_contexts, _time, scrubber)
@@ -277,6 +281,7 @@ public sealed partial class ExecutionJobProcessor
             InputOverrides = payload.InputOverrides ?? new Dictionary<string, IReadOnlyList<Item>>(),
             Signals = payload.Signals ?? new Dictionary<string, JsonNode>(),
             ResumeUrls = resumeUrls,
+            TaskUrls = taskUrls,
             Vars = vars,
             NodeStates = loadedStates,
             RuleOverrides = overrides,

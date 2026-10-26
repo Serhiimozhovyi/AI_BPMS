@@ -9,7 +9,8 @@ namespace OpenBP.Data;
 /// Інваріант ADR-004 §5 (F7-06): у завершеному виконанні немає вузлів в очікуванні. Закриває очікування, які лишились
 /// поза движком (скасування <c>waiting</c>-виконання через API, фінальний стан без результату движка): кожен вузол, чий
 /// останній крок — <c>waiting</c>, отримує крок <c>cancelled</c> з типом <see cref="WorkflowExecutor.WaitClosedType"/>,
-/// а job пробудження цього виконання (ще не взятий воркером) видаляється. Задачі <c>tasks</c> (F6-02) закриватиме тут же.
+/// а job пробудження цього виконання (ще не взятий воркером) видаляється, а відкриті задачі <c>tasks</c> (F6-02) стають
+/// <c>cancelled</c> з <c>cancelled_by_execution_id</c> цього виконання.
 /// </summary>
 public static class ExecutionWaits
 {
@@ -59,6 +60,7 @@ public static class ExecutionWaits
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await TaskSync.CancelOpenAsync(db, executionId, now, ct).ConfigureAwait(false);
         var id = executionId.ToString();
         await db.Database
             .ExecuteSqlInterpolatedAsync(

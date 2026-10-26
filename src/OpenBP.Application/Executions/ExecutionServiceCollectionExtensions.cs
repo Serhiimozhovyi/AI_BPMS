@@ -18,6 +18,7 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IExecutionLauncher, ExecutionLauncher>();
         services.AddScoped<IExecutionService, ExecutionService>();
         services.AddScoped<IWaitResumeService, WaitResumeService>();
+        services.AddScoped<Tasks.ITaskService, Tasks.TaskService>();
         services.AddScoped<IExecutionEventSource>(sp => new ExecutionEventSource(
             sp.GetRequiredService<OpenBP.Data.OpenBpDbContext>(),
             sp.GetRequiredService<Auth.ICurrentUser>(),

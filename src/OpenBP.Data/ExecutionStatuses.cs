@@ -125,6 +125,15 @@ public static class StageStatuses
     };
 }
 
+/// <summary>Значення <c>tasks.status</c> (F6-02).</summary>
+public static class TaskStatuses
+{
+    public const string Open = "open";
+    public const string Done = "done";
+    public const string Expired = "expired";
+    public const string Cancelled = "cancelled";
+}
+
 /// <summary>Значення <c>violations.status</c> і дії журналу аудиту порушень (ADR-004 §3, F7-03).</summary>
 public static class ViolationStatuses
 {

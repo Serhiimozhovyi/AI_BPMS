@@ -478,6 +478,61 @@ public sealed class BinaryFileEntity
 }
 
 /// <summary>
+/// Людська задача вузла <c>core.approval</c> (F6-02): одна на (виконання, вузол). Створює й оновлює
+/// <see cref="PostgresExecutionStore"/> з кроку <c>waiting</c> (<see cref="TaskSync"/>), закриває рішенням
+/// <c>ITaskService</c>, строком (<c>expired</c>) або завершенням виконання (<c>cancelled</c>, ADR-004 §5);
+/// видаляється разом із виконанням.
+/// </summary>
+public sealed class TaskEntity
+{
+    public Guid Id { get; set; }
+    public Guid ExecutionId { get; set; }
+    public Guid WorkflowId { get; set; }
+    public string NodeId { get; set; } = "";
+
+    /// <summary>Токен пробудження (<c>resume_tokens</c>, вид <c>task</c>): адреса <c>/tasks/{token}</c> і <c>callback_data</c> кнопок.</summary>
+    public string Token { get; set; } = "";
+
+    public string Title { get; set; } = "";
+    public string? Description { get; set; }
+
+    /// <summary>jsonb: <c>[{ key, label }]</c>.</summary>
+    public string Decisions { get; set; } = "[]";
+
+    /// <summary>jsonb: JSON Schema полів рішення або <c>null</c>.</summary>
+    public string? Fields { get; set; }
+
+    /// <summary><c>open</c> | <c>done</c> | <c>expired</c> | <c>cancelled</c> (<see cref="TaskStatuses"/>).</summary>
+    public string Status { get; set; } = TaskStatuses.Open;
+
+    /// <summary>Виконавець — користувач OpenBP (з <c>userId</c> або email у <c>expression</c>).</summary>
+    public Guid? AssigneeUserId { get; set; }
+
+    /// <summary>Виконавці за роллю: <c>viewer</c> | <c>editor</c> | <c>admin</c> (і вищі).</summary>
+    public string? AssigneeRole { get; set; }
+
+    /// <summary>Значення <c>expression</c> як є: email або зовнішній id (Telegram id).</summary>
+    public string? AssigneeValue { get; set; }
+
+    /// <summary>Коли задачу передано <c>escalateTo</c>; <c>null</c> — ще ні.</summary>
+    public DateTimeOffset? EscalatedAt { get; set; }
+
+    public string? Decision { get; set; }
+
+    /// <summary>jsonb: дані форми рішення.</summary>
+    public string? Data { get; set; }
+
+    public Guid? CompletedByUserId { get; set; }
+    public Guid? CompletedByApiKeyId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? DueAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>Виконання, чиє завершення чи скасування закрило задачу (<c>cancelled</c>, ADR-004 §5).</summary>
+    public Guid? CancelledByExecutionId { get; set; }
+}
+
+/// <summary>
 /// Одноразовий токен зовнішнього пробудження (F6-01): адреса <c>/webhook/resume/{token}</c> для вузла <c>core.wait</c>
 /// у режимі <c>webhook</c>/<c>form</c> конкретного виконання. Воркер створює токени на старті виконання, Api гасить
 /// (<see cref="UsedAt"/>) при пробудженні; видаляються разом із виконанням.

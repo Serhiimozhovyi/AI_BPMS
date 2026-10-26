@@ -128,6 +128,36 @@ describe('canvas-model', () => {
     expect(byId.get('old')).toEqual(switchV1.outputs);
   });
 
+  it('core.approval: timeout і по порту на рішення (типово два); порт з ребром не ховається', () => {
+    const approval = {
+      type: 'core.approval',
+      version: 1,
+      displayName: 'Погодження',
+      group: 'logic' as const,
+      inputs: ['main'],
+      outputs: ['timeout', ...Array.from({ length: 8 }, (_, i) => `decision${i}`)],
+      parametersSchema: { type: 'object' },
+      isTrigger: false,
+    };
+    const node = (id: string, parameters: Record<string, unknown>) => ({
+      id, name: id, type: 'core.approval', typeVersion: 1, position: [0, 0] as [number, number], parameters,
+    });
+    const definition = {
+      formatVersion: 1,
+      name: 'approval',
+      settings: {},
+      pinData: {},
+      nodes: [node('plain', {}), node('three', { decisions: [{}, {}, {}] }), node('edge', {})],
+      connections: [{ from: { node: 'edge', output: 4 }, to: { node: 'plain', input: 0 } }],
+    } as unknown as WorkflowDefinition;
+
+    const byId = new Map(toCanvasModel(definition, [approval]).nodes.map((n) => [n.id, n.outputs]));
+
+    expect(byId.get('plain')).toEqual(['timeout', 'decision0', 'decision1']);
+    expect(byId.get('three')).toEqual(['timeout', 'decision0', 'decision1', 'decision2']);
+    expect(byId.get('edge')).toEqual(approval.outputs.slice(0, 5));
+  });
+
   it('core.merge v2: показує branches входів (типово 2) і кожен вхід з ребром; v1 — два входи', () => {
     const mergeV2 = {
       type: 'core.merge',

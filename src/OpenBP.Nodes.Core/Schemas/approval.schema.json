@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "core.approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "assignee"
+  ],
+  "$defs": {
+    "assignee": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Кому задача: рівно одне з userId (користувач OpenBP), role (усі з цією роллю або вищою) чи expression (email користувача OpenBP або зовнішній id, напр. Telegram id; можна вираз {{ }})",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Id користувача OpenBP"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "viewer",
+            "editor",
+            "admin"
+          ],
+          "description": "Роль: задачу бачать і закривають усі з цією роллю або вищою"
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320,
+          "description": "Email користувача OpenBP або зовнішній id (Telegram id); зовнішню задачу закриває сценарій чи інтеграція з роллю editor через POST /api/v1/tasks/{id}/complete"
+        }
+      },
+      "minProperties": 1,
+      "maxProperties": 1
+    }
+  },
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Заголовок задачі; можна вираз {{ }}"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Що треба вирішити; можна вираз {{ }}"
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "description": "Рішення; рішення i веде на вихід decision{i} (індекс виходу i + 1), вихід 0 — timeout. Без значення — «Погодити» (approve) і «Відхилити» (reject)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,39}$",
+            "description": "Машинне значення рішення, напр. approve"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Підпис кнопки"
+          }
+        }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "description": "Поля коментаря чи даних до рішення (JSON Schema, як у core.formTrigger); без значення — лише кнопки рішень"
+    },
+    "assignee": {
+      "$ref": "#/$defs/assignee"
+    },
+    "maxWaitSec": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 7776000,
+      "description": "Скільки секунд чекати рішення (до 90 днів; без значення — 90 днів). Коли час вийшов: з escalateTo задача переходить до нього ще на такий самий строк, без нього — вхідні items ідуть на вихід timeout"
+    },
+    "escalateTo": {
+      "$ref": "#/$defs/assignee",
+      "description": "Кому передати задачу, коли maxWaitSec вийшов без рішення"
+    }
+  }
+}

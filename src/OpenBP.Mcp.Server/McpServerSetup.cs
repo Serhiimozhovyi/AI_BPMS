@@ -37,6 +37,7 @@ public static class McpServerSetup
             .WithTools<DataTableTools>(McpJson.Options)
             .WithTools<EvaluationTools>(McpJson.Options)
             .WithTools<ExplanationTools>(McpJson.Options)
+            .WithTools<TaskTools>(McpJson.Options)
             .WithResources<OpenBpResources>();
         return services;
     }

@@ -27,7 +27,7 @@
 | Клавіатури, редагування повідомлень, callback-кнопки | `reply_markup`, `edit_message_text`, `answer_callback_query` (F3-27) | є | `connectors/telegram/tests/OpenBP.Connectors.Telegram.Tests/TelegramConnectorTests.cs` (тести клавіатур); `connectors/psy-support/src/OpenBP.Connectors.PsySupport/Domain/Keyboard.cs` |
 | Стан діалогу між повідомленнями | таблиці/БД бота, приклад — бот психологічної підтримки | є | `examples/psy-support-bot.json`; `tests/OpenBP.Cli.Tests/PsySupportBotTests.cs`, `connectors/psy-support/tests` |
 | Відповідь LLM (локальна або хмарна модель) | `ai.llm` (Ollama, OpenAI, Anthropic; F3-01, F3-02) | є | `examples/telegram-1c-ollama.json`, `examples/credentials.ollama.json`; `tests/OpenBP.Ai.Tests` |
-| Ескалація людині з задачею і відповіддю | сповіщення адміністратору (F3-40) є; задача людині `core.approval` (F6-02) не готова | частково (F6-02) | `examples/psy-support-alerts.json`; `tests/OpenBP.Worker.Tests/ErrorWorkflowTests.cs` |
+| Ескалація людині з задачею і відповіддю | задача людині `core.approval` (F6-02): рішення в `/tasks`, за `$execution.taskUrl` чи через MCP, строк і `escalateTo`; сповіщення адміністратору (F3-40) | є | `tests/OpenBP.Worker.Tests/ApprovalWaitTests.cs`, `tests/OpenBP.Api.Tests/TaskTests.cs`, `apps/web/e2e-live/approval.live.ts`; `examples/psy-support-alerts.json` |
 | Швидка відповідь вебхука, дедуплікація повторних апдейтів | `core.webhook` без `respond`/дедуплікації | немає (F6-05) | — |
 
 ## 3. Події

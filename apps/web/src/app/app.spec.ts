@@ -94,6 +94,8 @@ describe('routes', () => {
       'workflows/:id',
       'projects/:id',
       'executions',
+      'tasks',
+      'tasks/:id',
       'tables',
       'connectors',
       'credentials',
