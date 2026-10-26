@@ -13,6 +13,7 @@ MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), 
 | `set_webhook` | `setWebhook` | `url` (https), `secret_token?`, `allowed_updates?`, `drop_pending_updates?` | `{ "ok": true }` |
 | `delete_webhook` | `deleteWebhook` | `drop_pending_updates?` | `{ "ok": true }` |
 | `send_document` | `sendDocument` | `chat_id`, `document_url` **або** `document_base64` + `file_name?`, `caption?` | надіслане повідомлення з `document` |
+| `send_photo` | `sendPhoto` | `chat_id`, `photo_url` **або** `photo_base64` (до 10 МБ, JPEG/PNG) + `file_name?`, `caption?` (до 1024 символів), `parse_mode?`, `reply_markup?` | надіслане повідомлення з `photo` (розміри з `file_id`); задовгий підпис чи завелика картинка — `isError` з поясненням, без запиту до Bot API |
 | `get_updates` | `getUpdates` | `offset?`, `limit?` (1–100) | `{ "result": [Update, …] }`, кожне з унікальним `update_id` |
 | `get_chat` | `getChat` | `chat_id` | `id`, `type`, `title`/`username`/`first_name` |
 

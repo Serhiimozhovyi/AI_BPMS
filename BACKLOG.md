@@ -970,7 +970,7 @@
 - DoD: контрактні тести проти локального HTTP-моку (RSS 2.0, Atom, битий XML, 404, таймаут, заборонена приватна адреса); job конектора в CI; README з прикладами `mcp.tool`.
 
 ### F6-26 · Telegram: `send_photo`
-- model: `sonnet` · status: `ready` · depends: F6-24
+- model: `sonnet` · status: `review` · depends: F6-24
 - Що: у `connectors/telegram` tool `send_photo { chat_id, photo_url | photo_base64, file_name?, caption?, parse_mode?, reply_markup? }` (Bot API `sendPhoto`; base64 — multipart, до 10 МБ, підпис до 1024 символів — інакше `isError` з поясненням). Потрібно для «Post photo» і «Post photo (FLUX)» з «Аграрії — MVP»: картинка FLUX приходить base64, тож `Buffer` у коді не потрібен.
 - DoD: контрактні тести з Bot API-моком (URL, base64, задовгий підпис, помилка API); README конектора.
 

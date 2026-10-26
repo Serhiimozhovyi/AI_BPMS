@@ -53,7 +53,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
 
         Assert.Equal(
-            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_updates", "send_document", "send_message", "send_messages", "set_my_commands", "set_webhook"],
+            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_updates", "send_document", "send_message", "send_messages", "send_photo", "set_my_commands", "set_webhook"],
             tools.Keys.Order());
         var send = tools["send_message"].InputSchema;
         Assert.Equal(["chat_id", "text"], send.GetProperty("required").EnumerateArray().Select(e => e.GetString()).Order());
@@ -66,7 +66,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.All(tools.Values, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 
         // chat_id → список чатів з get_updates у формі OpenBP (x-openbp-options, docs/connectors.md §2).
-        foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "get_chat" })
+        foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "send_photo", "get_chat" })
         {
             var options = tools[name].InputSchema.GetProperty("properties").GetProperty("chat_id").GetProperty("x-openbp-options");
             Assert.Equal(("get_updates", "result", "message.chat.id"), (options.GetProperty("tool").GetString(), options.GetProperty("itemsPath").GetString(), options.GetProperty("valuePath").GetString()));
@@ -330,6 +330,94 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         var badBase64 = await client.CallToolAsync("send_document", new Dictionary<string, object?> { ["chat_id"] = 42, ["document_base64"] = "not base64!" });
         Assert.True(badBase64.IsError);
         Assert.Equal(count, _api.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Send_photo_by_url_with_caption_and_buttons()
+    {
+        var client = await ConnectAsync();
+
+        var result = await client.CallToolAsync("send_photo", new Dictionary<string, object?>
+        {
+            ["chat_id"] = "@agro_channel",
+            ["photo_url"] = "https://example.com/post.png",
+            ["caption"] = "<b>Пшениця</b>",
+            ["parse_mode"] = "HTML",
+            ["reply_markup"] = JsonSerializer.Deserialize<JsonElement>("""{"inline_keyboard":[[{"text":"Читати","url":"https://example.com"}]]}"""),
+        });
+
+        Assert.NotEqual(true, result.IsError);
+        var request = _api.Requests.Last();
+        Assert.Equal("sendPhoto", request.Method);
+        var body = request.Json!.Value;
+        Assert.Equal("https://example.com/post.png", body.GetProperty("photo").GetString());
+        Assert.Equal("HTML", body.GetProperty("parse_mode").GetString());
+        Assert.Equal("Читати", body.GetProperty("reply_markup").GetProperty("inline_keyboard")[0][0].GetProperty("text").GetString());
+        var message = result.StructuredContent!.Value;
+        Assert.Equal(78, message.GetProperty("message_id").GetInt64());
+        Assert.Equal("AgACAgIAAxk-big", message.GetProperty("photo")[1].GetProperty("file_id").GetString());
+    }
+
+    [Fact]
+    public async Task Send_photo_by_base64_is_sent_as_multipart()
+    {
+        var client = await ConnectAsync();
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A];
+
+        var result = await client.CallToolAsync("send_photo", new Dictionary<string, object?>
+        {
+            ["chat_id"] = 42,
+            ["photo_base64"] = Convert.ToBase64String(png),
+            ["file_name"] = "post.png",
+            ["caption"] = "Підпис",
+            ["reply_markup"] = JsonSerializer.Deserialize<JsonElement>("""{"remove_keyboard":true}"""),
+        });
+
+        Assert.NotEqual(true, result.IsError);
+        var request = _api.Requests.Last();
+        Assert.StartsWith("multipart/form-data", request.ContentType, StringComparison.Ordinal);
+        Assert.Equal("42", request.Form["chat_id"]);
+        Assert.Equal("Підпис", request.Form["caption"]);
+        Assert.StartsWith($"post.png:{png.Length}:", request.Form["photo"], StringComparison.Ordinal);
+        Assert.Contains("remove_keyboard", request.Form["reply_markup"], StringComparison.Ordinal);
+        Assert.Equal("Підпис", result.StructuredContent!.Value.GetProperty("caption").GetString());
+    }
+
+    [Fact]
+    public async Task Send_photo_rejects_bad_arguments_without_calling_the_api()
+    {
+        var client = await ConnectAsync();
+        var count = _api.Requests.Count;
+
+        var neither = await client.CallToolAsync("send_photo", new Dictionary<string, object?> { ["chat_id"] = 42 });
+        var both = await client.CallToolAsync("send_photo", new Dictionary<string, object?> { ["chat_id"] = 42, ["photo_url"] = "https://e.com/a.png", ["photo_base64"] = "AAAA" });
+        var badBase64 = await client.CallToolAsync("send_photo", new Dictionary<string, object?> { ["chat_id"] = 42, ["photo_base64"] = "not base64!" });
+        var longCaption = await client.CallToolAsync("send_photo", new Dictionary<string, object?> { ["chat_id"] = 42, ["photo_url"] = "https://e.com/a.png", ["caption"] = new string('я', 1025) });
+        var tooBig = await client.CallToolAsync("send_photo", new Dictionary<string, object?> { ["chat_id"] = 42, ["photo_base64"] = Convert.ToBase64String(new byte[10 * 1024 * 1024 + 1]) });
+        var badMarkup = await client.CallToolAsync("send_photo", new Dictionary<string, object?>
+        {
+            ["chat_id"] = 42,
+            ["photo_url"] = "https://e.com/a.png",
+            ["reply_markup"] = JsonSerializer.Deserialize<JsonElement>("""{"foo":1}"""),
+        });
+
+        Assert.All(new[] { neither, both, badBase64, longCaption, tooBig, badMarkup }, r => Assert.True(r.IsError));
+        Assert.Contains("1024", string.Concat(longCaption.Content.OfType<TextContentBlock>().Select(b => b.Text)), StringComparison.Ordinal);
+        Assert.Equal(count, _api.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Send_photo_api_error_is_reported_without_the_token()
+    {
+        var client = await ConnectAsync();
+        _api.FailWith = (400, """{"ok":false,"error_code":400,"description":"Bad Request: wrong file identifier/HTTP URL specified"}""");
+
+        var result = await client.CallToolAsync("send_photo", new Dictionary<string, object?> { ["chat_id"] = 42, ["photo_url"] = "https://e.com/missing.png" });
+
+        Assert.True(result.IsError);
+        var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.Contains("wrong file identifier", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(Token, text, StringComparison.Ordinal);
     }
 
     [Fact]
