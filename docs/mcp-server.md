@@ -129,6 +129,11 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 resolvedAt }`; виконання, зупинене `block`-правилом, — `waiting` з кроком `waitState.reason = STAGE_RULE_BLOCKED`, і
 агент може відхилити правило з причиною через `override_rule`. Стан, дії й невиконані умови етапів одним викликом — `get_execution_stages` / `act_on_stage` (F7-05).
 
+Нотатки на канвасі (F3-62) — `notes[] { id, text, position, size?, color? }` на рівні сценарію — переносяться так само без
+втрат: агент може лишити пояснення поруч із вузлами (`text` — Markdown, `color` — Highlight-колір AC-Kit: `yellow`, `green`,
+`blue`, `teal`, `orange`, `red`, `violet`). Рушій нотатки ігнорує; `validate_workflow` перевіряє лише схему
+(`SCHEMA_VIOLATION` з `path` на `/notes/…`).
+
 ### Оцінки вузлів ШІ (F6-17)
 
 Оцінка — набір кейсів «вхід → очікуване» для одного вузла (зазвичай `ai.llm` чи `ai.agent`). `run_evaluation` виконує вузол на кожному кейсі по черзі тим самим механізмом, що `test_node` з `items`, на поточній (збереженій) версії і зберігає прогін з номером версії — так видно, чи зміна промпту покращила результат. Фактичне значення — `json` єдиного item'а виходу 0 (масив `json`-ів, якщо items кілька).

@@ -32,6 +32,27 @@ public sealed class WorkflowExecutorTests
         Assert.True(result.FinishedAt >= result.StartedAt);
     }
 
+    /// <summary>F3-62: нотатки на канвасі — не частина графа: виконання з ними й без них однакове.</summary>
+    [Fact]
+    public async Task NotesDoNotAffectExecution()
+    {
+        var g = new TestGraph()
+            .Node("t", Trigger, new JsonObject { ["count"] = 2 })
+            .Node("a", Pass)
+            .Edge("t", "a");
+        g.Workflow.Notes =
+        [
+            new WorkflowNote { Id = "note_1", Text = "## Вхід\n\nзаявки з **Telegram**", Position = [0, -120], Size = [240, 100], Color = NoteColors.Yellow },
+            new WorkflowNote { Id = "note_2", Text = "", Position = [400, 0] },
+        ];
+
+        var result = await g.RunAsync();
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        Assert.Equal(["t", "a"], result.Steps.Select(s => s.NodeId));
+        Assert.Equal([0, 1], Ns(result.OutputOf("a")));
+    }
+
     [Fact]
     public async Task IfRoutesItemsByPort()
     {

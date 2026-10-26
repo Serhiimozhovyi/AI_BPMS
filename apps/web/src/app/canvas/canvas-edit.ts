@@ -6,6 +6,7 @@ import {
   WorkflowNode,
 } from '../workflows/workflows-api.service';
 import { parsePosition } from './canvas-model';
+import { removeNotes } from './canvas-notes';
 
 /**
  * Редагування визначення сценарію з канвасу (F2-17): чисті функції `визначення → нове визначення`.
@@ -20,10 +21,11 @@ export interface NewConnection {
   targetInput: number;
 }
 
-/** Що виділено на канвасі: id вузлів і індекси ребер у `connections`. */
+/** Що виділено на канвасі: id вузлів, індекси ребер у `connections` і id нотаток (F3-62; немає — жодної). */
 export interface CanvasSelection {
   nodes: readonly string[];
   edges: readonly number[];
+  notes?: readonly string[];
 }
 
 export const EMPTY_SELECTION: CanvasSelection = { nodes: [], edges: [] };
@@ -82,7 +84,7 @@ export function detachBusinessSteps(business: WorkflowBusiness | undefined, node
 
 /**
  * Видаляє виділене: вузли разом з усіма їхніми ребрами, `pinData` і зв'язками зовнішніх кроків `business.steps`,
- * плюс виділені ребра. Нічого не виділено — те саме визначення.
+ * плюс виділені ребра і нотатки (F3-62). Нічого не виділено — те саме визначення.
  */
 export function deleteSelection(definition: WorkflowDefinition, selection: CanvasSelection): WorkflowDefinition {
   const nodeIds = new Set(selection.nodes);
@@ -93,7 +95,8 @@ export function deleteSelection(definition: WorkflowDefinition, selection: Canva
   );
   const nodesChanged = keptNodes.length !== definition.nodes.length;
   const connectionsChanged = keptConnections.length !== definition.connections.length;
-  if (!nodesChanged && !connectionsChanged) return definition;
+  if (!nodesChanged && !connectionsChanged) return removeNotes(definition, selection.notes ?? []);
+  definition = removeNotes(definition, selection.notes ?? []);
   const nodes = nodesChanged ? keptNodes : definition.nodes;
   const connections = connectionsChanged ? keptConnections : definition.connections;
 

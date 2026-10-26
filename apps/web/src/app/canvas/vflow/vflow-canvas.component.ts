@@ -1,12 +1,16 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, booleanAttribute, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
-import { ConnectEndEvent, Connection, ConnectionSettings, Edge, Node, Vflow, VflowComponent, createEdges, createNodes } from 'ngx-vflow';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, booleanAttribute, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import { ConnectEndEvent, Connection, ConnectionSettings, Edge, Node, StaticNode, Vflow, VflowComponent, createEdges, createNodes } from 'ngx-vflow';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection } from '../canvas-edit';
-import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition } from '../canvas-model';
+import { CanvasModel, CanvasNode, CanvasNodeGroup, NodePosition, parsePosition } from '../canvas-model';
+import { DEFAULT_NOTE_SIZE, MIN_NOTE_SIZE, NOTE_COLORS, noteColorToken, noteSize, renderNoteMarkdown } from '../canvas-notes';
 import { groupLabel } from '../palette';
 import { QuickAddRequest, ScreenPoint } from '../quick-add';
 import { NodeRunStatus } from '../test-run';
+import { NoteColor, WorkflowNote } from '../../workflows/workflows-api.service';
 
-interface NodeData {
+/** Дані картки вузла в ngx-vflow. */
+interface CardData {
+  kind: 'node';
   node: CanvasNode;
   color: string;
   groupLabel: string;
@@ -21,6 +25,46 @@ interface NodeData {
   runError: string | null;
   /** Незаповнені обов'язкові параметри (F3-57) — ключі полів у порядку форми. */
   missing: readonly string[];
+}
+
+/** Дані нотатки на канвасі (F3-62): та сама `nodeHtml`-картка ngx-vflow, інший вигляд. */
+interface NoteData {
+  kind: 'note';
+  note: WorkflowNote;
+  /** Текст нотатки як HTML (Markdown-підмножина, екранований). */
+  html: string;
+  color: NoteColor;
+  /** `var(--ac-…)` кольору — рамка й 15 %-тло. */
+  colorVar: string;
+  width: number;
+  height: number;
+}
+
+type NodeData = CardData | NoteData;
+
+/** Id вузла ngx-vflow для нотатки — з префіксом, щоб не збігся з id вузла сценарію. */
+const NOTE_PREFIX = 'note:';
+
+function noteNodeId(id: string): string {
+  return NOTE_PREFIX + id;
+}
+
+/** Id нотатки з id вузла ngx-vflow; не нотатка — `null`. */
+function noteIdOf(nodeId: string): string | null {
+  return nodeId.startsWith(NOTE_PREFIX) ? nodeId.slice(NOTE_PREFIX.length) : null;
+}
+
+/** Зміна нотатки з канвасу (F3-62): колір чи розмір; текст іде через {@link NoteEditRequest}. */
+export interface NoteChangeRequest {
+  id: string;
+  color?: NoteColor;
+  size?: [number, number];
+}
+
+/** Редагування тексту нотатки завершено; `text: null` — скасовано (Escape). */
+export interface NoteEditRequest {
+  id: string;
+  text: string | null;
 }
 
 /** Дія з тулбару над карткою вузла (F3-58). */
@@ -38,12 +82,18 @@ export interface NodeRenameRequest {
   name: string | null;
 }
 
-/** ПКМ на канвасі (F3-58): що під вказівником і де відкрити меню. */
-export type CanvasContextTarget = { kind: 'node'; nodeId: string } | { kind: 'edge'; edgeIndex: number } | { kind: 'canvas' };
+/** ПКМ на канвасі (F3-58): що під вказівником і де відкрити меню; нотатка (F3-62) — окрема ціль. */
+export type CanvasContextTarget =
+  | { kind: 'node'; nodeId: string }
+  | { kind: 'edge'; edgeIndex: number }
+  | { kind: 'note'; noteId: string }
+  | { kind: 'canvas' };
 
 export interface CanvasContextMenuRequest {
   target: CanvasContextTarget;
   anchor: ScreenPoint;
+  /** Точка меню в координатах канвасу (з кроком сітки) — туди ставиться нова нотатка. */
+  at?: [number, number];
 }
 
 /** Клік по «не заповнено: N» — відкрити вузол і поставити фокус на перше незаповнене поле. */
@@ -130,150 +180,216 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       (contextmenu)="openContextMenu($event)"
     >
       <ng-template nodeHtml let-ctx>
-        <div
-          class="node"
-          selectable
-          [class.selected]="ctx.selected()"
-          [class.disabled]="ctx.data().node.disabled"
-          [class.invalid]="ctx.data().errors.length > 0"
-          [attr.data-invalid]="ctx.data().errors.length > 0 ? true : null"
-          [attr.data-run-status]="ctx.data().runStatus"
-          [attr.data-pinned]="ctx.data().pinned ? true : null"
-          [class.run-success]="ctx.data().runStatus === 'success'"
-          [class.run-error]="ctx.data().runStatus === 'error'"
-          [class.run-skipped]="ctx.data().runStatus === 'skipped' || ctx.data().runStatus === 'cancelled'"
-          [style.--node-color]="ctx.data().color"
-          [style.height.px]="ctx.data().height"
-          [attr.data-node-id]="ctx.node.id"
-          [attr.data-node-type]="ctx.data().node.type"
-        >
-          @for (port of ctx.data().node.inputs; track $index; let i = $index) {
-            <handle
-              position="left"
-              type="target"
-              [id]="inputId(i)"
-              [offsetY]="handleOffset(i, ctx.data().node.inputs.length, ctx.data().height)"
-            />
-            @if (ctx.data().node.inputs.length > 1) {
-              <span
-                class="node__port node__port--in"
-                [style.top.px]="portTop(i, ctx.data().node.inputs.length, ctx.data().height)"
-                >{{ port }}</span
-              >
-            }
-          }
-          <div class="node__head">
-            <span class="node__group">{{ ctx.data().groupLabel }}</span>
-            @if (ctx.data().pinned) {
-              <span class="node__pin" data-testid="node-pinned" role="img" title="Output закріплено" i18n-title="@@canvas.pinned">📌</span>
-            }
-            @if (ctx.data().runStatus === 'success') {
-              <span class="node__run node__run--success" data-testid="node-run-badge" role="img" title="Виконано" i18n-title="@@canvas.run.success">✓</span>
-            } @else if (ctx.data().runStatus === 'error') {
-              <span class="node__run node__run--error" data-testid="node-run-badge" role="img" title="Помилка" i18n-title="@@canvas.run.error">✕</span>
-            }
-            @if (ctx.data().errors.length > 0) {
-              <span class="node__errors" data-testid="node-errors" role="img" [title]="ctx.data().errors.join('\n')"
-                >! {{ ctx.data().errors.length }}</span
-              >
-            }
-          </div>
-          @if (!readonly()) {
-            <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
-              <button type="button" class="node__tool" data-testid="node-tool-run" i18n-title="@@canvas.tool.run" title="Виконати вузол" (click)="act($event, ctx.node.id, 'run')">▶</button>
-              <button
-                type="button"
-                class="node__tool"
-                data-testid="node-tool-toggle"
-                [title]="ctx.data().node.disabled ? enableLabel : disableLabel"
-                (click)="act($event, ctx.node.id, 'toggle')"
-              >
-                ⏻
-              </button>
-              <button type="button" class="node__tool" data-testid="node-tool-duplicate" i18n-title="@@canvas.tool.duplicate" title="Дублювати (Ctrl+D)" (click)="act($event, ctx.node.id, 'duplicate')">⧉</button>
-              <button type="button" class="node__tool" data-testid="node-tool-rename" i18n-title="@@canvas.tool.rename" title="Перейменувати (F2)" (click)="act($event, ctx.node.id, 'rename')">✎</button>
-              <button type="button" class="node__tool node__tool--danger" data-testid="node-tool-delete" i18n-title="@@canvas.tool.delete" title="Видалити (Delete)" (click)="act($event, ctx.node.id, 'delete')">🗑</button>
-            </div>
-          }
-          @if (renaming() === ctx.node.id) {
-            <input
-              class="node__rename"
-              data-testid="node-rename"
-              i18n-aria-label="@@canvas.rename.label"
-              aria-label="Нова назва вузла"
-              [value]="ctx.data().node.name"
-              (mousedown)="$event.stopPropagation()"
-              (pointerdown)="$event.stopPropagation()"
-              (keydown.enter)="commitRename(ctx.node.id, $any($event.target).value)"
-              (keydown.escape)="cancelRename(ctx.node.id)"
-              (blur)="commitRename(ctx.node.id, $any($event.target).value)"
-            />
-          } @else {
-            <div class="node__name" [title]="ctx.data().node.name" (dblclick)="act($event, ctx.node.id, 'rename')">{{ ctx.data().node.name }}</div>
-          }
-          @if (ctx.data().runError; as runError) {
-            <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
-          } @else {
-            <div class="node__type" [title]="ctx.data().node.subtitle">{{ ctx.data().node.subtitle }}</div>
-          }
-          @if (ctx.data().missing.length > 0) {
-            <button
-              type="button"
-              class="node__missing"
-              data-testid="node-missing"
-              [title]="missingTitle(ctx.data().missing)"
-              (mousedown)="$event.stopPropagation()"
-              (pointerdown)="$event.stopPropagation()"
-              (click)="openMissing($event, ctx.node.id, ctx.data().missing[0])"
-              i18n="@@canvas.missing"
-            >
-              не заповнено: {{ ctx.data().missing.length }}
-            </button>
-          }
-          @for (port of ctx.data().node.outputs; track $index; let i = $index) {
-            <handle
-              position="right"
-              type="source"
-              [id]="outputId(i)"
-              [offsetY]="handleOffset(i, ctx.data().node.outputs.length, ctx.data().height)"
-            />
-            @if (ctx.data().node.outputs.length > 1) {
-              <span
-                class="node__port node__port--out"
-                [class.node__port--error]="port === 'error'"
-                [style.top.px]="portTop(i, ctx.data().node.outputs.length, ctx.data().height)"
-                >{{ port }}</span
-              >
-            }
-          }
-          @if ((ctx.selected() || firstStepHint(ctx.data().node)) && !readonly()) {
-            @if (firstStepHint(ctx.data().node)) {
-              <span
-                class="pointer-events-none absolute left-[calc(100%+48px)] -translate-y-1/2 whitespace-nowrap text-[12px] text-ac-kit"
-                data-testid="first-step-hint"
-                [style.top.px]="portTop(0, ctx.data().node.outputs.length, ctx.data().height)"
-                i18n="@@canvas.firstStepHint"
-                >Додайте наступний крок</span
-              >
-            }
-            @for (port of ctx.data().node.outputs; track $index; let i = $index) {
-              <button
-                type="button"
-                class="node__add"
-                data-testid="port-add"
-                [attr.data-output]="i"
-                [style.top.px]="portTop(i, ctx.data().node.outputs.length, ctx.data().height)"
-                i18n-title="@@canvas.quickAdd.portHint"
-                title="Додати наступний крок"
+        @let d = ctx.data();
+        @if (d.kind === 'note') {
+          <div
+            class="note"
+            selectable
+            [class.selected]="ctx.selected()"
+            [class.note--editing]="editingNote() === d.note.id"
+            [style.--note-color]="d.colorVar"
+            [style.width.px]="noteWidth(d)"
+            [style.height.px]="noteHeight(d)"
+            [attr.data-note-id]="d.note.id"
+            [attr.data-note-color]="d.color"
+            (dblclick)="startNoteEdit($event, d.note.id)"
+          >
+            @if (editingNote() === d.note.id) {
+              <textarea
+                class="note__editor"
+                data-testid="note-editor"
+                i18n-aria-label="@@canvas.note.editor"
+                aria-label="Текст нотатки (Markdown)"
+                i18n-placeholder="@@canvas.note.placeholder"
+                placeholder="Текст нотатки… Ctrl+Enter — зберегти, Escape — скасувати"
+                [value]="d.note.text"
                 (mousedown)="$event.stopPropagation()"
                 (pointerdown)="$event.stopPropagation()"
-                (click)="addFromPort($event, ctx.node.id, i)"
+                (dblclick)="$event.stopPropagation()"
+                (keydown)="noteEditorKey($event, d.note.id)"
+                (blur)="commitNoteEdit(d.note.id, $any($event.target).value)"
+              ></textarea>
+            } @else {
+              <div class="note__body" data-testid="note-body" [innerHTML]="d.html"></div>
+              @if (!d.note.text && !readonly()) {
+                <span class="note__hint" i18n="@@canvas.note.hint">Двічі клацніть, щоб написати</span>
+              }
+            }
+            @if (!readonly() && ctx.selected() && editingNote() !== d.note.id) {
+              <div class="note__tools" role="toolbar" data-testid="note-colors" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
+                @for (c of noteColors; track c.color) {
+                  <button
+                    type="button"
+                    class="note__swatch"
+                    [class.note__swatch--on]="c.color === d.color"
+                    [style.--swatch]="'var(' + c.token + ')'"
+                    [attr.data-testid]="'note-color-' + c.color"
+                    [attr.aria-pressed]="c.color === d.color"
+                    [title]="c.label"
+                    (click)="pickNoteColor($event, d.note.id, c.color)"
+                  ></button>
+                }
+                <button type="button" class="note__tool" data-testid="note-edit" i18n-title="@@canvas.note.edit" title="Редагувати (подвійний клік)" (click)="startNoteEdit($event, d.note.id)">✎</button>
+                <button type="button" class="note__tool note__tool--danger" data-testid="note-delete" i18n-title="@@canvas.note.delete" title="Видалити нотатку (Delete)" (click)="deleteNote($event, d.note.id)">🗑</button>
+              </div>
+            }
+            @if (!readonly()) {
+              <span
+                class="note__resize"
+                data-testid="note-resize"
+                i18n-title="@@canvas.note.resize"
+                title="Розтягнути"
+                (mousedown)="$event.stopPropagation()"
+                (pointerdown)="startNoteResize($event, d.note.id)"
+              ></span>
+            }
+          </div>
+        } @else {
+          <div
+            class="node"
+            selectable
+            [class.selected]="ctx.selected()"
+            [class.disabled]="d.node.disabled"
+            [class.invalid]="d.errors.length > 0"
+            [attr.data-invalid]="d.errors.length > 0 ? true : null"
+            [attr.data-run-status]="d.runStatus"
+            [attr.data-pinned]="d.pinned ? true : null"
+            [class.run-success]="d.runStatus === 'success'"
+            [class.run-error]="d.runStatus === 'error'"
+            [class.run-skipped]="d.runStatus === 'skipped' || d.runStatus === 'cancelled'"
+            [style.--node-color]="d.color"
+            [style.height.px]="d.height"
+            [attr.data-node-id]="ctx.node.id"
+            [attr.data-node-type]="d.node.type"
+          >
+            @for (port of d.node.inputs; track $index; let i = $index) {
+              <handle
+                position="left"
+                type="target"
+                [id]="inputId(i)"
+                [offsetY]="handleOffset(i, d.node.inputs.length, d.height)"
+              />
+              @if (d.node.inputs.length > 1) {
+                <span
+                  class="node__port node__port--in"
+                  [style.top.px]="portTop(i, d.node.inputs.length, d.height)"
+                  >{{ port }}</span
+                >
+              }
+            }
+            <div class="node__head">
+              <span class="node__group">{{ d.groupLabel }}</span>
+              @if (d.pinned) {
+                <span class="node__pin" data-testid="node-pinned" role="img" title="Output закріплено" i18n-title="@@canvas.pinned">📌</span>
+              }
+              @if (d.runStatus === 'success') {
+                <span class="node__run node__run--success" data-testid="node-run-badge" role="img" title="Виконано" i18n-title="@@canvas.run.success">✓</span>
+              } @else if (d.runStatus === 'error') {
+                <span class="node__run node__run--error" data-testid="node-run-badge" role="img" title="Помилка" i18n-title="@@canvas.run.error">✕</span>
+              }
+              @if (d.errors.length > 0) {
+                <span class="node__errors" data-testid="node-errors" role="img" [title]="d.errors.join('\n')"
+                  >! {{ d.errors.length }}</span
+                >
+              }
+            </div>
+            @if (!readonly()) {
+              <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
+                <button type="button" class="node__tool" data-testid="node-tool-run" i18n-title="@@canvas.tool.run" title="Виконати вузол" (click)="act($event, ctx.node.id, 'run')">▶</button>
+                <button
+                  type="button"
+                  class="node__tool"
+                  data-testid="node-tool-toggle"
+                  [title]="d.node.disabled ? enableLabel : disableLabel"
+                  (click)="act($event, ctx.node.id, 'toggle')"
+                >
+                  ⏻
+                </button>
+                <button type="button" class="node__tool" data-testid="node-tool-duplicate" i18n-title="@@canvas.tool.duplicate" title="Дублювати (Ctrl+D)" (click)="act($event, ctx.node.id, 'duplicate')">⧉</button>
+                <button type="button" class="node__tool" data-testid="node-tool-rename" i18n-title="@@canvas.tool.rename" title="Перейменувати (F2)" (click)="act($event, ctx.node.id, 'rename')">✎</button>
+                <button type="button" class="node__tool node__tool--danger" data-testid="node-tool-delete" i18n-title="@@canvas.tool.delete" title="Видалити (Delete)" (click)="act($event, ctx.node.id, 'delete')">🗑</button>
+              </div>
+            }
+            @if (renaming() === ctx.node.id) {
+              <input
+                class="node__rename"
+                data-testid="node-rename"
+                i18n-aria-label="@@canvas.rename.label"
+                aria-label="Нова назва вузла"
+                [value]="d.node.name"
+                (mousedown)="$event.stopPropagation()"
+                (pointerdown)="$event.stopPropagation()"
+                (keydown.enter)="commitRename(ctx.node.id, $any($event.target).value)"
+                (keydown.escape)="cancelRename(ctx.node.id)"
+                (blur)="commitRename(ctx.node.id, $any($event.target).value)"
+              />
+            } @else {
+              <div class="node__name" [title]="d.node.name" (dblclick)="act($event, ctx.node.id, 'rename')">{{ d.node.name }}</div>
+            }
+            @if (d.runError; as runError) {
+              <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
+            } @else {
+              <div class="node__type" [title]="d.node.subtitle">{{ d.node.subtitle }}</div>
+            }
+            @if (d.missing.length > 0) {
+              <button
+                type="button"
+                class="node__missing"
+                data-testid="node-missing"
+                [title]="missingTitle(d.missing)"
+                (mousedown)="$event.stopPropagation()"
+                (pointerdown)="$event.stopPropagation()"
+                (click)="openMissing($event, ctx.node.id, d.missing[0])"
+                i18n="@@canvas.missing"
               >
-                +
+                не заповнено: {{ d.missing.length }}
               </button>
             }
-          }
-        </div>
+            @for (port of d.node.outputs; track $index; let i = $index) {
+              <handle
+                position="right"
+                type="source"
+                [id]="outputId(i)"
+                [offsetY]="handleOffset(i, d.node.outputs.length, d.height)"
+              />
+              @if (d.node.outputs.length > 1) {
+                <span
+                  class="node__port node__port--out"
+                  [class.node__port--error]="port === 'error'"
+                  [style.top.px]="portTop(i, d.node.outputs.length, d.height)"
+                  >{{ port }}</span
+                >
+              }
+            }
+            @if ((ctx.selected() || firstStepHint(d.node)) && !readonly()) {
+              @if (firstStepHint(d.node)) {
+                <span
+                  class="pointer-events-none absolute left-[calc(100%+48px)] -translate-y-1/2 whitespace-nowrap text-[12px] text-ac-kit"
+                  data-testid="first-step-hint"
+                  [style.top.px]="portTop(0, d.node.outputs.length, d.height)"
+                  i18n="@@canvas.firstStepHint"
+                  >Додайте наступний крок</span
+                >
+              }
+              @for (port of d.node.outputs; track $index; let i = $index) {
+                <button
+                  type="button"
+                  class="node__add"
+                  data-testid="port-add"
+                  [attr.data-output]="i"
+                  [style.top.px]="portTop(i, d.node.outputs.length, d.height)"
+                  i18n-title="@@canvas.quickAdd.portHint"
+                  title="Додати наступний крок"
+                  (mousedown)="$event.stopPropagation()"
+                  (pointerdown)="$event.stopPropagation()"
+                  (click)="addFromPort($event, ctx.node.id, i)"
+                >
+                  +
+                </button>
+              }
+            }
+          </div>
+        }
       </ng-template>
       <ng-template edgeLabelHtml let-ctx>
         <span class="flex flex-col items-center gap-0.5">
@@ -590,6 +706,148 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       background: var(--ac-kit);
       color: var(--ac-white);
     }
+
+    /* Нотатка (F3-62): Highlight-колір AC-Kit — рамка і 15 %-тло; ngx-vflow бере розмір вузла з картки, тож він явний. */
+    .note {
+      position: relative;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1.5px solid var(--note-color);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--note-color) 15%, white);
+      color: var(--ac-vivid);
+      font: 13px/1.4 Ubuntu, sans-serif;
+      user-select: none;
+    }
+
+    .note.selected {
+      box-shadow: 0 0 0 2px var(--note-color);
+    }
+
+    .note--editing {
+      background: var(--ac-white);
+      user-select: text;
+    }
+
+    .note__body {
+      height: 100%;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
+
+    .note__body :is(h1, h2, h3) {
+      margin: 0 0 4px;
+      font: 600 14px/1.3 Ubuntu, sans-serif;
+    }
+
+    .note__body h1 {
+      font-size: 16px;
+    }
+
+    .note__body p {
+      margin: 0 0 6px;
+    }
+
+    .note__body :is(ul, ol) {
+      margin: 0 0 6px;
+      padding-left: 18px;
+    }
+
+    .note__body code {
+      padding: 0 3px;
+      border-radius: 3px;
+      background: rgb(38 31 75 / 0.08);
+      font-size: 12px;
+    }
+
+    .note__body a {
+      color: var(--ac-kit);
+    }
+
+    .note__hint {
+      position: absolute;
+      inset: 8px 10px;
+      color: var(--ac-cool-grey-4);
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    .note__editor {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      resize: none;
+      outline: none;
+    }
+
+    /* Палітра над виділеною нотаткою — за межею картки, як тулбар вузла. */
+    .note__tools {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 4px;
+      border: 1px solid var(--ac-cool-grey);
+      border-radius: 6px;
+      background: var(--ac-white);
+      box-shadow: 0 1px 4px rgb(38 31 75 / 0.12);
+    }
+
+    .note__swatch {
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 50%;
+      background: var(--swatch);
+      cursor: pointer;
+    }
+
+    .note__swatch--on,
+    .note__swatch:hover {
+      border-color: var(--ac-vivid);
+    }
+
+    .note__tool {
+      width: 22px;
+      height: 20px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: none;
+      color: var(--ac-cool-grey-4);
+      font: 13px/1 Ubuntu, sans-serif;
+      cursor: pointer;
+    }
+
+    .note__tool:hover {
+      background: var(--ac-cool-grey);
+      color: var(--ac-kit);
+    }
+
+    .note__tool--danger:hover {
+      color: var(--ac-red);
+    }
+
+    .note__resize {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 14px;
+      height: 14px;
+      border-right: 2px solid var(--note-color);
+      border-bottom: 2px solid var(--note-color);
+      border-bottom-right-radius: 6px;
+      cursor: nwse-resize;
+    }
   `,
 })
 export class VflowCanvasComponent {
@@ -653,6 +911,33 @@ export class VflowCanvasComponent {
   /** Відкрити спливаючу палітру (F3-50): «+» біля порту чи на ребрі, з'єднання відпущено в порожньому місці. */
   readonly quickAdd = output<QuickAddRequest>();
 
+  /** Нотатки сценарію (F3-62) — картки без портів поруч із вузлами. */
+  readonly notes = input<readonly WorkflowNote[]>([]);
+
+  /** Нотатка з відкритим полем тексту (F3-62); `null` — немає. */
+  readonly editingNote = input<string | null>(null);
+
+  /** Нотатки, які користувач перетягнув у нову позицію. */
+  readonly notesMoved = output<NodePosition[]>();
+
+  /** Колір чи розмір нотатки змінено з канвасу. */
+  readonly noteChange = output<NoteChangeRequest>();
+
+  /** Текст нотатки збережено або редагування скасовано. */
+  readonly noteEdit = output<NoteEditRequest>();
+
+  /** Подвійний клік чи «Редагувати» на нотатці — редактор відкриває поле тексту. */
+  readonly noteEditStart = output<string>();
+
+  /** «Видалити» з палітри нотатки. */
+  readonly noteDelete = output<string>();
+
+  protected readonly noteColors = NOTE_COLORS;
+  /** Нотатка, яку зараз розтягують за кут, і її проміжний розмір; `null` — ніяку. */
+  protected readonly resizing = signal<{ id: string; width: number; height: number } | null>(null);
+  /** Нотатка, для якої завершення редагування вже віддано (Ctrl+Enter + blur не дублюються). */
+  private noteEditDone: string | null = null;
+
   private readonly flow = viewChild(VflowComponent);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   /** Вузол, для якого inline-перейменування вже віддано (Enter + blur не дублюються). */
@@ -678,22 +963,39 @@ export class VflowCanvasComponent {
     const missing = this.missingFields();
     const draggable = !this.readonly();
     // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
-    const selected = new Set(untracked(this.selection).nodes);
-    return createNodes<NodeData>(
-      this.model().nodes.map((n) => {
-        const height = nodeHeight(n);
-        return {
-          id: n.id,
-          type: 'html-template',
-          point: { x: n.x, y: n.y },
-          width: NODE_WIDTH,
-          height,
-          draggable,
-          selected: selected.has(n.id),
-          data: { node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id), runError: runErrors.get(n.id) ?? null, missing: missing.get(n.id) ?? [] },
-        };
-      }),
-    );
+    const selection = untracked(this.selection);
+    const selected = new Set(selection.nodes);
+    const selectedNotes = new Set(selection.notes ?? []);
+    const cards = this.model().nodes.map((n): StaticNode<NodeData> => {
+      const height = nodeHeight(n);
+      return {
+        id: n.id,
+        type: 'html-template',
+        point: { x: n.x, y: n.y },
+        width: NODE_WIDTH,
+        height,
+        draggable,
+        selected: selected.has(n.id),
+        data: { kind: 'node', node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id), runError: runErrors.get(n.id) ?? null, missing: missing.get(n.id) ?? [] },
+      };
+    });
+    // Нотатки (F3-62) — перед вузлами, щоб картка вузла малювалась поверх нотатки, яка її перекриває.
+    const notes = this.notes().map((note): StaticNode<NodeData> => {
+      const [width, height] = noteSize(note);
+      const { x, y } = parsePosition(note.position);
+      const color = (NOTE_COLORS.find((c) => c.color === note.color) ?? NOTE_COLORS[0]).color;
+      return {
+        id: noteNodeId(note.id),
+        type: 'html-template',
+        point: { x, y },
+        width,
+        height,
+        draggable,
+        selected: selectedNotes.has(note.id),
+        data: { kind: 'note', note, html: renderNoteMarkdown(note.text ?? ''), color, colorVar: `var(${noteColorToken(note.color)})`, width, height },
+      };
+    });
+    return createNodes<NodeData>([...notes, ...cards]);
   });
 
   protected readonly edges = computed<Edge[]>(() => {
@@ -754,10 +1056,30 @@ export class VflowCanvasComponent {
       });
     });
 
-    // Виділення ззовні (вставка, видалення, undo) → сигнали `selected` наявних вузлів і ребер.
+    // Поле тексту нотатки (F3-62): фокус і курсор у кінець, щойно воно з'явилося.
+    effect(() => {
+      const id = this.editingNote();
+      untracked(() => {
+        this.noteEditDone = null;
+        if (!id) return;
+        let tries = 0;
+        const focus = () => {
+          const el = this.host.nativeElement.querySelector<HTMLTextAreaElement>(`[data-note-id="${CSS.escape(id)}"] [data-testid="note-editor"]`);
+          if (el) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+          } else if (++tries < 10) {
+            requestAnimationFrame(focus);
+          }
+        };
+        requestAnimationFrame(focus);
+      });
+    });
+
+    // Виділення ззовні (вставка, видалення, undo) → сигнали `selected` наявних вузлів, нотаток і ребер.
     effect(() => {
       const selection = this.selection();
-      const nodeIds = new Set(selection.nodes);
+      const nodeIds = new Set([...selection.nodes, ...(selection.notes ?? []).map(noteNodeId)]);
       const edgeIndexes = new Set(selection.edges);
       untracked(() => {
         for (const node of this.nodes()) node.selected?.set(nodeIds.has(node.id));
@@ -849,6 +1171,11 @@ export class VflowCanvasComponent {
       this.contextMenu.emit({ target: { kind: 'node', nodeId }, anchor });
       return;
     }
+    const noteId = target?.closest('[data-note-id]')?.getAttribute('data-note-id');
+    if (noteId) {
+      this.contextMenu.emit({ target: { kind: 'note', noteId }, anchor });
+      return;
+    }
     const edgeEl = target?.closest('g[edge]');
     if (edgeEl) {
       const index = [...this.host.nativeElement.querySelectorAll('g[edge]')].indexOf(edgeEl);
@@ -858,7 +1185,112 @@ export class VflowCanvasComponent {
         return;
       }
     }
-    this.contextMenu.emit({ target: { kind: 'canvas' }, anchor });
+    this.contextMenu.emit({ target: { kind: 'canvas' }, anchor, at: this.flowPoint(anchor) });
+  }
+
+  /** Точка екрана → координати канвасу з кроком сітки; без vflow чи SVG-геометрії (jsdom у тестах) — як є. */
+  private flowPoint(point: ScreenPoint): [number, number] {
+    const flow = this.flow();
+    if (!flow) return [snap(point.x), snap(point.y)];
+    try {
+      const p = flow.documentPointToFlowPoint(point);
+      return [snap(p.x), snap(p.y)];
+    } catch {
+      return [snap(point.x), snap(point.y)];
+    }
+  }
+
+  /** Лівий верхній кут нотатки типового розміру, щоб вона стала в центрі видимої частини канвасу (F3-62, `Shift+S`). */
+  viewportCenter(): [number, number] {
+    const rect = this.host.nativeElement.getBoundingClientRect();
+    const [x, y] = this.flowPoint({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    return [snap(x - DEFAULT_NOTE_SIZE[0] / 2), snap(y - DEFAULT_NOTE_SIZE[1] / 2)];
+  }
+
+  // ---------- Нотатки (F3-62) ----------
+
+  protected startNoteEdit(event: Event, id: string): void {
+    event.stopPropagation();
+    if (this.readonly() || this.editingNote() === id) return;
+    this.noteEditStart.emit(id);
+  }
+
+  protected noteEditorKey(event: KeyboardEvent, id: string): void {
+    // Клавіші належать полю: канвас їх не бачить (редактор не перехоплює keydown у textarea), але Escape і Ctrl+Enter — наші.
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelNoteEdit(id);
+    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      this.commitNoteEdit(id, (event.target as HTMLTextAreaElement).value);
+    }
+  }
+
+  protected commitNoteEdit(id: string, text: string): void {
+    // Ctrl+Enter і наступний blur приходять обидва — віддаємо лише перший.
+    if (this.editingNote() !== id || this.noteEditDone === id) return;
+    this.noteEditDone = id;
+    this.noteEdit.emit({ id, text });
+  }
+
+  protected cancelNoteEdit(id: string): void {
+    if (this.editingNote() !== id || this.noteEditDone === id) return;
+    this.noteEditDone = id;
+    this.noteEdit.emit({ id, text: null });
+  }
+
+  protected pickNoteColor(event: MouseEvent, id: string, color: NoteColor): void {
+    event.stopPropagation();
+    if (this.readonly()) return;
+    this.noteChange.emit({ id, color });
+  }
+
+  protected deleteNote(event: MouseEvent, id: string): void {
+    event.stopPropagation();
+    if (this.readonly()) return;
+    this.noteDelete.emit(id);
+  }
+
+  protected noteWidth(d: NoteData): number {
+    const r = this.resizing();
+    return r?.id === d.note.id ? r.width : d.width;
+  }
+
+  protected noteHeight(d: NoteData): number {
+    const r = this.resizing();
+    return r?.id === d.note.id ? r.height : d.height;
+  }
+
+  /** Кут нотатки: тягнемо — картка росте наживо (ngx-vflow бере розмір вузла з неї), відпустили — одна зміна визначення. */
+  protected startNoteResize(event: PointerEvent, id: string): void {
+    event.stopPropagation();
+    event.preventDefault();
+    if (this.readonly()) return;
+    const note = this.notes().find((n) => n.id === id);
+    if (!note) return;
+    const zoom = this.flow()?.viewport().zoom || 1;
+    const [startWidth, startHeight] = noteSize(note);
+    const start = { x: event.clientX, y: event.clientY };
+    let size: [number, number] = [startWidth, startHeight];
+    const move = (e: PointerEvent) => {
+      size = [
+        Math.max(MIN_NOTE_SIZE[0], startWidth + (e.clientX - start.x) / zoom),
+        Math.max(MIN_NOTE_SIZE[1], startHeight + (e.clientY - start.y) / zoom),
+      ];
+      this.resizing.set({ id, width: size[0], height: size[1] });
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      this.resizing.set(null);
+      const snapped: [number, number] = [snap(size[0]), snap(size[1])];
+      if (snapped[0] !== startWidth || snapped[1] !== startHeight) this.noteChange.emit({ id, size: snapped });
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
   }
 
   protected openMissing(event: MouseEvent, nodeId: string, field: string): void {
@@ -882,16 +1314,18 @@ export class VflowCanvasComponent {
 
   /** Виділення змінила бібліотека — читаємо його з сигналів `selected` і віддаємо назовні. */
   protected selectionChanged(): void {
-    const nodes = this.nodes()
+    const selectedIds = this.nodes()
       .filter((n) => n.selected?.())
       .map((n) => n.id);
+    const nodes = selectedIds.filter((id) => noteIdOf(id) === null);
+    const notes = selectedIds.map(noteIdOf).filter((id): id is string => id !== null);
     const edges = this.edges()
       .filter((e) => e.selected?.())
       .map(edgeIndex);
     this.syncEdgeLabels();
     const current = this.selection();
-    if (sameItems(current.nodes, nodes) && sameItems(current.edges, edges)) return;
-    this.selectionChange.emit({ nodes, edges });
+    if (sameItems(current.nodes, nodes) && sameItems(current.edges, edges) && sameItems(current.notes ?? [], notes)) return;
+    this.selectionChange.emit(notes.length ? { nodes, edges, notes } : { nodes, edges });
   }
 
   /**
@@ -919,15 +1353,24 @@ export class VflowCanvasComponent {
 
   protected dragEnded(): void {
     const model = new Map(this.model().nodes.map((n) => [n.id, n]));
+    const notes = new Map(this.notes().map((n) => [n.id, parsePosition(n.position)]));
     const moved: NodePosition[] = [];
+    const movedNotes: NodePosition[] = [];
     for (const node of this.nodes()) {
       const point = node.point();
+      const noteId = noteIdOf(node.id);
+      if (noteId !== null) {
+        const original = notes.get(noteId);
+        if (original && (original.x !== point.x || original.y !== point.y)) movedNotes.push({ id: noteId, x: point.x, y: point.y });
+        continue;
+      }
       const original = model.get(node.id);
       if (original && (original.x !== point.x || original.y !== point.y)) {
         moved.push({ id: node.id, x: point.x, y: point.y });
       }
     }
     if (moved.length > 0) this.nodesMoved.emit(moved);
+    if (movedNotes.length > 0) this.notesMoved.emit(movedNotes);
   }
 
   protected inputId(index: number): string {

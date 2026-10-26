@@ -13,8 +13,9 @@ import { BusinessRun } from '../business-view/business-run';
 import { Autosave } from '../canvas/autosave';
 import { CanvasSelection, EMPTY_SELECTION, NeighborDirection, copySelection, deleteSelection, neighborNode, pasteClipboard, renameNode, toggleDisabled } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
+import { addNote, randomNoteId, removeNotes, updateNote } from '../canvas/canvas-notes';
 import { missingFieldsByNode } from '../canvas/missing-fields';
-import { CanvasContextMenuRequest, CanvasContextTarget, MissingFieldRequest, NodeActionRequest, NodeRenameRequest } from '../canvas/vflow/vflow-canvas.component';
+import { CanvasContextMenuRequest, CanvasContextTarget, MissingFieldRequest, NodeActionRequest, NodeRenameRequest, NoteEditRequest } from '../canvas/vflow/vflow-canvas.component';
 import { CanvasComponent } from '../canvas/canvas.component';
 import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
@@ -244,6 +245,10 @@ export interface EditorErrorEvent {
               (nodeAction)="nodeAction($event)"
               (renamed)="renamed($event)"
               (contextMenu)="openContextMenu($event)"
+              [editingNote]="editingNote()"
+              (noteEditStart)="startNoteEdit($event)"
+              (noteEdit)="noteEdited($event)"
+              (noteDelete)="deleteNote($event)"
             />
             @if (!def.nodes.length && !readonly() && !quickAdd() && !assistantOpen()) {
               <app-empty-start class="absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2" (addTrigger)="startWithTrigger($event)" (pick)="startFromTemplate($event)" (describe)="assistantAction('describe')" />
@@ -797,7 +802,9 @@ export class WorkflowEditorComponent implements OnInit {
   /** Вузол з inline-полем назви на картці (F3-58); `null` — немає. */
   protected readonly renaming = signal<string | null>(null);
   /** Контекстне меню канвасу (F3-58); `null` — закрите. */
-  protected readonly contextMenu = signal<{ target: CanvasContextTarget; left: number; top: number } | null>(null);
+  protected readonly contextMenu = signal<{ target: CanvasContextTarget; left: number; top: number; at?: [number, number] } | null>(null);
+  /** Нотатка з відкритим полем тексту (F3-62); `null` — немає. */
+  protected readonly editingNote = signal<string | null>(null);
   /** Коротке повідомлення над канвасом (напр. назва вузла зайнята); зникає саме. */
   protected readonly notice = signal<string | null>(null);
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -807,6 +814,7 @@ export class WorkflowEditorComponent implements OnInit {
   /** Ключі останніх доданих елементів палітри (секція «Останні»). */
   private readonly recent = signal<string[]>(readRecent());
   private readonly canvasArea = viewChild<ElementRef<HTMLElement>>('canvasArea');
+  private readonly canvas = viewChild(CanvasComponent);
   private readonly inputCol = viewChild<ElementRef<HTMLElement>>('inputCol');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -973,7 +981,9 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly canRedo = this.history.canRedo;
   protected readonly canPaste = computed(() => this.clipboard.clipboard() !== null);
   protected readonly hasNodeSelection = computed(() => this.selection().nodes.length > 0);
-  protected readonly hasSelection = computed(() => this.selection().nodes.length > 0 || this.selection().edges.length > 0);
+  protected readonly hasSelection = computed(
+    () => this.selection().nodes.length > 0 || this.selection().edges.length > 0 || (this.selection().notes?.length ?? 0) > 0,
+  );
   protected readonly saveStatus = this.autosave.status;
   protected readonly validationErrors = this.autosave.validationErrors;
   protected readonly saveError = this.autosave.errorMessage;
@@ -1267,10 +1277,11 @@ export class WorkflowEditorComponent implements OnInit {
     // Меню діє на те, що під вказівником: вузол поза виділенням стає виділеним.
     if (target.kind === 'node' && !this.selection().nodes.includes(target.nodeId)) this.selection.set({ nodes: [target.nodeId], edges: [] });
     if (target.kind === 'edge') this.selection.set({ nodes: [], edges: [target.edgeIndex] });
+    if (target.kind === 'note' && !this.selection().notes?.includes(target.noteId)) this.selection.set({ nodes: [], edges: [], notes: [target.noteId] });
     const box = this.canvasArea()?.nativeElement.getBoundingClientRect();
     const left = box ? clamp(request.anchor.x - box.left, 8, box.width - CONTEXT_MENU_WIDTH) : request.anchor.x;
     const top = box ? clamp(request.anchor.y - box.top, 8, box.height - CONTEXT_MENU_HEIGHT) : request.anchor.y;
-    this.contextMenu.set({ target, left, top });
+    this.contextMenu.set({ target, left, top, at: request.at });
   }
 
   protected closeContextMenu(): void {
@@ -1327,7 +1338,55 @@ export class WorkflowEditorComponent implements OnInit {
       case 'selectAll':
         this.selectAll();
         break;
+      case 'addNote':
+        this.addNoteAt(menu.at ?? this.canvas()?.viewportCenter() ?? [0, 0]);
+        break;
+      case 'editNote':
+        if (target.kind === 'note') this.startNoteEdit(target.noteId);
+        break;
     }
+  }
+
+  // ---------- Нотатки (F3-62) ----------
+
+  /** Нова порожня нотатка з лівим верхнім кутом у `at` (координати канвасу) — одразу з відкритим полем тексту. */
+  protected addNoteAt(at: [number, number]): void {
+    const def = this.definition();
+    if (!def || this.readonly()) return;
+    const { definition, id } = addNote(def, at, randomNoteId);
+    this.changed(definition);
+    this.selection.set({ nodes: [], edges: [], notes: [id] });
+    this.editingNote.set(id);
+  }
+
+  protected startNoteEdit(id: string): void {
+    if (this.readonly() || !this.definition()?.notes?.some((n) => n.id === id)) return;
+    this.selection.set({ nodes: [], edges: [], notes: [id] });
+    this.editingNote.set(id);
+  }
+
+  /** Поле тексту закрито: новий текст — крок історії; скасування щойно доданої порожньої нотатки прибирає її. */
+  protected noteEdited(request: NoteEditRequest): void {
+    if (this.editingNote() !== request.id) return;
+    this.editingNote.set(null);
+    const def = this.definition();
+    if (!def) return;
+    const note = def.notes?.find((n) => n.id === request.id);
+    if (!note) return;
+    if (request.text === null) {
+      if (!note.text) this.changed(removeNotes(def, [request.id]));
+      return;
+    }
+    const next = updateNote(def, request.id, { text: request.text });
+    if (next !== def) this.changed(next);
+  }
+
+  protected deleteNote(id: string): void {
+    const def = this.definition();
+    if (!def || this.readonly()) return;
+    if (this.editingNote() === id) this.editingNote.set(null);
+    this.selection.set(EMPTY_SELECTION);
+    this.changed(removeNotes(def, [id]));
   }
 
   protected selectAll(): void {
@@ -1699,6 +1758,7 @@ export class WorkflowEditorComponent implements OnInit {
     } else if (!mod && !event.altKey && !event.shiftKey && key === 'd') action = this.hasNodeSelection() ? () => this.toggleNodes(this.selection().nodes) : null;
     else if (mod && key === 'd') action = this.hasNodeSelection() ? () => this.duplicate(this.selection().nodes) : null;
     else if (mod && key === 'a') action = () => this.selectAll();
+    else if (!mod && !event.altKey && event.shiftKey && key === 's') action = () => this.addNoteAt(this.canvas()?.viewportCenter() ?? [0, 0]);
     else if (mod && event.key === 'Enter') action = this.running() || !this.definition()?.nodes.length ? null : () => this.runWorkflow();
     else if (!mod && !event.altKey && !event.shiftKey && ARROWS[event.key]) {
       const direction = ARROWS[event.key];
@@ -1713,12 +1773,16 @@ export class WorkflowEditorComponent implements OnInit {
   private apply(definition: WorkflowDefinition): void {
     this.definition.set(definition);
     const ids = new Set(definition.nodes.map((n) => n.id));
+    const noteIds = new Set((definition.notes ?? []).map((n) => n.id));
     const selection = this.selection();
     const nodes = selection.nodes.filter((id) => ids.has(id));
     const edges = selection.edges.filter((i) => i < definition.connections.length);
-    if (nodes.length !== selection.nodes.length || edges.length !== selection.edges.length) {
-      this.selection.set({ nodes, edges });
+    const notes = (selection.notes ?? []).filter((id) => noteIds.has(id));
+    if (nodes.length !== selection.nodes.length || edges.length !== selection.edges.length || notes.length !== (selection.notes?.length ?? 0)) {
+      this.selection.set(notes.length ? { nodes, edges, notes } : { nodes, edges });
     }
+    const editing = this.editingNote();
+    if (editing && !noteIds.has(editing)) this.editingNote.set(null);
     const id = this.workflow()?.id;
     if (id) this.autosave.schedule({ id, definition });
   }

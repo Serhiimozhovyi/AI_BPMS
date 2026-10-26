@@ -596,7 +596,7 @@
 - DoD: Vitest — layout детермінований і без накладань на прикладах `examples/*.json`; Playwright — ПКМ → Дублювати, `D` вимикає, Вирівняти не змінює ребра; lint/test/build/e2e зелені.
 
 ### F3-62 · Нотатки на канвасі (частина пропозиції I)
-- model: `fable` · status: `ready` · depends: F3-58
+- model: `fable` · status: `review` · depends: F3-58
 - Що: вільні нотатки (sticky notes) на канвасі — зміна формату (правило 2 `CLAUDE.md`): `notes: [{ id, text, position, size, color }]` на рівні сценарію в `docs/workflow-format.md` і JSON Schema `OpenBP.Shared`, міграція версії формату, валідатор і движок їх ігнорують, `/mcp` віддає й приймає без втрат. UI: Markdown-текст, кольори Highlight AC-Kit, `Shift+S` — нова нотатка, ПКМ → «Додати нотатку».
 - DoD: round-trip `notes` у Shared, Api, `/mcp` і канвасі; тест міграції версії формату; Playwright — додати нотатку, перезавантажити сторінку, нотатка на місці; доки оновлено.
 

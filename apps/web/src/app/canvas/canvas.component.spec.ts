@@ -55,6 +55,47 @@ describe('CanvasComponent', () => {
     expect(cards[2].textContent).toContain('mcp.tool · create_order');
   });
 
+  it('F3-62: нотатки — картки з Markdown-текстом і кольором; зміна кольору чи розміру з канвасу — нове визначення', async () => {
+    const definition: WorkflowDefinition = {
+      ...demo(),
+      notes: [
+        { id: 'note_in', text: '## Вхід\n\nЗаявки з **Telegram** <b>не html</b>', position: [0, -160], size: [260, 120], color: 'green' },
+        { id: 'note_empty', text: '', position: [500, 0] },
+      ],
+    };
+    const fixture = await create(definition);
+    const host = fixture.nativeElement as HTMLElement;
+    const changes: WorkflowDefinition[] = [];
+    fixture.componentInstance.definitionChange.subscribe((d) => changes.push(d));
+
+    const notes = host.querySelectorAll<HTMLElement>('[data-note-id]');
+    expect(Array.from(notes).map((n) => n.getAttribute('data-note-id'))).toEqual(['note_in', 'note_empty']);
+    expect(notes[0].getAttribute('data-note-color')).toBe('green');
+    expect(notes[1].getAttribute('data-note-color')).toBe('yellow');
+    const body = notes[0].querySelector('[data-testid="note-body"]')!;
+    expect(body.querySelector('h2')?.textContent).toBe('Вхід');
+    expect(body.querySelector('strong')?.textContent).toBe('Telegram');
+    expect(body.querySelector('b')).toBeNull();
+    expect(body.textContent).toContain('<b>не html</b>');
+    expect(notes[1].textContent).toContain('Двічі клацніть');
+    // Вузли лишаються картками з портами, нотатки — без портів.
+    expect(host.querySelectorAll('[data-node-id]').length).toBe(3);
+    expect(notes[0].querySelectorAll('handle').length).toBe(0);
+
+    const canvas = vflow(fixture);
+    canvas.noteChange.emit({ id: 'note_in', color: 'red' });
+    canvas.noteChange.emit({ id: 'note_empty', size: [300, 80] });
+    canvas.noteChange.emit({ id: 'note_in', color: 'green' });
+    expect(changes).toHaveLength(2);
+    expect(changes[0].notes![0].color).toBe('red');
+    expect(changes[0].nodes).toBe(definition.nodes);
+    expect(changes[1].notes![1].size).toEqual([300, 80]);
+
+    canvas.notesMoved.emit([{ id: 'note_empty', x: 520, y: 40 }]);
+    expect(changes[2].notes![1].position).toEqual([520, 40]);
+    expect(changes[2].notes![0]).toBe(definition.notes![0]);
+  });
+
   it('порти — за дескрипторами: тригер без входу, IF з двома виходами, continueOnFail додає error', async () => {
     const fixture = await create(demo());
     const host = fixture.nativeElement as HTMLElement;
