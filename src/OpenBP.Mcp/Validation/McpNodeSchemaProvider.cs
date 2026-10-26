@@ -24,9 +24,13 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
     /// <summary>Тип вузла очікування умови (F5-03).</summary>
     public const string WaitForNodeType = "mcp.waitFor";
 
+    /// <summary>Push-тригер подій: підписка на ресурс конектора (F6-13).</summary>
+    public const string SubscribeNodeType = "mcp.subscribe";
+
     private static readonly NodePorts ToolPorts = new(1, 1);
     private static readonly NodePorts PollPorts = new(0, 1);
     private static readonly NodePorts WaitForPorts = new(1, 2);
+    private static readonly NodePorts SubscribePorts = new(0, 1);
 
     private readonly IMcpServerRegistry _servers;
     private readonly INodeSchemaProvider? _inner;
@@ -48,6 +52,7 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
             ToolNodeType => ToolPorts,
             PollNodeType => PollPorts,
             WaitForNodeType => WaitForPorts,
+            SubscribeNodeType => SubscribePorts,
             _ => null,
         };
 
@@ -55,7 +60,7 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
     public async Task<IReadOnlyList<WorkflowValidationError>> ValidateNodeAsync(NodeDefinition node, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(node);
-        if (node.Type is not (ToolNodeType or PollNodeType or WaitForNodeType))
+        if (node.Type is not (ToolNodeType or PollNodeType or WaitForNodeType or SubscribeNodeType))
         {
             return _inner is null ? [] : await _inner.ValidateNodeAsync(node, ct).ConfigureAwait(false);
         }
@@ -69,6 +74,17 @@ public sealed class McpNodeSchemaProvider : INodeSchemaProvider
         }
 
         var serverId = RequiredString(node, "serverId", described, errors);
+        if (node.Type == SubscribeNodeType)
+        {
+            // Ресурс обов'язковий, tool — необов'язковий (без нього читається сам ресурс).
+            RequiredString(node, "resourceUri", described, errors);
+            RequiredString(node, "keyField", described, errors);
+            if (node.Parameters["toolName"] is not JsonValue optional || !optional.TryGetValue<string>(out var optionalTool) || optionalTool.Length == 0)
+            {
+                return errors;
+            }
+        }
+
         var toolName = RequiredString(node, "toolName", described, errors);
         if (serverId is null || toolName is null
             || ExpressionSyntax.ContainsExpression(serverId) || ExpressionSyntax.ContainsExpression(toolName))
