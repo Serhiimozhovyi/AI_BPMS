@@ -10,10 +10,11 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { CredentialOption } from '../credentials/credentials-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
-import { CommonModel, MCP_TOOL_TYPES, applyCommon, applyParameters, commonFields, commonModel, parameterFields, parametersModel } from './node-form';
+import { CommonModel, MCP_TOOL_TYPES, SUBSCRIBE_NODE_TYPE, applyCommon, applyParameters, commonFields, commonModel, parameterFields, parametersModel } from './node-form';
 import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext } from './expression-suggest';
 import { NodeFormState, provideNodeForm } from './node-form-fields';
 import { OptionsConnector, ToolOptionsService } from './tool-options.service';
+import { SubscribeSourceComponent } from './subscribe-source.component';
 
 /** Стан форм для одного вузла: моделі (копії) і поля formly. Новий стан — нові екземпляри форм. */
 interface PanelState {
@@ -43,7 +44,7 @@ interface PanelState {
 @Component({
   selector: 'app-node-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormlyForm, ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [FormlyForm, ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, SubscribeSourceComponent],
   // Кеш списків з конекторів (F3-54) — у межах панелі.
   providers: [provideNodeForm(), ToolOptionsService],
   template: `
@@ -112,6 +113,9 @@ interface PanelState {
           <p class="panel__note" role="status" data-testid="node-panel-no-tool" i18n="@@nodeform.noTool">
             Схема tool'а невідома (конектор не знайдено або tools не завантажено) — аргументи редагуються як JSON.
           </p>
+        }
+        @if (isSubscribe(s.node)) {
+          <app-subscribe-source [node]="s.node" [readonly]="readonly()" (nodeChange)="sourceChanged($event)" />
         }
         @if (s.paramsFields.length === 0) {
           <p class="panel__note" i18n="@@nodeform.noParameters">Параметрів немає.</p>
@@ -339,12 +343,21 @@ export class NodePanelComponent {
     return MCP_TOOL_TYPES.includes(node.type);
   }
 
+  protected isSubscribe(node: WorkflowNode): boolean {
+    return node.type === SUBSCRIBE_NODE_TYPE;
+  }
+
   protected parametersChanged(model: Record<string, unknown>): void {
     this.emit(applyParameters(this.state().node, model));
   }
 
   protected commonChanged(model: CommonModel): void {
     this.emit(applyCommon(this.state().node, model));
+  }
+
+  /** Конектор/ресурс змінено блоком «Подія конектора»: форми параметрів перебудовуються з нового вузла. */
+  protected sourceChanged(node: WorkflowNode): void {
+    if (!this.readonly()) this.nodeChange.emit(node);
   }
 
   private emit(node: WorkflowNode): void {

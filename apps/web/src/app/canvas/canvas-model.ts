@@ -229,5 +229,9 @@ function subtitleOf(node: WorkflowNode): string {
     const toolName = node.parameters?.['toolName'];
     if (typeof toolName === 'string' && toolName) return `${node.type} · ${toolName}`;
   }
+  if (node.type === 'mcp.subscribe') {
+    const uri = node.parameters?.['resourceUri'];
+    if (typeof uri === 'string' && uri) return `${node.type} · ${uri}`;
+  }
   return node.type;
 }

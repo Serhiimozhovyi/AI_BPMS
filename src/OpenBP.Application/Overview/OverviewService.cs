@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Auth;
 using OpenBP.Data;
+using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Overview;
 
@@ -10,6 +11,29 @@ namespace OpenBP.Application.Overview;
 /// <param name="Failed">Виконань <c>error</c> і <c>timed_out</c>.</param>
 /// <param name="Total">Усіх завершених виконань.</param>
 public sealed record OverviewFailingWorkflow(Guid WorkflowId, string? Name, int Failed, int Total);
+
+/// <summary>Підписка push-тригера <c>mcp.subscribe</c> на сторінці «Огляд» (F6-20).</summary>
+/// <param name="WorkflowId">Сценарій.</param>
+/// <param name="WorkflowName">Назва сценарію.</param>
+/// <param name="NodeId">Вузол <c>mcp.subscribe</c>.</param>
+/// <param name="NodeName">Назва вузла; <c>null</c>, якщо не знайдено в опублікованій версії.</param>
+/// <param name="ServerId">Конектор (<c>parameters.serverId</c>).</param>
+/// <param name="ServerName">Назва конектора; <c>null</c>, якщо його не знайдено.</param>
+/// <param name="ResourceUri">Ресурс подій.</param>
+/// <param name="WorkerId">Воркер-власник; <c>null</c> — оренди нема.</param>
+/// <param name="LeasedUntil">До якого моменту діє оренда.</param>
+/// <param name="State"><c>held</c> — орендована живим воркером; <c>free</c> — оренди нема чи вона протухла (воркера нема або він упав).</param>
+public sealed record OverviewSubscription(
+    Guid WorkflowId,
+    string WorkflowName,
+    string NodeId,
+    string? NodeName,
+    string ServerId,
+    string? ServerName,
+    string ResourceUri,
+    string? WorkerId,
+    DateTimeOffset? LeasedUntil,
+    string State);
 
 /// <summary>Сторінка «Огляд» (F6-07).</summary>
 /// <param name="Range">Період: <c>24h</c>, <c>7d</c> або <c>30d</c>.</param>
@@ -26,6 +50,7 @@ public sealed record OverviewFailingWorkflow(Guid WorkflowId, string? Name, int 
 /// <param name="Running">Зараз виконуються (разом зі скасовуваними).</param>
 /// <param name="Waiting">Зараз чекають події чи часу.</param>
 /// <param name="OpenViolations">Виконань з відкритими порушеннями правил переходу між етапами (F7-04).</param>
+/// <param name="Subscriptions">Підписки push-тригерів <c>mcp.subscribe</c> активних сценаріїв (F6-20).</param>
 public sealed record OverviewResult(
     string Range,
     DateTimeOffset From,
@@ -40,7 +65,8 @@ public sealed record OverviewResult(
     int Queued,
     int Running,
     int Waiting,
-    int OpenViolations = 0);
+    int OpenViolations = 0,
+    IReadOnlyList<OverviewSubscription>? Subscriptions = null);
 
 /// <summary>Дані сторінки «Огляд».</summary>
 public interface IOverviewService
@@ -125,6 +151,8 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
             .Distinct()
             .CountAsync(ct);
 
+        var subscriptions = await LoadSubscriptionsAsync(restricted, visible, now, ct);
+
         return new OverviewResult(
             range!,
             from,
@@ -139,6 +167,41 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
             Current(ExecutionStatuses.Queued),
             Current(ExecutionStatuses.Running) + Current(ExecutionStatuses.Cancelling),
             Current(WaitingStatus),
-            openViolations);
+            openViolations,
+            subscriptions);
+    }
+
+    private async Task<List<OverviewSubscription>> LoadSubscriptionsAsync(
+        bool restricted, IQueryable<Guid> visible, DateTimeOffset now, CancellationToken ct)
+    {
+        var rows = await db.Subscriptions.AsNoTracking()
+            .Where(s => !restricted || visible.Contains(s.WorkflowId))
+            .Join(db.Workflows.AsNoTracking(), s => s.WorkflowId, w => w.Id, (s, w) => new { Sub = s, w.Name, Version = (w.PublishedVersionId ?? w.CurrentVersionId)!.Value })
+            .OrderBy(x => x.Name).ThenBy(x => x.Sub.NodeId)
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var versionIds = rows.Select(r => r.Version).Distinct().ToList();
+        var definitions = await db.WorkflowVersions.AsNoTracking()
+            .Where(v => versionIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, v => v.Definition, ct);
+        var serverIds = rows.Select(r => Guid.TryParse(r.Sub.ServerId, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty).Distinct().ToList();
+        var servers = await db.McpServers.AsNoTracking().Where(s => serverIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id.ToString(), s => s.Name, ct);
+
+        return [.. rows.Select(r =>
+        {
+            string? nodeName = null;
+            if (definitions.TryGetValue(r.Version, out var json))
+            {
+                nodeName = WorkflowJson.Deserialize(json).Nodes.FirstOrDefault(n => n.Id == r.Sub.NodeId)?.Name;
+            }
+
+            var held = r.Sub.WorkerId is not null && r.Sub.LeasedUntil > now;
+            return new OverviewSubscription(
+                r.Sub.WorkflowId, r.Name, r.Sub.NodeId, nodeName, r.Sub.ServerId, servers.GetValueOrDefault(r.Sub.ServerId.ToLowerInvariant()),
+                r.Sub.ResourceUri, held ? r.Sub.WorkerId : null, held ? r.Sub.LeasedUntil : null, held ? "held" : "free");
+        })];
     }
 }

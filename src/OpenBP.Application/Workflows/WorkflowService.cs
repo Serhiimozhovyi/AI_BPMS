@@ -8,6 +8,7 @@ using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Paging;
 using OpenBP.Application.Schedules;
+using OpenBP.Application.Subscriptions;
 using OpenBP.Application.Variables;
 using OpenBP.Application.Webhooks;
 using OpenBP.Data;
@@ -191,7 +192,9 @@ public sealed class WorkflowService(
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         if (workflow.Active)
         {
-            await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
+            var published = WorkflowJson.Deserialize(version.Definition);
+            await WebhookRegistrar.ReplaceAsync(db, id, published, ct);
+            await SubscriptionRegistrar.ReplaceAsync(db, id, published, time.GetUtcNow(), ct);
         }
 
         workflow.PublishedVersionId = version.Id;
@@ -318,7 +321,9 @@ public sealed class WorkflowService(
         await ThrowIfInvalidAsync(JsonNode.Parse(version.Definition)!.AsObject(), asActive: true, ct, workflow.Id, new(workflow.GroupId));
         ThrowIfOnlyWorkflowTrigger(WorkflowJson.Deserialize(version.Definition));
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await WebhookRegistrar.ReplaceAsync(db, id, WorkflowJson.Deserialize(version.Definition), ct);
+        var definition = WorkflowJson.Deserialize(version.Definition);
+        await WebhookRegistrar.ReplaceAsync(db, id, definition, ct);
+        await SubscriptionRegistrar.ReplaceAsync(db, id, definition, time.GetUtcNow(), ct);
         workflow.PublishedVersionId = version.Id;
         workflow.Active = true;
         workflow.UpdatedAt = time.GetUtcNow();
@@ -347,6 +352,7 @@ public sealed class WorkflowService(
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             await WebhookRegistrar.RemoveAsync(db, id, ct);
+            await SubscriptionRegistrar.RemoveAsync(db, id, ct);
             workflow.Active = false;
             workflow.UpdatedAt = time.GetUtcNow();
             db.Audit(currentUser, workflow.UpdatedAt, AuditActions.WorkflowDeactivated, AuditEntities.Workflow, id.ToString(),

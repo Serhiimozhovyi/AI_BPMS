@@ -14,6 +14,9 @@ import { CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields 
 /** Типи, чиї `arguments` описує `inputSchema` tool'а з `tools_cache` (docs/connectors.md). */
 export const MCP_TOOL_TYPES: readonly string[] = ['mcp.tool', 'mcp.poll', 'mcp.waitFor'];
 
+/** Push-тригер конектора (F6-20): `serverId` і `resourceUri` обираються окремим блоком панелі, не полями formly. */
+export const SUBSCRIBE_NODE_TYPE = 'mcp.subscribe';
+
 /** Тип вузла, чий параметр `code` редагується в Monaco (F2-19). */
 export const CODE_NODE_TYPE = 'core.code';
 
@@ -83,6 +86,7 @@ function isExpressionText(value: string): boolean {
 
 function baseFields(type: string, descriptor: NodeTypeInfo, tool: McpToolInfo | null | undefined): FormlyFieldConfig[] {
   if (type === CODE_NODE_TYPE) return schemaFields(descriptor.parametersSchema).map((f) => (f.key === 'code' ? { ...f, type: CODE_FIELD } : f));
+  if (type === SUBSCRIBE_NODE_TYPE) return schemaFields(descriptor.parametersSchema, { omit: ['serverId', 'resourceUri'] });
   if (!MCP_TOOL_TYPES.includes(type)) return schemaFields(descriptor.parametersSchema);
   const argumentsSchema = isPlainObject(tool?.inputSchema)
     ? { ...tool.inputSchema, title: $localize`:@@nodeform.arguments:Аргументи` }

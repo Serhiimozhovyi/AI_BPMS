@@ -146,6 +146,18 @@ public interface IConnectorService
     /// <exception cref="ConnectorUnavailableException">Сервер недоступний; стан уже записано як <see cref="ConnectorStatus.Error"/>.</exception>
     Task<ConnectorDetail> RefreshToolsAsync(Guid id, CancellationToken ct);
 
+    /// <summary>
+    /// Ресурси конектора (<c>resources/list</c> і <c>resources/templates/list</c>) — варіанти для вузла
+    /// <c>mcp.subscribe</c> (F6-20). Список кешується в пам'яті процесу на хвилину; <paramref name="refresh"/> читає наново.
+    /// Конектор без ресурсів дає порожній список.
+    /// </summary>
+    /// <param name="id"><c>mcp_servers.id</c>.</param>
+    /// <param name="refresh">Пропустити кеш.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Конектора немає.</exception>
+    /// <exception cref="ConnectorUnavailableException">Сервер недоступний.</exception>
+    Task<IReadOnlyList<ConnectorResource>> ListResourcesAsync(Guid id, bool refresh, CancellationToken ct);
+
     /// <summary>Тестовий виклик tool'а з аргументами (без сценарію і без збереження кроків).</summary>
     /// <param name="id"><c>mcp_servers.id</c>.</param>
     /// <param name="toolName">Ім'я tool'а з кешу.</param>
@@ -155,3 +167,10 @@ public interface IConnectorService
     /// <exception cref="ConnectorUnavailableException">Сервер недоступний або таймаут.</exception>
     Task<ToolCallResult> CallToolAsync(Guid id, string toolName, JsonObject arguments, CancellationToken ct);
 }
+
+/// <summary>Ресурс конектора для вибору в <c>mcp.subscribe</c> (F6-20).</summary>
+/// <param name="Uri">URI ресурсу або шаблон (<c>kit://changes/{entity}</c>, якщо <paramref name="IsTemplate"/>).</param>
+/// <param name="Name">Назва від сервера.</param>
+/// <param name="Description">Опис, якщо є.</param>
+/// <param name="IsTemplate"><c>true</c> — це шаблон URI: підписатися можна лише на URI з підставленими параметрами.</param>
+public sealed record ConnectorResource(string Uri, string Name, string? Description, bool IsTemplate);

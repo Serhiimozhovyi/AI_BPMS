@@ -220,6 +220,24 @@ public class ConnectorTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Resources_lists_event_resources_of_live_server_and_empty_for_server_without_them()
+    {
+        var admin = await LoginAsync(UserRole.Admin);
+        await using var server = await StartHttpServerAsync();
+        var live = IdOf(await CreateAsync(admin, HttpInput(Unique("Events http"), McpUrl(server))));
+
+        var resources = await admin.GetFromJsonAsync<JsonElement>($"{Base}/{live}/resources");
+
+        var events = Assert.Single(resources.EnumerateArray(), r => r.GetProperty("uri").GetString() == FakeEvents.Uri);
+        Assert.False(events.GetProperty("isTemplate").GetBoolean());
+
+        // Другий виклик віддається з кешу, refresh=true читає наново — обидва успішні.
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"{Base}/{live}/resources")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"{Base}/{live}/resources?refresh=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"{Base}/{Guid.NewGuid()}/resources")).StatusCode);
+    }
+
+    [Fact]
     public async Task Update_changes_settings_and_repeats_discovery()
     {
         var admin = await LoginAsync(UserRole.Admin);
