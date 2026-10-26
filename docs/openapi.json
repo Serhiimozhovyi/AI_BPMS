@@ -1647,6 +1647,55 @@
         ]
       }
     },
+    "/api/v1/workflows/convert/n8n": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Перетворити сценарій n8n на тіло імпорту",
+        "description": "Приймає JSON сценарію n8n (експорт або копію з полотна), нічого не зберігає. Відповідь — `definition` і `manifest` для `POST /workflows/import` (конектор Telegram і credential Ollama — з назвами credentials n8n) та `notes[]`: `replace` — вузол без відповідника став заглушкою `core.code`, `check` — перенесено, перевірте.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/N8nConversion"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/{id}/export": {
       "get": {
         "tags": [
@@ -7215,6 +7264,50 @@
           "stdio",
           "http"
         ]
+      },
+      "N8nConversion": {
+        "required": [
+          "definition",
+          "manifest",
+          "notes"
+        ],
+        "type": "object",
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/WorkflowManifest"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/N8nConversionNote"
+            }
+          }
+        }
+      },
+      "N8nConversionNote": {
+        "required": [
+          "level",
+          "node",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "node": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
       },
       "NodeDescriptor": {
         "required": [
