@@ -959,6 +959,36 @@
 - Що: після оновлення `ModelContextProtocol` до версії з клієнтським API `subscriptions/listen { resourceSubscriptions }` воркер відкриває сесію підписки на поточному протоколі (`2026-07-28`+) і падає на `resources/subscribe` з `McpSubscriptions.ProtocolVersion` лише для старих серверів (за `NegotiatedProtocolVersion`); FakeServer і шаблон Connector Kit підтримують обидва шляхи (`SubscriptionsListenHandler` з доставкою `resources/updated` у потік запиту), stateless HTTP тоді теж працює.
 - DoD: тести реєстру й воркера на обох протоколах; `docs/connectors.md` §9.2 п. 3 оновлено; `architecture.md` §10.4.
 
+### F6-24 · Імпорт сценарію з n8n
+- model: `opus` · status: `done` · depends: F6-09
+- Що: запит власника 2026-10-26 — імпорт JSON сценарію n8n («Аграрії — MVP») не спрацьовував: діалог «Імпорт» розумів лише власний формат експорту. `POST /api/v1/workflows/convert/n8n` (application-шар `N8nWorkflowConverter`) перетворює сценарій n8n на `{ definition, manifest, notes }`: тригери, Code (з емуляцією `$input`/`$('…')`), If, Merge, Set, Wait, Data Table, Telegram «Send Message» → `mcp.tool`, Ollama → `ai.llm`; вирази `={{ }}` і `$('Назва').item.json`; `onError`, `retryOnFail`; вузли без відповідника — заглушки `core.code` з поясненням. Діалог імпорту розпізнає n8n, перетворює, імпортує і показує, що доробити.
+- DoD: unit-тести конвертера (валідація результату, зв'язки й виходи помилок, маніфест, цикли, cron, виконання коду n8n через движок); Vitest діалогу; `docs/workflow-format.md` §«Імпорт з n8n».
+
+### F6-25 · Конектор HTTP і RSS (`connectors/http`)
+- model: `sonnet` · status: `ready` · depends: F6-24
+- Що: запит власника 2026-10-26 — для сценарію n8n «Аграрії — MVP» бракує читання RSS і HTTP-запитів (в OpenBP немає прямого HTTP-вузла: інтеграції лише через MCP, правило 3). Новий конектор на Connector Kit: tool `rss_read { url, limit? }` → `items[]` з полями, звичними для n8n Read RSS (`title`, `link`, `isoDate`, `pubDate`, `contentSnippet`, `content`, `creator`, `categories`, `guid`), RSS 2.0 і Atom; tool `http_request { method, url, headers?, query?, json?, body?, timeoutSec? }` → `{ status, headers, json | text }` (ліміт розміру відповіді, `timeoutSec` до 300). Безпека: `HTTP_ALLOWED_HOSTS` (порожній — будь-які публічні), заборона приватних адрес (SSRF), крім явно дозволених (`HTTP_ALLOW_PRIVATE`, напр. `host.docker.internal` для локального FLUX/Ollama). Маніфест `connector.json`, запис у каталозі конекторів, сервіс у `docker-compose`.
+- DoD: контрактні тести проти локального HTTP-моку (RSS 2.0, Atom, битий XML, 404, таймаут, заборонена приватна адреса); job конектора в CI; README з прикладами `mcp.tool`.
+
+### F6-26 · Telegram: `send_photo`
+- model: `sonnet` · status: `ready` · depends: F6-24
+- Що: у `connectors/telegram` tool `send_photo { chat_id, photo_url | photo_base64, file_name?, caption?, parse_mode?, reply_markup? }` (Bot API `sendPhoto`; base64 — multipart, до 10 МБ, підпис до 1024 символів — інакше `isError` з поясненням). Потрібно для «Post photo» і «Post photo (FLUX)» з «Аграрії — MVP»: картинка FLUX приходить base64, тож `Buffer` у коді не потрібен.
+- DoD: контрактні тести з Bot API-моком (URL, base64, задовгий підпис, помилка API); README конектора.
+
+### F6-27 · Погодження в Telegram з очікуванням відповіді
+- model: `opus` · status: `ready` · depends: F6-24, F5-03
+- Що: аналог n8n Telegram «Send and Wait for Response» (кнопки ✅/❌, сценарій чекає натискання до N год). У `connectors/telegram`: tool `send_approval { chat_id, text, approve_label?, reject_label?, parse_mode? }` → `{ message_id, token }` (inline-кнопки з `callback_data` = токен + рішення) і `get_approval { chat_id, message_id, token }` → `{ answered, approved, by }` (читає `callback_query` через `getUpdates` або буфер подій F6-22, відповідає `answerCallbackQuery`, прибирає кнопки й дописує рішення в повідомлення). У сценарії: `mcp.tool send_approval` → `mcp.waitFor get_approval` з умовою `answered` і `timeoutAfter`; вихід `timeout` — як «не погоджено». Описати обмеження: один споживач оновлень на бота (webhook vs polling), приклад у README.
+- DoD: тести конектора з Bot API-моком (погоджено, відхилено, чужий токен, повторне натискання); CLI-тест сценарію `send_approval → waitFor → if` з моком і перемотуванням часу; `docs/connectors.md` — розділ про погодження.
+
+### F6-28 · Конвертер n8n: нові конектори і доробки
+- model: `sonnet` · status: `ready` · depends: F6-25, F6-26, F6-27
+- Що: `N8nWorkflowConverter` (F6-24) перетворює Read RSS → `mcp.tool rss_read`, HTTP Request → `mcp.tool http_request`, Telegram «Send Photo» → `send_photo`, «Send and Wait» → `send_approval` + `mcp.waitFor get_approval` (вихід `data.approved` як у n8n) замість заглушок; конектори HTTP і Telegram — у `manifest`. Доробки: типові вирази Luxon (`$now.setZone(tz).toISODate()`, `.toFormat(…)`, `$today`) → еквіваленти на `Date`/`Intl`; «Execute Once» → вставлений `core.code` з першим item'ом; відповідь `ai.llm` для коду, що читав вихід Ollama (`$json.response`/`message.content`), — сумісне поле або зауваження з точним місцем.
+- DoD: unit-тести на кожен новий мапінг і вирази Luxon; сценарій «Аграрії — MVP» (знеособлена копія у тестах) перетворюється без заглушок; `docs/workflow-format.md` §«Імпорт з n8n» оновлено.
+
+### F6-29 · Приклад «Агро-новини з погодженням» — повний прогін
+- model: `sonnet` · status: `ready` · depends: F6-28
+- Що: `examples/agro-news.json` — робочий аналог «Аграрії — MVP» на OpenBP: `core.schedule` 6:30 і 18:30 → `rss_read` з кількох стрічок → `core.merge` → історія в `core.dataTable` → відбір кандидатів (`core.code`) → `ai.llm` (Ollama, openai-compatible) пише пост → чернетка в Telegram → `send_approval` + `mcp.waitFor` → публікація (`send_photo` з картинкою або `send_message`) → запис у таблицю. Шаблон у «Почати з прикладу». Перевірка в бою — з власником на тестовому каналі й тестовому боті (не продакшн n8n).
+- DoD: CLI-тест прикладу з моками RSS, Telegram і LLM (погоджено / відхилено / таймаут / без кандидатів); валідатор без помилок; запис у `examples/templates.json`.
+
 ## Фаза 7 — Етапи й правила
 
 Нарізано 2026-10-26 за рекомендацією власника щодо розвитку OpenBP (2026-10-25): окремий продукт, Кіт — перший пілот, базова сутність для бізнесу — етап БП. Рішення — [ADR-004](docs/adr/ADR-004-stages.md): етап — необов'язковий шар над графом, одиниця виконання лишається вузол; PRD v0.3 §5a. Розбір пунктів рекомендації і що з них уже є: https://claude.ai/artifact/HE5eYpzLyNBpp9AJ6d7smA
@@ -983,7 +1013,7 @@
 - DoD: тести движка: послідовні етапи, гілка не дійшла → `skipped`, скасування під час `active` → `cancelled`, `overdue` з `TimeProvider`-фейком, `businessDays` через вихідні; інтеграційний тест (Testcontainers) запису `execution_stages` і відновлення після рестарту воркера; Vitest журналу; сценарії без `stages` не пишуть у таблицю.
 
 ### F7-03 · Правила переходу `block`/`warn` і відхилення з причиною
-- model: `opus` · status: `ready` · depends: F7-02, F6-15
+- model: `opus` · status: `done` · depends: F7-02, F6-15
 - Що: рушій перевіряє `transitions[].rules[]` на ребрі з етапу (ADR-004 §3): `block` і умова хибна → виконання `waiting` з причиною `STAGE_RULE_BLOCKED`, повторна перевірка при `resume`/події; `warn` → перехід проходить. Відхилення: `POST /api/v1/executions/{id}/overrides { ruleId, reason }` (`editor` або виконавець етапу; порожня `reason` → 422 `STAGE_RULE_REASON_REQUIRED`), MCP `override_rule`; таблиця `violations (execution_id, stage_id, rule_id, workflow_version_id, status open|resolved|overridden, actor_user_id|actor_system, reason, context jsonb, created_at, resolved_at)`, `context` після scrubbing (§8); події audit log `violation.opened|resolved|overridden`; панель виконання показує заблокований перехід, повідомлення правила й кнопку «Продовжити з причиною…».
 - DoD: тести: `block` зупиняє і пробуджується після відхилення; `block` пробуджується, коли умова стала істинною на `resume`; `warn` пропускає й створює `open`; відхилення без причини → 422; viewer → 403; audit log містить події; `docs/workflow-format.md`, `architecture.md`, `docs/mcp-server.md` оновлено.
 

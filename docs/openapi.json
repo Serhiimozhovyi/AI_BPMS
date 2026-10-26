@@ -1647,6 +1647,55 @@
         ]
       }
     },
+    "/api/v1/workflows/convert/n8n": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Перетворити сценарій n8n на тіло імпорту",
+        "description": "Приймає JSON сценарію n8n (експорт або копію з полотна), нічого не зберігає. Відповідь — `definition` і `manifest` для `POST /workflows/import` (конектор Telegram і credential Ollama — з назвами credentials n8n) та `notes[]`: `replace` — вузол без відповідника став заглушкою `core.code`, `check` — перенесено, перевірте.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/N8nConversion"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/{id}/export": {
       "get": {
         "tags": [
@@ -3896,6 +3945,66 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExecutionSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/executions/{id}/overrides": {
+      "post": {
+        "tags": [
+          "Виконання"
+        ],
+        "summary": "Відхилити правило переходу з причиною",
+        "description": "ADR-004 §3: відкрите порушення правила `ruleId` стає `overridden` з автором і причиною; для `block` виконання, що чекає на цьому переході, прокидається одразу. Роль editor. Порожня `reason` — 422 STAGE_RULE_REASON_REQUIRED; правило не порушене — 409 STAGE_RULE_NOT_VIOLATED; `ruleId` порушений у кількох етапах без `stageId` — 422 STAGE_RULE_AMBIGUOUS.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViolationDto"
                 }
               }
             }
@@ -6846,6 +6955,15 @@
             "items": {
               "$ref": "#/components/schemas/ExecutionSummary"
             }
+          },
+          "violations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ViolationDto"
+            }
           }
         }
       },
@@ -7367,6 +7485,50 @@
           "stdio",
           "http"
         ]
+      },
+      "N8nConversion": {
+        "required": [
+          "definition",
+          "manifest",
+          "notes"
+        ],
+        "type": "object",
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/WorkflowManifest"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/N8nConversionNote"
+            }
+          }
+        }
+      },
+      "N8nConversionNote": {
+        "required": [
+          "level",
+          "node",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "node": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
       },
       "NodeDescriptor": {
         "required": [
@@ -8044,6 +8206,30 @@
           }
         }
       },
+      "RuleOverrideRequest": {
+        "required": [
+          "ruleId",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "ruleId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stageId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "StageStatus": {
         "enum": [
           "pending",
@@ -8372,6 +8558,69 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ViolationDto": {
+        "required": [
+          "id",
+          "stageId",
+          "ruleId",
+          "mode",
+          "status",
+          "message",
+          "reason",
+          "actorUserId",
+          "createdAt",
+          "resolvedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actorUserId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },

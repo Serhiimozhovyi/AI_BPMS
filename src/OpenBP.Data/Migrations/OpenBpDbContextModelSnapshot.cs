@@ -1151,6 +1151,80 @@ namespace OpenBP.Data.Migrations
                     b.ToTable("variables", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBP.Data.ViolationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorSystem")
+                        .HasColumnType("text")
+                        .HasColumnName("actor_system");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("Context")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("context");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("RuleId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rule_id");
+
+                    b.Property<string>("StageId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("stage_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("WorkflowVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_version_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId")
+                        .HasFilter("status = 'open'");
+
+                    b.HasIndex("ExecutionId", "StageId", "RuleId");
+
+                    b.ToTable("violations", (string)null);
+                });
+
             modelBuilder.Entity("OpenBP.Data.WebhookDedupeEntity", b =>
                 {
                     b.Property<Guid>("WorkflowId")

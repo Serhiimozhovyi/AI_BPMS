@@ -105,6 +105,13 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
             [.. keys.Where(k => !known.Contains(k, StringComparer.Ordinal))]);
     }
 
+    /// <inheritdoc />
+    public N8nConversion ConvertN8n(JsonObject workflow)
+    {
+        currentUser.Require(UserRole.Viewer);
+        return N8nWorkflowConverter.Convert(workflow);
+    }
+
     private static Dictionary<string, string> Resolve(
         string kind,
         IReadOnlyCollection<string> refs,
@@ -116,7 +123,8 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var reference in refs)
         {
-            var described = manifest.TryGetValue(reference, out var d) ? d : ((string Name, string? Type)?)null;
+            // Порожній тип (конектор з імпорту n8n) — будь-який транспорт.
+            var described = manifest.TryGetValue(reference, out var d) ? (d.Name, string.IsNullOrEmpty(d.Type) ? null : d.Type) : ((string Name, string? Type)?)null;
             if (explicitMap is not null && explicitMap.TryGetValue(reference, out var chosen))
             {
                 if (Guid.TryParse(chosen, out var chosenId) && targets.Any(t => t.Id == chosenId))

@@ -67,6 +67,12 @@ public sealed record ExecutionRequest
     public IReadOnlyDictionary<string, JsonObject> NodeStates { get; init; } = EmptyStates;
 
     /// <summary>
+    /// Відхилення правил переходу (ADR-004 §3, F7-03): невиконане правило <c>block</c> з відхиленням не зупиняє перехід.
+    /// Хост бере їх з порушень виконання зі станом <c>overridden</c>.
+    /// </summary>
+    public IReadOnlyCollection<RuleOverride> RuleOverrides { get; init; } = [];
+
+    /// <summary>
     /// Зовнішні пробудження (F6-01): id вузла, чий останній крок <see cref="StepStatus.Waiting"/>, → дані, що його розбудили
     /// (тіло <c>POST /webhook/resume/{token}</c>, дані форми). Лише для <see cref="WorkflowExecutor.ResumeAsync(ExecutionSnapshot, ExecutionRequest, CancellationToken)"/>:
     /// вузол отримує їх як <c>INodeContext.Resumption.Signal</c>. Вузли без запису прокидаються за часом.

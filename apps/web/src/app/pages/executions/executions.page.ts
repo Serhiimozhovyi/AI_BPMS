@@ -23,6 +23,7 @@ import {
   ExecutionStep,
   ExecutionSummary,
   ExecutionsApiService,
+  Violation,
   executionModeLabel,
   executionStateLabel,
   failedStep,
@@ -255,6 +256,60 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
               <app-stage-strip [stages]="stages" />
             }
           }
+          @if (d.violations?.length) {
+            <ul class="mb-3 flex flex-col gap-2" data-testid="violations">
+              @for (v of d.violations; track v.id) {
+                <li
+                  class="rounded border p-3"
+                  [class.border-red-700]="v.status === 'open' && v.mode === 'block'"
+                  [class.border-amber-600]="v.status === 'open' && v.mode === 'warn'"
+                  data-testid="violation"
+                  [attr.data-rule]="v.ruleId"
+                  [attr.data-status]="v.status"
+                  [attr.data-mode]="v.mode"
+                >
+                  <p>
+                    <span class="font-semibold" data-testid="violation-title">{{ violationTitle(v) }}</span>
+                    <span class="opacity-70"> · {{ stageName(d, v.stageId) }}</span>
+                  </p>
+                  @if (v.message) {
+                    <p data-testid="violation-message">{{ v.message }}</p>
+                  }
+                  @if (v.status === 'overridden') {
+                    <p class="opacity-70" data-testid="violation-reason" i18n="@@violations.reason">Причина: {{ v.reason }}</p>
+                  }
+                  @if (v.status === 'open') {
+                    @if (overrideId() === v.id) {
+                      <div class="mt-2 flex flex-col gap-2" data-testid="override-panel">
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                          <mat-label i18n="@@violations.override.reason">Чому перехід має пройти попри правило</mat-label>
+                          <textarea matInput rows="3" data-testid="override-reason" [value]="overrideReason()" (input)="overrideReason.set(text($event))"></textarea>
+                          <mat-hint i18n="@@violations.override.hint">Причина й автор потраплять у журнал виконання та аудит</mat-hint>
+                        </mat-form-field>
+                        <div class="flex gap-2">
+                          <button
+                            mat-flat-button
+                            type="button"
+                            data-testid="override-submit"
+                            [disabled]="acting() || !overrideReason().trim()"
+                            (click)="overrideRule(d.summary.id, v)"
+                            i18n="@@violations.override.submit"
+                          >
+                            Продовжити
+                          </button>
+                          <button mat-button type="button" data-testid="override-cancel" (click)="overrideId.set(null)" i18n="@@violations.override.cancel">Скасувати</button>
+                        </div>
+                      </div>
+                    } @else {
+                      <button mat-stroked-button type="button" class="mt-2" data-testid="override-button" [disabled]="acting()" (click)="openOverride(v.id)">
+                        {{ v.mode === 'block' ? continueWithReason : overrideWithReason }}
+                      </button>
+                    }
+                  }
+                </li>
+              }
+            </ul>
+          }
           <div class="mb-2 inline-flex overflow-hidden rounded border" role="radiogroup" i18n-aria-label="@@executions.view" aria-label="Вигляд виконання">
             <button type="button" role="radio" class="px-3 py-1" data-testid="view-business" [class.font-semibold]="view() === 'business'" [attr.aria-checked]="view() === 'business'" (click)="setView('business')" i18n-title="@@executions.view.business.hint" title="Де зараз процес — на схемі з доріжками" i18n="@@executions.view.business">Бізнес</button>
             <button type="button" role="radio" class="px-3 py-1" data-testid="view-technical" [class.font-semibold]="view() === 'technical'" [attr.aria-checked]="view() === 'technical'" (click)="setView('technical')" i18n-title="@@executions.view.technical.hint" title="Список кроків з даними" i18n="@@executions.view.technical">Технічний</button>
@@ -333,6 +388,11 @@ export class ExecutionsPage implements OnInit {
   readonly acting = signal(false);
   readonly actionError = signal<string | null>(null);
   readonly resumeOpen = signal(false);
+  /** Порушення, для якого відкрито поле причини відхилення (F7-03). */
+  readonly overrideId = signal<string | null>(null);
+  readonly overrideReason = signal('');
+  readonly continueWithReason = $localize`:@@violations.override.block:Продовжити з причиною…`;
+  readonly overrideWithReason = $localize`:@@violations.override.warn:Відхилити з причиною…`;
   readonly resumeText = signal('');
   /** Текст редактора на момент відкриття: незмінений — продовжуємо з тими самими входами. */
   private readonly resumeInitial = signal('');
@@ -422,6 +482,7 @@ export class ExecutionsPage implements OnInit {
     this.stopLive();
     this.actionError.set(null);
     this.resumeOpen.set(false);
+    this.overrideId.set(null);
     this.api
       .get(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -499,6 +560,50 @@ export class ExecutionsPage implements OnInit {
           this.actionError.set(apiErrorMessage(e));
         },
       });
+  }
+
+  openOverride(violationId: string): void {
+    this.overrideReason.set('');
+    this.overrideId.set(violationId);
+  }
+
+  /** Відхилення правила з причиною: для `block` виконання прокидається, деталі перечитуються з Api. */
+  overrideRule(id: string, violation: Violation): void {
+    const reason = this.overrideReason().trim();
+    if (!reason) return;
+    this.acting.set(true);
+    this.actionError.set(null);
+    this.api
+      .overrideRule(id, { ruleId: violation.ruleId, stageId: violation.stageId, reason })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.acting.set(false);
+          this.overrideId.set(null);
+          this.refreshSummary(id);
+        },
+        error: (e: unknown) => {
+          this.acting.set(false);
+          this.actionError.set(apiErrorMessage(e));
+        },
+      });
+  }
+
+  violationTitle(violation: Violation): string {
+    switch (violation.status) {
+      case 'resolved':
+        return $localize`:@@violations.resolved:Правило виконано`;
+      case 'overridden':
+        return $localize`:@@violations.overridden:Правило відхилено з причиною`;
+      default:
+        return violation.mode === 'block'
+          ? $localize`:@@violations.block:Перехід зупинено правилом`
+          : $localize`:@@violations.warn:Попередження правила`;
+    }
+  }
+
+  stageName(detail: ExecutionDetail, stageId: string): string {
+    return detail.stages?.find((s) => s.stageId === stageId)?.name ?? stageId;
   }
 
   text(event: Event): string {

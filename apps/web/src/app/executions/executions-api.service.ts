@@ -108,6 +108,33 @@ export interface ExecutionStage {
   exitedAt: string | null;
 }
 
+/** Стан порушення правила переходу (ADR-004 §3). */
+export type ViolationStatus = 'open' | 'resolved' | 'overridden';
+
+/** `ViolationDto` — порушення правила переходу між етапами (F7-03). */
+export interface Violation {
+  id: string;
+  stageId: string;
+  ruleId: string;
+  /** `block` — перехід чекає виправлення або відхилення; `warn` — пройшов, порушення зафіксоване. */
+  mode: 'block' | 'warn';
+  status: ViolationStatus;
+  message: string | null;
+  /** Причина відхилення (для `overridden`). */
+  reason: string | null;
+  actorUserId: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** `RuleOverrideRequest` — тіло `POST /executions/{id}/overrides`. */
+export interface RuleOverrideRequest {
+  ruleId: string;
+  reason: string;
+  /** Лише коли той самий `ruleId` порушений у кількох етапах. */
+  stageId?: string | null;
+}
+
 /** `ExecutionDetail` — `GET /executions/{id}`. */
 export interface ExecutionDetail {
   summary: ExecutionSummary;
@@ -116,6 +143,8 @@ export interface ExecutionDetail {
   stages?: ExecutionStage[];
   /** Підсценарії, які запустило це виконання (F6-04), у порядку запуску. */
   children?: ExecutionSummary[] | null;
+  /** Порушення правил переходу (F7-03), у порядку виникнення. */
+  violations?: Violation[] | null;
 }
 
 /** `StartExecutionRequest` — тіло ручного запуску. */
@@ -192,6 +221,11 @@ export class ExecutionsApiService {
 
   cancel(id: string): Observable<ExecutionSummary> {
     return this.http.post<ExecutionSummary>(`${this.url(id)}/cancel`, null);
+  }
+
+  /** `POST /executions/{id}/overrides` (F7-03) — відхилити порушене правило переходу з причиною. */
+  overrideRule(id: string, request: RuleOverrideRequest): Observable<Violation> {
+    return this.http.post<Violation>(`${this.url(id)}/overrides`, request);
   }
 
   /** `POST /executions/{id}/retry` — нове виконання тієї самої версії з тими самими стартовими даними. */

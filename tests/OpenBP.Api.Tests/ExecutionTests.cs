@@ -406,6 +406,118 @@ public class ExecutionTests(ApiFactory api)
             cancelled[1].GetProperty("exitedAt").GetDateTimeOffset());
     }
 
+    private static RuleCheck Check(string stageId, string ruleId, bool blocking, bool passed, JsonArray? context = null) =>
+        new(stageId, ruleId, blocking, passed, false, $"Правило {ruleId}", "n_set", context ?? [], DateTimeOffset.UtcNow);
+
+    [Fact]
+    public async Task Override_RequiresEditorAndReason_ClosesViolationWithAudit_AndWakesBlockedExecution()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var viewer = await LoginAsync(UserRole.Viewer);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        await MarkRunningAsync(executionId);
+        var scrubber = new OpenBP.Data.Credentials.SecretScrubber();
+        scrubber.Add(new JsonObject { ["password"] = "s3cr3t-pass" });
+        var store = new PostgresExecutionStore(new Contexts(api), scrubber: scrubber);
+        await AssertProblemAsync(
+            await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_amount", reason = "Погоджено" }),
+            HttpStatusCode.Conflict, "STAGE_RULE_NOT_VIOLATED");
+
+        // Рушій зупинив перехід (block) і зафіксував попередження (warn); секрет у items не потрапляє в порушення.
+        await store.SaveRuleChecksAsync(
+            executionId,
+            [
+                Check("st_request", "r_amount", blocking: true, passed: false, [new JsonObject { ["amount"] = 5, ["password"] = "s3cr3t-pass" }]),
+                Check("st_request", "r_comment", blocking: false, passed: false),
+            ],
+            default);
+        var resumeAt = DateTimeOffset.UtcNow.AddHours(1);
+        await using (var db = api.CreateDbContext())
+        {
+            await db.Executions.Where(e => e.Id == executionId).ExecuteUpdateAsync(s => s
+                .SetProperty(e => e.Status, ExecutionStatuses.Waiting)
+                .SetProperty(e => e.ResumeAt, resumeAt));
+            await db.Jobs.Where(j => j.Kind == JobKinds.Execution).ExecuteDeleteAsync();
+            db.Jobs.Add(new JobEntity
+            {
+                Id = Guid.NewGuid(),
+                Kind = JobKinds.Execution,
+                Payload = JobJson.Serialize(new ExecutionJobPayload { ExecutionId = executionId, WorkflowId = workflowId, VersionId = Guid.NewGuid(), Mode = ExecutionMode.Manual }),
+                RunAt = resumeAt,
+            });
+            await db.SaveChangesAsync();
+            var context = await db.Violations.Where(v => v.ExecutionId == executionId && v.RuleId == "r_amount").Select(v => v.Context).SingleAsync();
+            Assert.DoesNotContain("s3cr3t-pass", context);
+            Assert.Contains("\"amount\"", context);
+        }
+
+        var before = await JsonAsync(await viewer.GetAsync($"/api/v1/executions/{executionId}"));
+        var open = before.GetProperty("violations").EnumerateArray().ToList();
+        Assert.Equal(["r_amount", "r_comment"], open.Select(v => v.GetProperty("ruleId").GetString()));
+        Assert.Equal(["block", "warn"], open.Select(v => v.GetProperty("mode").GetString()));
+        Assert.All(open, v => Assert.Equal("open", v.GetProperty("status").GetString()));
+        Assert.Equal("Правило r_amount", open[0].GetProperty("message").GetString());
+
+        await AssertProblemAsync(
+            await viewer.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_amount", reason = "Погоджено" }),
+            HttpStatusCode.Forbidden, "FORBIDDEN");
+        await AssertProblemAsync(
+            await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_amount", reason = "  " }),
+            HttpStatusCode.UnprocessableEntity, "STAGE_RULE_REASON_REQUIRED");
+
+        var response = await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_amount", reason = " Погоджено директором " });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var overridden = await JsonAsync(response);
+        Assert.Equal("overridden", overridden.GetProperty("status").GetString());
+        Assert.Equal("Погоджено директором", overridden.GetProperty("reason").GetString());
+        Assert.NotEqual(JsonValueKind.Null, overridden.GetProperty("actorUserId").ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, overridden.GetProperty("resolvedAt").ValueKind);
+
+        await AssertProblemAsync(
+            await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_amount", reason = "Ще раз" }),
+            HttpStatusCode.Conflict, "STAGE_RULE_NOT_VIOLATED");
+
+        await using (var db = api.CreateDbContext())
+        {
+            // Job пробудження перенесено на зараз: воркер пропустить перехід, не чекаючи перевірки через годину.
+            var runAt = await db.Jobs.Where(j => j.Kind == JobKinds.Execution).Select(j => j.RunAt).SingleAsync();
+            Assert.True(runAt < resumeAt.AddMinutes(-30), $"run_at {runAt:O}");
+            var audit = await db.AuditLog.AsNoTracking()
+                .Where(a => a.EntityType == ViolationStatuses.AuditEntity && a.EntityId == executionId.ToString())
+                .OrderBy(a => a.At).ThenBy(a => a.Id)
+                .Select(a => new { a.Action, a.UserId, a.Details })
+                .ToListAsync();
+            Assert.Equal(
+                [ViolationStatuses.AuditOpened, ViolationStatuses.AuditOpened, ViolationStatuses.AuditOverridden],
+                audit.Select(a => a.Action));
+            Assert.NotNull(audit[2].UserId);
+            Assert.Contains("r_amount", audit[2].Details);
+        }
+
+        var after = (await JsonAsync(await viewer.GetAsync($"/api/v1/executions/{executionId}"))).GetProperty("violations").EnumerateArray().ToList();
+        Assert.Equal(["overridden", "open"], after.Select(v => v.GetProperty("status").GetString()));
+    }
+
+    [Fact]
+    public async Task Override_SameRuleInTwoStages_NeedsStageId()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor);
+        var executionId = (await StartAsync(editor, workflowId)).GetProperty("id").GetGuid();
+        await new PostgresExecutionStore(new Contexts(api)).SaveRuleChecksAsync(
+            executionId,
+            [Check("st_a", "r_same", blocking: false, passed: false), Check("st_b", "r_same", blocking: false, passed: false)],
+            default);
+
+        await AssertProblemAsync(
+            await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_same", reason = "Так треба" }),
+            HttpStatusCode.UnprocessableEntity, "STAGE_RULE_AMBIGUOUS");
+        var response = await editor.PostAsJsonAsync($"/api/v1/executions/{executionId}/overrides", new { ruleId = "r_same", stageId = "st_b", reason = "Так треба" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("st_b", (await JsonAsync(response)).GetProperty("stageId").GetString());
+    }
+
     [Fact]
     public async Task Get_Unknown_Returns404()
     {

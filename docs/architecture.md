@@ -90,6 +90,15 @@
   пн–пт, вхід у вихідні рахується з понеділка), `until` — вираз з `$now` = час входу; раз пораховано — не
   перераховується (при відновленні береться з `ExecutionSnapshot.Stages`). Підстан `overdue` не зберігається:
   `active` і `now > due_at` на момент читання.
+- Правила переходу (F7-03, ADR-004 §3) перевіряє виконавець перед запуском вузла, до якого веде перехід: ребро з
+  завершеного вузла етапу у вузол іншого етапу чи поза етапом, що отримало items. Застосовуються `transitions[]` етапу
+  джерела з `to` = етап цілі або без `to`; умова обчислюється на кожному item переходу (`$json` — item), правило
+  виконане, лише якщо всі дають `true` (помилка виразу — невиконане). Кожна перевірка йде в
+  `IStageStore.SaveRuleChecksAsync`. Невиконане `block`-правило без відхилення не запускає вузол: крок `waiting` з
+  `waitState.reason = STAGE_RULE_BLOCKED` і `rules[]`, `resumeAt` = зараз + `WorkflowExecutor.RuleRecheckInterval`
+  (1 год) — на пробудженні правило перевіряється знову (дані могли виправити в зовнішній системі). Відхилення
+  (`ExecutionRequest.RuleOverrides`, з порушень `overridden`) пропускає перехід; `warn` проходить завжди. Етап, перехід з
+  якого зупинено, лишається `active`: вихід зараховується, лише коли вузол-ціль справді почався (не зупинений правилом).
 
 ### Інтерфейси Engine (все зовнішнє — тільки через них)
 
@@ -99,7 +108,7 @@ public interface ICredentialProvider { Task<JsonObject> GetAsync(string credenti
 public interface INodeRegistry      { INode Resolve(string type, int typeVersion); }
 public interface IExpressionEvaluator { JsonNode? Evaluate(string expr, ExpressionScope scope); }
 public interface IExecutionLogger   { void Log(LogLevel l, string nodeId, string message, object? data = null); }
-public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IReadOnlyList<StageState> stages, CancellationToken ct); } // F7-02, необов'язковий
+public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IReadOnlyList<StageState> stages, CancellationToken ct); Task SaveRuleChecksAsync(Guid executionId, IReadOnlyList<RuleCheck> checks, CancellationToken ct); } // F7-02/F7-03, необов'язковий
 ```
 
 `InMemoryExecutionStore` і `FakeCredentialProvider` живуть у `OpenBP.Engine.Testing` і використовуються CLI та тестами.
@@ -172,6 +181,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `binary_files` | id (PK, 32 hex), execution_id (→ `executions`, cascade; null — ще не прив'язано), mime_type, file_name, size, sha256, content (bytea), created_at — файли, які приймає Api (поля-файли форм, F6-03), сховище `postgres` для `BinaryRef`; неприв'язані старші за добу чистить ретеншн |
 | `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01); унікальний `(execution_id, node_id)` |
 | `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
+| `violations` | id, execution_id, stage_id, rule_id, workflow_version_id, mode (`block`/`warn`), status (`open`/`resolved`/`overridden`), message, actor_user_id, actor_system (`engine`), reason, context jsonb (items переходу після scrubbing), created_at, resolved_at (F7-03, ADR-004 §3; індекси (execution_id, stage_id, rule_id) і execution_id для `open`). Пише `PostgresExecutionStore.SaveRuleChecksAsync`: невиконане правило відкриває порушення (одне відкрите на правило), виконане закриває (`resolved`); `POST /executions/{id}/overrides` переводить у `overridden` з автором і причиною й будить job виконання, що чекає на `block`. Кожна зміна — `violation.opened/resolved/overridden` в `audit_log` (`entity_type = execution`). `GET /executions/{id}` віддає `violations[]`; ретеншн і видалення сценарію чистять разом із кроками |
 | `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
 | `webhook_dedupe` | workflow_id, node_id, key (PK), execution_id, status_code?, headers?, body?, created_at, expires_at (індекс) — ключі ідемпотентності webhook-ів (F6-05) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |

@@ -247,6 +247,66 @@ describe('ExecutionsPage', () => {
     expect(s.host.querySelector('[data-testid="stage-strip"]')).toBeNull();
   });
 
+  it('правила переходу (F7-03): зупинений перехід з повідомленням, «Продовжити з причиною…» надсилає причину й перечитує деталі', async () => {
+    const s = await setup();
+    const waiting: ExecutionSummary = { ...running, state: 'waiting', resumeAt: '2026-10-23T11:00:00Z' };
+    const violation = {
+      id: 'v1',
+      stageId: 'st_request',
+      ruleId: 'r_amount',
+      mode: 'block' as const,
+      status: 'open' as const,
+      message: 'Сума замала для оплати.',
+      reason: null,
+      actorUserId: null,
+      createdAt: '2026-10-23T10:00:01Z',
+      resolvedAt: null,
+    };
+    await openDetail(s, {
+      summary: waiting,
+      steps: [step('s1', 'n_webhook')],
+      stages: [{ stageId: 'st_request', name: 'Заявка', position: 0, status: 'active', overdue: false, enteredAt: '2026-10-23T10:00:00Z', dueAt: null, exitedAt: null }],
+      violations: [violation, { ...violation, id: 'v2', ruleId: 'r_comment', mode: 'warn', status: 'overridden', message: null, reason: 'Коментар усно' }],
+    });
+    const items = [...s.host.querySelectorAll<HTMLElement>('[data-testid="violation"]')];
+    expect(items.map((li) => [li.getAttribute('data-rule'), li.getAttribute('data-status')])).toEqual([
+      ['r_amount', 'open'],
+      ['r_comment', 'overridden'],
+    ]);
+    expect(items[0].querySelector('[data-testid="violation-title"]')?.textContent).toBe('Перехід зупинено правилом');
+    expect(items[0].textContent).toContain('Заявка');
+    expect(items[0].querySelector('[data-testid="violation-message"]')?.textContent).toBe('Сума замала для оплати.');
+    expect(items[1].querySelector('[data-testid="violation-reason"]')?.textContent).toContain('Коментар усно');
+    expect(items[1].querySelector('[data-testid="override-button"]')).toBeNull();
+
+    const open = items[0].querySelector<HTMLButtonElement>('[data-testid="override-button"]')!;
+    expect(open.textContent).toContain('Продовжити з причиною…');
+    open.click();
+    await render(s.harness);
+    const submit = items[0].querySelector<HTMLButtonElement>('[data-testid="override-submit"]')!;
+    expect(submit.disabled).toBe(true);
+    const reason = items[0].querySelector<HTMLTextAreaElement>('[data-testid="override-reason"]')!;
+    reason.value = '  Погоджено директором ';
+    reason.dispatchEvent(new Event('input'));
+    await render(s.harness);
+    expect(submit.disabled).toBe(false);
+    submit.click();
+
+    const request = s.http.expectOne({ method: 'POST', url: '/api/v1/executions/e2/overrides' });
+    expect(request.request.body).toEqual({ ruleId: 'r_amount', stageId: 'st_request', reason: 'Погоджено директором' });
+    request.flush({ ...violation, status: 'overridden', reason: 'Погоджено директором' });
+    s.http.expectOne('/api/v1/executions/e2').flush({
+      summary: waiting,
+      steps: [step('s1', 'n_webhook')],
+      violations: [{ ...violation, status: 'overridden', reason: 'Погоджено директором' }],
+    });
+    await render(s.harness);
+    const after = s.host.querySelector<HTMLElement>('[data-testid="violation"]')!;
+    expect(after.getAttribute('data-status')).toBe('overridden');
+    expect(after.querySelector('[data-testid="violation-title"]')?.textContent).toBe('Правило відхилено з причиною');
+    expect(s.host.querySelector('[data-testid="override-panel"]')).toBeNull();
+  });
+
   it('«Повторити» запускає повтор, оновлює журнал і відкриває нове виконання', async () => {
     const s = await setup();
     await openDetail(s, failedDetail);

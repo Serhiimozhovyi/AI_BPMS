@@ -5,7 +5,7 @@ namespace OpenBP.Application.Workflows;
 /// <summary>Конектор, на який посилається експортований сценарій (<c>serverId</c> у параметрах вузлів).</summary>
 /// <param name="Ref">Id сервера в середовищі-джерелі — так він записаний у визначенні.</param>
 /// <param name="Name">Назва сервера; за нею (і транспортом) імпорт шукає відповідник.</param>
-/// <param name="Transport">Транспорт: <c>http</c> або <c>stdio</c>.</param>
+/// <param name="Transport">Транспорт: <c>http</c> або <c>stdio</c>; порожній — будь-який (імпорт з n8n).</param>
 public sealed record ManifestConnector(string Ref, string Name, string Transport);
 
 /// <summary>Credential, на який посилається експортований сценарій (<c>credentialId</c> у параметрах вузлів).</summary>

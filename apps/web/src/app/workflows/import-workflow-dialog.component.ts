@@ -11,6 +11,8 @@ import { ConnectorsApiService, apiErrorMessage } from '../connectors/connectors-
 import { CredentialsApiService } from '../credentials/credentials-api.service';
 import {
   ImportMapping,
+  N8nConversion,
+  N8nConversionNote,
   ReferenceKind,
   UnmappedReference,
   WorkflowDefinition,
@@ -34,10 +36,26 @@ export interface MappingCandidate {
   type: string | null;
 }
 
-/** Файл експорту: `{ definition, manifest }` або саме визначення. */
+/**
+ * Файл експорту: `{ definition, manifest }` або саме визначення; для сценарію n8n — `n8n` з його JSON
+ * (Api перетворить його, F6-24) і `definition: null`.
+ */
 export interface ParsedExport {
-  definition: WorkflowDefinition;
+  definition: WorkflowDefinition | null;
   manifest: WorkflowManifest | null;
+  n8n?: object;
+}
+
+/** Сценарій n8n: `connections` — об'єкт за назвами вузлів (в OpenBP — масив) або типи вузлів n8n. */
+export function isN8nWorkflow(value: unknown): value is { nodes: unknown[] } {
+  if (!value || typeof value !== 'object') return false;
+  const obj = value as { nodes?: unknown; connections?: unknown };
+  if (!Array.isArray(obj.nodes)) return false;
+  if (obj.connections && typeof obj.connections === 'object' && !Array.isArray(obj.connections)) return true;
+  return obj.nodes.some((n) => {
+    const type = (n as { type?: unknown } | null)?.type;
+    return typeof type === 'string' && (type.startsWith('n8n-nodes-') || type.startsWith('@n8n/'));
+  });
 }
 
 /** Розбирає вміст файлу експорту; `null` — не JSON або без `nodes`. */
@@ -49,6 +67,7 @@ export function parseExport(text: string): ParsedExport | null {
     return null;
   }
   if (!value || typeof value !== 'object') return null;
+  if (isN8nWorkflow(value)) return { definition: null, manifest: null, n8n: value };
   const obj = value as { definition?: unknown; manifest?: unknown; nodes?: unknown };
   const definition = (obj.definition ?? obj) as WorkflowDefinition;
   if (!definition || typeof definition !== 'object' || !Array.isArray(definition.nodes)) return null;
@@ -73,20 +92,42 @@ export const choiceKey = (u: Pick<UnmappedReference, 'kind' | 'ref'>) => `${u.ki
       @if (result(); as r) {
         <div data-testid="import-done">
           <p class="mb-2" i18n="@@import.done">Сценарій «{{ r.workflow.name }}» створено (неактивний).</p>
-          <p class="text-amber-700" data-testid="import-missing-vars" i18n="@@import.missingVars">
-            Немає змінних: {{ r.missingVariables.join(', ') }}. Додайте їх у Налаштуваннях, інакше $vars дасть undefined.
-          </p>
+          @if (r.missingVariables.length > 0) {
+            <p class="text-amber-700" data-testid="import-missing-vars" i18n="@@import.missingVars">
+              Немає змінних: {{ r.missingVariables.join(', ') }}. Додайте їх у Налаштуваннях, інакше $vars дасть undefined.
+            </p>
+          }
+          @if (notes().length > 0) {
+            <div data-testid="import-notes">
+              <p class="mb-1 font-semibold" i18n="@@import.n8n.notes">Що доробити після імпорту з n8n</p>
+              <ul class="list-disc pl-5">
+                @for (n of notes(); track $index) {
+                  <li [attr.data-level]="n.level" [class.text-red-700]="n.level === 'replace'">
+                    @if (n.node) {
+                      <b>{{ n.node }}</b>:
+                    }
+                    {{ n.message }}
+                  </li>
+                }
+              </ul>
+            </div>
+          }
         </div>
       } @else {
         <div class="flex flex-col gap-3 pt-2">
           <p class="opacity-70" i18n="@@import.hint">
-            Файл з «Експортувати» або з <code>openbp export</code>. Конектори й облікові дані знаходяться за назвою і типом.
+            Файл з «Експортувати», з <code>openbp export</code> або JSON сценарію n8n. Конектори й облікові дані знаходяться за назвою і типом.
           </p>
           <input type="file" accept="application/json,.json" data-testid="import-file" (change)="readFile($event)" />
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label i18n="@@import.json">Або вставте JSON</mat-label>
             <textarea matInput rows="6" class="font-mono" data-testid="import-json" [value]="text()" (input)="setText($any($event.target).value)"></textarea>
           </mat-form-field>
+          @if (parsed()?.n8n) {
+            <p class="text-amber-700" data-testid="import-n8n" i18n="@@import.n8n.detected">
+              Це сценарій n8n: його буде перетворено на формат OpenBP, вузли без відповідника стануть заглушками з поясненням.
+            </p>
+          }
           @if (parseError()) {
             <p class="text-red-700" data-testid="import-parse-error" i18n="@@import.parseError">Це не файл експорту сценарію.</p>
           }
@@ -147,6 +188,9 @@ export class ImportWorkflowDialog {
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly result = signal<WorkflowImportResult | null>(null);
+  /** Перетворений сценарій n8n: повторний імпорт (після вибору відповідників) не перетворює знову. */
+  readonly converted = signal<N8nConversion | null>(null);
+  readonly notes = computed<N8nConversionNote[]>(() => this.converted()?.notes ?? []);
 
   readonly canSubmit = computed(
     () => !this.busy() && this.parsed() !== null && this.unmapped().every((u) => !!this.choices()[choiceKey(u)]),
@@ -175,6 +219,7 @@ export class ImportWorkflowDialog {
     this.unmapped.set([]);
     this.choices.set({});
     this.error.set(null);
+    this.converted.set(null);
   }
 
   readFile(event: Event): void {
@@ -192,13 +237,38 @@ export class ImportWorkflowDialog {
     if (!parsed || !this.canSubmit()) return;
     this.busy.set(true);
     this.error.set(null);
+    const converted = this.converted();
+    if (parsed.n8n && !converted) {
+      this.workflows
+        .convertN8n(parsed.n8n)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (conversion) => {
+            this.converted.set(conversion);
+            this.importDefinition(conversion.definition, conversion.manifest);
+          },
+          error: (e: unknown) => {
+            this.busy.set(false);
+            this.error.set(apiErrorMessage(e));
+          },
+        });
+      return;
+    }
+    if (converted) {
+      this.importDefinition(converted.definition, converted.manifest);
+    } else if (parsed.definition) {
+      this.importDefinition(parsed.definition, parsed.manifest);
+    }
+  }
+
+  private importDefinition(definition: WorkflowDefinition, manifest: WorkflowManifest | null): void {
     this.workflows
-      .importWorkflow({ definition: parsed.definition, manifest: parsed.manifest, mapping: this.mapping(), groupId: this.data?.groupId ?? null })
+      .importWorkflow({ definition, manifest, mapping: this.mapping(), groupId: this.data?.groupId ?? null })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
           this.busy.set(false);
-          if (result.missingVariables.length > 0) {
+          if (result.missingVariables.length > 0 || this.notes().length > 0) {
             this.result.set(result);
           } else {
             this.ref.close(result);

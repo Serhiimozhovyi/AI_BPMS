@@ -240,6 +240,14 @@ public sealed partial class ExecutionJobProcessor
 
         var loadedStates = await LoadNodeStatesAsync(payload.WorkflowId, stoppingToken).ConfigureAwait(false);
         var vars = await LoadVariablesAsync(stoppingToken).ConfigureAwait(false);
+        IReadOnlyCollection<RuleOverride> overrides = [];
+        if (workflow.Stages is { Count: > 0 })
+        {
+            // Відхилення правил переходу (F7-03): з ними зупинений перехід проходить на пробудженні.
+            await using var db = await _contexts.CreateDbContextAsync(stoppingToken).ConfigureAwait(false);
+            overrides = await PostgresExecutionStore.LoadRuleOverridesAsync(db, executionId, stoppingToken).ConfigureAwait(false);
+        }
+
         // Адреси пробудження (F6-01) видаються до старту графа, щоб $execution.resumeUrl був відомий ще до вузла очікування.
         var resumeUrls = await EnsureResumeTokensAsync(executionId, workflow, stoppingToken).ConfigureAwait(false);
         // Ручний тестовий запуск з канвасу показує дані вузлів завжди; решта — за settings.saveSuccessfulData (F4-07).
@@ -271,6 +279,7 @@ public sealed partial class ExecutionJobProcessor
             ResumeUrls = resumeUrls,
             Vars = vars,
             NodeStates = loadedStates,
+            RuleOverrides = overrides,
         };
 
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);

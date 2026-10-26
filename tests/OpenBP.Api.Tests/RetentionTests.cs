@@ -33,6 +33,7 @@ public class RetentionTests(ApiFactory api)
         }
 
         db.ExecutionStages.Add(new ExecutionStageEntity { ExecutionId = id, StageId = "s1", Name = "Етап", Status = StageStatuses.Done });
+        db.Violations.Add(new ViolationEntity { Id = Guid.NewGuid(), ExecutionId = id, StageId = "s1", RuleId = "r1", Mode = "warn", Status = ViolationStatuses.Open, CreatedAt = at });
 
         await db.SaveChangesAsync();
         return id;
@@ -71,6 +72,8 @@ public class RetentionTests(ApiFactory api)
         Assert.Equal(kept.Length * 2, await check.ExecutionSteps.CountAsync(s => kept.Contains(s.ExecutionId)));
         Assert.False(await check.ExecutionStages.AnyAsync(s => old.Contains(s.ExecutionId)));
         Assert.Equal(kept.Length, await check.ExecutionStages.CountAsync(s => kept.Contains(s.ExecutionId)));
+        Assert.False(await check.Violations.AnyAsync(v => old.Contains(v.ExecutionId)));
+        Assert.Equal(kept.Length, await check.Violations.CountAsync(v => kept.Contains(v.ExecutionId)));
     }
 
     [Fact]

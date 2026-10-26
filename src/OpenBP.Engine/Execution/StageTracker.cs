@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Nodes;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Engine.Execution;
@@ -10,7 +11,8 @@ namespace OpenBP.Engine.Execution;
 /// <item>Етап <see cref="StageStatus.Active"/>, щойно є крок вузла етапу, крім <see cref="StepStatus.Skipped"/>;
 /// <see cref="StageState.EnteredAt"/> — найраніший початок такого кроку.</item>
 /// <item><see cref="StageStatus.Done"/> — перехід з етапу пройдено: вихід вузла етапу, з'єднаний ребром з вузлом поза
-/// етапом, отримав items; або вузол етапу без вихідних ребер завершився успішно. <see cref="StageState.ExitedAt"/> —
+/// етапом, отримав items, і цей вузол стартував (не зупинений правилом <c>block</c>, F7-03); або вузол етапу без
+/// вихідних ребер завершився успішно. <see cref="StageState.ExitedAt"/> —
 /// найраніше завершення такого кроку.</item>
 /// <item>Після успішного виконання етап, що почався, але переходу не пройшов (гілка згасла всередині), — теж
 /// <see cref="StageStatus.Done"/>; після помилки, скасування чи таймауту — <see cref="StageStatus.Cancelled"/>.
@@ -67,16 +69,12 @@ public static class StageTracker
         {
             var stage = stages[position];
             var members = stage.Nodes.ToHashSet(StringComparer.Ordinal);
-            var started = members
-                .Select(id => latest.GetValueOrDefault(id))
-                .Where(s => s is not null && s.Status != StepStatus.Skipped)
-                .Select(s => s!)
-                .ToList();
+            var latestOfStage = members.Select(id => latest.GetValueOrDefault(id)).OfType<StepRecord>().ToList();
+            var started = latestOfStage.Where(IsStart).ToList();
             // Гілку етапу закрило злиття чи завершення виконання (ADR-004 §5): такий крок — не старт, а обрив етапу.
-            var closed = started.Any(IsClosing);
-            started.RemoveAll(IsClosing);
+            var closed = latestOfStage.Any(IsClosing);
 
-            var hasStart = steps.Any(s => members.Contains(s.NodeId) && s.Status != StepStatus.Skipped && !IsClosing(s));
+            var hasStart = steps.Any(s => members.Contains(s.NodeId) && IsStart(s));
             if (!hasStart)
             {
                 result.Add(new StageState(stage.Id, stage.Name, position, finished ? StageStatus.Skipped : StageStatus.Pending, null, null, null));
@@ -86,7 +84,7 @@ public static class StageTracker
             // Вхід — найраніший старт вузла етапу серед усіх кроків; після пробудження крок очікування в кроках запуску
             // вже замінено новим, тож збережений раніше вхід важить більше.
             var enteredAt = steps
-                .Where(s => members.Contains(s.NodeId) && s.Status != StepStatus.Skipped && !IsClosing(s))
+                .Where(s => members.Contains(s.NodeId) && IsStart(s))
                 .Min(s => s.StartedAt);
             var before = previous?.FirstOrDefault(p => p.StageId == stage.Id);
             if (before?.EnteredAt is { } earlier && earlier < enteredAt)
@@ -98,7 +96,7 @@ public static class StageTracker
                 ? prevDue
                 : DueAt(stage.Due, enteredAt, workflow.Settings.Timezone, until);
 
-            var exitedAt = ExitOf(started, members, outgoing);
+            var exitedAt = ExitOf(started, members, outgoing, latest);
             var (status, exit) = exitedAt is not null
                 ? (StageStatus.Done, exitedAt)
                 : closed
@@ -189,10 +187,30 @@ public static class StageTracker
     private static bool IsClosing(StepRecord step) =>
         step.Status == StepStatus.Cancelled && step.Error?.Type is WorkflowExecutor.BranchCancelledType or WorkflowExecutor.WaitClosedType;
 
+    /// <summary>Ключ причини в <c>waitState</c> кроку очікування.</summary>
+    public const string WaitReasonKey = "reason";
+
+    /// <summary>
+    /// Крок очікування, яким рушій зупинив перехід з етапу правилом <c>block</c> (F7-03): вузол ще не виконувався.
+    /// </summary>
+    /// <param name="step">Крок.</param>
+    public static bool IsRuleBlock(StepRecord step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        return step.Status == StepStatus.Waiting
+               && step.WaitState?[WaitReasonKey] is JsonValue reason
+               && reason.TryGetValue<string>(out var text)
+               && text == WorkflowExecutor.StageRuleBlocked;
+    }
+
+    /// <summary>Вузол справді стартував: не згас, не закритий рушієм і не стоїть перед зупиненим переходом.</summary>
+    private static bool IsStart(StepRecord step) => step.Status != StepStatus.Skipped && !IsClosing(step) && !IsRuleBlock(step);
+
     private static DateTimeOffset? ExitOf(
         List<StepRecord> started,
         HashSet<string> members,
-        Dictionary<string, List<Connection>> outgoing)
+        Dictionary<string, List<Connection>> outgoing,
+        Dictionary<string, StepRecord> latest)
     {
         DateTimeOffset? exit = null;
         foreach (var step in started.Where(s => s.Status is StepStatus.Success or StepStatus.Error))
@@ -200,7 +218,10 @@ public static class StageTracker
             var edges = outgoing.GetValueOrDefault(step.NodeId) ?? [];
             var passed = edges.Count == 0
                 ? step.Status == StepStatus.Success
-                : edges.Any(c => !members.Contains(c.To.Node) && (c.From.Output ?? 0) is var port && port < step.Output.Length && step.Output[port].Length > 0);
+                : edges.Any(c => !members.Contains(c.To.Node)
+                                 && (c.From.Output ?? 0) is var port && port < step.Output.Length && step.Output[port].Length > 0
+                                 // Перехід пройдено, коли вузол за ним стартував: правило block могло його зупинити.
+                                 && latest.TryGetValue(c.To.Node, out var next) && IsStart(next));
             if (passed && (exit is null || step.FinishedAt < exit))
             {
                 exit = step.FinishedAt;
