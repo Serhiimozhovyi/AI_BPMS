@@ -179,6 +179,8 @@ export interface ExecutionFilter {
   to?: string | null;
   /** Точний збіг ключа кореляції (F5-04). */
   correlationKey?: string | null;
+  /** Лише з відкритими порушеннями правил переходу (F7-04). */
+  hasOpenViolations?: boolean | null;
 }
 
 /** Мінімум `EventSource`, який потрібен клієнту; у тестах підміняється. */
@@ -212,6 +214,7 @@ export class ExecutionsApiService {
       const value = filter[key];
       if (value) params[key] = value;
     }
+    if (filter.hasOpenViolations) params['hasOpenViolations'] = 'true';
     return this.http.get<PageResult<ExecutionSummary>>(`${API_BASE}/executions`, { params });
   }
 
@@ -221,6 +224,11 @@ export class ExecutionsApiService {
 
   cancel(id: string): Observable<ExecutionSummary> {
     return this.http.post<ExecutionSummary>(`${this.url(id)}/cancel`, null);
+  }
+
+  /** `GET /executions/{id}/violations` (F7-04) — порушення правил переходу у порядку виникнення. */
+  violations(id: string): Observable<Violation[]> {
+    return this.http.get<Violation[]>(`${this.url(id)}/violations`);
   }
 
   /** `POST /executions/{id}/overrides` (F7-03) — відхилити порушене правило переходу з причиною. */

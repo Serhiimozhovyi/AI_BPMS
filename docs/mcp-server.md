@@ -96,9 +96,10 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `create_evaluation` | editor | `workflowId`, `nodeId`, `cases`, `name?` | оцінка з кейсами `{ name?, input: [{json}], expected?, check: exact \| jsonPath \| expression \| llm, config? }`; невідомий вузол чи бракує налаштувань перевірки — `EVALUATION_INVALID` |
 | `run_evaluation` | editor | `id` | прогін `{ passed, total, version, versionId, results: [{ caseId, name, passed, actual, reason, error, durationMs, tokens, executionId }] }`: кожен кейс виконується як `test_node` з `items` на поточній версії, прогін зберігається за версією |
 | `get_execution` | viewer | `id` | те саме, що `run_workflow`, плюс `children[]` — підсценарії, запущені цим виконанням (F6-04: `summary` з `mode: sub`, `parentNodeId`); `summary` підсценарію має `parentExecutionId` |
-| `list_executions` | viewer | `workflowId?`, `status?`, `correlationKey?`, `page?` | сторінка виконань без кроків |
+| `list_executions` | viewer | `workflowId?`, `status?`, `correlationKey?`, `hasOpenViolations?`, `page?` | сторінка виконань без кроків |
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
 | `resume_execution` | editor | `id`, `items?` | нове виконання `resume` (у черзі): продовження помилкового (`error`/`timed_out`) з вузла, що впав; успішні вузли не виконуються знову, `items` — нові дані на вхід 0 вузла, що впав (F6-08). Інакше — `EXECUTION_NOT_FAILED` / `RESUME_INPUT_NOT_APPLICABLE` |
+| `list_violations` | viewer | `id` | `{ items[] }` — порушення правил переходу виконання (F7-04): `open`, `resolved` і `overridden` з причиною та автором, у порядку виникнення (те саме, що `violations[]` в `get_execution`) |
 | `override_rule` | editor | `id`, `ruleId`, `reason`, `stageId?` | відхилити порушене правило переходу з причиною (F7-03, ADR-004 §3): відкрите порушення стає `overridden` з автором і причиною; для `block` виконання, що чекає на переході, прокидається одразу. Порожня причина — `STAGE_RULE_REASON_REQUIRED`, порушення немає — `STAGE_RULE_NOT_VIOLATED`, той самий `ruleId` у кількох етапах без `stageId` — `STAGE_RULE_AMBIGUOUS` |
 
 `definition` — сценарій у форматі [workflow-format.md](workflow-format.md); схема — resource

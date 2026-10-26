@@ -100,6 +100,50 @@ public sealed class StageRuleTests(PostgresFixture postgres)
         Assert.Equal((StageRuleModes.Warn, ViolationStatuses.Open), (violation.Mode, violation.Status));
     }
 
+    /// <summary>Старт → «Сума» (етап «Заявка») → «Далі» → «Виправлення» (етап «Оплата»); правило хибне, доки «Виправлення» не виконалось.</summary>
+    private static WorkflowDefinition FixedLater() => WorkflowJson.Deserialize("""
+        {
+          "formatVersion": 1,
+          "name": "Виправлення на наступному кроці",
+          "settings": { "timezone": "Europe/Kyiv", "executionTimeoutSec": 60, "errorWorkflowId": null, "saveSuccessfulData": true },
+          "nodes": [
+            { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+            { "id": "n_sum", "name": "Сума", "type": "core.set", "typeVersion": 1, "position": [200, 0], "parameters": { "fields": [ { "name": "amount", "value": "5" } ] } },
+            { "id": "n_next", "name": "Далі", "type": "core.set", "typeVersion": 1, "position": [400, 0], "parameters": { "fields": [ { "name": "paid", "value": "так" } ] } },
+            { "id": "n_fix", "name": "Виправлення", "type": "core.set", "typeVersion": 1, "position": [600, 0], "parameters": { "fields": [ { "name": "fixed", "value": "так" } ] } }
+          ],
+          "connections": [
+            { "from": { "node": "n_start" }, "to": { "node": "n_sum" } },
+            { "from": { "node": "n_sum" }, "to": { "node": "n_next" } },
+            { "from": { "node": "n_next" }, "to": { "node": "n_fix" } }
+          ],
+          "stages": [
+            { "id": "st_request", "name": "Заявка", "nodes": ["n_sum"],
+              "transitions": [ { "to": "st_pay", "rules": [
+                { "id": "r_fixed", "condition": "{{ $node[\"Виправлення\"].json.fixed === 'так' }}", "mode": "warn", "message": "Дані ще не виправлені." } ] } ] },
+            { "id": "st_pay", "name": "Оплата", "nodes": ["n_next", "n_fix"] }
+          ]
+        }
+        """);
+
+    [Fact]
+    public async Task Open_violation_is_resolved_with_audit_when_condition_holds_after_a_later_step()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var (workflowId, versionId) = await worker.SaveWorkflowAsync(FixedLater());
+        var executionId = await worker.LaunchAsync(workflowId, versionId);
+
+        Assert.True(await worker.ProcessNextAsync());
+
+        var done = await worker.ExecutionAsync(executionId);
+        Assert.True(done.Status == ExecutionStatuses.Success, done.Error);
+        var violation = Assert.Single(await ViolationsAsync(worker, executionId));
+        Assert.Equal(("r_fixed", StageRuleModes.Warn, ViolationStatuses.Resolved, ViolationStatuses.EngineActor), (violation.RuleId, violation.Mode, violation.Status, violation.ActorSystem));
+        Assert.NotNull(violation.ResolvedAt);
+        Assert.Equal(1, await AuditCountAsync(worker, ViolationStatuses.AuditOpened));
+        Assert.Equal(1, await AuditCountAsync(worker, ViolationStatuses.AuditResolved));
+    }
+
     private static async Task<List<ViolationEntity>> ViolationsAsync(WorkerHarness worker, Guid executionId)
     {
         await using var db = worker.Db.CreateDbContext();

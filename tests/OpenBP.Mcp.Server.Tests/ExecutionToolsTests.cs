@@ -179,6 +179,10 @@ public class ExecutionToolsTests(McpServerFactory mcp)
         Assert.Equal("FORBIDDEN", (string?)(await ErrorAsync(viewer, "resume_execution", new() { ["id"] = id }))["code"]);
         Assert.Equal("FORBIDDEN", (string?)(await ErrorAsync(viewer, "override_rule", new() { ["id"] = id, ["ruleId"] = "r1", ["reason"] = "Так" }))["code"]);
 
+        Assert.Empty((await CallAsync(viewer, "list_violations", new() { ["id"] = id }))["items"]!.AsArray());
+        Assert.Empty((await CallAsync(viewer, "list_executions", new() { ["workflowId"] = workflowId, ["hasOpenViolations"] = true }))["items"]!.AsArray());
+        Assert.Single((await CallAsync(viewer, "list_executions", new() { ["workflowId"] = workflowId, ["hasOpenViolations"] = false }))["items"]!.AsArray());
+
         // Editor: без причини — 422, порушення немає — конфлікт (повний сценарій — ExecutionTests.Override_*).
         Assert.Equal("STAGE_RULE_REASON_REQUIRED", (string?)(await ErrorAsync(editor, "override_rule", new() { ["id"] = id, ["ruleId"] = "r1", ["reason"] = " " }))["code"]);
         Assert.Equal("STAGE_RULE_NOT_VIOLATED", (string?)(await ErrorAsync(editor, "override_rule", new() { ["id"] = id, ["ruleId"] = "r1", ["reason"] = "Так" }))["code"]);
@@ -194,6 +198,7 @@ public class ExecutionToolsTests(McpServerFactory mcp)
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "get_execution", new() { ["id"] = missing }))["code"]);
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "cancel_execution", new() { ["id"] = missing }))["code"]);
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "resume_execution", new() { ["id"] = missing }))["code"]);
+        Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "list_violations", new() { ["id"] = missing }))["code"]);
         Assert.Equal("NOT_FOUND", (string?)(await ErrorAsync(editor, "override_rule", new() { ["id"] = missing, ["ruleId"] = "r1", ["reason"] = "Так" }))["code"]);
         var ex = await Assert.ThrowsAsync<McpProtocolException>(() => editor.ReadResourceAsync($"openbp://executions/{missing}").AsTask());
         Assert.Equal(McpErrorCode.ResourceNotFound, ex.ErrorCode);

@@ -99,6 +99,13 @@
   (1 год) — на пробудженні правило перевіряється знову (дані могли виправити в зовнішній системі). Відхилення
   (`ExecutionRequest.RuleOverrides`, з порушень `overridden`) пропускає перехід; `warn` проходить завжди. Етап, перехід з
   якого зупинено, лишається `active`: вихід зараховується, лише коли вузол-ціль справді почався (не зупинений правилом).
+- Повторна перевірка (F7-04): після кожного завершеного кроку (і відновленого) виконавець заново рахує правила
+  переходів, які виконання вже пройшло (вузол-ціль запущено), на поточних items ребра й виходах вузлів (`$node`).
+  Правило, що тепер виконане, іде в `IStageStore.SaveRuleChecksAsync` як `passed` — сховище закриває відкрите
+  порушення (`resolved`, `resolved_at`, аудит `violation.resolved`). Невиконані правила тут не звітуються (вони
+  зафіксовані при переході), а про виконане повідомляється один раз за запуск (`RunState.PassedRules`); після
+  відновлення перша перевірка повідомляє знову, що для сховища no-op. Відхилене (`overridden`) порушення не
+  відкривається й не закривається повторно.
 
 ### Інтерфейси Engine (все зовнішнє — тільки через них)
 
@@ -180,7 +187,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `webhooks` | id, workflow_id, node_id, method, path (unique) |
 | `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01); унікальний `(execution_id, node_id)` |
 | `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
-| `violations` | id, execution_id, stage_id, rule_id, workflow_version_id, mode (`block`/`warn`), status (`open`/`resolved`/`overridden`), message, actor_user_id, actor_system (`engine`), reason, context jsonb (items переходу після scrubbing), created_at, resolved_at (F7-03, ADR-004 §3; індекси (execution_id, stage_id, rule_id) і execution_id для `open`). Пише `PostgresExecutionStore.SaveRuleChecksAsync`: невиконане правило відкриває порушення (одне відкрите на правило), виконане закриває (`resolved`); `POST /executions/{id}/overrides` переводить у `overridden` з автором і причиною й будить job виконання, що чекає на `block`. Кожна зміна — `violation.opened/resolved/overridden` в `audit_log` (`entity_type = execution`). `GET /executions/{id}` віддає `violations[]`; ретеншн і видалення сценарію чистять разом із кроками |
+| `violations` | id, execution_id, stage_id, rule_id, workflow_version_id, mode (`block`/`warn`), status (`open`/`resolved`/`overridden`), message, actor_user_id, actor_system (`engine`), reason, context jsonb (items переходу після scrubbing), created_at, resolved_at (F7-03, ADR-004 §3; індекси (execution_id, stage_id, rule_id) і execution_id для `open`). Пише `PostgresExecutionStore.SaveRuleChecksAsync`: невиконане правило відкриває порушення (одне відкрите на правило), виконане закриває (`resolved`); `POST /executions/{id}/overrides` переводить у `overridden` з автором і причиною й будить job виконання, що чекає на `block`. Кожна зміна — `violation.opened/resolved/overridden` в `audit_log` (`entity_type = execution`). `GET /executions/{id}` віддає `violations[]`, а `GET /executions/{id}/violations` — той самий список окремо (F7-04); `GET /executions?hasOpenViolations=true|false` фільтрує за наявністю `open`, «Огляд» (`openViolations`) рахує виконання з відкритими порушеннями; ретеншн і видалення сценарію чистять разом із кроками |
 | `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
 | `webhook_dedupe` | workflow_id, node_id, key (PK), execution_id, status_code?, headers?, body?, created_at, expires_at (індекс) — ключі ідемпотентності webhook-ів (F6-05) |
 | `node_state` | workflow_id, node_id, state (jsonb) — для polling- і push-тригерів (`seenKeys`) |
