@@ -24,8 +24,11 @@ export interface ExecutionSummary {
   id: string;
   workflowId: string;
   versionId: string;
-  /** `error` — запуск сценарію помилок (`core.errorTrigger`, F4-06); `resume` — продовження з вузла, що впав (F6-08). */
-  mode: 'manual' | 'trigger' | 'retry' | 'error' | 'resume';
+  /**
+   * `error` — запуск сценарію помилок (`core.errorTrigger`, F4-06); `resume` — продовження з вузла, що впав (F6-08);
+   * `sub` — підсценарій, викликаний вузлом `core.executeWorkflow` іншого виконання (F6-04).
+   */
+  mode: 'manual' | 'trigger' | 'retry' | 'error' | 'resume' | 'sub';
   state: ExecutionState;
   startedAt: string | null;
   finishedAt: string | null;
@@ -38,6 +41,10 @@ export interface ExecutionSummary {
   resumeAt?: string | null;
   /** Для `waiting` — вузол, що чекає. */
   waitingNodeId?: string | null;
+  /** Для `sub` — виконання, яке викликало цей підсценарій. */
+  parentExecutionId?: string | null;
+  /** Для `sub` — вузол `core.executeWorkflow` батьківського виконання. */
+  parentNodeId?: string | null;
 }
 
 /** `StepError` — помилка вузла (F3-57): `message` — що сталося і що зробити, `details` — технічні подробиці. */
@@ -107,6 +114,8 @@ export interface ExecutionDetail {
   steps: ExecutionStep[];
   /** Етапи в порядку `stages[]`; порожньо або немає — сценарій без етапів. */
   stages?: ExecutionStage[];
+  /** Підсценарії, які запустило це виконання (F6-04), у порядку запуску. */
+  children?: ExecutionSummary[] | null;
 }
 
 /** `StartExecutionRequest` — тіло ручного запуску. */
@@ -267,6 +276,8 @@ export function executionModeLabel(mode: ExecutionSummary['mode']): string {
       return $localize`:@@executions.mode.error:Сценарій помилок`;
     case 'resume':
       return $localize`:@@executions.mode.resume:Продовження`;
+    case 'sub':
+      return $localize`:@@executions.mode.sub:Підсценарій`;
   }
 }
 

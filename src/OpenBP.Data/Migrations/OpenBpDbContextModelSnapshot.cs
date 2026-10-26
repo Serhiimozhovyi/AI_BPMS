@@ -432,6 +432,15 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("mode");
 
+                    b.Property<Guid?>("ParentExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_execution_id");
+
+                    b.Property<string>("ParentNodeId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("parent_node_id");
+
                     b.Property<DateTimeOffset?>("ResumeAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("resume_at");
@@ -469,6 +478,9 @@ namespace OpenBP.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FinishedAt");
+
+                    b.HasIndex("ParentExecutionId")
+                        .HasFilter("parent_execution_id IS NOT NULL");
 
                     b.HasIndex("WorkflowId", "CorrelationKey")
                         .HasFilter("correlation_key IS NOT NULL");

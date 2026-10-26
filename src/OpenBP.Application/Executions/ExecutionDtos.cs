@@ -96,6 +96,8 @@ public static class ExecutionStates
 /// <param name="CorrelationKey">Ключ кореляції (F5-04): Id угоди, контрагента тощо; <c>null</c> — не задано.</param>
 /// <param name="ResumeAt">Для <see cref="ExecutionState.Waiting"/> — коли виконання прокинеться (F5-02).</param>
 /// <param name="WaitingNodeId">Для <see cref="ExecutionState.Waiting"/> — вузол, що чекає.</param>
+/// <param name="ParentExecutionId">Для <see cref="ExecutionMode.Sub"/> — виконання, яке викликало цей підсценарій (F6-04).</param>
+/// <param name="ParentNodeId">Для <see cref="ExecutionMode.Sub"/> — вузол <c>core.executeWorkflow</c> батьківського виконання.</param>
 public sealed record ExecutionSummary(
     Guid Id,
     Guid WorkflowId,
@@ -108,13 +110,20 @@ public sealed record ExecutionSummary(
     Guid? ResumedFromExecutionId = null,
     string? CorrelationKey = null,
     DateTimeOffset? ResumeAt = null,
-    string? WaitingNodeId = null);
+    string? WaitingNodeId = null,
+    Guid? ParentExecutionId = null,
+    string? ParentNodeId = null);
 
 /// <summary>Виконання з кроками (<c>GET /executions/{id}</c>); кроки вже очищені від секретів (F2-04).</summary>
 /// <param name="Summary">Заголовок виконання.</param>
 /// <param name="Steps">Кроки в порядку збереження.</param>
 /// <param name="Stages">Стан етапів (ADR-004 §2, F7-02) у порядку <c>stages[]</c>; порожньо — сценарій без етапів.</param>
-public sealed record ExecutionDetail(ExecutionSummary Summary, IReadOnlyList<ExecutionStepDto> Steps, IReadOnlyList<ExecutionStageDto> Stages);
+/// <param name="Children">Підсценарії, які запустило це виконання (F6-04), у порядку запуску; <c>parentNodeId</c> — вузол-викликач.</param>
+public sealed record ExecutionDetail(
+    ExecutionSummary Summary,
+    IReadOnlyList<ExecutionStepDto> Steps,
+    IReadOnlyList<ExecutionStageDto> Stages,
+    IReadOnlyList<ExecutionSummary>? Children = null);
 
 /// <summary>Стан етапу виконання (<c>execution_stages</c>, ADR-004 §2).</summary>
 /// <param name="StageId">Id етапу (<c>stages[].id</c>).</param>
@@ -213,6 +222,8 @@ public sealed record ResumeExecutionRequest(IReadOnlyList<Item>? Items = null);
 /// Ключ кореляції (F5-04); порожній — немає. З <c>settings.correlation.skipIfActive</c> запуск при активному виконанні з тим
 /// самим ключем пишеться як <see cref="ExecutionState.Cancelled"/> без job.
 /// </param>
+/// <param name="ParentExecutionId">Лише <see cref="ExecutionMode.Sub"/>: виконання, що викликало підсценарій (F6-04).</param>
+/// <param name="ParentNodeId">Лише <see cref="ExecutionMode.Sub"/>: вузол <c>core.executeWorkflow</c>, що викликав.</param>
 public sealed record ExecutionLaunch(
     Guid WorkflowId,
     ExecutionMode Mode,
@@ -223,7 +234,9 @@ public sealed record ExecutionLaunch(
     Guid? VersionId = null,
     Guid? ResumedFromExecutionId = null,
     IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null,
-    string? CorrelationKey = null);
+    string? CorrelationKey = null,
+    Guid? ParentExecutionId = null,
+    string? ParentNodeId = null);
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

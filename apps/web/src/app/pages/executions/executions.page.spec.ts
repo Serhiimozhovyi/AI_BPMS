@@ -301,6 +301,29 @@ describe('ExecutionsPage', () => {
     expect(detail.querySelector('[data-testid="resume-button"]')).toBeNull();
   });
 
+  it('підсценарії: деталі показують запущені дочірні виконання й посилання на батьківське', async () => {
+    const s = await setup();
+    const child: ExecutionSummary = { ...failed, id: 'e9', workflowId: 'w2', mode: 'sub', state: 'success', error: null, parentExecutionId: 'e1', parentNodeId: 'n_1c' };
+    await openDetail(s, { ...failedDetail, children: [child] });
+
+    const detail = s.host.querySelector('[data-testid="execution-detail"]')!;
+    const children = detail.querySelectorAll('[data-testid="child-execution"]');
+    expect(children).toHaveLength(1);
+    expect(children[0].textContent).toContain('1С: замовлення');
+    expect(children[0].textContent).toContain('e9');
+    expect(detail.querySelector('[data-testid="parent-execution"]')).toBeNull();
+
+    children[0].querySelector('button')!.click();
+    s.http.expectOne('/api/v1/executions/e9').flush({ summary: child, steps: [], children: [] });
+    s.http.expectOne('/api/v1/workflows/w2').flush({ ...workflow, id: 'w2', name: 'Перевірка складу' });
+    await render(s.harness);
+
+    const childDetail = s.host.querySelector('[data-testid="execution-detail"]')!;
+    expect(childDetail.textContent).toContain('Підсценарій');
+    expect(childDetail.querySelector('[data-testid="parent-execution"]')?.textContent).toContain('e1');
+    expect(childDetail.querySelector('[data-testid="child-executions"]')).toBeNull();
+  });
+
   it('«Продовжити з вузла» без змін надсилає порожнє тіло; для успішного виконання кнопки немає', async () => {
     const s = await setup();
     await openDetail(s, failedDetail);

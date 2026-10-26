@@ -95,7 +95,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 | `list_evaluations` | viewer | `workflowId`, `nodeId?` | `{ items: [{ id, workflowId, nodeId, name, caseCount, lastRun }] }` — оцінки вузлів ШІ (F6-17); `lastRun` — `{ passed, total, version, … }` без результатів кейсів |
 | `create_evaluation` | editor | `workflowId`, `nodeId`, `cases`, `name?` | оцінка з кейсами `{ name?, input: [{json}], expected?, check: exact \| jsonPath \| expression \| llm, config? }`; невідомий вузол чи бракує налаштувань перевірки — `EVALUATION_INVALID` |
 | `run_evaluation` | editor | `id` | прогін `{ passed, total, version, versionId, results: [{ caseId, name, passed, actual, reason, error, durationMs, tokens, executionId }] }`: кожен кейс виконується як `test_node` з `items` на поточній версії, прогін зберігається за версією |
-| `get_execution` | viewer | `id` | те саме, що `run_workflow` |
+| `get_execution` | viewer | `id` | те саме, що `run_workflow`, плюс `children[]` — підсценарії, запущені цим виконанням (F6-04: `summary` з `mode: sub`, `parentNodeId`); `summary` підсценарію має `parentExecutionId` |
 | `list_executions` | viewer | `workflowId?`, `status?`, `correlationKey?`, `page?` | сторінка виконань без кроків |
 | `cancel_execution` | editor | `id` | стан після запиту на скасування (фінальне виконання не змінюється) |
 | `resume_execution` | editor | `id`, `items?` | нове виконання `resume` (у черзі): продовження помилкового (`error`/`timed_out`) з вузла, що впав; успішні вузли не виконуються знову, `items` — нові дані на вхід 0 вузла, що впав (F6-08). Інакше — `EXECUTION_NOT_FAILED` / `RESUME_INPUT_NOT_APPLICABLE` |

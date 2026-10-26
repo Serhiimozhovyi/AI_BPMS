@@ -199,6 +199,26 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
               <button mat-button type="button" (click)="select(source)">{{ source }}</button>
             </p>
           }
+          @if (d.summary.parentExecutionId; as parent) {
+            <p class="mb-2 opacity-70" data-testid="parent-execution">
+              <ng-container i18n="@@executions.parent">Підсценарій виконання</ng-container>
+              <button mat-button type="button" (click)="select(parent)">{{ parent }}</button>
+            </p>
+          }
+          @if (d.children?.length) {
+            <div class="mb-2" data-testid="child-executions">
+              <p class="opacity-70" i18n="@@executions.children">Запущені підсценарії:</p>
+              <ul>
+                @for (c of d.children; track c.id) {
+                  <li data-testid="child-execution">
+                    {{ nodeName(c.parentNodeId ?? '') }} —
+                    <span [class]="stateClass(c.state)">{{ stateLabel(c.state) }}</span>
+                    <button mat-button type="button" (click)="select(c.id)">{{ c.id }}</button>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
           @if (resumeOpen()) {
             <div class="mb-4 flex flex-col gap-2 rounded border p-3" data-testid="resume-panel">
               @if (resumeStep(); as failed) {

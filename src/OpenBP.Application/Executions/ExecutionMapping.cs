@@ -20,7 +20,9 @@ internal static class ExecutionMapping
         e.ResumedFromExecutionId,
         e.CorrelationKey,
         e.Status == ExecutionStatuses.Waiting ? e.ResumeAt : null,
-        e.Status == ExecutionStatuses.Waiting ? e.WaitingNodeId : null);
+        e.Status == ExecutionStatuses.Waiting ? e.WaitingNodeId : null,
+        e.ParentExecutionId,
+        e.ParentNodeId);
 
     /// <summary>Крок як збережений: items і помилка вже очищені від секретів (F2-04).</summary>
     public static ExecutionStepDto ToStep(ExecutionStepEntity e) => new(
