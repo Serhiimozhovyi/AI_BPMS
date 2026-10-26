@@ -5,6 +5,7 @@ import {
   EditorSavedEvent,
   WorkflowEditorComponent,
 } from '../app/workflow-editor/workflow-editor.component';
+import { StageActedEvent, StageBoardComponent } from '../app/executions/stage-board.component';
 import { ElementConfig } from './element-services';
 
 /** Мови інтерфейсу, для яких є переклад; інші значення `locale` — українська. */
@@ -13,17 +14,21 @@ const LOCALES = ['uk'];
 /**
  * `<openbp-canvas>` (F4-13): редактор сценарію SPA (канвас, палітра, панель вузла, тестовий запуск) без роутера й
  * shell, у Shadow DOM — стилі хоста не діють на канвас і навпаки. Атрибути: `api-base`, `workflow-id`, `readonly`,
- * `locale`, `token`; події: `openbp-saved`, `openbp-run`, `openbp-error` (дані — у `event.detail`). Див. docs/embedding.md.
+ * `locale`, `token`, `view`, `execution-id`; події: `openbp-saved`, `openbp-run`, `openbp-action`, `openbp-error` (дані —
+ * у `event.detail`). `view="business"` з `execution-id` (F7-05) — етапи виконання колонками з діями з контракту етапів
+ * замість редактора. Див. docs/embedding.md.
  */
 @Component({
   // Тег на сторінці — `openbp-canvas` (customElements.define у main.ts); selector лише для збірки.
   selector: 'app-openbp-canvas',
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.ShadowDom,
-  imports: [WorkflowEditorComponent],
+  imports: [WorkflowEditorComponent, StageBoardComponent],
   template: `
     <div class="openbp" [attr.lang]="lang()">
-      @if (workflowId()) {
+      @if (view() === 'business' && executionId()) {
+        <app-stage-board [executionId]="executionId()" (acted)="action.emit($event)" (failed)="failed.emit($event)" />
+      } @else if (workflowId()) {
         <app-workflow-editor
           [workflowId]="workflowId()"
           [readonly]="readonly()"
@@ -57,6 +62,12 @@ export class OpenbpCanvasElement {
   /** API-ключ або OIDC access token (`Authorization: Bearer`); без нього — cookie сесії. */
   readonly token = input('');
 
+  /** `business` з `execution-id` — етапи виконання з діями (F7-05); інакше — редактор. Атрибут `view`. */
+  readonly view = input<'technical' | 'business' | ''>('');
+
+  /** Виконання для `view="business"`. Атрибут `execution-id`. */
+  readonly executionId = input('');
+
   /** `openbp-saved` — `{ workflowId, version }`. */
   // Назва DOM-події елемента — частина публічного API (docs/embedding.md).
   // eslint-disable-next-line @angular-eslint/no-output-rename
@@ -66,6 +77,11 @@ export class OpenbpCanvasElement {
   // Назва DOM-події елемента — частина публічного API (docs/embedding.md).
   // eslint-disable-next-line @angular-eslint/no-output-rename
   readonly run = output<EditorRunEvent>({ alias: 'openbp-run' });
+
+  /** `openbp-action` — `{ executionId, stageId, actionId, kind, decision }`: дію етапу виконано. */
+  // Назва DOM-події елемента — частина публічного API (docs/embedding.md).
+  // eslint-disable-next-line @angular-eslint/no-output-rename
+  readonly action = output<StageActedEvent>({ alias: 'openbp-action' });
 
   /** `openbp-error` — `{ code, message }`. */
   // Назва DOM-події елемента — частина публічного API (docs/embedding.md).

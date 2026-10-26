@@ -307,6 +307,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `IAssistantService`, `IAssistantSettingsService` | REST `POST /workflows/{id}/assistant`, `/settings/assistant`, UI | помічник у редакторі (§10.8) |
 | `IWorkflowExplanationService` (+ `WorkflowExplainer` у воркері) | REST `/workflows/{id}/explanation`, UI | пояснення сценарію простими словами (§10.8, F3-72) |
 | `INodeService` | REST `GET /nodes`, UI (палітра канвасу) | дескриптори зареєстрованих вузлів (`NodeDescriptor`), viewer |
+| `IStageService` | REST `/executions/{id}/stages`, MCP `get_execution_stages`/`act_on_stage`, `<openbp-canvas view="business">` | контракт етапів (F7-05, ADR-004 §4): стан, порушення, дії поточного користувача, невиконані правила; дії — через `ITaskService`, `IExecutionService.OverrideRuleAsync`, `IWaitResumeService` |
 
 Сигнатури — у коді (`OpenBP.Application`), вони є джерелом правди; тут — лише правила.
 
@@ -390,6 +391,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `GET /executions/{id}` | viewer | `ExecutionDetail` з кроками |
 | `POST /executions/{id}/cancel` · `POST /executions/{id}/retry` · `POST /executions/{id}/resume` (`{ items? }`) | editor | 202 `ExecutionSummary` |
 | `GET /executions/{id}/events` | viewer | SSE, див. 10.5 |
+| `GET /executions/{id}/stages` | viewer | `ExecutionStages { execution, stages[] }` — контракт етапів (F7-05, ADR-004 §4): на етап `{ id, name, position, status, overdue, enteredAt, dueAt, exitedAt, owner, violations[], actions[], unmet[] }`. `actions` — лише доступні поточному користувачу: `task:{taskId}` (відкрита задача `core.approval` етапу, яку він може закрити; `decisions`, `fields`, `reasonRequired`), `override:{ruleId}` (відкрите порушення, editor), `resume:{nodeId}` (`core.wait` у режимі `webhook`, editor). `unmet` — правила переходів активного етапу, не виконані на items ребра з успішного вузла етапу в ще не розпочатий (або зупинений правилом) вузол поза етапом; той самий Jint, `$node` — останні успішні виходи, `$vars`, без `$env`; відхилені правила не входять. Сценарій без етапів — `stages: []` |
+| `POST /executions/{id}/stages/{stageId}/actions/{actionId} { decision?, data?, reason? }` | viewer (дія — за її правами) | `ExecutionStages` після дії. `task` = `POST /tasks/{id}/complete` (ті самі помилки); якщо після рішення правила наступного переходу не виконуються — на поточних items (`unmet`) або на item'і рішення `{ decision, data, completedBy, completedAt }` на виході цього рішення — потрібна `reason`, інакше 422 `STAGE_RULE_REASON_REQUIRED`; з причиною ці правила записуються як `overridden` (з автором, audit `violation.overridden`) в одній транзакції з рішенням, тож рушій пропускає перехід без порушення. `override` = `POST /executions/{id}/overrides`; `resume` будить вебхук-очікування з `data` як тілом. Недоступна чи невідома дія або етап — 404 |
 | `GET /nodes` | viewer | дескриптори `core.*`/`ai.*`/`mcp.*` для палітри |
 | `GET /connectors` · `GET /connectors/{id}` · `GET /connectors/{id}/tools` | viewer | `PageResult<ConnectorSummary>` · `ConnectorDetail` · `McpToolInfo[]` |
 | `POST /connectors` · `PUT /connectors/{id}` · `DELETE /connectors/{id}` · `POST /connectors/{id}/refresh-tools` | admin | `ConnectorDetail`; 409 при видаленні, якщо є активні сценарії з цим сервером |

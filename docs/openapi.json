@@ -3865,6 +3865,138 @@
         ]
       }
     },
+    "/api/v1/executions/{id}/stages": {
+      "get": {
+        "tags": [
+          "Виконання"
+        ],
+        "summary": "Етапи виконання: стан, порушення, дії, невиконані правила",
+        "description": "Контракт ADR-004 §4 (F7-05), той самий для `/mcp` (`get_execution_stages`) і `<openbp-canvas view=\"business\" execution-id>`. `actions` — дії, доступні поточному користувачу: `task` (відкрита задача етапу, яку він може закрити), `override` (відхилити відкрите порушення, editor), `resume` (пробудити `core.wait` у режимі webhook, editor). `unmet` — невиконані правила наступного переходу активного етапу на поточних items. Виконання за об'єктом зовнішньої системи — `GET /executions?correlationKey=`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionStages"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/executions/{id}/stages/{stageId}/actions/{actionId}": {
+      "post": {
+        "tags": [
+          "Виконання"
+        ],
+        "summary": "Виконати дію етапу",
+        "description": "Дія з `actions` етапу; відповідь — етапи після неї. `task` — `{ decision, data? }` (як `POST /tasks/{id}/complete`); якщо `unmet` не порожній — ще `reason`, інакше 422 STAGE_RULE_REASON_REQUIRED (причина стає відхиленням цих правил). `override` — `{ reason }` (як `POST /executions/{id}/overrides`). `resume` — `data` іде у виконання як тіло пробудження. Дії, недоступної користувачу, немає — 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "stageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StageActionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionStages"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/executions/{id}/cancel": {
       "post": {
         "tags": [
@@ -7262,6 +7394,94 @@
         ],
         "description": "Режим запуску виконання (поле `executions.mode`, docs/architecture.md §6)."
       },
+      "ExecutionStage": {
+        "required": [
+          "id",
+          "name",
+          "position",
+          "status",
+          "overdue",
+          "enteredAt",
+          "dueAt",
+          "exitedAt",
+          "owner",
+          "violations",
+          "actions",
+          "unmet"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StageStatus"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "enteredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "dueAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "exitedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StageOwnerDto"
+              }
+            ]
+          },
+          "violations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ViolationDto"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StageAction"
+            }
+          },
+          "unmet": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnmetRule"
+            }
+          }
+        }
+      },
       "ExecutionStageDto": {
         "required": [
           "stageId",
@@ -7315,6 +7535,24 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "ExecutionStages": {
+        "required": [
+          "execution",
+          "stages"
+        ],
+        "type": "object",
+        "properties": {
+          "execution": {
+            "$ref": "#/components/schemas/ExecutionSummary"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionStage"
+            }
           }
         }
       },
@@ -8564,6 +8802,122 @@
           }
         }
       },
+      "StageAction": {
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "reasonRequired"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "reasonRequired": {
+            "type": "boolean"
+          },
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "decisions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TaskDecision"
+            }
+          },
+          "fields": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
+          "ruleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StageActionRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StageOwnerDto": {
+        "required": [
+          "lane",
+          "role",
+          "expression"
+        ],
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expression": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "StageStatus": {
         "enum": [
           "pending",
@@ -9006,6 +9360,35 @@
           "elapsed": {
             "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
             "type": "string"
+          }
+        }
+      },
+      "UnmetRule": {
+        "required": [
+          "ruleId",
+          "mode",
+          "message",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "ruleId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "to": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

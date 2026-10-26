@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!--
       Демо вбудовування редактора OpenBP (F4-13, docs/embedding.md). Збірка: npm run build:element.
-      Параметри адреси: ?workflow-id=<id>&api-base=<корінь Api>&token=<ключ>&readonly
+      Параметри адреси: ?workflow-id=<id>&api-base=<корінь Api>&token=<ключ>&readonly або ?view=business&execution-id=<id>
       Стилі нижче навмисно «агресивні», як у чужому застосунку: канвас у Shadow DOM від них не ламається,
       а стилі канвасу не потрапляють на сторінку.
     -->
@@ -61,13 +61,13 @@
     <script>
       const params = new URLSearchParams(location.search);
       const canvas = document.getElementById('canvas');
-      for (const name of ['workflow-id', 'api-base', 'token', 'locale']) {
+      for (const name of ['workflow-id', 'api-base', 'token', 'locale', 'view', 'execution-id']) {
         if (params.has(name)) canvas.setAttribute(name, params.get(name));
       }
       if (params.has('readonly')) canvas.setAttribute('readonly', '');
       const log = document.getElementById('events');
       window.openbpEvents = [];
-      for (const type of ['openbp-saved', 'openbp-run', 'openbp-error']) {
+      for (const type of ['openbp-saved', 'openbp-run', 'openbp-action', 'openbp-error']) {
         canvas.addEventListener(type, (e) => {
           window.openbpEvents.push({ type, detail: e.detail });
           log.textContent += `${type} ${JSON.stringify(e.detail)}\n`;

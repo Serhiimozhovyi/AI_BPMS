@@ -1,7 +1,9 @@
 using System.ComponentModel;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using OpenBP.Application.Executions;
 using OpenBP.Application.Paging;
+using OpenBP.Application.Stages;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Mcp.Server;
@@ -102,6 +104,50 @@ public sealed class ExecutionTools
         [Description("Execution id.")] Guid id,
         CancellationToken ct = default) =>
         new(await executions.ListViolationsAsync(id, ct));
+
+    /// <summary><c>get_execution_stages</c> (F7-05, ADR-004 §4).</summary>
+    /// <param name="stages">Сервіс етапів.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "get_execution_stages", Title = "Get execution stages", ReadOnly = true, UseStructuredContent = true)]
+    [Description(
+        "Returns the business stages of an execution (ADR-004): status (pending|active|done|skipped|cancelled), overdue, enteredAt, " +
+        "dueAt, owner, violations of transition rules, actions you can take now and unmet rules of the next transition evaluated " +
+        "on the current items. Actions: task (decide an open human task of the stage), override (override an open violation " +
+        "with a reason, editor), resume (wake a core.wait webhook node, editor) — run them with act_on_stage. Same as the " +
+        "resource openbp://executions/{id}/stages. Find the execution of an external object with list_executions(correlationKey).")]
+    public static Task<ExecutionStages> GetExecutionStages(
+        IStageService stages,
+        [Description("Execution id.")] Guid id,
+        CancellationToken ct = default) =>
+        stages.GetAsync(id, ct);
+
+    /// <summary><c>act_on_stage</c> (F7-05, ADR-004 §4).</summary>
+    /// <param name="stages">Сервіс етапів.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="stageId">Етап.</param>
+    /// <param name="actionId">Дія.</param>
+    /// <param name="decision">Рішення задачі.</param>
+    /// <param name="data">Дані.</param>
+    /// <param name="reason">Причина.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "act_on_stage", Title = "Act on execution stage", Destructive = false, Idempotent = false, UseStructuredContent = true)]
+    [Description(
+        "Runs an action from get_execution_stages (stages[].actions[].id) and returns the stages after it. task: pass decision " +
+        "(decisions[].key) and data for its fields, the same as complete_task; when the decision leaves rules of the next transition " +
+        "unmet (stage unmet[] or rules on the decision item itself) also pass reason (it overrides those rules), otherwise " +
+        "STAGE_RULE_REASON_REQUIRED. override: pass reason, the same as override_rule. " +
+        "resume: data becomes the wake-up body. An action not available to you → NOT_FOUND.")]
+    public static Task<ExecutionStages> ActOnStage(
+        IStageService stages,
+        [Description("Execution id.")] Guid id,
+        [Description("Stage id (stages[].id).")] string stageId,
+        [Description("Action id (stages[].actions[].id), e.g. task:<taskId>, override:<ruleId>, resume:<nodeId>.")] string actionId,
+        [Description("Decision key for a task action.")] string? decision = null,
+        [Description("Data: task fields or the wake-up body of a resume action.")] JsonObject? data = null,
+        [Description("Reason: required for override and for a task when the stage has unmet rules.")] string? reason = null,
+        CancellationToken ct = default) =>
+        stages.ActAsync(id, stageId, actionId, new StageActionRequest(decision, data, reason), ct);
 
     /// <summary><c>cancel_execution</c>.</summary>
     /// <param name="executions">Сервіс виконань.</param>
