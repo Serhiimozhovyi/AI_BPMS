@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using OpenBP.Engine.Nodes;
 using OpenBP.Engine.Webhooks;
@@ -90,7 +89,7 @@ public sealed class RespondToWebhookNode(IWebhookResponder? responder = null) : 
         }
         else
         {
-            body = JsonSerializer.SerializeToUtf8Bytes(p.Body ?? first.Json, WorkflowJson.Options);
+            body = Encoding.UTF8.GetBytes((p.Body ?? first.Json).ToJsonString());
             contentType = "application/json; charset=utf-8";
         }
 

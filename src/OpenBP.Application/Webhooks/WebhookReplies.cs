@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +27,7 @@ public sealed record WebhookReply(int StatusCode, IReadOnlyDictionary<string, st
     public static WebhookReply Json(int statusCode, JsonNode? body, Guid? executionId, string contentType = JsonContentType) => new(
         statusCode,
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Content-Type"] = contentType },
-        JsonSerializer.SerializeToUtf8Bytes(body, WorkflowJson.Options),
+        Encoding.UTF8.GetBytes(body?.ToJsonString() ?? "null"),
         executionId);
 }
 
@@ -61,7 +62,7 @@ public static class WebhookReplies
         return new WebhookResponse(
             200,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Content-Type"] = WebhookReply.JsonContentType },
-            JsonSerializer.SerializeToUtf8Bytes(body, WorkflowJson.Options));
+            Encoding.UTF8.GetBytes(body.ToJsonString()));
     }
 }
 

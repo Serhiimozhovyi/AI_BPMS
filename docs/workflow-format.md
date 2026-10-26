@@ -226,6 +226,46 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   webhook відповідає 202 з id цього запису. Діє на всі режими, зокрема ручний запуск із ключем. Запуск без ключа не
   перевіряється. У редакторі — перемикач у діалозі «Налаштування».
 
+### Відповідь webhook-у й дедуплікація (`core.webhook`, `core.respondToWebhook`)
+
+Що webhook відповідає викликачу і як він відсікає повтори того самого запиту (F6-05).
+
+```json
+{ "id": "n_hook", "name": "Заявка", "type": "core.webhook", "typeVersion": 1, "position": [0, 0],
+  "parameters": { "method": "POST", "path": "orders", "respond": "fromNode", "responseTimeoutSec": 20,
+                  "idempotencyKey": "{{ $json.body.orderId }}", "dedupeWindowSec": 3600 } }
+```
+
+```json
+{ "id": "n_reply", "name": "Відповідь", "type": "core.respondToWebhook", "typeVersion": 1, "position": [600, 0],
+  "parameters": { "statusCode": 201, "headers": { "X-Order": "{{ $json.id }}" }, "body": { "id": "{{ $json.id }}" } } }
+```
+
+- `respond`:
+  - `immediately` (типово, як було) — одразу 202 `{ "executionId": "…" }`;
+  - `whenFinished` — Api чекає завершення: успіх — 200 JSON з виходом останнього успішного вузла (порт 0, а якщо він
+    порожній — перший непорожній; один item — його `json`, кілька — масив); `error`/`timed_out` — 500
+    `WEBHOOK_EXECUTION_FAILED`, `cancelled` — 409 `WEBHOOK_EXECUTION_CANCELLED`. Працює й із `saveSuccessfulData: false`;
+  - `fromNode` — відповідає вузол `core.respondToWebhook`; виконання після нього триває. Виконання завершилось, а
+    вузол не відповів (гілка не дійшла) — 500 `WEBHOOK_NO_RESPONSE`.
+- `responseTimeoutSec` (1…300, типово 30) — скільки Api чекає для `whenFinished`/`fromNode`; не дочекались — 504
+  `WEBHOOK_RESPONSE_TIMEOUT` (`application/problem+json` з `executionId` і `executionStatus`), виконання триває.
+- `core.respondToWebhook`: `statusCode` (100…599, типово 200); `headers` (ім'я → рядок; `Content-Length`,
+  `Transfer-Encoding`, `Connection` ігноруються); `body` — рядок стає `text/plain`, інше значення — JSON, без `body` —
+  `json` першого item'а; `binaryKey` — замість тіла файл із `binary` першого item'а з його MIME-типом і
+  `Content-Disposition: attachment`. Тіло — до 10 МБ. Свій `Content-Type` у `headers` має перевагу. Відповідає лише
+  перший такий вузол у виконанні; items проходять на вихід без змін. Без воркера (`openbp run`) — помилка
+  вузла.
+- Дедуплікація: ключ — `idempotencyKey` (вираз над item'ом тригера, як `correlationKey`; помилка виразу — 400), без
+  нього — заголовок `Idempotency-Key`; порожнє значення — без дедуплікації; обрізається до 200 символів. Повтор
+  ключа того самого webhook-вузла у вікні `dedupeWindowSec` (1…2592000, типово 86400) нового виконання не створює:
+  відповідь, що вже відома, повертається така сама з заголовком `Idempotent-Replayed: true`; якщо перше виконання ще
+  не відповіло — повтор чекає на нього. 504 не запам'ятовується. Після вікна той самий ключ запускає нове виконання.
+- Не плутати з `correlationKey` (вище): той не дає запустити друге **активне** виконання з тим самим бізнес-ключем,
+  `idempotencyKey` відсікає повторний **HTTP-запит** у вікні часу незалежно від стану виконання. У вузлі вони поруч.
+- Валідація: `respond: "fromNode"` без увімкненого `core.respondToWebhook`, досяжного з цього webhook-а, —
+  `WEBHOOK_RESPOND_NODE_MISSING`.
+
 ### Таблиці даних (`core.dataTable`)
 
 Вузол «Таблиця даних» читає й пише таблиці зі сторінки «Таблиці» (`/tables`, F6-11): довідники, черги, стан між
@@ -414,6 +454,8 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
     `STAGE_NODE_IN_TWO_STAGES` (`/stages/{i}/nodes/{j}`, на другому етапі), `STAGE_NOT_CONNECTED` (`/stages/{i}/nodes`),
     `STAGE_TRANSITION_UNKNOWN` (`/stages/{i}/transitions/{k}/to`), `STAGE_RULE_ID_DUPLICATE`
     (`/stages/{i}/transitions/{k}/rules/{r}/id`); `owner.lane` без такої доріжки — `BUSINESS_LANE_UNKNOWN` (`/stages/{i}/owner/lane`).
+11. `core.webhook` з `respond: "fromNode"` має досяжний увімкнений `core.respondToWebhook` (`WEBHOOK_RESPOND_NODE_MISSING`,
+    `/nodes/{i}/parameters/respond`).
 
 Помилки повертаються списком `{ code, nodeId?, path?, message }` — агент виправляє по кодах.
 
