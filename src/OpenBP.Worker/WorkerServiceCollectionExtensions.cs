@@ -162,6 +162,15 @@ public static class WorkerServiceCollectionExtensions
             sp.GetRequiredService<PollJobProcessor>(),
             sp.GetRequiredService<WorkerLiveness>(),
             sp.GetRequiredService<ExplainJobProcessor>()));
+        // Підписки push-тригерів mcp.subscribe (F6-13).
+        services.AddHostedService(sp => new SubscriptionService(
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<IMcpServerRegistry>(),
+            sp.GetRequiredService<McpServerSync>(),
+            sp.GetRequiredService<PollJobProcessor>(),
+            sp.GetRequiredService<WorkerOptions>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SubscriptionService>>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddHostedService(sp => new WorkerHeartbeatService(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
             sp.GetRequiredService<WorkerLiveness>(),

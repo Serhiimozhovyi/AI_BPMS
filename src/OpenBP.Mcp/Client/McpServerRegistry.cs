@@ -169,6 +169,19 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task<McpClient> OpenSessionAsync(string serverId, string? protocolVersion = null, CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var entry = GetEntry(serverId);
+        if (entry.Removed)
+        {
+            throw new McpServerUnknownException(serverId);
+        }
+
+        return await ConnectAsync(entry.Config, ct, protocolVersion).ConfigureAwait(false);
+    }
+
     /// <summary>Закриває сесії без викликів довше за <see cref="McpRegistryOptions.IdleTimeout"/>.</summary>
     /// <returns>Кількість закритих сесій.</returns>
     public async Task<int> EvictIdleAsync()
@@ -326,7 +339,7 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
         }
     }
 
-    private async Task<McpClient> ConnectAsync(McpServerConfig config, CancellationToken ct)
+    private async Task<McpClient> ConnectAsync(McpServerConfig config, CancellationToken ct, string? protocolVersion = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(_options.ConnectTimeout);
@@ -340,6 +353,7 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
                 // що відповів на discover пізніше (повільний старт stdio-процесу, навантаження), уже на протоколі
                 // 2026-07-28 і відхиляє `initialize` — тож проба чекає стільки ж, скільки все підключення.
                 DiscoverProbeTimeout = _options.ConnectTimeout,
+                ProtocolVersion = protocolVersion,
             };
             return await McpClient.CreateAsync(CreateTransport(config), options, _loggerFactory, cts.Token).ConfigureAwait(false);
         }

@@ -15,10 +15,10 @@ namespace OpenBP.Mcp.Nodes;
 public sealed class McpPollNode : INode
 {
     /// <summary>Ємність кільцевого буфера <c>seenKeys</c>.</summary>
-    public const int SeenKeysCapacity = 1000;
+    public const int SeenKeysCapacity = SeenKeys.Capacity;
 
     /// <summary>Ключ стану вузла з уже баченими ключами.</summary>
-    public const string SeenKeysState = "seenKeys";
+    public const string SeenKeysState = SeenKeys.StateKey;
 
     private readonly McpToolInvoker _invoker;
 
@@ -52,45 +52,8 @@ public sealed class McpPollNode : INode
         }
 
         var items = await _invoker.CallAsync(ctx, p, ct).ConfigureAwait(false);
-
-        var seen = new List<JsonNode?>();
-        var known = new HashSet<string>(StringComparer.Ordinal);
-        if (ctx.NodeState[SeenKeysState] is JsonArray stored)
-        {
-            foreach (var key in stored)
-            {
-                seen.Add(key?.DeepClone());
-                known.Add(KeyText(key));
-            }
-        }
-
-        var fresh = new List<Item>();
-        foreach (var item in items)
-        {
-            var key = McpToolInvoker.ResolvePath(item.Json, p.KeyField)
-                ?? throw new McpToolException(
-                    $"У записі немає ключового поля «{p.KeyField}» (або воно null). Вкажіть у keyField поле, що є в кожному записі.");
-            if (known.Add(KeyText(key)))
-            {
-                seen.Add(key.DeepClone());
-                fresh.Add(item);
-            }
-        }
-
-        if (seen.Count > SeenKeysCapacity)
-        {
-            seen.RemoveRange(0, seen.Count - SeenKeysCapacity);
-        }
-
-        var state = (JsonObject)ctx.NodeState.DeepClone();
-        state[SeenKeysState] = new JsonArray([.. seen]);
-        ctx.NodeState = state;
-
-        return [[.. fresh]];
+        return [[.. SeenKeys.Filter(ctx, items, p.KeyField)]];
     }
-
-    /// <summary>Канонічний текст ключа: <c>1</c> і <c>"1"</c> — різні ключі.</summary>
-    private static string KeyText(JsonNode? key) => key?.ToJsonString() ?? "null";
 
     private sealed class PollParameters : McpCallParameters
     {

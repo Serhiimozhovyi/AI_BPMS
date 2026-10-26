@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -17,7 +18,7 @@ namespace OpenBP.Mcp.FakeServer;
 /// Тестовий MCP-сервер. <c>dotnet OpenBP.Mcp.FakeServer.dll</c> — stdio;
 /// <c>--http &lt;url&gt;</c> — Streamable HTTP на <c>&lt;url&gt;/mcp</c>. У тестах HTTP-варіант хоститься в процесі через <see cref="BuildHttp"/>.
 /// <c>--mock 1c</c> / <c>--mock telegram</c> / <c>--mock msgraph</c> — stdio-моки 1С, Telegram і Microsoft Graph для прикладів
-/// <c>examples/telegram-1c.json</c> і <c>examples/daily-report.json</c>.
+/// <c>examples/telegram-1c.json</c> і <c>examples/daily-report.json</c>. Без моку є й події <see cref="FakeEvents"/>.
 /// </summary>
 public static class FakeServerApp
 {
@@ -68,6 +69,13 @@ public static class FakeServerApp
             server.WithTools([type]);
         }
 
+        if (mock < 0)
+        {
+            // Події для mcp.subscribe (F6-13): ресурс fake://events, tools emit_event/list_events.
+            FakeEvents.Register(builder.Services);
+            server.WithTools([typeof(FakeEventTools)]);
+        }
+
         if (tools.Contains(typeof(MockTelegramTools)))
         {
             builder.Services.PostConfigure<McpServerOptions>(MockTelegramTools.AnnotateChatIds);
@@ -86,8 +94,10 @@ public static class FakeServerApp
         builder.Logging.ClearProviders();
         builder.Services
             .AddMcpServer(o => o.ServerInfo = new Implementation { Name = ServerName, Version = "1.0.0" })
-            .WithHttpTransport()
-            .WithTools([typeof(FakeTools)]);
+            // Сесії для клієнтів з initialize (F6-13): лише в сесії сервер може сам надіслати notifications/resources/updated.
+            .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
+            .WithTools([typeof(FakeTools), typeof(FakeEventTools)]);
+        FakeEvents.Register(builder.Services);
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;

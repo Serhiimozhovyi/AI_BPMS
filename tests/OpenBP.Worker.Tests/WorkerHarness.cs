@@ -16,6 +16,7 @@ using OpenBP.Engine.Execution;
 using OpenBP.Engine.Nodes;
 using OpenBP.Expressions;
 using OpenBP.Mcp.Client;
+using OpenBP.Mcp.FakeServer;
 using OpenBP.Mcp.Nodes;
 using OpenBP.Nodes.Core;
 using OpenBP.Shared.Workflow;
@@ -126,7 +127,11 @@ internal sealed class WorkerHarness : IAsyncDisposable
             binary,
             options,
             NullLogger<PollJobProcessor>.Instance);
+        Subscriptions = new SubscriptionService(Db, _mcp, Servers, Poll, options, NullLogger<SubscriptionService>.Instance);
     }
+
+    /// <summary>Підписки <c>mcp.subscribe</c> (F6-13); проходи запускає тест через <see cref="SubscriptionService.ScanAsync"/>.</summary>
+    public SubscriptionService Subscriptions { get; }
 
     /// <summary>Годинник черги, обробника й <c>core.wait</c>; <c>null</c> — системний.</summary>
     public TimeProvider? Time { get; }
@@ -178,7 +183,7 @@ internal sealed class WorkerHarness : IAsyncDisposable
     /// <param name="limits">Серверні межі виконання (<c>OPENBP_MAX_EXECUTION_TIMEOUT_SEC</c>); <c>null</c> — типові.</param>
     /// <param name="loggers">Журнали обробника виконань; <c>null</c> — без журналу.</param>
     /// <param name="time">Годинник черги, обробника й <c>core.wait</c>; <c>null</c> — системний.</param>
-    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null, TimeProvider? time = null)
+    public static async Task<WorkerHarness> CreateAsync(PostgresFixture postgres, int maxConcurrent = 4, TimeSpan? lockTimeout = null, IBinaryStore? binary = null, WorkflowLimits? limits = null, ILoggerFactory? loggers = null, TimeProvider? time = null, TimeSpan? subscriptionLease = null)
     {
         var cs = await postgres.NewMigratedDatabaseAsync();
         return new WorkerHarness(
@@ -189,6 +194,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
                 MaxConcurrentExecutions = maxConcurrent,
                 HeartbeatInterval = TimeSpan.FromMilliseconds(100),
                 PollInterval = TimeSpan.FromMilliseconds(50),
+                SubscriptionScanInterval = TimeSpan.FromMilliseconds(200),
+                SubscriptionLease = subscriptionLease ?? TimeSpan.FromSeconds(30),
             },
             new JobQueueOptions { LockTimeout = lockTimeout ?? TimeSpan.FromMinutes(5) },
             binary: binary,
@@ -220,6 +227,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
                 MaxConcurrentExecutions = Options.MaxConcurrentExecutions,
                 HeartbeatInterval = Options.HeartbeatInterval,
                 PollInterval = Options.PollInterval,
+                SubscriptionScanInterval = Options.SubscriptionScanInterval,
+                SubscriptionLease = Options.SubscriptionLease,
             },
             QueueOptions,
             EncryptionKey,
@@ -392,6 +401,8 @@ internal sealed class WorkerHarness : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
+        await Subscriptions.DropAsync();
+        Subscriptions.Dispose();
         await _mcp.DisposeAsync();
         _http.Dispose();
 
@@ -440,6 +451,16 @@ internal static class Workflows
             .Replace("\"srv_telegram\"", $"\"{telegramServerId}\"", StringComparison.Ordinal);
         return WorkflowJson.Deserialize(json);
     }
+
+    /// <summary>Рядок <c>mcp_servers</c> для HTTP FakeServer, що живе в процесі тестів (<see cref="FakeServerApp.BuildHttp"/>).</summary>
+    public static McpServerEntity HttpServer(string name, Uri url) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = name,
+        Transport = "http",
+        Config = new JsonObject { ["url"] = url.ToString() }.ToJsonString(),
+        Status = "new",
+    };
 
     /// <summary>Рядок <c>mcp_servers</c> для stdio-моку FakeServer (<c>--mock 1c|telegram</c>, без моку — загальні tools).</summary>
     public static McpServerEntity FakeServer(string name, string? mock = null, Guid? credentialId = null)
