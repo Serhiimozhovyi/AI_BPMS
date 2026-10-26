@@ -958,7 +958,7 @@
 - DoD: тести валідатора на кожен код і на сценарій без `stages`; старі приклади валідні; `describe_nodes`/схема у MCP містять `stages`; `docs/workflow-format.md`, `architecture.md` §2 оновлено; рев'ю власником.
 
 ### F7-02 · Рушій: стан етапу, строки, таблиця `execution_stages`
-- model: `opus` · status: `in-progress agent/F7-02-stage-state` · depends: F7-01
+- model: `opus` · status: `review #165` · depends: F7-01
 - Що: `OpenBP.Engine` обчислює стан етапів за ADR-004 §2 (`pending`/`active`/`done`/`skipped`/`cancelled`, підстан `overdue`) при кожному `SaveStepAsync`; інтерфейс `IStageStore` (правило 1), реалізація в `OpenBP.Data`: таблиця `execution_stages (execution_id, stage_id, status, entered_at, due_at, exited_at)` + міграція; `due` з `businessDays` (пн–пт за `settings.timezone`) і `until`; ретеншн F4-07 чистить разом із виконанням; `ExecutionDetail` отримує `stages[]`; журнал виконань `/executions/:id` показує етапи (AC-Kit «Етап N», як у F3-69); бізнес-вигляд виконання фарбує етапи за станом.
 - DoD: тести движка: послідовні етапи, гілка не дійшла → `skipped`, скасування під час `active` → `cancelled`, `overdue` з `TimeProvider`-фейком, `businessDays` через вихідні; інтеграційний тест (Testcontainers) запису `execution_stages` і відновлення після рестарту воркера; Vitest журналу; сценарії без `stages` не пишуть у таблицю.
 
