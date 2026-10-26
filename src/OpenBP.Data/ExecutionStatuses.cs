@@ -94,3 +94,33 @@ public static class StepStatuses
         _ => throw new InvalidOperationException($"Невідомий статус кроку «{status}» у БД."),
     };
 }
+
+/// <summary>Рядкові значення <c>execution_stages.status</c> (ADR-004 §2).</summary>
+public static class StageStatuses
+{
+    public const string Pending = "pending";
+    public const string Active = "active";
+    public const string Done = "done";
+    public const string Skipped = "skipped";
+    public const string Cancelled = "cancelled";
+
+    public static string ToDb(StageStatus status) => status switch
+    {
+        StageStatus.Pending => Pending,
+        StageStatus.Active => Active,
+        StageStatus.Done => Done,
+        StageStatus.Skipped => Skipped,
+        StageStatus.Cancelled => Cancelled,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
+    };
+
+    public static StageStatus FromDb(string status) => status switch
+    {
+        Pending => StageStatus.Pending,
+        Active => StageStatus.Active,
+        Done => StageStatus.Done,
+        Skipped => StageStatus.Skipped,
+        Cancelled => StageStatus.Cancelled,
+        _ => throw new InvalidOperationException($"Невідомий стан етапу «{status}» у БД."),
+    };
+}

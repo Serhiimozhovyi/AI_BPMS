@@ -38,6 +38,32 @@ internal static class ExecutionMapping
         e.SubSteps is null ? null : JsonSerializer.Deserialize<SubStep[]>(e.SubSteps, WorkflowJson.Options),
         e.ResumeAt);
 
+    /// <summary>
+    /// Етап як збережений, узгоджений зі станом виконання: виконання, що завершилось без воркера (скасування з черги чи
+    /// очікування), лишає етапи <c>pending</c>/<c>active</c> — їх віддаємо як <c>skipped</c>/<c>cancelled</c>.
+    /// </summary>
+    public static ExecutionStageDto ToStage(ExecutionStageEntity e, ExecutionEntity execution, DateTimeOffset now)
+    {
+        var status = StageStatuses.FromDb(e.Status);
+        var exitedAt = e.ExitedAt;
+        var state = ExecutionStates.FromDb(execution.Status);
+        if (ExecutionStates.IsFinal(state))
+        {
+            if (status == StageStatus.Pending)
+            {
+                status = StageStatus.Skipped;
+            }
+            else if (status == StageStatus.Active)
+            {
+                status = state == ExecutionState.Success ? StageStatus.Done : StageStatus.Cancelled;
+                exitedAt ??= execution.FinishedAt;
+            }
+        }
+
+        var overdue = status == StageStatus.Active && e.DueAt is { } due && now > due;
+        return new(e.StageId, e.Name, e.Position, status, overdue, e.EnteredAt, e.DueAt, exitedAt);
+    }
+
     private static Item[][] ReadItems(string? json) =>
         json is null ? [] : JsonSerializer.Deserialize<Item[][]>(json, WorkflowJson.Options) ?? [];
 }

@@ -29,4 +29,9 @@ public sealed record ExecutionSnapshot
 
     /// <summary>Збережені кроки в порядку збереження.</summary>
     public IReadOnlyList<StepRecord> Steps { get; init; } = [];
+
+    /// <summary>
+    /// Збережений стан етапів (ADR-004 §2): при відновленні строки етапів не перераховуються; порожньо — немає.
+    /// </summary>
+    public IReadOnlyList<StageState> Stages { get; init; } = [];
 }

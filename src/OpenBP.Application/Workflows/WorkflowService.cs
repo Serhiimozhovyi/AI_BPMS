@@ -372,6 +372,7 @@ public sealed class WorkflowService(
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var executions = db.Executions.Where(e => e.WorkflowId == id).Select(e => e.Id);
         await db.ExecutionSteps.Where(s => executions.Contains(s.ExecutionId)).ExecuteDeleteAsync(ct);
+        await db.ExecutionStages.Where(s => executions.Contains(s.ExecutionId)).ExecuteDeleteAsync(ct);
         await db.Executions.Where(e => e.WorkflowId == id).ExecuteDeleteAsync(ct);
         await db.Webhooks.Where(w => w.WorkflowId == id).ExecuteDeleteAsync(ct);
         await db.NodeStates.Where(s => s.WorkflowId == id).ExecuteDeleteAsync(ct);

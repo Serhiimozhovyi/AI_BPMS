@@ -32,6 +32,8 @@ public class RetentionTests(ApiFactory api)
             db.ExecutionSteps.Add(new ExecutionStepEntity { Id = Guid.NewGuid(), ExecutionId = id, NodeId = $"n{i}", Status = "success", Output = "[[]]" });
         }
 
+        db.ExecutionStages.Add(new ExecutionStageEntity { ExecutionId = id, StageId = "s1", Name = "Етап", Status = StageStatuses.Done });
+
         await db.SaveChangesAsync();
         return id;
     }
@@ -67,6 +69,8 @@ public class RetentionTests(ApiFactory api)
         Assert.Equal(kept.Order(), left.Order());
         Assert.False(await check.ExecutionSteps.AnyAsync(s => old.Contains(s.ExecutionId)));
         Assert.Equal(kept.Length * 2, await check.ExecutionSteps.CountAsync(s => kept.Contains(s.ExecutionId)));
+        Assert.False(await check.ExecutionStages.AnyAsync(s => old.Contains(s.ExecutionId)));
+        Assert.Equal(kept.Length, await check.ExecutionStages.CountAsync(s => kept.Contains(s.ExecutionId)));
     }
 
     [Fact]

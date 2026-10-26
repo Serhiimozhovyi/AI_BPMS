@@ -58,6 +58,12 @@ public sealed record ExecutionResult
     /// <summary>Стан вузлів після успішних запусків — хост зберігає його в <c>node_state</c>.</summary>
     public required IReadOnlyDictionary<string, JsonObject> NodeStates { get; init; }
 
+    /// <summary>
+    /// Стан етапів (ADR-004 §2) на кінець цього проходу, у порядку <c>stages[]</c>; порожньо — сценарій без етапів.
+    /// Те саме передано в <see cref="IStageStore.SaveStagesAsync"/>.
+    /// </summary>
+    public IReadOnlyList<StageState> Stages { get; init; } = [];
+
     /// <summary>Початок виконання (UTC).</summary>
     public required DateTimeOffset StartedAt { get; init; }
 

@@ -23,6 +23,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<McpServerEntity> McpServers => Set<McpServerEntity>();
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
     public DbSet<ExecutionStepEntity> ExecutionSteps => Set<ExecutionStepEntity>();
+    public DbSet<ExecutionStageEntity> ExecutionStages => Set<ExecutionStageEntity>();
     public DbSet<JobEntity> Jobs => Set<JobEntity>();
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
     public DbSet<WebhookResponseEntity> WebhookResponses => Set<WebhookResponseEntity>();
@@ -221,6 +222,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.SubSteps).HasColumnType("jsonb");
             e.Property(x => x.WaitState).HasColumnType("jsonb");
             e.HasIndex(x => x.ExecutionId);
+        });
+        b.Entity<ExecutionStageEntity>(e =>
+        {
+            e.ToTable("execution_stages");
+            e.HasKey(x => new { x.ExecutionId, x.StageId });
+            // Прострочені етапи (SLA, F7-04): активні зі строком.
+            e.HasIndex(x => x.DueAt).HasFilter("status = 'active'");
         });
         b.Entity<JobEntity>(e =>
         {

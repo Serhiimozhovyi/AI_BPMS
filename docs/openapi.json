@@ -6681,7 +6681,8 @@
       "ExecutionDetail": {
         "required": [
           "summary",
-          "steps"
+          "steps",
+          "stages"
         ],
         "type": "object",
         "properties": {
@@ -6692,6 +6693,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExecutionStepDto"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionStageDto"
             }
           },
           "children": {
@@ -6715,6 +6722,62 @@
           "sub"
         ],
         "description": "Режим запуску виконання (поле `executions.mode`, docs/architecture.md §6)."
+      },
+      "ExecutionStageDto": {
+        "required": [
+          "stageId",
+          "name",
+          "position",
+          "status",
+          "overdue",
+          "enteredAt",
+          "dueAt",
+          "exitedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "stageId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StageStatus"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "enteredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "dueAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "exitedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
       },
       "ExecutionState": {
         "enum": [
@@ -7787,6 +7850,16 @@
             }
           }
         }
+      },
+      "StageStatus": {
+        "enum": [
+          "pending",
+          "active",
+          "done",
+          "skipped",
+          "cancelled"
+        ],
+        "description": "Стан етапу бізнес-процесу у виконанні (ADR-004 §2)."
       },
       "StartExecutionRequest": {
         "examples": [

@@ -309,6 +309,90 @@ public class PostgresExecutionStoreTests(PostgresFixture postgres)
         Assert.Equal(ExecutionStatuses.Success, (await db.Executions.SingleAsync(e => e.Id == created.Id)).Status);
     }
 
+    [Fact]
+    public async Task SaveStagesAsync_ReplacesRows_AndLoadAsyncReturnsThemInOrder()
+    {
+        var (store, cs) = await StoreAsync();
+        var workflow = ResumeWorkflow();
+        var (wf, ver) = await SaveVersionAsync(cs, workflow);
+        var created = Snapshot(wf, ver, workflow);
+        await store.CreateAsync(created, CancellationToken.None);
+
+        await store.SaveStagesAsync(created.Id, [new("s1", "Один", 0, StageStatus.Active, Now, Now.AddHours(2), null), new("s2", "Два", 1, StageStatus.Pending, null, null, null)], CancellationToken.None);
+        StageState[] final =
+        [
+            new("s1", "Один", 0, StageStatus.Done, Now, Now.AddHours(2), Now.AddMinutes(30)),
+            new("s2", "Два", 1, StageStatus.Skipped, null, null, null),
+        ];
+        await store.SaveStagesAsync(created.Id, final, CancellationToken.None);
+
+        await using var db = PostgresFixture.CreateContext(cs);
+        var rows = await db.ExecutionStages.Where(s => s.ExecutionId == created.Id).OrderBy(s => s.Position).ToListAsync();
+        Assert.Equal(["done", "skipped"], rows.Select(r => r.Status));
+        Assert.Equal(Now.AddMinutes(30), rows[0].ExitedAt);
+        var snapshot = (await store.LoadAsync(created.Id, CancellationToken.None))!;
+        Assert.Equal(final, snapshot.Stages);
+    }
+
+    [Fact]
+    public async Task WorkflowWithoutStages_WritesNoStageRows()
+    {
+        var (store, cs) = await StoreAsync();
+        var workflow = ResumeWorkflow();
+        var (wf, ver) = await SaveVersionAsync(cs, workflow);
+        var created = Snapshot(wf, ver, workflow);
+        await store.CreateAsync(created, CancellationToken.None);
+
+        var result = await Executor(store, store).RunAsync(new ExecutionRequest { ExecutionId = created.Id, Workflow = workflow }, CancellationToken.None);
+
+        Assert.Equal(ExecutionStatus.Success, result.Status);
+        await using var db = PostgresFixture.CreateContext(cs);
+        Assert.False(await db.ExecutionStages.AnyAsync(s => s.ExecutionId == created.Id));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(6)]
+    public async Task Stages_AreWrittenDuringRun_AndSurviveWorkerRestart(int savedBeforeCrash)
+    {
+        var workflow = ResumeWorkflow();
+        workflow.Stages =
+        [
+            new() { Id = "st_branch", Name = "Розгалуження", Nodes = ["i", "a", "b"], Due = new() { Amount = 2, Unit = StageDueUnits.BusinessDays } },
+            new() { Id = "st_end", Name = "Кінець", Nodes = ["m", "z", "w"] },
+            new() { Id = "st_error", Name = "Помилка", Nodes = ["f", "e"] },
+        ];
+        var (store, cs) = await StoreAsync();
+        var (wf, ver) = await SaveVersionAsync(cs, workflow);
+        var created = Snapshot(wf, ver, workflow);
+        await store.CreateAsync(created, CancellationToken.None);
+        var request = new ExecutionRequest { ExecutionId = created.Id, Workflow = workflow };
+        await Assert.ThrowsAsync<CrashException>(() =>
+            Executor(new CrashingStore(store, savedBeforeCrash), store).RunAsync(request, CancellationToken.None));
+
+        // До падіння стан етапів уже в таблиці: розгалуження почалось, строк пораховано.
+        var (restarted, _) = await StoreAsync();
+        var snapshot = (await restarted.LoadAsync(created.Id, CancellationToken.None))!;
+        Assert.Equal(["st_branch", "st_end", "st_error"], snapshot.Stages.Select(s => s.StageId));
+        var branchBefore = snapshot.Stages[0];
+        Assert.NotEqual(StageStatus.Pending, branchBefore.Status);
+        Assert.NotNull(branchBefore.DueAt);
+
+        var resumed = await Executor(restarted, restarted).ResumeAsync(snapshot, CancellationToken.None);
+        await restarted.FinishAsync(resumed, CancellationToken.None);
+
+        Assert.Equal(ExecutionStatus.Success, resumed.Status);
+        Assert.All(resumed.Stages, s => Assert.Equal(StageStatus.Done, s.Status));
+        Assert.Equal(branchBefore.EnteredAt, resumed.Stages[0].EnteredAt);
+        Assert.Equal(branchBefore.DueAt, resumed.Stages[0].DueAt);
+        // Postgres зберігає час до мікросекунд.
+        Assert.Equal(resumed.Stages.Select(Micro), (await restarted.LoadAsync(created.Id, CancellationToken.None))!.Stages);
+    }
+
+    private static DateTimeOffset? Micro(DateTimeOffset? t) => t is { } v ? v.AddTicks(-(v.Ticks % 10)) : null;
+
+    private static StageState Micro(StageState s) => s with { EnteredAt = Micro(s.EnteredAt), DueAt = Micro(s.DueAt), ExitedAt = Micro(s.ExitedAt) };
+
     private static ExecutionResult Result(Guid id, ExecutionStatus status, string? error) => new()
     {
         ExecutionId = id,
@@ -380,7 +464,7 @@ public class PostgresExecutionStoreTests(PostgresFixture postgres)
         return wf;
     }
 
-    private static WorkflowExecutor Executor(IExecutionStore store)
+    private static WorkflowExecutor Executor(IExecutionStore store, IStageStore? stages = null)
     {
         var registry = new InMemoryNodeRegistry()
             .Register(new FuncNode(Descriptor(Trigger, [], ["main"]), ctx =>
@@ -397,7 +481,7 @@ public class PostgresExecutionStoreTests(PostgresFixture postgres)
             ]))
             .Register(new FuncNode(Descriptor(Merge, ["a", "b"], ["main"]), ctx => [[.. ctx.Items(0), .. ctx.Items(1)]]))
             .Register(new FuncNode(Descriptor(Fail, ["main"], ["main"]), _ => throw new InvalidOperationException("Зламано")));
-        return new WorkflowExecutor(registry, store, new FakeExpressionEvaluator(), new FakeCredentialProvider(), new InMemoryBinaryStore(), new InMemoryExecutionLogger());
+        return new WorkflowExecutor(registry, store, new FakeExpressionEvaluator(), new FakeCredentialProvider(), new InMemoryBinaryStore(), new InMemoryExecutionLogger(), stageStore: stages);
     }
 
     private static NodeDescriptor Descriptor(string type, IReadOnlyList<string> inputs, IReadOnlyList<string> outputs) =>
