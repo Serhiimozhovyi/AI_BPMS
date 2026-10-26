@@ -361,8 +361,9 @@ public class PostgresExecutionStoreTests(PostgresFixture postgres)
         {
             var resolved = await db.Violations.SingleAsync(v => v.ExecutionId == created.Id);
             Assert.Equal((ViolationStatuses.Resolved, ViolationStatuses.EngineActor, (DateTimeOffset?)Now), (resolved.Status, resolved.ActorSystem, resolved.ResolvedAt));
-            var audit = await db.AuditLog.Where(a => a.EntityId == created.Id.ToString()).OrderBy(a => a.Id).Select(a => a.Action).ToListAsync();
-            Assert.Equal([ViolationStatuses.AuditOpened, ViolationStatuses.AuditResolved], audit);
+            // Обидві події з тим самим At — порядок id у межах мілісекунди не гарантований.
+            var audit = await db.AuditLog.Where(a => a.EntityId == created.Id.ToString()).Select(a => a.Action).ToListAsync();
+            Assert.Equal([ViolationStatuses.AuditOpened, ViolationStatuses.AuditResolved], audit.Order());
         }
     }
 
