@@ -259,8 +259,82 @@ public sealed partial class ConnectorCatalog
             Fail("http.url має бути абсолютною http(s)-адресою.");
         }
 
-        return manifest with { Description = manifest.Description ?? "", Triggers = manifest.Triggers ?? [] };
+        var triggers = manifest.Triggers ?? [];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < triggers.Count; i++)
+        {
+            ValidateTrigger(triggers[i] as JsonObject, i, seen, Fail);
+        }
+
+        return manifest with { Description = manifest.Description ?? "", Triggers = triggers };
     }
+
+    /// <summary>
+    /// Пресет тригера (docs/connectors.md §9.2): <c>{ id, title, description?, node: { type, parameters } }</c>; <c>type</c> —
+    /// <c>mcp.subscribe</c> (потрібні <c>resourceUri</c>, <c>keyField</c>) або <c>mcp.poll</c> (<c>toolName</c>, <c>keyField</c>,
+    /// <c>cron</c>); <c>serverId</c> у параметрах не допускається — його підставляє палітра.
+    /// </summary>
+    private static void ValidateTrigger(JsonObject? trigger, int index, HashSet<string> seen, Func<string, string> fail)
+    {
+        if (trigger is null)
+        {
+            fail($"triggers[{index}]: очікується об'єкт.");
+            return;
+        }
+
+        var id = Text(trigger["id"]);
+        var label = id is null ? $"triggers[{index}]" : $"тригер «{id}»";
+        if (id is null)
+        {
+            fail($"{label}: потрібен id.");
+        }
+        else if (!seen.Add(id))
+        {
+            fail($"{label}: id повторюється.");
+        }
+
+        if (Text(trigger["title"]) is null)
+        {
+            fail($"{label}: потрібна назва (title).");
+        }
+
+        var unknown = trigger.Select(p => p.Key).FirstOrDefault(k => k is not ("id" or "title" or "description" or "node"));
+        if (unknown is not null)
+        {
+            fail($"{label}: невідоме поле «{unknown}».");
+        }
+
+        if (trigger["node"] is not JsonObject node || node["parameters"] is not JsonObject parameters)
+        {
+            fail($"{label}: потрібен node з type і parameters.");
+            return;
+        }
+
+        var type = Text(node["type"]);
+        string[] required = type switch
+        {
+            "mcp.subscribe" => ["resourceUri", "keyField"],
+            "mcp.poll" => ["toolName", "keyField", "cron"],
+            _ => [],
+        };
+        if (required.Length == 0)
+        {
+            fail($"{label}: node.type має бути mcp.subscribe або mcp.poll.");
+        }
+
+        if (parameters.ContainsKey("serverId"))
+        {
+            fail($"{label}: parameters не має містити serverId — його підставляє палітра.");
+        }
+
+        foreach (var name in required.Where(n => Text(parameters[n]) is null))
+        {
+            fail($"{label}: у parameters потрібен «{name}» для {type}.");
+        }
+    }
+
+    private static string? Text(JsonNode? value) =>
+        value is JsonValue v && v.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text) ? text : null;
 
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{0,63}$")]
     private static partial Regex IdPattern();

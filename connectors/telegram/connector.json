@@ -25,5 +25,21 @@
     ],
     "headers": []
   },
-  "triggers": []
+  "triggers": [
+    {
+      "id": "new_update",
+      "title": "Нове повідомлення Telegram",
+      "description": "Вхідні повідомлення й натискання кнопок бота; перевірка щохвилини (після F6-22 — миттєво, mcp.subscribe).",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "get_updates",
+          "arguments": {},
+          "itemsPath": "result",
+          "keyField": "update_id",
+          "cron": "*/1 * * * *"
+        }
+      }
+    }
+  ]
 }

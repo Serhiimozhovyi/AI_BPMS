@@ -1,5 +1,5 @@
 import { emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, PaletteServer, addNode, buildPalette, createNode, filterPalette, itemHint, nextNodePosition } from './palette';
+import { CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, TRIGGER_PRESETS_SECTION, PaletteServer, addNode, buildPalette, createNode, filterPalette, itemHint, nextNodePosition } from './palette';
 import { SAMPLE_DESCRIPTORS } from './sample-workflows';
 
 const servers: PaletteServer[] = [
@@ -35,6 +35,40 @@ describe('palette', () => {
     expect(connectors[0].actions?.map((a) => a.key)).toEqual(['c-1c/create_order', 'c-1c/find_customer']);
     expect(itemHint(connectors[0])).toBe('2 дій');
     expect(connectors[1].actions?.[0]).toMatchObject({ label: 'Telegram → Надіслати повідомлення', type: MCP_TOOL, serverId: 'c-tg', toolName: 'send_message', group: 'integration' });
+  });
+
+  it('пресети тригерів встановлених конекторів — картки в секції «Події конекторів»; вставка підставляє serverId і параметри (F6-21)', () => {
+    const withPresets: PaletteServer[] = [
+      {
+        ...servers[0],
+        triggers: [
+          {
+            id: 'new_update',
+            title: 'Нове повідомлення Telegram',
+            description: 'Вхідні повідомлення бота',
+            node: { type: 'mcp.poll', parameters: { toolName: 'get_updates', arguments: {}, itemsPath: 'result', keyField: 'update_id', cron: '*/1 * * * *' } },
+          },
+          { id: 'unknown', title: 'Невідомий тип', node: { type: 'mcp.subscribe', parameters: { resourceUri: 'x://y', keyField: 'id' } } },
+        ],
+      },
+      servers[1],
+    ];
+
+    const sections = buildPalette(SAMPLE_DESCRIPTORS, withPresets);
+
+    // mcp.subscribe немає серед дескрипторів зразка — картка без дескриптора не показується.
+    const presets = sections.find((s) => s.id === TRIGGER_PRESETS_SECTION)!;
+    expect(presets.items.map((i) => [i.key, i.label, i.type, i.group, i.serverId])).toEqual([
+      ['trigger:c-tg/new_update', 'Нове повідомлення Telegram', 'mcp.poll', 'trigger', 'c-tg'],
+    ]);
+    expect(buildPalette(SAMPLE_DESCRIPTORS, servers).some((s) => s.id === TRIGGER_PRESETS_SECTION)).toBe(false);
+
+    const node = createNode(presets.items[0], emptyWorkflowDefinition('t'));
+    expect(node.type).toBe('mcp.poll');
+    expect(node.name).toBe('Нове повідомлення Telegram');
+    expect(node.parameters).toEqual({ serverId: 'c-tg', toolName: 'get_updates', arguments: {}, itemsPath: 'result', keyField: 'update_id', cron: '*/1 * * * *' });
+    // Пошук знаходить картку за назвою.
+    expect(filterPalette(sections, 'telegram').flatMap((s) => s.items).some((i) => i.key === 'trigger:c-tg/new_update')).toBe(true);
   });
 
   it('«Часті дії» — до 5 дій з «Останніх» у їхньому порядку; невідомі ключі пропускаються', () => {

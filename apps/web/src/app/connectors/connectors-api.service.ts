@@ -52,7 +52,15 @@ export interface ConnectorManifest {
   stdio?: { command: string; arguments?: string[] | null; environment?: Record<string, string> | null } | null;
   http?: { url: string; headers?: Record<string, string> | null } | null;
   credential?: { env?: ConnectorManifestKey[] | null; headers?: ConnectorManifestKey[] | null } | null;
-  triggers: unknown[];
+  triggers: ConnectorTriggerPreset[];
+}
+
+/** Пресет тригера в `connector.json` (docs/connectors.md §9.2): готовий вузол без `serverId`. */
+export interface ConnectorTriggerPreset {
+  id: string;
+  title: string;
+  description?: string | null;
+  node: { type: 'mcp.subscribe' | 'mcp.poll'; parameters: Record<string, unknown> };
 }
 
 /** Запис `GET /api/v1/connectors/catalog`. */

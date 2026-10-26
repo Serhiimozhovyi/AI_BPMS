@@ -308,7 +308,15 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
   `workingDirectory`) або `http` (`url`, `headers`). Можна описати обидва — користувач обирає при встановленні.
 - `credential.env` / `credential.headers` — ключі credential'а `mcp.stdio` / `mcp.http`: після встановлення форма
   облікових даних відкривається з цими назвами, лишається вписати значення. Секретів у маніфесті немає.
-- `triggers` — пресети тригерів конектора (F6-13); поки порожній масив.
+- `triggers` — пресети тригерів конектора (F6-21, схема — §9.2 п. 4): `{ id, title, description?, node: { type, parameters } }`,
+  `type` — `mcp.subscribe` (обов'язкові `resourceUri`, `keyField`) або `mcp.poll` (`toolName`, `keyField`, `cron`), `serverId` у
+  `parameters` заборонений. Некоректний пресет — помилка завантаження маніфесту з назвою конектора й пресета. Пресети
+  віддає `GET /connectors/catalog` (`manifest.triggers`); палітра бере їх для конекторів, встановлених з запису каталогу
+  (`catalogId`), і показує секцією «Події конекторів»: вставка картки створює готовий вузол із `serverId` конектора.
+  Вбудовані: `telegram` — «Нове повідомлення Telegram» (`mcp.poll` на `get_updates`, `keyField = update_id`; після F6-22
+  стане `mcp.subscribe`), `msgraph` — «Новий лист» (`list_messages`, `keyField = id`, `mailbox` вкажіть у вузлі), `onec` —
+  «Новий документ 1С» (`list_document_orders`; назву tool'а звірте зі своїм `Connector:Source`), `kit-crm` — «Нова угода» і
+  «Нова чи змінена задача» (`changes_since`).
 - Типовий шлях stdio — `/opt/openbp/connectors/<id>/<збірка>.dll`: туди адміністратор кладе `dotnet publish` конектора
   (docs/admin/README.md). Інший шлях чи URL змінюється після встановлення так само, як у доданого вручну конектора.
 

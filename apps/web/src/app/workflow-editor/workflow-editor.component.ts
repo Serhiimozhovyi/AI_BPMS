@@ -35,7 +35,7 @@ import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
 import { TestRun, ancestorIds, applyEvent, isRunning, itemCounts, nodeRunErrors, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
 import { ExecutionItem, ExecutionsApiService, StartExecutionRequest, StepStatus } from '../executions/executions-api.service';
-import { ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
+import { ConnectorCatalogEntry, ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../node-form/expression-suggest';
 import { ExpressionTargetService } from '../node-form/expression-target';
@@ -1808,9 +1808,20 @@ export class WorkflowEditorComponent implements OnInit {
       switchMap((page) => {
         const withTools = page.items.filter((c) => c.toolCount > 0);
         if (withTools.length === 0) return of([]);
-        return forkJoin(withTools.map((c) => this.connectors.get(c.id)));
+        // Пресети тригерів (F6-21) — з каталогу; запит лише коли є конектори, встановлені з нього. Без каталогу — палітра без пресетів.
+        const presets$ = withTools.some((c) => c.catalogId)
+          ? this.connectors.catalog().pipe(catchError(() => of([] as ConnectorCatalogEntry[])))
+          : of([] as ConnectorCatalogEntry[]);
+        return forkJoin([forkJoin(withTools.map((c) => this.connectors.get(c.id))), presets$]);
       }),
-      map((details) => details.map((d) => ({ id: d.summary.id, name: d.summary.name, tools: d.tools }))),
+      map(([details, catalog]) =>
+        details.map((d) => ({
+          id: d.summary.id,
+          name: d.summary.name,
+          tools: d.tools,
+          triggers: catalog.find((e) => e.manifest.id === d.summary.catalogId)?.manifest.triggers ?? [],
+        })),
+      ),
       catchError((e: unknown) => {
         this.toolsError.set($localize`:@@workfloweditor.toolsError:Tools MCP-серверів недоступні: ${apiErrorMessage(e)}:error:`);
         return of([]);

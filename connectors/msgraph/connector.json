@@ -37,5 +37,25 @@
     ],
     "headers": []
   },
-  "triggers": []
+  "triggers": [
+    {
+      "id": "new_mail",
+      "title": "Новий лист",
+      "description": "Нові листи вхідних поточної скриньки (mailbox вкажіть у вузлі); перевірка щохвилини.",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "list_messages",
+          "arguments": {
+            "mailbox": "",
+            "folder": "inbox",
+            "top": 50
+          },
+          "itemsPath": "result",
+          "keyField": "id",
+          "cron": "*/1 * * * *"
+        }
+      }
+    }
+  ]
 }
