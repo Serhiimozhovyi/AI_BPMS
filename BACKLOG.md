@@ -1023,7 +1023,7 @@
 - DoD: тести: порушення `open` → умова виправлена на наступному кроці → `resolved` з `resolved_at`; фільтр списку; Vitest розділу; `docs/architecture.md` §6 оновлено.
 
 ### F7-05 · Контракт взаємодії: стан етапів, дії, умови — REST, `/mcp`, web-component
-- model: `opus` · status: `review #173` · depends: F7-02, F6-02
+- model: `opus` · status: `done` · depends: F7-02, F6-02
 - Що: application-сервіс `IStageService` (ADR-004 §4): `GET /api/v1/executions/{id}/stages` → стан етапів, `violations`, `unmet` (невиконані правила на наступному переході, обчислені з поточних items), `actions` (відкриті задачі F6-02 цього етапу, дозволені відхилення, пробудження `core.wait` у режимі `webhook`); `POST /executions/{id}/stages/{stageId}/actions/{actionId} { data?, reason? }` виконує дію через ті самі сервіси (`ITaskService`, overrides, resume); MCP `get_execution_stages`, `act_on_stage`, resource `openbp://executions/{id}/stages`; `<openbp-canvas view="business" execution-id>` малює етапи колонками зі станом, строком і діями з контракту; пошук виконання за `correlationKey` (`GET /executions?correlationKey=`, F5-04). У контракті немає сутностей жодного клієнта.
 - DoD: тести сервісу (Testcontainers): стан + дії + `unmet`; дія «завершити задачу» через контракт = `complete_task`; дія з `reason` на `warn`-правилі; viewer бачить лише свої дії; MCP tools; Vitest web-component; `docs/embedding.md`, `docs/mcp-server.md`, `docs/architecture.md` оновлено; OpenAPI перегенеровано.
 
