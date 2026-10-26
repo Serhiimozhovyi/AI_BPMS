@@ -41,7 +41,9 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 
 ### Claude Desktop
 
-«Користувацькі конектори» Claude Desktop вміють лише OAuth, а OpenBP приймає API-ключ у заголовку, тому підключайте
+OpenBP приймає лише API-ключ у заголовку, а OAuth для `/mcp` немає. Custom connector claude.ai можна додати лише з бета-розділом
+«Request headers» ([docs/guide/ai-connectors.md §3.3](guide/ai-connectors.md#33-claudeai--custom-connector-веб-desktop-мобільний)); ChatGPT Developer mode
+заголовків не підтримує ([там же §4](guide/ai-connectors.md#4-chatgpt-та-інші-продукти-openai)). Для Claude Desktop надійніше підключати
 через локальний міст [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (потрібен Node.js). У
 `claude_desktop_config.json` (Settings → Developer → Edit Config):
 

@@ -127,6 +127,7 @@ curl -sS -X POST "$OPENBP_URL/mcp" -H "Authorization: Bearer $OPENBP_API_KEY" \
 # → event: message / data: {"result":{"tools":[{"name":"describe_connectors",…
 ```
 
+Покроково для Claude Code, Claude Desktop, claude.ai, Codex, OpenAI API і чому поки не ChatGPT — [ai-connectors.md](ai-connectors.md).
 Деталі, resources і типовий діалог — [docs/mcp-server.md](../mcp-server.md).
 
 ## 5. Вбудований редактор `<openbp-canvas>`
