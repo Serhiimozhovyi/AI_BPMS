@@ -30,10 +30,23 @@ namespace OpenBP.Engine.Execution;
 /// його наступники не плануються, інші гілки виконуються до кінця, а результат — <see cref="ExecutionStatus.Waiting"/> з
 /// найранішим <see cref="ExecutionResult.ResumeAt"/>. <c>ResumeAsync</c> запускає такий вузол знову з
 /// <see cref="Nodes.INodeContext.Resumption"/>.</item>
+/// <item>Вузол злиття з правилом «N гілок» (<see cref="Nodes.IJoinNode"/>, <c>core.merge</c> v2 <c>any</c>/<c>count</c>, F7-06)
+/// стає в чергу, щойно дані прийшли на N під'єднаних входів; отримує лише їх. Решта гілок скасовується: кожен незавершений
+/// вузол, що веде тільки до входів, які програли, отримує крок <see cref="StepStatus.Cancelled"/> з типом помилки
+/// <see cref="BranchCancelledType"/> (зокрема вузол у <see cref="StepStatus.Waiting"/>), і більше не запускається.</item>
+/// <item>Завершене виконання не лишає очікувань (ADR-004 §5): за будь-якого результату, крім
+/// <see cref="ExecutionStatus.Waiting"/>, кожен вузол, чий останній крок — <see cref="StepStatus.Waiting"/>, отримує крок
+/// <see cref="StepStatus.Cancelled"/> з типом <see cref="WaitClosedType"/>.</item>
 /// </list>
 /// </summary>
 public sealed class WorkflowExecutor
 {
+    /// <summary>Тип помилки кроку вузла зі скасованої гілки злиття (F7-06).</summary>
+    public const string BranchCancelledType = "BRANCH_CANCELLED";
+
+    /// <summary>Тип помилки кроку, що закриває очікування вузла, коли виконання завершилось (F7-06).</summary>
+    public const string WaitClosedType = "WAIT_CLOSED";
+
     private readonly INodeRegistry _registry;
     private readonly IExecutionStore _store;
     private readonly IStageStore? _stages;
@@ -176,6 +189,14 @@ public sealed class WorkflowExecutor
             if (step.Status == StepStatus.Waiting)
             {
                 run.Resumptions[nodeId] = new Nodes.NodeResumption(step.ResumeAt ?? step.FinishedAt, step.WaitState ?? []);
+                run.OpenWaits[nodeId] = step;
+            }
+            else if (step.Status == StepStatus.Cancelled && step.Error?.Type == BranchCancelledType)
+            {
+                // Гілку скасовано злиттям до падіння: вузол не запускається знову, крок повернеться в результат,
+                // коли злиття спрацює на тому самому місці обходу.
+                run.RestoredDead[nodeId] = step;
+                run.Dead.Add(nodeId);
             }
         }
 
@@ -278,8 +299,15 @@ public sealed class WorkflowExecutor
         var token = linked.Token;
 
         var queue = new Queue<PlannedNode>(plan.Starts);
+        var enqueued = new HashSet<string>(plan.Starts.Select(s => s.Definition.Id), StringComparer.Ordinal);
         while (queue.TryDequeue(out var node))
         {
+            if (run.Dead.Contains(node.Definition.Id))
+            {
+                // Гілку скасовано злиттям, поки вузол стояв у черзі.
+                continue;
+            }
+
             if (restored.TryGetValue(node.Definition.Id, out var step))
             {
                 run.Steps.Add(step);
@@ -288,37 +316,56 @@ public sealed class WorkflowExecutor
             {
                 if (token.IsCancellationRequested)
                 {
-                    return Finish(run, startedAt, Interrupted(ct, timeoutSec), null);
+                    return await FinishAsync(run, startedAt, Interrupted(ct, timeoutSec), null).ConfigureAwait(false);
                 }
 
                 step = await RunNodeAsync(node, run, token).ConfigureAwait(false);
                 run.Steps.Add(step);
                 await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
+                run.OpenWaits.Remove(node.Definition.Id);
                 await SyncStagesAsync(run, null, _time.GetUtcNow()).ConfigureAwait(false);
 
                 if (step.Status == StepStatus.Cancelled)
                 {
-                    return Finish(run, startedAt, Interrupted(ct, timeoutSec), node.Definition.Id);
+                    return await FinishAsync(run, startedAt, Interrupted(ct, timeoutSec), node.Definition.Id).ConfigureAwait(false);
                 }
 
                 if (step.Status == StepStatus.Waiting)
                 {
                     // Наступники чекають на пробудження; інші гілки йдуть далі.
                     run.Waiting.Add(step);
+                    run.OpenWaits[node.Definition.Id] = step;
                     continue;
                 }
 
                 if (!IsCompleted(node, step))
                 {
                     _services.Logger.Log(LogLevel.Error, node.Definition.Id, $"Вузол «{node.Definition.Name}» завершився помилкою: {step.Error!.Message}");
-                    return Finish(run, startedAt, (ExecutionStatus.Error, step.Error), node.Definition.Id);
+                    return await FinishAsync(run, startedAt, (ExecutionStatus.Error, step.Error), node.Definition.Id).ConfigureAwait(false);
                 }
             }
 
             run.Complete(node, step);
             foreach (var next in node.Successors.Distinct())
             {
-                if (plan.Nodes.ContainsKey(next.Definition.Id) && --next.Pending == 0)
+                if (!plan.Nodes.ContainsKey(next.Definition.Id))
+                {
+                    continue;
+                }
+
+                var ready = --next.Pending == 0;
+                if (next.Join?.Required is { } required && !run.Selections.ContainsKey(next.Definition.Id) && !run.Dead.Contains(next.Definition.Id))
+                {
+                    var arrived = run.ArrivedInputs(next);
+                    if (arrived.Count >= required)
+                    {
+                        run.Selections[next.Definition.Id] = [.. arrived.Take(required)];
+                        await CancelLosingBranchesAsync(plan, next, run).ConfigureAwait(false);
+                        ready = true;
+                    }
+                }
+
+                if (ready && enqueued.Add(next.Definition.Id))
                 {
                     queue.Enqueue(next);
                 }
@@ -329,10 +376,89 @@ public sealed class WorkflowExecutor
         {
             var first = run.Waiting.MinBy(w => w.ResumeAt)!;
             _services.Logger.Log(LogLevel.Info, first.NodeId, $"Виконання чекає до {first.ResumeAt:O}.");
-            return Finish(run, startedAt, (ExecutionStatus.Waiting, null), null) with { ResumeAt = first.ResumeAt, WaitingNodeId = first.NodeId };
+            return await FinishAsync(run, startedAt, (ExecutionStatus.Waiting, null), null).ConfigureAwait(false) with { ResumeAt = first.ResumeAt, WaitingNodeId = first.NodeId };
         }
 
-        return Finish(run, startedAt, (ExecutionStatus.Success, null), null);
+        return await FinishAsync(run, startedAt, (ExecutionStatus.Success, null), null).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Злиття <paramref name="join"/> отримало потрібні гілки: скасовує незавершені вузли, що ведуть лише до його входів,
+    /// які програли (або до інших таких вузлів). Вузол, що має й інший вихід, лишається живим.
+    /// </summary>
+    private async Task CancelLosingBranchesAsync(ExecutionPlan plan, PlannedNode join, RunState run)
+    {
+        var selected = run.Selections[join.Definition.Id];
+        bool Losing(Edge e) => !selected.Contains(e.ToInput);
+
+        // Кандидати — незавершені попередники входів, що програли.
+        var candidates = new HashSet<PlannedNode>();
+        var stack = new Stack<PlannedNode>(join.Incoming.Where(Losing).Select(e => e.From));
+        while (stack.TryPop(out var node))
+        {
+            if (node == join || !plan.Nodes.ContainsKey(node.Definition.Id) || run.IsCompleted(node.Definition.Id) || !candidates.Add(node))
+            {
+                continue;
+            }
+
+            foreach (var edge in node.Incoming)
+            {
+                stack.Push(edge.From);
+            }
+        }
+
+        // Лишаються ті, чиї всі ребра йдуть у кандидатів або у входи злиття, що програли.
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var node in candidates.ToList())
+            {
+                var feedsOnlyLosers = node.Successors
+                    .Where(s => plan.Nodes.ContainsKey(s.Definition.Id))
+                    .All(s => s == join
+                        ? join.Incoming.Where(e => e.From == node).All(Losing)
+                        : candidates.Contains(s) || run.Dead.Contains(s.Definition.Id));
+                if (!feedsOnlyLosers)
+                {
+                    candidates.Remove(node);
+                    changed = true;
+                }
+            }
+        }
+        while (changed);
+
+        var now = _time.GetUtcNow();
+        foreach (var node in candidates.OrderBy(n => n.Order))
+        {
+            var id = node.Definition.Id;
+            if (run.RestoredDead.Remove(id, out var restoredStep))
+            {
+                run.Steps.Add(restoredStep);
+                continue;
+            }
+
+            if (!run.Dead.Add(id))
+            {
+                continue;
+            }
+
+            var step = new StepRecord
+            {
+                ExecutionId = run.Request.ExecutionId,
+                NodeId = id,
+                Status = StepStatus.Cancelled,
+                Output = Ports(node.OutputCount, []),
+                Error = new StepError($"Гілку скасовано: «{join.Definition.Name}» уже отримав потрібні гілки.", BranchCancelledType),
+                StartedAt = now,
+                FinishedAt = now,
+            };
+            run.Steps.Add(step);
+            await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
+            run.Waiting.RemoveAll(w => w.NodeId == id);
+            run.OpenWaits.Remove(id);
+            _services.Logger.Log(LogLevel.Info, id, $"Вузол «{node.Definition.Name}» скасовано: «{join.Definition.Name}» уже отримав потрібні гілки.");
+        }
     }
 
     /// <summary>
@@ -564,13 +690,21 @@ public sealed class WorkflowExecutor
         return new Item { Json = new JsonObject { ["error"] = json } };
     }
 
-    /// <summary>Тригер (без входів) — завжди; один вхід — є items; кілька входів (Merge) — items на всіх.</summary>
+    /// <summary>
+    /// Тригер (без входів) — завжди; один вхід — є items; кілька входів (Merge) — items на всіх. Вузол злиття
+    /// (<see cref="Nodes.IJoinNode"/>) — на всіх під'єднаних входах або, з правилом «N гілок», на N входах.
+    /// </summary>
     private static bool HasData(PlannedNode node, IReadOnlyList<Item>[] inputs) =>
-        node.InputCount switch
+        node.Join switch
         {
-            0 => true,
-            1 => inputs[0].Count > 0,
-            _ => inputs.All(i => i.Count > 0),
+            { Required: { } required } => inputs.Count(i => i.Count > 0) >= required,
+            { } => node.ConnectedInputs.Count > 0 && node.ConnectedInputs.All(i => inputs[i].Count > 0),
+            null => node.InputCount switch
+            {
+                0 => true,
+                1 => inputs[0].Count > 0,
+                _ => inputs.All(i => i.Count > 0),
+            },
         };
 
     private static void EnsureShape(PlannedNode node, Item[][]? output)
@@ -615,8 +749,13 @@ public sealed class WorkflowExecutor
         return ports;
     }
 
-    private ExecutionResult Finish(RunState run, DateTimeOffset startedAt, (ExecutionStatus Status, StepError? Error) outcome, string? failedNodeId)
+    private async Task<ExecutionResult> FinishAsync(RunState run, DateTimeOffset startedAt, (ExecutionStatus Status, StepError? Error) outcome, string? failedNodeId)
     {
+        if (outcome.Status != ExecutionStatus.Waiting)
+        {
+            await CloseOpenWaitsAsync(run, outcome.Status).ConfigureAwait(false);
+        }
+
         var finishedAt = _time.GetUtcNow();
         _services.Logger.Log(
             outcome.Status == ExecutionStatus.Success ? LogLevel.Info : LogLevel.Warning,
@@ -635,6 +774,37 @@ public sealed class WorkflowExecutor
         };
     }
 
+    /// <summary>
+    /// Інваріант ADR-004 §5: у завершеному виконанні немає вузлів в очікуванні. Кожен вузол, чий останній крок —
+    /// <see cref="StepStatus.Waiting"/> (у цьому проході чи зі знімка, якщо до нього не дійшла черга), отримує крок
+    /// <see cref="StepStatus.Cancelled"/>; job пробудження хост не створює, бо результат не <see cref="ExecutionStatus.Waiting"/>.
+    /// </summary>
+    private async Task CloseOpenWaitsAsync(RunState run, ExecutionStatus status)
+    {
+        var now = _time.GetUtcNow();
+        foreach (var (nodeId, waiting) in run.OpenWaits.OrderBy(p => p.Value.FinishedAt).ThenBy(p => p.Key, StringComparer.Ordinal))
+        {
+            var step = new StepRecord
+            {
+                ExecutionId = run.Request.ExecutionId,
+                NodeId = nodeId,
+                RunIndex = waiting.RunIndex,
+                Status = StepStatus.Cancelled,
+                Input = waiting.Input,
+                Output = [.. waiting.Output.Select(_ => Array.Empty<Item>())],
+                Error = new StepError($"Очікування закрито: виконання завершилось зі статусом {status}.", WaitClosedType),
+                StartedAt = now,
+                FinishedAt = now,
+            };
+            run.Steps.Add(step);
+            await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
+            _services.Logger.Log(LogLevel.Info, nodeId, $"Очікування вузла закрито: виконання завершилось ({status}).");
+        }
+
+        run.OpenWaits.Clear();
+        run.Waiting.Clear();
+    }
+
     /// <summary>Змінний стан одного запуску.</summary>
     private sealed class RunState(ExecutionRequest request)
     {
@@ -648,6 +818,18 @@ public sealed class WorkflowExecutor
 
         /// <summary>Кроки вузлів, що призупинили виконання в цьому проході.</summary>
         public List<StepRecord> Waiting { get; } = [];
+
+        /// <summary>Вузли, чий останній збережений крок — <see cref="StepStatus.Waiting"/>: закриваються при завершенні.</summary>
+        public Dictionary<string, StepRecord> OpenWaits { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Вузли скасованих гілок злиття: не запускаються.</summary>
+        public HashSet<string> Dead { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Кроки скасованих гілок зі знімка, ще не повернені в <see cref="Steps"/>.</summary>
+        public Dictionary<string, StepRecord> RestoredDead { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Входи, які отримало злиття з правилом «N гілок», коли спрацювало.</summary>
+        public Dictionary<string, HashSet<int>> Selections { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Пробудження вузлів, що чекали (з останніх кроків <see cref="StepStatus.Waiting"/> знімка).</summary>
         public Dictionary<string, Nodes.NodeResumption> Resumptions { get; } = new(StringComparer.Ordinal);
@@ -675,6 +857,19 @@ public sealed class WorkflowExecutor
             }
         }
 
+        public bool IsCompleted(string nodeId) => _completion.ContainsKey(nodeId);
+
+        /// <summary>Під'єднані входи вузла, на які вже прийшли items, у порядку надходження (потім — за індексом входу).</summary>
+        public List<int> ArrivedInputs(PlannedNode node) =>
+            [.. node.Incoming
+                .Where(e => _completion.ContainsKey(e.From.Definition.Id))
+                .Where(e => _outputs[e.From.Definition.Id] is var output && e.FromOutput < output.Length && output[e.FromOutput].Length > 0)
+                .GroupBy(e => e.ToInput)
+                .Select(g => (Input: g.Key, At: g.Min(e => _completion[e.From.Definition.Id])))
+                .OrderBy(p => p.At)
+                .ThenBy(p => p.Input)
+                .Select(p => p.Input)];
+
         /// <summary>Виходи вже виконаних вузлів за назвою (порт 0) — для <c>$node["Назва"]</c>.</summary>
         public IReadOnlyDictionary<string, IReadOnlyList<Item>> NodeOutputsByName() =>
             new Dictionary<string, IReadOnlyList<Item>>(_byName, StringComparer.Ordinal);
@@ -687,8 +882,10 @@ public sealed class WorkflowExecutor
                 inputs[i] = [];
             }
 
+            var selected = Selections.GetValueOrDefault(node.Definition.Id);
             var edges = node.Incoming
                 .Where(e => _completion.ContainsKey(e.From.Definition.Id))
+                .Where(e => selected is null || selected.Contains(e.ToInput))
                 .OrderBy(e => _completion[e.From.Definition.Id])
                 .ThenBy(e => e.Index);
             foreach (var edge in edges)

@@ -16,6 +16,8 @@ namespace OpenBP.Engine.Execution;
 /// <see cref="StageStatus.Done"/>; після помилки, скасування чи таймауту — <see cref="StageStatus.Cancelled"/>.
 /// Етап, що так і не почався, після завершення виконання — <see cref="StageStatus.Skipped"/>, до завершення —
 /// <see cref="StageStatus.Pending"/>.</item>
+/// <item>Етап, вузол якого рушій закрив без запуску (гілку скасовано злиттям, очікування закрито в кінці виконання,
+/// ADR-004 §5), — <see cref="StageStatus.Cancelled"/>, якщо етап почався, інакше як етап, що не почався.</item>
 /// <item>Строк <see cref="StageState.DueAt"/> рахується від <see cref="StageState.EnteredAt"/> за <c>due</c>
 /// (<see cref="DueAt"/>) і не перераховується, поки етап не перезапущено.</item>
 /// </list>
@@ -70,8 +72,12 @@ public static class StageTracker
                 .Where(s => s is not null && s.Status != StepStatus.Skipped)
                 .Select(s => s!)
                 .ToList();
+            // Гілку етапу закрило злиття чи завершення виконання (ADR-004 §5): такий крок — не старт, а обрив етапу.
+            var closed = started.Any(IsClosing);
+            started.RemoveAll(IsClosing);
 
-            if (started.Count == 0)
+            var hasStart = steps.Any(s => members.Contains(s.NodeId) && s.Status != StepStatus.Skipped && !IsClosing(s));
+            if (!hasStart)
             {
                 result.Add(new StageState(stage.Id, stage.Name, position, finished ? StageStatus.Skipped : StageStatus.Pending, null, null, null));
                 continue;
@@ -80,7 +86,7 @@ public static class StageTracker
             // Вхід — найраніший старт вузла етапу серед усіх кроків; після пробудження крок очікування в кроках запуску
             // вже замінено новим, тож збережений раніше вхід важить більше.
             var enteredAt = steps
-                .Where(s => members.Contains(s.NodeId) && s.Status != StepStatus.Skipped)
+                .Where(s => members.Contains(s.NodeId) && s.Status != StepStatus.Skipped && !IsClosing(s))
                 .Min(s => s.StartedAt);
             var before = previous?.FirstOrDefault(p => p.StageId == stage.Id);
             if (before?.EnteredAt is { } earlier && earlier < enteredAt)
@@ -95,9 +101,11 @@ public static class StageTracker
             var exitedAt = ExitOf(started, members, outgoing);
             var (status, exit) = exitedAt is not null
                 ? (StageStatus.Done, exitedAt)
+                : closed
+                ? (StageStatus.Cancelled, (DateTimeOffset?)latest.Values.Where(s => members.Contains(s.NodeId) && IsClosing(s)).Min(s => s.FinishedAt))
                 : final switch
                 {
-                    ExecutionStatus.Success => (StageStatus.Done, started.Max(s => s.FinishedAt)),
+                    ExecutionStatus.Success => (StageStatus.Done, started.Count > 0 ? started.Max(s => s.FinishedAt) : (DateTimeOffset?)now),
                     ExecutionStatus.Error or ExecutionStatus.Cancelled or ExecutionStatus.TimedOut => (StageStatus.Cancelled, (DateTimeOffset?)now),
                     _ => (StageStatus.Active, (DateTimeOffset?)null),
                 };
@@ -173,6 +181,13 @@ public static class StageTracker
     /// <param name="value">Рядок.</param>
     public static DateTimeOffset? ParseUntil(string? value) =>
         DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) ? parsed : null;
+
+    /// <summary>
+    /// Крок, яким рушій закрив вузол без запуску: гілку скасовано злиттям (<see cref="WorkflowExecutor.BranchCancelledType"/>)
+    /// або очікування закрито в кінці виконання (<see cref="WorkflowExecutor.WaitClosedType"/>).
+    /// </summary>
+    private static bool IsClosing(StepRecord step) =>
+        step.Status == StepStatus.Cancelled && step.Error?.Type is WorkflowExecutor.BranchCancelledType or WorkflowExecutor.WaitClosedType;
 
     private static DateTimeOffset? ExitOf(
         List<StepRecord> started,

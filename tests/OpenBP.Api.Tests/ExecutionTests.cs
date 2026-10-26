@@ -468,6 +468,25 @@ public class ExecutionTests(ApiFactory api)
                 .SetProperty(e => e.WaitingNodeId, "n_wait"));
         }
 
+        // Дві гілки чекають (F7-06): скасування закриває обидва очікування і знімає job пробудження.
+        var store = new PostgresExecutionStore(new Contexts(api));
+        foreach (var node in new[] { "n_wait", "n_other" })
+        {
+            await store.SaveStepAsync(Step(executionId, node, "чекає") with { Status = StepStatus.Waiting, ResumeAt = resumeAt }, default);
+        }
+
+        await using (var db = api.CreateDbContext())
+        {
+            db.Jobs.Add(new JobEntity
+            {
+                Id = Guid.NewGuid(),
+                Kind = JobKinds.Execution,
+                Payload = JobJson.Serialize(new ExecutionJobPayload { ExecutionId = executionId, WorkflowId = workflowId, VersionId = Guid.NewGuid(), Mode = ExecutionMode.Manual }),
+                RunAt = resumeAt,
+            });
+            await db.SaveChangesAsync();
+        }
+
         var page = await JsonAsync(await editor.GetAsync($"/api/v1/executions?workflowId={workflowId}&status=waiting"));
         var row = Assert.Single(page.GetProperty("items").EnumerateArray());
         Assert.Equal("waiting", row.GetProperty("state").GetString());
@@ -482,6 +501,18 @@ public class ExecutionTests(ApiFactory api)
         Assert.Equal("cancelled", cancelled.GetProperty("state").GetString());
         Assert.Equal(JsonValueKind.Null, cancelled.GetProperty("resumeAt").ValueKind);
         Assert.NotEqual(JsonValueKind.Null, cancelled.GetProperty("finishedAt").ValueKind);
+
+        await using (var db = api.CreateDbContext())
+        {
+            var latest = (await db.ExecutionSteps.AsNoTracking().Where(st => st.ExecutionId == executionId).OrderBy(st => st.Id).ToListAsync())
+                .GroupBy(st => st.NodeId)
+                .Select(g => g.Last())
+                .ToList();
+            Assert.Equal(["n_other", "n_wait"], latest.Select(st => st.NodeId).Order());
+            Assert.All(latest, st => Assert.Equal("cancelled", st.Status));
+            var payloads = (await db.Jobs.AsNoTracking().Where(j => j.Kind == JobKinds.Execution).Select(j => j.Payload).ToListAsync()).Select(JobJson.Deserialize<ExecutionJobPayload>);
+            Assert.DoesNotContain(payloads, p => p.ExecutionId == executionId);
+        }
     }
 
     [Fact]

@@ -184,19 +184,29 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
     outgoing.set(edge.source, list);
   });
 
-  const reachVisible = (start: string): string[] => {
-    const found: string[] = [];
+  // Входи кожного вузла, до яких іде ребро: «N з M» злиття рахує під'єднані гілки.
+  const connectedInputs = new Map<string, Set<number>>();
+  for (const edge of model.edges) {
+    const set = connectedInputs.get(edge.target) ?? new Set<number>();
+    set.add(edge.targetInput);
+    connectedInputs.set(edge.target, set);
+  }
+
+  /** Видимі кроки за згорнутими вузлами; `join` — підпис злиття «будь-яка з гілок»/«N з M» на шляху (F7-06). */
+  const reachVisible = (start: string): { id: string; join?: string }[] => {
+    const found: { id: string; join?: string }[] = [];
     const seen = new Set<string>();
-    const stack = [start];
+    const stack: { id: string; join?: string }[] = [{ id: start }];
     while (stack.length > 0) {
-      const id = stack.pop()!;
+      const { id, join } = stack.pop()!;
       if (seen.has(id) || !nodes.has(id)) continue;
       seen.add(id);
       if (visible.has(id)) {
-        found.push(id);
+        found.push(join ? { id, join } : { id });
         continue;
       }
-      for (const { c } of outgoing.get(id) ?? []) stack.push(c?.to?.node);
+      const next = joinLabel(nodes.get(id)!, connectedInputs.get(id)?.size ?? 0) ?? join;
+      for (const { c } of outgoing.get(id) ?? []) stack.push({ id: c?.to?.node, ...(next ? { join: next } : {}) });
     }
     return found;
   };
@@ -208,8 +218,9 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
     for (const { c, index } of outgoing.get(node.id) ?? []) {
       const output = node.outputs[c?.from?.output] ?? '';
       const kind: BusinessEdgeKind = ALT_OUTPUTS.has(output) ? 'alt' : 'flow';
-      const label = connectionLabel(c) ?? outputLabel(node, output);
-      for (const target of reachVisible(c?.to?.node)) {
+      const own = connectionLabel(c) ?? outputLabel(node, output);
+      for (const { id: target, join } of reachVisible(c?.to?.node)) {
+        const label = own && join ? `${own} · ${join}` : (own ?? join);
         const key = `${node.id}->${target}:${label ?? ''}`;
         if (keys.has(key)) continue;
         keys.add(key);
@@ -219,6 +230,19 @@ function flowEdges(model: CanvasModel, nodes: ReadonlyMap<string, CanvasNode>, v
     }
   }
   return result;
+}
+
+/**
+ * Підпис злиття `core.merge` v2 (F7-06): `any` — «будь-яка з гілок», `count` — «N з M», де M — під'єднані гілки;
+ * `all` і версія 1 — без підпису.
+ */
+export function joinLabel(node: CanvasNode, branches: number): string | undefined {
+  if (node.type !== 'core.merge' || node.source.typeVersion < 2) return undefined;
+  const mode = node.source.parameters?.['mode'];
+  if (mode === 'any') return $localize`:@@business.join.any:будь-яка з гілок`;
+  const count = node.source.parameters?.['count'];
+  if (mode === 'count' && typeof count === 'number') return $localize`:@@business.join.count:${count}:count: з ${branches}:total:`;
+  return undefined;
 }
 
 /** Підпис гілки: лише для рішень, вузлів з кількома виходами і гілок збою/таймауту. */
