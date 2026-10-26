@@ -728,14 +728,22 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 | If (v1, v2), Merge (append, combine by position), Set, No Op, Wait (інтервал, дата) | `core.if`, `core.merge` v2, `core.set`, `core.wait` v2 |
 | Data Table (insert, get, update, upsert, delete) | `core.dataTable` (таблицю шукає за назвою з n8n) |
 | Telegram «Send Message» | `mcp.tool` конектора Telegram, `send_message` |
-| Ollama (`@n8n/n8n-nodes-langchain.ollama`) | `ai.llm`, провайдер `openai-compatible` |
+| Telegram «Send Photo» (URL або бінарні дані) | `mcp.tool` `send_photo` (F6-26) |
+| Telegram «Send and Wait for Response» | `mcp.tool` `send_approval` → `mcp.waitFor` `get_approval` (умова `answered`, щохвилини); вихід `timeout` веде туди ж, куди й відповідь (F6-27) |
+| Read RSS Feed | `mcp.tool` `rss_read` конектора HTTP, `itemsPath = items` (F6-25) |
+| HTTP Request | `mcp.tool` `http_request`; відповідь `{ status, json \| text \| base64 }` розгортається службовим `core.code` у форму n8n — JSON-тіло полями item'а |
+| Ollama (`@n8n/n8n-nodes-langchain.ollama`) | `ai.llm`, провайдер `openai-compatible`; відповідь у `$json.text` (у `notes` — де перевірити код, що читав `response`/`message.content`) |
 
 - Вирази `={{ … }}` → `{{ … }}`; `$('Назва').item.json`, `.first().json`, `.last().json` → `$node["Назва"].json`.
-- Вузол без відповідника (RSS, HTTP Request, Telegram «Send and Wait», «Send Photo», інші ШІ-вузли…) стає заглушкою
+- Вирази Luxon (`$now.setZone(tz).toISODate()`, `.toISO()`, `.toFormat(…)`, `$today`) переписуються на `Date` у поясі
+  сценарію (у виразах і в коді); решта Luxon лишається зауваженням `check`. `$json.data.approved` після «Send and Wait»
+  стає `$json.approved` (без відповіді поле порожнє — «не погоджено»).
+- «Execute Once» → службовий `core.code` «<вузол>: лише перший item» перед вузлом.
+- Вузол без відповідника (інші ШІ-вузли, Gmail, Sheets…) стає заглушкою
   `core.code` з тією самою назвою, що кидає помилку; зв'язки зберігаються, у `notes` вузла — тип і параметри n8n.
 - `onError: continueErrorOutput` → `continueOnFail` і вихід помилки; `continueRegularOutput` → `continueOnFail`, а вихід
   помилки веде туди ж, куди основний. `retryOnFail` → `retry`. Ребро, що замикає цикл, відкидається (DAG).
-- Конектор Telegram і credential Ollama потрапляють у `manifest` з назвами credentials n8n; транспорт конектора порожній —
+- Конектори Telegram і HTTP та credential Ollama потрапляють у `manifest` з назвами credentials n8n; транспорт конектора порожній —
   при імпорті підходить будь-який, а без збігу за назвою діалог просить вибрати відповідник.
 - `notes: [{ level, node, message }]`: `replace` — заглушка, яку треба замінити; `check` — перенесено, але варто
   перевірити (Execute Once, Luxon у виразах, `Buffer` у коді, таблиці даних, які треба створити, тощо).
