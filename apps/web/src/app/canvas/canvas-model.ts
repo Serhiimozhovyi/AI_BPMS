@@ -109,7 +109,7 @@ export function toCanvasModel(
 
   const canvasNodes = nodes.map((node): CanvasNode => {
     const descriptor = index.find(node.type, node.typeVersion);
-    const inputs = descriptor ? [...descriptor.inputs] : [];
+    const inputs = descriptor ? visibleInputs(node, descriptor, maxInput.get(node.id) ?? -1) : [];
     const outputs = descriptor ? visibleOutputs(node, descriptor, maxOutput.get(node.id) ?? -1) : [];
     if (node.continueOnFail === true) outputs.push(ERROR_OUTPUT);
     padPorts(inputs, maxInput.get(node.id) ?? -1, descriptor ? undefined : 'main');
@@ -197,6 +197,18 @@ function visibleOutputs(node: WorkflowNode, descriptor: NodeTypeInfo, maxEdgeOut
   const rules = node.parameters?.['rules'];
   const count = Array.isArray(rules) ? rules.length : 0;
   return outputs.slice(0, Math.max(1 + Math.max(1, count), maxEdgeOutput + 1));
+}
+
+/**
+ * `core.merge` версії 2 має входи `input1…input8` (F7-06): показуємо `parameters.branches` (типово 2) і кожен
+ * вхід, до якого вже йде ребро.
+ */
+function visibleInputs(node: WorkflowNode, descriptor: NodeTypeInfo, maxEdgeInput: number): string[] {
+  const inputs = [...descriptor.inputs];
+  if (node.type !== 'core.merge' || descriptor.version < 2) return inputs;
+  const branches = node.parameters?.['branches'];
+  const count = typeof branches === 'number' && Number.isInteger(branches) ? branches : 2;
+  return inputs.slice(0, Math.max(Math.min(Math.max(2, count), inputs.length), maxEdgeInput + 1));
 }
 
 function padPorts(ports: string[], maxIndex: number, prefix: string | undefined): void {

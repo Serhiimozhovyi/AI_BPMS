@@ -978,7 +978,7 @@
 - DoD: тести сервісу (Testcontainers): стан + дії + `unmet`; дія «завершити задачу» через контракт = `complete_task`; дія з `reason` на `warn`-правилі; viewer бачить лише свої дії; MCP tools; Vitest web-component; `docs/embedding.md`, `docs/mcp-server.md`, `docs/architecture.md` оновлено; OpenAPI перегенеровано.
 
 ### F7-06 · Гілки: `core.merge` `all|any|count`, скасування закриває очікування й задачі
-- model: `opus` · status: `ready` · depends: F5-02
+- model: `opus` · status: `review #160` · depends: F5-02
 - Що: `core.merge` typeVersion 2: `mode: all | any | count` (+ `count`), `any`/`count` пропускають першу/N-ту гілку, решту рушій скасовує (їхні `waiting` вузли → `cancelled`, подальші вузли не стартують); v1 працює як раніше. Завершення (`success`/`error`/`timed_out`) або скасування виконання закриває все незавершене: `core.wait`/`mcp.waitFor` у `waiting` → `cancelled`, job пробудження знімається; інваріант «немає `waiting` кроків і відкритих задач у завершеному виконанні» — у `IExecutionStore` як перевірка при `CompleteAsync`; для задач F6-02 — контракт у `architecture.md` §10.4 (статус задачі `cancelled` з `executionId` причини), який F6-02 реалізує. Бізнес-вигляд підписує merge «будь-яка з гілок»/«N з M».
 - DoD: тести движка: `any` з двома гілками, повільна гілка скасована; `count: 2` з трьох; скасування виконання під час `waiting` в обох гілках → усі кроки `cancelled`; інваріант перевіряється тестом з Testcontainers; `docs/workflow-format.md` (`core.merge` v2), `architecture.md` §2 і §10.4 оновлено; `describe_nodes` знає v2.
 

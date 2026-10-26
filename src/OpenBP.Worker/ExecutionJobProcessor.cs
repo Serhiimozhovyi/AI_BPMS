@@ -633,16 +633,20 @@ public sealed partial class ExecutionJobProcessor
         }
     }
 
-    /// <summary>Фінальний стан без результату движка; не перезаписує вже фінальний стан.</summary>
+    /// <summary>
+    /// Фінальний стан без результату движка; не перезаписує вже фінальний стан. Тією ж транзакцією закриває відкриті
+    /// очікування вузлів (ADR-004 §5) — наприклад, коли скасування прийшло, поки виконання призупинялось.
+    /// </summary>
     private async Task SetFinalAsync(Guid executionId, string status, string? error, string? onlyFrom = null)
     {
         var now = _time.GetUtcNow();
         await using var db = await _contexts.CreateDbContextAsync().ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync().ConfigureAwait(false);
         var query = db.Executions.Where(e => e.Id == executionId);
         query = onlyFrom is null
             ? query.Where(e => e.Status == ExecutionStatuses.Queued || e.Status == ExecutionStatuses.Running || e.Status == ExecutionStatuses.Cancelling)
             : query.Where(e => e.Status == onlyFrom);
-        await query
+        var updated = await query
             .ExecuteUpdateAsync(
                 s => s
                     .SetProperty(e => e.Status, status)
@@ -650,6 +654,14 @@ public sealed partial class ExecutionJobProcessor
                     .SetProperty(e => e.Error, error),
                 CancellationToken.None)
             .ConfigureAwait(false);
+        if (updated == 1)
+        {
+            await ExecutionWaits
+                .CloseAsync(db, executionId, $"Очікування закрито: виконання завершилось зі статусом {status}.", _time, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+
+        await tx.CommitAsync().ConfigureAwait(false);
     }
 
     private async Task<WorkflowDefinition?> LoadWorkflowAsync(Guid versionId, CancellationToken ct)
