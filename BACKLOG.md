@@ -945,7 +945,7 @@
 - DoD: інтеграційні тести Api: активація створює рядок, деактивація видаляє, збереження активного сценарію зі зміненим ресурсом оновлює; Vitest панелі й палітри; `describe_nodes` і `docs/connectors.md` §9.4 оновлено.
 
 ### F6-21 · Пресети тригерів у маніфесті конектора й палітрі
-- model: `sonnet` · status: `ready` · depends: F6-16, F6-20
+- model: `sonnet` · status: `done` · depends: F6-16, F6-20
 - Що: `connector.json.triggers[]` за схемою `docs/connectors.md` §9.2 (`{ id, title, description?, node: { type: mcp.subscribe | mcp.poll, parameters без serverId } }`); `GET /api/v1/connectors/catalog` і `GET /connectors/{id}` віддають пресети; у палітрі для кожного встановленого конектора з пресетами — картки «Новий лист» (msgraph: `mcp.poll` на `list_messages`, `keyField = id`), «Нове повідомлення Telegram» (`mcp.poll` на `get_updates`, `keyField = update_id`; після F6-22 — `mcp.subscribe`), «Новий документ 1С» (`mcp.poll` на `list_<set>` з фільтром за датою зміни, `keyField` — ключ); вставка пресету підставляє `serverId` і параметри; `connectors/*/connector.json` заповнено.
 - DoD: тести каталогу (валідація пресету за схемою, невалідний → помилка завантаження з назвою конектора); Vitest палітри; приклад у `docs/guide/authors.md`.
 
