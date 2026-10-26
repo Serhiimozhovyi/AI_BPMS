@@ -35,7 +35,7 @@ public sealed class McpSubscribeNode : INode
     public NodeDescriptor Descriptor { get; } = new(
         Type: McpNodeSchemaProvider.SubscribeNodeType,
         Version: 1,
-        DisplayName: "MCP: подія",
+        DisplayName: "Подія конектора",
         Group: NodeGroup.Trigger,
         Inputs: [],
         Outputs: ["main"],

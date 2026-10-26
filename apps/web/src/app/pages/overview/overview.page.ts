@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
@@ -21,7 +22,7 @@ import {
 @Component({
   selector: 'app-overview-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule, RouterLink],
+  imports: [DatePipe, MatButtonModule, MatProgressBarModule, RouterLink],
   template: `
     <section class="p-6">
       <div class="mb-4 flex flex-wrap items-center gap-4">
@@ -114,6 +115,48 @@ import {
             </table>
           </div>
         }
+
+        <h2 class="mb-2 mt-6 text-lg font-semibold" i18n="@@overview.subscriptions">Підписки на події</h2>
+        @if (!d.subscriptions || d.subscriptions.length === 0) {
+          <p class="opacity-70" data-testid="subscriptions-empty" i18n="@@overview.subscriptions.empty">Активних підписок на події конекторів немає.</p>
+        } @else {
+          <div class="overflow-x-auto">
+            <table class="w-full max-w-5xl text-left" data-testid="subscriptions">
+              <thead>
+                <tr>
+                  <th class="p-2" i18n="@@overview.col.workflow">Сценарій</th>
+                  <th class="p-2" i18n="@@overview.sub.connector">Конектор</th>
+                  <th class="p-2" i18n="@@overview.sub.resource">Ресурс</th>
+                  <th class="p-2" i18n="@@overview.sub.worker">Воркер</th>
+                  <th class="p-2" i18n="@@overview.sub.lease">Оренда до</th>
+                  <th class="p-2" i18n="@@overview.sub.state">Стан</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of d.subscriptions; track s.workflowId + s.nodeId) {
+                  <tr [attr.data-subscription]="s.workflowId + '/' + s.nodeId" [attr.data-state]="s.state">
+                    <td class="p-2">
+                      <a class="underline" [routerLink]="['/workflows', s.workflowId]">{{ s.workflowName }}</a>
+                      <div class="text-sm opacity-70">{{ s.nodeName ?? s.nodeId }}</div>
+                    </td>
+                    <td class="p-2">{{ s.serverName ?? s.serverId }}</td>
+                    <td class="p-2 font-mono text-sm">{{ s.resourceUri }}</td>
+                    <td class="p-2">{{ s.workerId ?? '—' }}</td>
+                    <td class="p-2">{{ s.leasedUntil ? (s.leasedUntil | date: 'HH:mm:ss') : '—' }}</td>
+                    <td class="p-2">
+                      @if (s.state === 'held') {
+                        <span i18n="@@overview.sub.state.held">Відкрита</span>
+                      } @else {
+                        <span class="text-amber-700" i18n="@@overview.sub.state.free">Немає власника</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
         <p class="mt-4 max-w-3xl text-sm opacity-60" i18n="@@overview.hint">
           Лічильники оновлюються раз на 5 хвилин; тривалість оцінена за інтервалами, тому показано верхню межу.
         </p>

@@ -117,6 +117,14 @@ export interface PageResult<T> {
 }
 
 /** Базовий шлях REST (docs/architecture.md §10.3). */
+/** Ресурс конектора для `mcp.subscribe` (F6-20): `resources/list` або шаблон з `resources/templates/list`. */
+export interface ConnectorResource {
+  uri: string;
+  name: string;
+  description?: string | null;
+  isTemplate: boolean;
+}
+
 export const API_BASE = '/api/v1';
 
 /** Клієнт `/api/v1/connectors` (docs/architecture.md §10.3). */
@@ -153,6 +161,11 @@ export class ConnectorsApiService {
 
   refreshTools(id: string): Observable<ConnectorDetail> {
     return this.http.post<ConnectorDetail>(`${this.base}/${encodeURIComponent(id)}/refresh-tools`, null);
+  }
+
+  /** Ресурси подій конектора (кеш на сервері — хвилина; `refresh` читає наново). */
+  resources(id: string, refresh = false): Observable<ConnectorResource[]> {
+    return this.http.get<ConnectorResource[]>(`${this.base}/${encodeURIComponent(id)}/resources`, { params: refresh ? { refresh: true } : {} });
   }
 
   callTool(id: string, tool: string, args: Record<string, unknown>): Observable<ToolCallResult> {

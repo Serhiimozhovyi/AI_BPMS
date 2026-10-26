@@ -43,6 +43,11 @@ public static class ConnectorEndpoints
             (await service.GetAsync(id, ct)).Tools)
             .WithSummary("Tools MCP-сервера (з кешу)");
 
+        connectors.MapGet("/{id:guid}/resources", (Guid id, IConnectorService service, CancellationToken ct, bool? refresh) =>
+            service.ListResourcesAsync(id, refresh == true, ct))
+            .WithSummary("Ресурси MCP-сервера")
+            .WithDescription("`resources/list` і `resources/templates/list` для вузла `mcp.subscribe`; кеш у пам'яті на хвилину, `refresh=true` читає наново.");
+
         connectors.MapPost("/", async (ConnectorInput? input, IConnectorService service, CancellationToken ct) =>
         {
             var created = await service.CreateAsync(Required(input), ct);

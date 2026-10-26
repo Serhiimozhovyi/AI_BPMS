@@ -167,6 +167,68 @@ public sealed class ConnectorService(
         return Detail(row);
     }
 
+    private static readonly TimeSpan ResourcesTtl = TimeSpan.FromMinutes(1);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, (DateTimeOffset At, IReadOnlyList<ConnectorResource> Items)> ResourcesCache = new();
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ConnectorResource>> ListResourcesAsync(Guid id, bool refresh, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Viewer);
+        var row = await db.McpServers.SingleOrDefaultAsync(s => s.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await RequireVisibleAsync(row, ct);
+        var now = time.GetUtcNow();
+        if (!refresh && ResourcesCache.TryGetValue(id, out var cached) && now - cached.At < ResourcesTtl)
+        {
+            return cached.Items;
+        }
+
+        var serverId = id.ToString();
+        if (!registry.TryGetServer(serverId, out _))
+        {
+            var registrationError = await RegisterAsync(row, ct);
+            if (registrationError is not null)
+            {
+                await SetStatusAsync(row, ConnectorStatus.Error, ct);
+                throw new ConnectorUnavailableException(id, registrationError.Message, registrationError);
+            }
+        }
+
+        try
+        {
+            var items = await registry.RunAsync<IReadOnlyList<ConnectorResource>>(
+                serverId,
+                async (client, token) =>
+                {
+                    var list = new List<ConnectorResource>();
+                    foreach (var resource in await client.ListResourcesAsync(cancellationToken: token))
+                    {
+                        list.Add(new(resource.Uri, resource.Name, resource.Description, false));
+                    }
+
+                    foreach (var template in await client.ListResourceTemplatesAsync(cancellationToken: token))
+                    {
+                        list.Add(new(template.UriTemplate, template.Name, template.Description, true));
+                    }
+
+                    return list;
+                },
+                ct: ct);
+            ResourcesCache[id] = (now, items);
+            return items;
+        }
+        catch (McpUnavailableException ex)
+        {
+            await SetStatusAsync(row, ConnectorStatus.Error, ct);
+            throw new ConnectorUnavailableException(id, ex.Message, ex);
+        }
+        catch (McpProtocolException)
+        {
+            // Сервер без можливості resources (-32601): підписуватися нема на що.
+            ResourcesCache[id] = (now, []);
+            return [];
+        }
+    }
+
     /// <inheritdoc />
     public async Task<ToolCallResult> CallToolAsync(Guid id, string toolName, JsonObject arguments, CancellationToken ct)
     {

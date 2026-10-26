@@ -577,8 +577,9 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
   ретеншном агрегати не зменшує.
 - Quartz-job `notifications` в Api — див. §8 (сповіщення адміністратору).
 
-Підписки (F6-13, connectors.md §9.4): `SubscriptionService` воркера раз на `Worker:SubscriptionScanInterval` (10 с)
-звіряє `subscriptions` з вузлами `mcp.subscribe` опублікованих версій активних сценаріїв, продовжує свої оренди
+Підписки (F6-13, F6-20, connectors.md §9.4): рядки `subscriptions` пише Api в транзакції активації/публікації/деактивації
+(`SubscriptionRegistrar`, поруч із `WebhookRegistrar`); `SubscriptionService` воркера раз на `Worker:SubscriptionScanInterval` (10 с)
+як страхівку звіряє `subscriptions` з вузлами `mcp.subscribe` опублікованих версій активних сценаріїв, продовжує свої оренди
 (`worker_id`, `leased_until = now + Worker:SubscriptionLease`, 30 с) і бере вільні чи протухлі — так підписку впалого
 воркера за строк оренди підхоплює інший. Для орендованої відкриває окрему сесію з конектором (протокол `2025-11-25`,
 `resources/subscribe`) і одразу читає «надолужити». Сповіщення `notifications/resources/updated` → `PollJobProcessor.PollAsync`

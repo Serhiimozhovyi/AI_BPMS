@@ -56,6 +56,32 @@ describe('OverviewPage', () => {
 
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
+  it('показує підписки на події з власником і станом (F6-20)', async () => {
+    const { host } = await setup({
+      ...day,
+      subscriptions: [
+        { workflowId: 'w1', workflowName: 'Бот', nodeId: 'n1', nodeName: 'Нове повідомлення', serverId: 's1', serverName: 'Telegram',
+          resourceUri: 'telegram://updates', workerId: 'worker-a', leasedUntil: '2026-10-26T10:00:30Z', state: 'held' },
+        { workflowId: 'w2', workflowName: 'Звіт', nodeId: 'n2', nodeName: null, serverId: 's2', serverName: null,
+          resourceUri: 'kit://changes/sales', workerId: null, leasedUntil: null, state: 'free' },
+      ],
+    });
+    const held = host.querySelector('[data-subscription="w1/n1"]')!;
+    expect(held.textContent).toContain('Telegram');
+    expect(held.textContent).toContain('telegram://updates');
+    expect(held.textContent).toContain('worker-a');
+    expect(held.textContent).toContain('Відкрита');
+    const free = host.querySelector('[data-subscription="w2/n2"]')!;
+    expect(free.getAttribute('data-state')).toBe('free');
+    expect(free.textContent).toContain('Немає власника');
+    expect(free.textContent).toContain('s2');
+  });
+
+  it('без підписок показує порожній стан (F6-20)', async () => {
+    const { host } = await setup();
+    expect(host.querySelector('[data-testid="subscriptions-empty"]')).not.toBeNull();
+  });
+
   it('показує лічильники, «зараз» і топ сценаріїв за помилками', async () => {
     const { host } = await setup();
     expect(host.querySelector('h1')?.textContent).toContain('Огляд');

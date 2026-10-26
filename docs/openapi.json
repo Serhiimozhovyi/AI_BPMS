@@ -4693,6 +4693,66 @@
         ]
       }
     },
+    "/api/v1/connectors/{id}/resources": {
+      "get": {
+        "tags": [
+          "Конектори"
+        ],
+        "summary": "Ресурси MCP-сервера",
+        "description": "`resources/list` і `resources/templates/list` для вузла `mcp.subscribe`; кеш у пам'яті на хвилину, `refresh=true` читає наново.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorResource"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/connectors/{id}/refresh-tools": {
       "post": {
         "tags": [
@@ -6383,6 +6443,32 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ConnectorResource": {
+        "required": [
+          "uri",
+          "name",
+          "description",
+          "isTemplate"
+        ],
+        "type": "object",
+        "properties": {
+          "uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isTemplate": {
+            "type": "boolean"
           }
         }
       },
@@ -8388,6 +8474,76 @@
             ],
             "format": "int32",
             "default": 0
+          },
+          "subscriptions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OverviewSubscription"
+            }
+          }
+        }
+      },
+      "OverviewSubscription": {
+        "required": [
+          "workflowId",
+          "workflowName",
+          "nodeId",
+          "nodeName",
+          "serverId",
+          "serverName",
+          "resourceUri",
+          "workerId",
+          "leasedUntil",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "workflowId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "nodeName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "serverId": {
+            "type": "string"
+          },
+          "serverName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resourceUri": {
+            "type": "string"
+          },
+          "workerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "leasedUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string"
           }
         }
       },

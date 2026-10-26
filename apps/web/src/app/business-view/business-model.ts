@@ -146,7 +146,7 @@ function stepKind(node: CanvasNode): BusinessStepKind {
 }
 
 function defaultLane(node: CanvasNode, connectorNames: ReadonlyMap<string, string>): BusinessLane {
-  if (node.type === 'mcp.tool' || node.type === 'mcp.poll' || node.type === 'mcp.waitFor') {
+  if (node.type === 'mcp.tool' || node.type === 'mcp.poll' || node.type === 'mcp.waitFor' || node.type === 'mcp.subscribe') {
     const serverId = node.source.parameters?.['serverId'];
     const name = typeof serverId === 'string' ? connectorNames.get(serverId) : undefined;
     return name ? { id: `connector:${serverId as string}`, name } : otherLane();
