@@ -19,6 +19,15 @@ public sealed class ExecutionService(
     IExecutionLauncher launcher,
     TimeProvider time) : IExecutionService
 {
+    /// <summary>Код 422: відхилення правила без причини (ADR-004 §3).</summary>
+    public const string StageRuleReasonRequiredCode = "STAGE_RULE_REASON_REQUIRED";
+
+    /// <summary>Код 422: <c>ruleId</c> порушений у кількох етапах, а <c>stageId</c> не вказано.</summary>
+    public const string StageRuleAmbiguousCode = "STAGE_RULE_AMBIGUOUS";
+
+    /// <summary>Код конфлікту: відкритого порушення правила немає.</summary>
+    public const string StageRuleNotViolatedCode = "STAGE_RULE_NOT_VIOLATED";
+
     /// <summary>Код конфлікту: повтор незавершеного виконання.</summary>
     public const string ExecutionNotFinishedCode = "EXECUTION_NOT_FINISHED";
 
@@ -135,6 +144,10 @@ public sealed class ExecutionService(
             .Where(s => s.ExecutionId == id)
             .OrderBy(s => s.Position)
             .ToListAsync(ct);
+        var violations = await db.Violations.AsNoTracking()
+            .Where(v => v.ExecutionId == id)
+            .OrderBy(v => v.Id)
+            .ToListAsync(ct);
         var children = await db.Executions.AsNoTracking()
             .Where(e => e.ParentExecutionId == id)
             .OrderBy(e => e.Id)
@@ -144,7 +157,8 @@ public sealed class ExecutionService(
             ExecutionMapping.ToSummary(execution),
             [.. steps.Select(ExecutionMapping.ToStep)],
             [.. stages.Select(s => ExecutionMapping.ToStage(s, execution, now))],
-            [.. children.Select(ExecutionMapping.ToSummary)]);
+            [.. children.Select(ExecutionMapping.ToSummary)],
+            [.. violations.Select(ExecutionMapping.ToViolation)]);
     }
 
     /// <inheritdoc />
@@ -460,6 +474,68 @@ public sealed class ExecutionService(
     /// Права на сценарій (F6-14): чужий проєкт — 404 (для <paramref name="notFound"/>, типово — сам сценарій), бракує ролі — 403.
     /// Неіснуючий сценарій пропускається: його відхилить запуск.
     /// </summary>
+    /// <inheritdoc />
+    public async Task<ViolationDto> OverrideRuleAsync(Guid id, RuleOverrideRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        currentUser.Require(UserRole.Viewer);
+        await RequireExecutionAsync(id, UserRole.Editor, ct);
+        if (string.IsNullOrWhiteSpace(request.RuleId))
+        {
+            throw new ArgumentException("Вкажіть ruleId правила.", nameof(request));
+        }
+
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrEmpty(reason))
+        {
+            throw new UnprocessableException(StageRuleReasonRequiredCode, "Вкажіть причину, чому перехід має пройти попри правило.");
+        }
+
+        var open = await db.Violations
+            .Where(v => v.ExecutionId == id && v.RuleId == request.RuleId && v.Status == ViolationStatuses.Open)
+            .Where(v => request.StageId == null || v.StageId == request.StageId)
+            .OrderBy(v => v.Id)
+            .ToListAsync(ct);
+        if (open.Count == 0)
+        {
+            throw new ConflictException(StageRuleNotViolatedCode, $"Правило «{request.RuleId}» у цьому виконанні не порушене — відхиляти нічого.");
+        }
+
+        if (open.Select(v => v.StageId).Distinct().Count() > 1)
+        {
+            throw new UnprocessableException(StageRuleAmbiguousCode, $"Правило «{request.RuleId}» порушене в кількох етапах — вкажіть stageId.");
+        }
+
+        var now = time.GetUtcNow();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        foreach (var violation in open)
+        {
+            violation.Status = ViolationStatuses.Overridden;
+            violation.Reason = reason;
+            violation.ActorUserId = currentUser.UserId;
+            violation.ActorSystem = null;
+            violation.ResolvedAt = now;
+            db.AuditLog.Add(PostgresExecutionStore.ViolationAudit(
+                ViolationStatuses.AuditOverridden, violation, now, currentUser.UserId, currentUser.ApiKeyId));
+        }
+
+        await db.SaveChangesAsync(ct);
+        if (open.Any(v => v.Mode == StageRuleModes.Block))
+        {
+            // Виконання чекає на зупиненому переході: будимо його job зараз, а не через RuleRecheckInterval.
+            var idText = id.ToString();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE jobs SET run_at = {now}
+                 WHERE kind = {Jobs.JobKinds.Execution} AND locked_by IS NULL AND run_at > {now}
+                   AND payload->>'executionId' = {idText}
+                   AND EXISTS (SELECT 1 FROM executions e WHERE e.id = {id} AND e.status = {ExecutionStatuses.Waiting})
+                """, ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return ExecutionMapping.ToViolation(open[0]);
+    }
+
     private async Task RequireWorkflowAsync(Guid workflowId, UserRole minimum, CancellationToken ct, (string Entity, Guid Id)? notFound = null)
     {
         var workflow = await db.Workflows.AsNoTracking().Where(w => w.Id == workflowId).Select(w => new { w.GroupId }).SingleOrDefaultAsync(ct);

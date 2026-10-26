@@ -124,3 +124,21 @@ public static class StageStatuses
         _ => throw new InvalidOperationException($"Невідомий стан етапу «{status}» у БД."),
     };
 }
+
+/// <summary>Значення <c>violations.status</c> і дії журналу аудиту порушень (ADR-004 §3, F7-03).</summary>
+public static class ViolationStatuses
+{
+    public const string Open = "open";
+    public const string Resolved = "resolved";
+    public const string Overridden = "overridden";
+
+    /// <summary><c>violations.actor_system</c>, коли стан змінив рушій.</summary>
+    public const string EngineActor = "engine";
+
+    /// <summary><c>audit_log.entity_type</c> порушень — виконання, в якому воно сталося.</summary>
+    public const string AuditEntity = "execution";
+
+    public const string AuditOpened = "violation.opened";
+    public const string AuditResolved = "violation.resolved";
+    public const string AuditOverridden = "violation.overridden";
+}

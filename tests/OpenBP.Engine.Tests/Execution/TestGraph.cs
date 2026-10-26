@@ -101,9 +101,16 @@ internal sealed class TestGraph
     }
 
     /// <summary>Додає етап над вузлами <paramref name="nodes"/>.</summary>
-    public TestGraph Stage(string id, string[] nodes, StageDue? due = null)
+    public TestGraph Stage(string id, string[] nodes, StageDue? due = null, params StageTransition[] transitions)
     {
-        (_workflow.Stages ??= []).Add(new WorkflowStage { Id = id, Name = $"Етап {id}", Nodes = [.. nodes], Due = due });
+        (_workflow.Stages ??= []).Add(new WorkflowStage
+        {
+            Id = id,
+            Name = $"Етап {id}",
+            Nodes = [.. nodes],
+            Due = due,
+            Transitions = transitions.Length > 0 ? [.. transitions] : null,
+        });
         return this;
     }
 

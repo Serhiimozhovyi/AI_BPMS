@@ -64,4 +64,10 @@ public sealed record ExecutionRequest
 
     /// <summary>Стан вузлів між виконаннями (<c>node_state</c>): id вузла → стан, що отримає <c>INodeContext.NodeState</c>.</summary>
     public IReadOnlyDictionary<string, JsonObject> NodeStates { get; init; } = EmptyStates;
+
+    /// <summary>
+    /// Відхилення правил переходу (ADR-004 §3, F7-03): невиконане правило <c>block</c> з відхиленням не зупиняє перехід.
+    /// Хост бере їх з порушень виконання зі станом <c>overridden</c>.
+    /// </summary>
+    public IReadOnlyCollection<RuleOverride> RuleOverrides { get; init; } = [];
 }

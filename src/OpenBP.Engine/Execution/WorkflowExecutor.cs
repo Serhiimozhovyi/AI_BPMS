@@ -44,6 +44,16 @@ public sealed class WorkflowExecutor
     /// <summary>Тип помилки кроку вузла зі скасованої гілки злиття (F7-06).</summary>
     public const string BranchCancelledType = "BRANCH_CANCELLED";
 
+    /// <summary>
+    /// Причина кроку очікування (<c>waitState.reason</c>), коли перехід з етапу зупинило правило <c>block</c> (F7-03).
+    /// </summary>
+    public const string StageRuleBlocked = "STAGE_RULE_BLOCKED";
+
+    /// <summary>
+    /// Через скільки повторно перевірити правила зупиненого переходу, якщо раніше не було відхилення чи пробудження.
+    /// </summary>
+    public static readonly TimeSpan RuleRecheckInterval = TimeSpan.FromHours(1);
+
     /// <summary>Тип помилки кроку, що закриває очікування вузла, коли виконання завершилось (F7-06).</summary>
     public const string WaitClosedType = "WAIT_CLOSED";
 
@@ -186,7 +196,9 @@ public sealed class WorkflowExecutor
         var run = new RunState(request) { Stages = snapshot.Stages.Count > 0 ? snapshot.Stages : null };
         foreach (var (nodeId, step) in latest)
         {
-            if (step.Status == StepStatus.Waiting)
+            // Перехід, зупинений правилом (F7-03), — не очікування вузла: на пробудженні правила перевіряються знову,
+            // а вузол, якщо перехід пройде, виконується вперше, без Resumption.
+            if (step.Status == StepStatus.Waiting && !StageTracker.IsRuleBlock(step))
             {
                 run.Resumptions[nodeId] = new Nodes.NodeResumption(step.ResumeAt ?? step.FinishedAt, step.WaitState ?? []);
                 run.OpenWaits[nodeId] = step;
@@ -319,7 +331,8 @@ public sealed class WorkflowExecutor
                     return await FinishAsync(run, startedAt, Interrupted(ct, timeoutSec), null).ConfigureAwait(false);
                 }
 
-                step = await RunNodeAsync(node, run, token).ConfigureAwait(false);
+                step = await CheckTransitionRulesAsync(node, run).ConfigureAwait(false)
+                       ?? await RunNodeAsync(node, run, token).ConfigureAwait(false);
                 run.Steps.Add(step);
                 await _store.SaveStepAsync(step, CancellationToken.None).ConfigureAwait(false);
                 run.OpenWaits.Remove(node.Definition.Id);
@@ -380,6 +393,136 @@ public sealed class WorkflowExecutor
         }
 
         return await FinishAsync(run, startedAt, (ExecutionStatus.Success, null), null).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Правила переходу (ADR-004 §3, F7-03) на ребрах, що ведуть у <paramref name="node"/> з етапу, до якого вузол не
+    /// належить. Правило переходу <c>to</c> діє на ребро у вузол етапу <c>to</c>; без <c>to</c> — на будь-яке ребро з
+    /// етапу. Умова — вираз над кожним item на ребрі; правило виконане, якщо вона <c>true</c> для всіх. Результати —
+    /// у <see cref="IStageStore.SaveRuleChecksAsync"/>. Невиконане й не відхилене правило <c>block</c> зупиняє перехід:
+    /// вузол не виконується, а отримує крок <see cref="StepStatus.Waiting"/> з причиною <see cref="StageRuleBlocked"/> і
+    /// пробудженням через <see cref="RuleRecheckInterval"/> — на ньому (або раніше, після відхилення) правила
+    /// перевіряються знову.
+    /// </summary>
+    /// <returns>Крок очікування, якщо перехід зупинено; інакше <c>null</c>.</returns>
+    private async Task<StepRecord?> CheckTransitionRulesAsync(PlannedNode node, RunState run)
+    {
+        var request = run.Request;
+        var stages = request.Workflow.Stages;
+        if (stages is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var target = run.StageOf(node.Definition.Id);
+        var now = _time.GetUtcNow();
+        var checks = new List<RuleCheck>();
+        var blocked = new JsonArray();
+        foreach (var edge in node.Incoming.OrderBy(e => e.Index))
+        {
+            var from = run.StageOf(edge.From.Definition.Id);
+            if (from is null || from == target || from.Transitions is not { Count: > 0 } || !run.IsCompleted(edge.From.Definition.Id))
+            {
+                continue;
+            }
+
+            var items = run.EdgeItems(edge);
+            if (items.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var transition in from.Transitions.Where(t => t.To is null || t.To == target?.Id))
+            {
+                foreach (var rule in transition.Rules)
+                {
+                    var passed = RulePassed(rule, items, run, now);
+                    var overridden = !passed && request.RuleOverrides.Contains(new RuleOverride(from.Id, rule.Id));
+                    checks.Add(new RuleCheck(
+                        from.Id,
+                        rule.Id,
+                        rule.IsBlocking,
+                        passed,
+                        overridden,
+                        rule.Message,
+                        node.Definition.Id,
+                        [.. items.Select(i => (JsonNode)i.Json.DeepClone())],
+                        now));
+                    if (!passed)
+                    {
+                        _services.Logger.Log(
+                            LogLevel.Warning,
+                            node.Definition.Id,
+                            $"Правило «{rule.Id}» етапу «{from.Name}» не виконане{(overridden ? " — відхилено з причиною" : rule.IsBlocking ? " — перехід зупинено" : "")}: {rule.Message}");
+                    }
+
+                    if (!passed && !overridden && rule.IsBlocking)
+                    {
+                        blocked.Add(new JsonObject { ["stageId"] = from.Id, ["ruleId"] = rule.Id, ["message"] = rule.Message });
+                    }
+                }
+            }
+        }
+
+        if (checks.Count > 0 && _stages is not null)
+        {
+            await _stages.SaveRuleChecksAsync(request.ExecutionId, checks, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        if (blocked.Count == 0)
+        {
+            return null;
+        }
+
+        var inputs = run.GatherInputs(node);
+        return new StepRecord
+        {
+            ExecutionId = request.ExecutionId,
+            NodeId = node.Definition.Id,
+            Status = StepStatus.Waiting,
+            Input = [.. inputs.Select(i => i.ToArray())],
+            Output = Ports(node.OutputCount, []),
+            ResumeAt = now + RuleRecheckInterval,
+            WaitState = new JsonObject { [StageTracker.WaitReasonKey] = StageRuleBlocked, ["rules"] = blocked },
+            StartedAt = now,
+            FinishedAt = now,
+        };
+    }
+
+    /// <summary>Умова правила істинна для кожного item; вираз, що не обчислився, — правило не виконане.</summary>
+    private bool RulePassed(StageRule rule, IReadOnlyList<Item> items, RunState run, DateTimeOffset now)
+    {
+        var request = run.Request;
+        var nodes = run.NodeOutputsByName();
+        for (var i = 0; i < items.Count; i++)
+        {
+            try
+            {
+                var value = _services.Expressions.Evaluate(rule.Condition, new Expressions.ExpressionScope
+                {
+                    Item = items[i],
+                    ItemIndex = i,
+                    Input = items,
+                    Nodes = nodes,
+                    Now = now,
+                    Timezone = request.Workflow.Settings.Timezone,
+                    Env = request.Env,
+                    Vars = request.Vars,
+                    ExecutionId = request.ExecutionId,
+                });
+                if (value is not JsonValue v || !v.TryGetValue<bool>(out var ok) || !ok)
+                {
+                    return false;
+                }
+            }
+            catch (Expressions.ExpressionException ex)
+            {
+                _services.Logger.Log(LogLevel.Warning, null, $"Умова правила «{rule.Id}» не обчислилась: {ex.Message}");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -858,6 +1001,33 @@ public sealed class WorkflowExecutor
         }
 
         public bool IsCompleted(string nodeId) => _completion.ContainsKey(nodeId);
+
+        /// <summary>Items на ребрі від завершеного джерела (копії не робляться — лише для читання).</summary>
+        public IReadOnlyList<Item> EdgeItems(Edge edge) =>
+            _outputs.TryGetValue(edge.From.Definition.Id, out var output) && edge.FromOutput < output.Length ? output[edge.FromOutput] : [];
+
+        /// <summary>Етап вузла (перший у <c>stages[]</c>, якщо вузол помилково у двох); <c>null</c> — вузол без етапу.</summary>
+        public WorkflowStage? StageOf(string nodeId)
+        {
+            _stageOf ??= BuildStageIndex(Request.Workflow);
+            return _stageOf.GetValueOrDefault(nodeId);
+        }
+
+        private Dictionary<string, WorkflowStage>? _stageOf;
+
+        private static Dictionary<string, WorkflowStage> BuildStageIndex(WorkflowDefinition workflow)
+        {
+            var index = new Dictionary<string, WorkflowStage>(StringComparer.Ordinal);
+            foreach (var stage in workflow.Stages ?? [])
+            {
+                foreach (var id in stage.Nodes)
+                {
+                    index.TryAdd(id, stage);
+                }
+            }
+
+            return index;
+        }
 
         /// <summary>Під'єднані входи вузла, на які вже прийшли items, у порядку надходження (потім — за індексом входу).</summary>
         public List<int> ArrivedInputs(PlannedNode node) =>

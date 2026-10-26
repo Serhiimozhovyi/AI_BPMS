@@ -120,6 +120,28 @@ public sealed class ExecutionTools
         CancellationToken ct = default) =>
         executions.ResumeFromFailedAsync(id, items, ct);
 
+    /// <summary><c>override_rule</c> (F7-03, ADR-004 §3).</summary>
+    /// <param name="executions">Сервіс виконань.</param>
+    /// <param name="id">Виконання.</param>
+    /// <param name="ruleId">Правило переходу.</param>
+    /// <param name="reason">Причина відхилення.</param>
+    /// <param name="stageId">Етап — лише якщо однаковий ruleId порушений у кількох етапах.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "override_rule", Title = "Override stage transition rule", Destructive = false, Idempotent = false, UseStructuredContent = true)]
+    [Description(
+        "Overrides an unmet transition rule of a workflow stage with a reason (ADR-004 §3): the open violation becomes " +
+        "overridden with you as the author. For a block rule the execution waiting on that transition wakes up and the " +
+        "transition passes; for a warn rule it only records why. Open violations are listed in get_execution (violations[]). " +
+        "Requires editor. Empty reason → STAGE_RULE_REASON_REQUIRED; no open violation of the rule → STAGE_RULE_NOT_VIOLATED.")]
+    public static Task<ViolationDto> OverrideRule(
+        IExecutionService executions,
+        [Description("Execution id.")] Guid id,
+        [Description("Rule id (stages[].transitions[].rules[].id).")] string ruleId,
+        [Description("Why the transition should pass despite the rule; shown in the execution log and the audit log.")] string reason,
+        [Description("Stage id; only needed when the same ruleId is violated in several stages.")] string? stageId = null,
+        CancellationToken ct = default) =>
+        executions.OverrideRuleAsync(id, new RuleOverrideRequest(ruleId, reason, stageId), ct);
+
     /// <summary>Чекає фінального стану чи очікування (<c>waiting</c>) за потоком подій; вихід за <paramref name="timeout"/> — не помилка.</summary>
     internal static async Task WaitForFinalStateAsync(IExecutionEventSource events, Guid executionId, TimeSpan timeout, CancellationToken ct)
     {

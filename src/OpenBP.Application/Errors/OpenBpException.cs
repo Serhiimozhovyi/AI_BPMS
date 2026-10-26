@@ -96,6 +96,17 @@ public sealed class WorkflowValidationException : OpenBpException
     public IReadOnlyList<WorkflowValidationError> Errors { get; }
 }
 
+/// <summary>422: запит коректний за формою, але не виконує правила дії (напр. відхилення без причини).</summary>
+public sealed class UnprocessableException : OpenBpException
+{
+    /// <param name="code">Уточнений код, напр. <c>STAGE_RULE_REASON_REQUIRED</c>.</param>
+    /// <param name="message">Пояснення.</param>
+    public UnprocessableException(string code, string message)
+        : base(code, 422, message)
+    {
+    }
+}
+
 /// <summary>502: MCP-сервер конектора недоступний або не відповів за таймаут.</summary>
 public sealed class ConnectorUnavailableException : OpenBpException
 {

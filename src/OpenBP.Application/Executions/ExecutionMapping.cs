@@ -64,6 +64,9 @@ internal static class ExecutionMapping
         return new(e.StageId, e.Name, e.Position, status, overdue, e.EnteredAt, e.DueAt, exitedAt);
     }
 
+    public static ViolationDto ToViolation(ViolationEntity v) =>
+        new(v.Id, v.StageId, v.RuleId, v.Mode, v.Status, v.Message, v.Reason, v.ActorUserId, v.CreatedAt, v.ResolvedAt);
+
     private static Item[][] ReadItems(string? json) =>
         json is null ? [] : JsonSerializer.Deserialize<Item[][]>(json, WorkflowJson.Options) ?? [];
 }

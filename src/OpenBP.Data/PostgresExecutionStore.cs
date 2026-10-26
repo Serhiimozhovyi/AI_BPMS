@@ -206,6 +206,109 @@ public sealed class PostgresExecutionStore(
         await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Невиконане й не відхилене правило відкриває порушення (<c>open</c>, якщо такого ще немає) з items переходу, очищеними
+    /// від секретів; виконане закриває відкрите (<c>resolved</c>). Кожна зміна — запис <c>violation.opened|resolved</c> у
+    /// <c>audit_log</c> тією самою транзакцією.
+    /// </remarks>
+    public async Task SaveRuleChecksAsync(Guid executionId, IReadOnlyList<RuleCheck> checks, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(checks);
+        ct.ThrowIfCancellationRequested();
+        await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var versionId = await db.Executions
+            .Where(e => e.Id == executionId)
+            .Select(e => (Guid?)e.VersionId)
+            .SingleOrDefaultAsync(ct)
+            .ConfigureAwait(false) ?? throw NotCreated(executionId);
+        var open = await db.Violations
+            .Where(v => v.ExecutionId == executionId && v.Status == ViolationStatuses.Open)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        foreach (var check in checks.Where(c => !c.Overridden))
+        {
+            var existing = open.FirstOrDefault(v => v.StageId == check.StageId && v.RuleId == check.RuleId);
+            var at = check.At.ToUniversalTime();
+            if (!check.Passed && existing is null)
+            {
+                var violation = new ViolationEntity
+                {
+                    Id = SequentialGuid.Next(time),
+                    ExecutionId = executionId,
+                    StageId = check.StageId,
+                    RuleId = check.RuleId,
+                    WorkflowVersionId = versionId,
+                    Mode = check.Blocking ? StageRuleModes.Block : StageRuleModes.Warn,
+                    Status = ViolationStatuses.Open,
+                    Message = check.Message,
+                    ActorSystem = ViolationStatuses.EngineActor,
+                    Context = (scrubber is null ? check.Context : scrubber.Scrub(check.Context))?.ToJsonString() ?? "[]",
+                    CreatedAt = at,
+                };
+                db.Violations.Add(violation);
+                open.Add(violation);
+                db.AuditLog.Add(ViolationAudit(ViolationStatuses.AuditOpened, violation, at));
+            }
+            else if (check.Passed && existing is not null)
+            {
+                existing.Status = ViolationStatuses.Resolved;
+                existing.ResolvedAt = at;
+                existing.ActorSystem = ViolationStatuses.EngineActor;
+                open.Remove(existing);
+                db.AuditLog.Add(ViolationAudit(ViolationStatuses.AuditResolved, existing, at));
+            }
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Відхилення правил виконання (порушення <c>overridden</c>) — для <see cref="ExecutionRequest.RuleOverrides"/>.</summary>
+    /// <param name="db">Контекст БД.</param>
+    /// <param name="executionId">Ідентифікатор виконання.</param>
+    /// <param name="ct">Скасування.</param>
+    public static async Task<IReadOnlyCollection<RuleOverride>> LoadRuleOverridesAsync(OpenBpDbContext db, Guid executionId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        var rows = await db.Violations
+            .AsNoTracking()
+            .Where(v => v.ExecutionId == executionId && v.Status == ViolationStatuses.Overridden)
+            .Select(v => new { v.StageId, v.RuleId })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return [.. rows.Select(r => new RuleOverride(r.StageId, r.RuleId)).Distinct()];
+    }
+
+    /// <summary>Запис журналу аудиту про зміну порушення (без items — лише ідентифікатори).</summary>
+    /// <param name="action">Одна з дій <see cref="ViolationStatuses"/>.</param>
+    /// <param name="violation">Порушення.</param>
+    /// <param name="at">Коли.</param>
+    /// <param name="userId">Хто; <c>null</c> — рушій.</param>
+    /// <param name="apiKeyId">Ключ API, яким зроблено зміну.</param>
+    public static AuditEntryEntity ViolationAudit(string action, ViolationEntity violation, DateTimeOffset at, Guid? userId = null, Guid? apiKeyId = null)
+    {
+        ArgumentNullException.ThrowIfNull(violation);
+        return new AuditEntryEntity
+        {
+            Id = Guid.CreateVersion7(at),
+            At = at,
+            UserId = userId,
+            ApiKeyId = apiKeyId,
+            Action = action,
+            EntityType = ViolationStatuses.AuditEntity,
+            EntityId = violation.ExecutionId.ToString(),
+            Details = new JsonObject
+            {
+                ["violationId"] = violation.Id.ToString(),
+                ["stageId"] = violation.StageId,
+                ["ruleId"] = violation.RuleId,
+                ["mode"] = violation.Mode,
+            }.ToJsonString(),
+        };
+    }
+
     /// <summary>Стан етапів виконання в порядку <c>stages[]</c>; порожньо — сценарій без етапів.</summary>
     /// <param name="db">Контекст БД.</param>
     /// <param name="executionId">Ідентифікатор виконання.</param>

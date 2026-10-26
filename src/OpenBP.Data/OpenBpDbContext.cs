@@ -24,6 +24,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
     public DbSet<ExecutionStepEntity> ExecutionSteps => Set<ExecutionStepEntity>();
     public DbSet<ExecutionStageEntity> ExecutionStages => Set<ExecutionStageEntity>();
+    public DbSet<ViolationEntity> Violations => Set<ViolationEntity>();
     public DbSet<JobEntity> Jobs => Set<JobEntity>();
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
     public DbSet<WebhookResponseEntity> WebhookResponses => Set<WebhookResponseEntity>();
@@ -229,6 +230,14 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.HasKey(x => new { x.ExecutionId, x.StageId });
             // Прострочені етапи (SLA, F7-04): активні зі строком.
             e.HasIndex(x => x.DueAt).HasFilter("status = 'active'");
+        });
+        b.Entity<ViolationEntity>(e =>
+        {
+            e.ToTable("violations");
+            e.Property(x => x.Context).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.ExecutionId, x.StageId, x.RuleId });
+            // Відкриті порушення (F7-04: фільтр журналу, «Огляд»).
+            e.HasIndex(x => x.ExecutionId).HasFilter("status = 'open'");
         });
         b.Entity<JobEntity>(e =>
         {
