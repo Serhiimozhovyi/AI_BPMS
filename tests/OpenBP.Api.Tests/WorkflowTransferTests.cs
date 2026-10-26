@@ -308,11 +308,11 @@ public class WorkflowTransferTests(ApiFactory api)
                 { "id": "1", "name": "Старт", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
                 { "id": "2", "name": "Код", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [200, 0],
                   "parameters": { "jsCode": "return [{ json: { ok: true } }];" } },
-                { "id": "3", "name": "RSS", "type": "n8n-nodes-base.rssFeedRead", "typeVersion": 1.2, "position": [400, 0], "parameters": { "url": "https://example.com/rss" } }
+                { "id": "3", "name": "Пошта", "type": "n8n-nodes-base.gmail", "typeVersion": 2, "position": [400, 0], "parameters": { "operation": "getAll" } }
               ],
               "connections": {
                 "Старт": { "main": [[{ "node": "Код", "type": "main", "index": 0 }]] },
-                "Код": { "main": [[{ "node": "RSS", "type": "main", "index": 0 }]] }
+                "Код": { "main": [[{ "node": "Пошта", "type": "main", "index": 0 }]] }
               }
             }
             """;
@@ -321,7 +321,7 @@ public class WorkflowTransferTests(ApiFactory api)
         Assert.Equal(HttpStatusCode.OK, converted.StatusCode);
         var conversion = await JsonAsync(converted);
         var note = Assert.Single(conversion.GetProperty("notes").EnumerateArray(), n => n.GetProperty("level").GetString() == "replace");
-        Assert.Equal("RSS", note.GetProperty("node").GetString());
+        Assert.Equal("Пошта", note.GetProperty("node").GetString());
 
         var imported = await editor.PostAsync($"{Workflows}/import", Json($$"""
             { "definition": {{conversion.GetProperty("definition").GetRawText()}}, "manifest": {{conversion.GetProperty("manifest").GetRawText()}} }
