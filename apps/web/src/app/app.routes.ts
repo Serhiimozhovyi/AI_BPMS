@@ -1,7 +1,17 @@
-import { Routes } from '@angular/router';
+import { Routes, UrlMatcher, UrlSegment } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
+/** `/form/<шлях з кількох сегментів>` — публічна сторінка форми (F6-03). */
+export const formMatcher: UrlMatcher = (segments: UrlSegment[]) =>
+  segments.length > 1 && segments[0].path === 'form' ? { consumed: segments } : null;
+
 export const routes: Routes = [
+  {
+    // Публічна форма (F6-03): без входу (доступ перевіряє Api за налаштуванням вузла) і без меню застосунку.
+    matcher: formMatcher,
+    title: $localize`:@@form.pageTitle:Форма`,
+    loadComponent: () => import('./pages/form/form.page').then((m) => m.FormPage),
+  },
   {
     path: 'login',
     title: $localize`:@@login.pageTitle:Вхід`,

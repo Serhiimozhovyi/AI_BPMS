@@ -17,6 +17,7 @@ using OpenBP.Application.Credentials;
 using OpenBP.Application.DataTables;
 using OpenBP.Application.Evaluations;
 using OpenBP.Application.Executions;
+using OpenBP.Application.Forms;
 using OpenBP.Application.Nodes;
 using OpenBP.Application.Notifications;
 using OpenBP.Application.Schedules;
@@ -84,6 +85,9 @@ builder.Services.AddSingleton(_ => new OAuth2Client(new HttpClient { Timeout = T
 builder.Services.AddScoped<ICredentialProvider>(sp => new PostgresCredentialProvider(new CredentialStore(
     sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>(), sp.GetRequiredService<OAuth2Client>())));
 builder.Services.AddOpenBpWebhookServices();
+// Публічні форми (F6-03): core.formTrigger і core.wait (режим form); файли — у Postgres (binary_files), ліміти — OPENBP_FORM_*.
+builder.Services.AddOpenBpFormServices(FormLimits.Parse(
+    builder.Configuration[FormLimits.MaxBodyMbKey], builder.Configuration[FormLimits.MaxFilesKey]));
 
 // Credentials (F4-01): CRUD без значень секретів, лише для admin.
 builder.Services.AddOpenBpCredentialServices();
@@ -131,7 +135,7 @@ app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
 app.MapOpenBpMetrics();
 
-app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints().MapAssistantEndpoints().MapEvaluationEndpoints();
+app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints().MapAssistantEndpoints().MapEvaluationEndpoints().MapFormEndpoints();
 app.MapWebhookEndpoints();
 app.MapOAuth2Endpoints();
 app.MapOpenBpMcp("/mcp", ApiKeyAuthenticationHandler.SchemeName);

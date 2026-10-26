@@ -67,22 +67,35 @@ public static class WorkerServiceCollectionExtensions
         if (!string.IsNullOrWhiteSpace(storage.S3.Bucket))
         {
             services.AddSingleton(sp => S3BinaryStore.Create(storage.S3, sp.GetRequiredService<TimeProvider>()));
-            services.AddSingleton<IBinaryStore>(sp =>
-            {
-                var s3 = sp.GetRequiredService<S3BinaryStore>();
-                var readers = new Dictionary<string, IBinaryStore>(StringComparer.Ordinal) { [S3BinaryStore.StorageName] = s3 };
-                if (!string.IsNullOrWhiteSpace(storage.LocalPath))
-                {
-                    readers[LocalBinaryStore.StorageName] = new LocalBinaryStore(storage.LocalPath, sp.GetRequiredService<TimeProvider>());
-                }
+        }
 
-                return new RoutingBinaryStore(s3, readers);
-            });
-        }
-        else if (!string.IsNullOrWhiteSpace(storage.LocalPath))
+        // Пише в S3 або локальну папку; читає за BinaryRef.storage — зокрема файли форм з Postgres (F6-03), які приймає Api.
+        services.AddSingleton<IBinaryStore>(sp =>
         {
-            services.AddSingleton<IBinaryStore>(sp => new LocalBinaryStore(storage.LocalPath, sp.GetRequiredService<TimeProvider>()));
-        }
+            var time = sp.GetRequiredService<TimeProvider>();
+            var readers = new Dictionary<string, IBinaryStore>(StringComparer.Ordinal)
+            {
+                [PostgresBinaryStore.StorageName] = new PostgresBinaryStore(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), time),
+            };
+            IBinaryStore writer = new UnsupportedBinaryStore();
+            if (!string.IsNullOrWhiteSpace(storage.LocalPath))
+            {
+                writer = readers[LocalBinaryStore.StorageName] = new LocalBinaryStore(storage.LocalPath, time);
+            }
+
+            if (!string.IsNullOrWhiteSpace(storage.S3.Bucket))
+            {
+                writer = readers[S3BinaryStore.StorageName] = sp.GetRequiredService<S3BinaryStore>();
+            }
+
+            if (writer is UnsupportedBinaryStore)
+            {
+                // Сховище не налаштоване: старі посилання без storage — з поясненням, що налаштувати.
+                readers[LocalBinaryStore.StorageName] = writer;
+            }
+
+            return new RoutingBinaryStore(writer, readers);
+        });
 
         services.AddOpenBpTracing(configuration);
 

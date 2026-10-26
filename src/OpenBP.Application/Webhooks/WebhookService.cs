@@ -51,7 +51,7 @@ public sealed class WebhookService(
     {
         ArgumentNullException.ThrowIfNull(request);
         var path = WebhookParameters.NormalizePath(request.Path);
-        var hook = await db.Webhooks.AsNoTracking().SingleOrDefaultAsync(w => w.Path == path, ct)
+        var hook = await db.Webhooks.AsNoTracking().SingleOrDefaultAsync(w => w.Kind == WebhookEntity.WebhookKind && w.Path == path, ct)
                    ?? throw new NotFoundException(Entity, path);
         if (!string.Equals(hook.Method, request.Method, StringComparison.OrdinalIgnoreCase))
         {

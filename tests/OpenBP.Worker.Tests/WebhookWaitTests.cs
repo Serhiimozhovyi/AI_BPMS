@@ -209,7 +209,7 @@ public sealed class WebhookWaitTests(PostgresFixture postgres)
     private static async Task<ExecutionSummary> ResumeAsync(WorkerHarness worker, string token, JsonNode? body)
     {
         await using var db = worker.Db.CreateDbContext();
-        return await new WaitResumeService(db, worker.Time ?? TimeProvider.System).ResumeAsync(token, body, CancellationToken.None);
+        return await new WaitResumeService(db, worker.Time ?? TimeProvider.System).ResumeAsync(token, body, null, CancellationToken.None);
     }
 
     /// <summary>Годинник, який тест переводить уперед; таймери — системні.</summary>

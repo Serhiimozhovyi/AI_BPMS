@@ -168,7 +168,8 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `executions` | id, workflow_id, version_id, mode, status, started_at, finished_at, heartbeat_at, error, scheduled_at (F6-06), resumed_from_execution_id (F6-08), correlation_key (F5-04, індекс `(workflow_id, correlation_key)`), parent_execution_id і parent_node_id (F6-04, підсценарій `mode = sub`; індекс за `parent_execution_id`) |
 | `execution_steps` | id, execution_id, node_id, run_index, status, input (jsonb), output (jsonb), error, started_at, finished_at, sub_steps (jsonb, F6-12: `SubStep[]` — запити до моделі й виклики інструментів агента; `null` — немає), resume_at, wait_state (jsonb) — для кроку `waiting` (F5-02) |
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
-| `webhooks` | id, workflow_id, node_id, method, path (unique) |
+| `webhooks` | id, workflow_id, node_id, method, path, kind (`webhook` — `core.webhook`, `form` — `core.formTrigger`, F6-03); унікальний `(kind, path)` |
+| `binary_files` | id (PK, 32 hex), execution_id (→ `executions`, cascade; null — ще не прив'язано), mime_type, file_name, size, sha256, content (bytea), created_at — файли, які приймає Api (поля-файли форм, F6-03), сховище `postgres` для `BinaryRef`; неприв'язані старші за добу чистить ретеншн |
 | `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01); унікальний `(execution_id, node_id)` |
 | `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
 | `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
@@ -194,6 +195,9 @@ DO UPDATE SET data = data_rows.data || EXCLUDED.data`; фільтри `where` п
 Видалення колонки прибирає її значення з рядків; ключову колонку таблиці з рядками змінити не можна.
 
 Quartz тримає власні таблиці для розкладів. Бінарні дані — у файловому сховищі (локальна папка / S3-сумісне), в jsonb лише `BinaryRef`.
+Виняток — файли, які приймає сам Api (поля-файли форм, F6-03): файлове сховище налаштоване лише у воркера, тож Api пише
+їх у `binary_files` (`PostgresBinaryStore`, `BinaryRef.storage = "postgres"`), а воркер читає такі посилання через свій
+маршрутизатор сховищ (`RoutingBinaryStore`) поряд із `local`/`s3`. Розмір обмежують ліміти форм (`OPENBP_FORM_MAX_BODY_MB`).
 
 Файлове сховище воркера — локальна папка `Storage:LocalPath` (змінна `Storage__LocalPath`; у Docker — шлях у volume):
 файл лежить у `<папка>/<рік>/<місяць>/<id>`, у `BinaryRef` — `storage: local`, `directory: рік/місяць`, `sha256`,
@@ -323,7 +327,9 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ### 10.3. REST
 
-Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}`, `/webhook/resume/{token}` (F6-01) і `/mcp` — поза префіксом.
+Префікс `/api/v1`, JSON у camelCase (`WorkflowJson.Options` для визначень). Маршрути `/webhook/{path}`, `/webhook/resume/{token}` (F6-01) і `/mcp` — поза префіксом. Публічні форми (F6-03):
+сторінка `/form/{path}` — маршрут SPA без входу й меню; дані для неї — анонімні `GET`/`POST /api/v1/forms/{path}`
+(`IFormService`; доступ задає вузол — `auth: none | login | token`).
 
 Машиночитний опис — OpenAPI 3.1 за адресою `/openapi/v1.json` (без входу, лише схеми); знімок у репозиторії —
 [`docs/openapi.json`](openapi.json), тест `OpenApiTests` звіряє його з живим документом (F4-12).
@@ -375,11 +381,12 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `GET /credentials/types` | admin | `CredentialTypeInfo[]`: тип, поля (`text`/`secret`/`url`/`secretMap`), JSON Schema (секрети — `writeOnly`) |
 | `GET /credentials` · `GET /credentials/{id}` | admin | `CredentialSummary[]` · `CredentialSummary`: `{ id, name, type, fields, createdBy, usedBy: { connectors, workflows }, error }` — `fields` лише шляхи заповнених полів (`apiKey`, `headers.Authorization`), значень немає ніколи |
 | `POST /credentials { name, type, data }` · `PATCH /credentials/{id} { name?, data? }` · `DELETE /credentials/{id}` | admin | 201 `CredentialSummary` · `CredentialSummary` (часткова заміна: ключ замінює, `null` видаляє, решта лишається; для `headers`/`env` — на рівні їхніх ключів) · 204; 400 `CREDENTIAL_INVALID` з `errors: [{ field, message }]`; 409 `CREDENTIAL_IN_USE`, якщо на credential посилається конектор або поточна версія будь-якого сценарію |
+| `GET /forms/{path}` · `POST /forms/{path}` (JSON `{ fields }` або multipart: частина `fields` + файли) | анонімно; доступ задає `auth` вузла: `login` — сесія, `token` — `X-Form-Token` або `?token=` (F6-03) | `FormDefinition` `{ kind, title, description, schema, submitLabel }` · 202 `FormSubmitted` `{ executionId, message, redirectUrl }`; `path = resume/{token}` — форма `core.wait`; 400 `FORM_INVALID` з `errors: [{ field, message }]`, 401 `FORM_LOGIN_REQUIRED` з `loginUrl`, без токена чи з чужим — 401 `UNAUTHENTICATED`, 413 `FORM_TOO_LARGE` |
 
 Помилки — RFC 9457 `application/problem+json`: `{ type, title, status, detail, code, errors? }`.
 `code` — машинний код з `OpenBpException`; `errors` — список `WorkflowValidationError` для 422; `unmapped` — для 422 `IMPORT_UNMAPPED`.
 Відображення: `NotFound` → 404, `Forbidden` → 403, не автентифіковано → 401, `Conflict` → 409,
-`WorkflowValidation` → 422, `ConnectorUnavailable` → 502, `CredentialValidation` → 400 з `errors`, помилка аргументів → 400.
+`WorkflowValidation` → 422, `ConnectorUnavailable` → 502, `CredentialValidation` → 400 з `errors`, `FormValidation` → 400 з `errors`, `FormLoginRequired` → 401 з `loginUrl`, помилка аргументів → 400.
 
 Пагінація — offset: `page` (з 1), `pageSize` (за замовчуванням 50, максимум 200);
 відповідь `{ items, page, pageSize, total }`. Сортування фіксоване: сценарії за `updated_at desc`,
@@ -445,7 +452,11 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   кроком `waiting` як `NodeResumption.Signal`; вузол кладе дані сигналу на вихід `main`, без сигналу після строку —
   вхідні items на `timeout`, до строку (рестарт) — чекає далі. Токени видаляються разом із виконанням (FK cascade); скасоване
   чи завершене виконання пробудити не можна (409 `EXECUTION_NOT_WAITING`). Форма (F6-03) будить тим самим сервісом з
-  даними форми як сигналом.
+  даними форми як сигналом: адреса режиму `form` — сторінка `OPENBP_PUBLIC_URL + /form/resume/{token}`; вузол кладе в
+  стан очікування обчислений параметр `form` (`{ title, description, schema, submitLabel, message }`), `GET
+  /api/v1/forms/resume/{token}` читає його з останнього кроку `waiting`, а `POST` після перевірки за схемою викликає
+  `IWaitResumeService.ResumeAsync(token, { json, binary }, kind: form)` — сигнал є item'ом (поля і файли). Токен `form`
+  через `/webhook/resume` не приймається (404).
 - SSE не закривається на `waiting`; MCP `run_workflow`, помічник і оцінки перестають чекати на `waiting`
   (`ExecutionStates.IsSettled`).
 

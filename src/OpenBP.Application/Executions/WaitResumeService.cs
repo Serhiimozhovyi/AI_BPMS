@@ -28,12 +28,17 @@ public sealed class WaitResumeService(OpenBpDbContext db, TimeProvider time) : I
     private const string Entity = "resumeToken";
 
     /// <inheritdoc />
-    public async Task<ExecutionSummary> ResumeAsync(string token, JsonNode? signal, CancellationToken ct)
+    public async Task<ExecutionSummary> ResumeAsync(string token, JsonNode? signal, string? kind, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
         await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
         var row = await db.ResumeTokens.SingleOrDefaultAsync(t => t.Token == token, ct).ConfigureAwait(false)
                   ?? throw new NotFoundException(Entity, token);
+        if (kind is not null && row.Kind != kind)
+        {
+            throw new NotFoundException(Entity, token);
+        }
+
         if (row.UsedAt is not null)
         {
             throw new ConflictException(TokenUsedCode, "Цю адресу пробудження вже використано: виконання продовжилось.");

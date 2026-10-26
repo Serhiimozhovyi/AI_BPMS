@@ -29,6 +29,12 @@ public static class ResumeTokens
     /// <summary>Шлях адреси пробудження після хоста: <c>/webhook/resume/{token}</c>. Шляхи тригерів <c>core.webhook</c> з цим префіксом заборонені.</summary>
     public const string PathPrefix = "webhook/resume";
 
+    /// <summary>
+    /// Шлях сторінки форми режиму <c>form</c> після хоста: <c>/form/resume/{token}</c> (F6-03). Шляхи тригерів
+    /// <c>core.formTrigger</c> з префіксом <c>resume</c> заборонені.
+    /// </summary>
+    public const string FormPathPrefix = "form/resume";
+
     /// <summary>Довжина токена в байтах до base64url.</summary>
     private const int TokenBytes = 32;
 
@@ -58,14 +64,16 @@ public static class ResumeTokens
 
     /// <summary>
     /// Публічна адреса пробудження: <paramref name="publicUrl"/> (<c>OPENBP_PUBLIC_URL</c>, без <c>/</c> в кінці) +
-    /// <c>/webhook/resume/{token}</c>; без публічної адреси — відносний шлях (у листі він не спрацює: задайте змінну для воркера).
+    /// <c>/webhook/resume/{token}</c> (режим <c>webhook</c>) або сторінка <c>/form/resume/{token}</c> (режим <c>form</c>);
+    /// без публічної адреси — відносний шлях (у листі він не спрацює: задайте змінну для воркера).
     /// </summary>
     /// <param name="publicUrl">Публічна адреса OpenBP або <c>null</c>.</param>
     /// <param name="token">Токен.</param>
-    public static string UrlFor(string? publicUrl, string token)
+    /// <param name="kind"><see cref="WebhookKind"/> або <see cref="FormKind"/>.</param>
+    public static string UrlFor(string? publicUrl, string token, string kind = WebhookKind)
     {
         ArgumentException.ThrowIfNullOrEmpty(token);
-        var path = $"/{PathPrefix}/{token}";
+        var path = $"/{(kind == FormKind ? FormPathPrefix : PathPrefix)}/{token}";
         return string.IsNullOrWhiteSpace(publicUrl) ? path : publicUrl.TrimEnd('/') + path;
     }
 
@@ -108,7 +116,7 @@ public static class ResumeTokens
                 added = true;
             }
 
-            urls[nodeId] = UrlFor(publicUrl, token);
+            urls[nodeId] = UrlFor(publicUrl, token, kind!);
         }
 
         if (added)

@@ -53,6 +53,8 @@ OIDC-провайдери задаються не в `.env`, а в `oidc.env` з
 | `OPENBP_MAX_EXECUTION_TIMEOUT_SEC` | `3600` | api, worker | Межа таймауту виконання сценарію, с. Таймаут у налаштуваннях сценарію не може її перевищити. |
 | `OPENBP_DATA_TABLE_MAX_ROWS` | `100000` | api, worker | Найбільше рядків в одній таблиці даних (F6-11). Понад ліміт — помилка `DATA_TABLE_ROW_LIMIT`. |
 | `OPENBP_DATA_TABLE_MAX_ROW_BYTES` | `65536` | api, worker | Найбільший розмір рядка таблиці даних у JSON, байт. |
+| `OPENBP_FORM_MAX_BODY_MB` | `10` | api | Найбільший розмір надсилання форми (`/api/v1/forms/...`, F6-03), МБ. Понад ліміт — 413 `FORM_TOO_LARGE`. Файли форм зберігаються в Postgres (`binary_files`). |
+| `OPENBP_FORM_MAX_FILES` | `10` | api | Найбільше файлів в одному надсиланні форми. Понад ліміт — 400 `FORM_INVALID`. |
 | `OPENBP_EXECUTION_RETENTION_DAYS` | `30` | api | Завершені виконання, старші за N днів, видаляються. `0` — не видаляти. |
 | `OPENBP_AUDIT_RETENTION_DAYS` | `365` | api | Записи журналу аудиту, старші за N днів, видаляються тим самим job'ом. `0` — не видаляти. |
 | `OPENBP_EXECUTION_RETENTION_CRON` | `0 0 3 * * ?` | api | Розклад очищення: Quartz cron або 5 полів crontab, час `TZ`. |

@@ -198,20 +198,22 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 ```
 
 - Версія 3 (`typeVersion: 3`, палітра пропонує її для нових вузлів, F6-01): режими `duration` і `until` як у версії 2 плюс
-  пробудження зовні — `mode: "webhook"` (чекати `POST` на адресу пробудження) і `mode: "form"` (чекати надіслану форму за
-  тією ж адресою; сторінку форми дає F6-03). Виходи — `main` і `timeout`: дані, що розбудили вузол, ідуть на `main`
+  пробудження зовні — `mode: "webhook"` (чекати `POST` на адресу пробудження) і `mode: "form"` (чекати, доки людина
+  надішле форму на сторінці за адресою пробудження, F6-03, — див. «Форми» нижче). Виходи — `main` і `timeout`: дані, що розбудили вузол, ідуть на `main`
   (об'єкт — один item, масив об'єктів — item на елемент, інше — `{ "body": … }`), а коли минув `maxWaitSec` (секунди,
   типово і не більше 90 днів) без відповіді — вхідні items ідуть на `timeout`. Режими за часом вихід `timeout` не
   використовують. Поки вузол чекає, виконання у стані `waiting`, воркер вільний; воркер може впасти й піднятися — сигнал
   не губиться.
-- Адреса пробудження — `POST /webhook/resume/{token}` з одноразовим випадковим токеном на пару (виконання, вузол).
+- Адреса пробудження — `POST /webhook/resume/{token}` (режим `webhook`) або сторінка `/form/resume/{token}` (режим
+  `form`) з одноразовим випадковим токеном на пару (виконання, вузол).
   Воркер видає токени на старті виконання, тож адресу можна вставити в лист чи повідомлення **до** вузла очікування:
   `$execution.resumeUrl` — коли такий вузол у сценарії один, `$execution.resumeUrls["Назва вузла"]` — за назвою вузла (з
   кількома вузлами `resumeUrl` не визначений). Адреса будується з `OPENBP_PUBLIC_URL` (docs/admin/env.md; змінна потрібна й
   воркеру). Тіло запиту (JSON, форма або текст) стає виходом вузла. Відповідь `202 { executionId }`; невідомий токен — 404;
   повторний запит, завершене чи скасоване виконання, інший вузол, що чекає, або строк, що вже вийшов — 409
-  (`RESUME_TOKEN_USED`, `EXECUTION_NOT_WAITING`, `NODE_NOT_WAITING`). Шляхи тригерів `core.webhook` не можуть починатися з
-  `resume/`.
+  (`RESUME_TOKEN_USED`, `EXECUTION_NOT_WAITING`, `NODE_NOT_WAITING`). Токен режиму `form` через `/webhook/resume` не
+  приймається (404): дані форми проходять перевірку за її схемою. Шляхи тригерів `core.webhook` і `core.formTrigger` не
+  можуть починатися з `resume/`.
 
 ```json
 { "id": "n_mail", "name": "Лист", "type": "mcp.tool", "typeVersion": 1, "position": [200, 0],
@@ -221,6 +223,54 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 ```
 
 У `openbp run` (CLI) HTTP-сервера немає: очікування `webhook`/`form` перемотується до `maxWaitSec` і йде виходом `timeout`.
+
+### Форми (`core.formTrigger`, `core.wait` у режимі `form`)
+
+Публічна сторінка з полями за JSON Schema (F6-03): людина заповнює форму в браузері, сценарій отримує дані.
+
+```json
+{ "id": "n_form", "name": "Заява", "type": "core.formTrigger", "typeVersion": 1, "position": [0, 0],
+  "parameters": {
+    "path": "hr/leave", "title": "Заява на відпустку", "description": "Заповніть за тиждень до відпустки.",
+    "schema": { "type": "object", "required": ["name", "days"], "properties": {
+      "name": { "type": "string", "title": "ПІБ", "minLength": 2 },
+      "days": { "type": "integer", "title": "Днів", "minimum": 1, "maximum": 28 },
+      "kind": { "type": "string", "title": "Вид", "enum": ["annual", "unpaid"] },
+      "scan": { "type": "string", "format": "binary", "title": "Скан заяви" } } },
+    "submitLabel": "Надіслати заяву", "auth": "none", "onSubmit": { "message": "Дякуємо, заяву прийнято" } } }
+```
+
+- `core.formTrigger` — тригер: при активації шлях `path` реєструється (таблиця `webhooks`, `kind = form`), сторінка —
+  `/form/{path}` (без меню застосунку). Шлях — сталий рядок як у `core.webhook`, унікальний серед активних форм
+  (`WEBHOOK_PATH_CONFLICT`); той самий шлях у `core.webhook` — інша адреса, конфлікту немає. `schema` має бути
+  коректною JSON Schema з `type: object` — інакше активація дає `PARAMETER_INVALID` на `/parameters/schema`.
+- Поля (`schema.properties`): `string` (формати `email`, `date`, `date-time`, `uri`, `textarea` — багаторядкове, `binary` —
+  файл), `number`, `integer`, `boolean` — прапорець, `enum` або `oneOf` з `const`/`title` — список, масив з `items.enum` —
+  кілька значень. `title` — підпис, `description` — підказка, `required`, `minLength`/`maxLength`, `minimum`/`maximum`,
+  `pattern` перевіряються і на сторінці, і на сервері. Порожні поля вважаються незаповненими.
+- `auth`: `none` (типово) — будь-хто за посиланням; `login` — лише користувач OpenBP (без сесії сторінка веде на вхід і
+  повертає на форму); `token` — посилання `/form/{path}?token=…`, значення токена — у credential типу `form.token`
+  (`credentialId`); без токена чи з чужим — 401.
+- `onSubmit`: `message` — текст після надсилання (типово «Дякуємо! Форму надіслано.»), `redirectUrl` — перейти на адресу
+  `http(s)://…`.
+- Item тригера: `{ "fields": { … }, "submittedAt": "ISO 8601", "submittedBy"?: { "id", "email" } }` (`submittedBy` — коли
+  надсилав користувач OpenBP). Файл з поля `format: binary` — у `binary` під назвою поля (`BinaryRef` зі сховищем
+  `postgres`), у `fields` — назва файлу; один файл на поле. Ліміти сервера — розмір тіла (`OPENBP_FORM_MAX_BODY_MB`,
+  типово 10) і кількість файлів (`OPENBP_FORM_MAX_FILES`, типово 10), docs/admin/env.md.
+- `core.wait` v3 з `mode: "form"` показує ту саму сторінку за `$execution.resumeUrl` (`/form/resume/{token}`); що на ній —
+  параметр `form`: `{ "title", "description", "schema", "submitLabel", "message" }` (вирази обчислюються, коли виконання
+  доходить до вузла; без `title` — назва вузла, без `schema` — лише кнопка). Надіслана форма будить виконання: на вихід
+  `main` іде item з тими самими `fields`, `submittedAt`, `submittedBy?` і `binary`. Сторінка вже надісланої форми каже
+  «вже надіслано», неактуальної — «процес завершено або строк вийшов».
+
+```json
+{ "id": "n_wait", "name": "Погодження", "type": "core.wait", "typeVersion": 3, "position": [400, 0],
+  "parameters": { "mode": "form", "maxWaitSec": 259200, "form": {
+    "title": "Погодьте заявку {{ $json.id }}", "submitLabel": "Погодити", "message": "Рішення записано",
+    "schema": { "type": "object", "required": ["decision"], "properties": {
+      "decision": { "type": "string", "title": "Рішення", "oneOf": [ { "const": "approve", "title": "Погодити" }, { "const": "reject", "title": "Відхилити" } ] },
+      "comment": { "type": "string", "format": "textarea", "title": "Коментар" } } } } } }
+```
 
 Чекати не часу, а події в зовнішній системі (задачу закрили, оплата надійшла) — `mcp.waitFor` (F5-03): перевіряє умову
 над відповіддю tool'а конектора з інтервалом, між перевірками виконання теж у `waiting`; виходи `done` і `timeout`

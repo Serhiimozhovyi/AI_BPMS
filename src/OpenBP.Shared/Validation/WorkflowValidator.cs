@@ -36,6 +36,7 @@ public sealed class WorkflowValidator
     {
         "core.manualTrigger",
         "core.webhook",
+        "core.formTrigger",
         "core.schedule",
         "mcp.poll",
         "mcp.subscribe",

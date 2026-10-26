@@ -30,7 +30,7 @@ public static class WebhookEndpoints
         app.MapPost("/" + ResumeTokens.PathPrefix + "/{token}", ResumeAsync).AllowAnonymous()
             .WithTags(OpenApiSetup.Tags.Webhooks).WithSummary("Розбудити виконання, що чекає у вузлі core.wait (режим webhook)")
             .WithDescription("`token` — з `$execution.resumeUrl` сценарію, одноразовий. Тіло (JSON, форма або текст) стає виходом вузла очікування. " +
-                "404 — невідомий токен; 409 — токен уже використано (`RESUME_TOKEN_USED`), виконання не чекає (`EXECUTION_NOT_WAITING`) або чекає інший вузол (`NODE_NOT_WAITING`).")
+                "404 — невідомий токен (або токен форми: її надсилають зі сторінки `/form/resume/{token}`); 409 — токен уже використано (`RESUME_TOKEN_USED`), виконання не чекає (`EXECUTION_NOT_WAITING`) або чекає інший вузол (`NODE_NOT_WAITING`).")
             .Produces<WebhookAccepted>(StatusCodes.Status202Accepted);
         app.MapMethods("/webhook/{**path}", Methods, HandleAsync).AllowAnonymous()
             .WithTags(OpenApiSetup.Tags.Webhooks).WithSummary("Запустити активний сценарій з тригером core.webhook")
@@ -92,7 +92,7 @@ public static class WebhookEndpoints
     private static async Task<IResult> ResumeAsync(string token, HttpContext http, IWaitResumeService resume)
     {
         var body = await ReadBodyAsync(http.Request, http.RequestAborted);
-        var execution = await resume.ResumeAsync(token, body, http.RequestAborted);
+        var execution = await resume.ResumeAsync(token, body, ResumeTokens.WebhookKind, http.RequestAborted);
         return Results.Accepted(null, new WebhookAccepted(execution.Id));
     }
 

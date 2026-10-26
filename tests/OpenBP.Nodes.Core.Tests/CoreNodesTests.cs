@@ -18,6 +18,9 @@ public class CoreNodesTests
         { "core.webhook", """{"path":"telegram-in"}""" },
         { "core.webhook", """{"method":"GET","path":"orders/new","auth":{"type":"header","credentialId":"cred_1","headerName":"X-Token"}}""" },
         { "core.webhook", """{"method":"POST","path":"a.b~c_d-1","auth":{"type":"basic","credentialId":"cred_1"}}""" },
+        { "core.formTrigger", """{"path":"leave","title":"Відпустка","schema":{"type":"object","properties":{"days":{"type":"integer"}}}}""" },
+        { "core.formTrigger", """{"path":"hr/in","title":"T","schema":{},"auth":"token","credentialId":"cred_1","onSubmit":{"redirectUrl":"https://example.com/thanks"}}""" },
+        { "core.formTrigger", """{"path":"x","title":"T","schema":{},"auth":"login","onSubmit":{"message":"Дякуємо"},"submitLabel":"Відправити"}""" },
         { "core.schedule", """{"cron":"0 7 * * 1-5"}""" },
         { "core.schedule", """{"cron":"0 0 7 ? * MON-FRI","timezone":"Europe/Kyiv"}""" },
         { "core.set", """{"fields":[{"name":"order.customer","value":"{{ $json.name }}"}],"keepOnlySet":false}""" },
@@ -45,6 +48,11 @@ public class CoreNodesTests
         { "core.webhook", """{"path":"x","method":"OPTIONS"}""" },
         { "core.webhook", """{"path":"x","auth":{"type":"jwt","credentialId":"c"}}""" },
         { "core.webhook", """{"path":"x","auth":{"type":"header"}}""" },
+        { "core.formTrigger", """{"path":"x","schema":{}}""" },
+        { "core.formTrigger", """{"path":"x","title":"T"}""" },
+        { "core.formTrigger", """{"path":"x","title":"T","schema":{},"auth":"token"}""" },
+        { "core.formTrigger", """{"path":"x","title":"T","schema":{},"auth":"basic","credentialId":"c"}""" },
+        { "core.formTrigger", """{"path":"x","title":"T","schema":{},"onSubmit":{"redirectUrl":"javascript:alert(1)"}}""" },
         { "core.schedule", "{}" },
         { "core.schedule", """{"cron":""}""" },
         { "core.schedule", """{"cron":"0 7 * * *","timezone":""}""" },
@@ -75,7 +83,7 @@ public class CoreNodesTests
             registry.Register(node);
         }
 
-        string[] expected = ["core.manualTrigger", "core.webhook", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable", "core.decisionTable", "core.workflowTrigger", "core.executeWorkflow", "core.respondToWebhook"];
+        string[] expected = ["core.manualTrigger", "core.webhook", "core.formTrigger", "core.schedule", "core.errorTrigger", "core.set", "core.if", "core.switch", "core.merge", "core.loop", "core.wait", "core.code", "core.dataTable", "core.decisionTable", "core.workflowTrigger", "core.executeWorkflow", "core.respondToWebhook"];
         Assert.Equal(expected.Order(), registry.Descriptors.Select(d => d.Type).Distinct().Order());
         foreach (var type in expected)
         {
@@ -88,6 +96,7 @@ public class CoreNodesTests
 
         Assert.True(registry.Resolve("core.manualTrigger", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.webhook", 1).Descriptor.IsTrigger);
+        Assert.True(registry.Resolve("core.formTrigger", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.schedule", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.errorTrigger", 1).Descriptor.IsTrigger);
         Assert.True(registry.Resolve("core.workflowTrigger", 1).Descriptor.IsTrigger);

@@ -411,11 +411,43 @@ public sealed class JobEntity
 
 public sealed class WebhookEntity
 {
+    /// <summary>Тригер HTTP-запиту <c>core.webhook</c>: адреса <c>/webhook/{path}</c>.</summary>
+    public const string WebhookKind = "webhook";
+
+    /// <summary>Тригер форми <c>core.formTrigger</c> (F6-03): сторінка <c>/form/{path}</c>.</summary>
+    public const string FormKind = "form";
+
     public Guid Id { get; set; }
     public Guid WorkflowId { get; set; }
     public string NodeId { get; set; } = "";
     public string Method { get; set; } = "POST";
     public string Path { get; set; } = "";
+
+    /// <summary><see cref="WebhookKind"/> або <see cref="FormKind"/>; шлях унікальний у межах виду.</summary>
+    public string Kind { get; set; } = WebhookKind;
+}
+
+/// <summary>
+/// Файл, який прийняв Api (F6-03: поля-файли форм), у Postgres — сховище <c>postgres</c> для <c>BinaryRef</c>. Воркер
+/// читає його так само, як файли інших сховищ; видаляється разом із виконанням (<see cref="ExecutionId"/>, cascade).
+/// </summary>
+public sealed class BinaryFileEntity
+{
+    /// <summary>Ключ (<c>BinaryRef.id</c>): 32 hex-символи випадкового Guid.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>Виконання, якому належить файл; <c>null</c> — щойно завантажено, виконання ще не створено.</summary>
+    public Guid? ExecutionId { get; set; }
+
+    public string MimeType { get; set; } = "application/octet-stream";
+    public string? FileName { get; set; }
+    public long Size { get; set; }
+
+    /// <summary>SHA-256 вмісту, hex у нижньому регістрі.</summary>
+    public string Sha256 { get; set; } = "";
+
+    public byte[] Content { get; set; } = [];
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 /// <summary>

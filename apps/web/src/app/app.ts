@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { ProjectContextService } from './projects/project-context.service';
 import { NO_GROUP } from './workflows/workflow-groups';
@@ -19,6 +21,14 @@ export class App {
   protected readonly user = this.auth.user;
   protected readonly projects = inject(ProjectContextService);
   protected readonly sharedSpace = NO_GROUP;
+  /** Публічна форма (`/form/…`, F6-03) — без шапки й меню застосунку. */
+  protected readonly bare = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map((e) => isBareUrl(e.urlAfterRedirects)),
+    ),
+    { initialValue: isBareUrl(typeof location === 'undefined' ? '' : location.pathname) },
+  );
 
   constructor() {
     // Проєкти (F6-14) залежать від користувача: після входу — перечитати, після виходу — забути.
@@ -43,4 +53,9 @@ export class App {
       },
     });
   }
+}
+
+/** Сторінки без шапки й меню: публічна форма. */
+export function isBareUrl(url: string): boolean {
+  return url.startsWith('/form/');
 }

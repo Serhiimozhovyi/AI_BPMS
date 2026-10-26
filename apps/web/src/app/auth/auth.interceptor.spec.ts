@@ -29,6 +29,16 @@ describe('authInterceptor', () => {
     expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/workflows/abc' } });
   });
 
+  it('401 від публічної форми не перенаправляє: це вирішує сторінка форми (F6-03)', async () => {
+    const { http, controller, navigate, auth } = setup('/form/leave');
+    const request = firstValueFrom(http.get('/api/v1/forms/leave'));
+    controller.expectOne('/api/v1/forms/leave').flush({ code: 'UNAUTHENTICATED' }, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(request).rejects.toMatchObject({ status: 401 });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(auth.user()).not.toBeNull();
+  });
+
   it.each(['/api/v1/auth/login', '/api/v1/auth/me'])('401 на %s не перенаправляє', async (url) => {
     const { http, controller, navigate, auth } = setup();
     const request = firstValueFrom(http.post(url, {}));
