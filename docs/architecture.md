@@ -147,7 +147,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 
 ## 5. Вирази і Code-вузол
 
-- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$vars` (змінні інстансу з таблиці `variables`, F6-09; невідомий ключ — `undefined`), `$execution.id`, `$execution.resumeUrl` / `$execution.resumeUrls["Назва"]` (адреси пробудження вузлів `core.wait` у режимі `webhook`/`form`, F6-01; `ExecutionRequest.ResumeUrls` → `ExpressionScope.ResumeUrls`).
+- Синтаксис `{{ <js> }}` у будь-якому рядковому параметрі. Змінні: `$json`, `$binary` (F3-23: файли поточного item'а — `BinaryRef` без байтів, `{}` якщо файлів немає), `$input`, `$node["Назва"].json` і `.binary`, `$now`, `$env` (лише дозволені), `$vars` (змінні інстансу з таблиці `variables`, F6-09; невідомий ключ — `undefined`), `$execution.id`, `$execution.resumeUrl` / `$execution.resumeUrls["Назва"]` (адреси пробудження вузлів `core.wait` у режимі `webhook`/`form`, F6-01; `ExecutionRequest.ResumeUrls` → `ExpressionScope.ResumeUrls`), `$execution.taskUrl` / `$execution.taskUrls["Назва"]` (картки задач `/tasks/{token}` вузлів `core.approval`, F6-02; `ExecutionRequest.TaskUrls` → `ExpressionScope.TaskUrls`).
 - Обчислення — Jint з лімітами: 50 мс, 16 МБ, глибина рекурсії 64, без `require`, без доступу до CLR. Code-вузол: ті ж обмеження, ліміт 5 с.
 - Code-вузол (`core.code`, F3-30): `$json`, `$index` (eachItem) або `items` (allItems), а також `$node["Назва"].json` (як у
   виразах: item з тим самим індексом або перший) і `$node["Назва"].all` (усі items) — копії виходів, лише читання;
@@ -186,7 +186,8 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `jobs` | id, kind, payload (jsonb), run_at, locked_by, locked_at, attempts |
 | `webhooks` | id, workflow_id, node_id, method, path, kind (`webhook` — `core.webhook`, `form` — `core.formTrigger`, F6-03); унікальний `(kind, path)` |
 | `binary_files` | id (PK, 32 hex), execution_id (→ `executions`, cascade; null — ще не прив'язано), mime_type, file_name, size, sha256, content (bytea), created_at — файли, які приймає Api (поля-файли форм, F6-03), сховище `postgres` для `BinaryRef`; неприв'язані старші за добу чистить ретеншн |
-| `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01); унікальний `(execution_id, node_id)` |
+| `resume_tokens` | token (PK, base64url 32 байти), execution_id (→ `executions`, cascade), node_id, kind (`webhook`/`form`/`task`), created_at, used_at — одноразові адреси пробудження `core.wait` v3 (F6-01) і токени задач `core.approval` (`task`, F6-02); унікальний `(execution_id, node_id)` |
+| `tasks` | id, execution_id (→ `executions`, cascade), workflow_id, node_id, token (з `resume_tokens`, унікальний), title, description, decisions (jsonb `[{ key, label }]`), fields (jsonb, JSON Schema), status (`open`/`done`/`expired`/`cancelled`), assignee_user_id, assignee_role, assignee_value (email або зовнішній id), escalated_at, decision, data (jsonb), completed_by_user_id, completed_by_api_key_id, created_at, due_at, completed_at, cancelled_by_execution_id — задачі `core.approval` (F6-02); унікальний `(execution_id, node_id)`, індекси `(status, assignee_user_id)`, `created_at`. Пише `PostgresExecutionStore.SaveStepAsync` через `TaskSync` тією ж транзакцією, що й крок: `waiting` з `wait_state.task` — створити/оновити виконавця (ескалація), `cancelled` — `cancelled`, інший крок вузла — `expired`; `ExecutionWaits.CloseAsync` закриває відкриті задачі виконання (`cancelled`, `cancelled_by_execution_id`); рішення — `ITaskService.CompleteAsync`; ретеншн і видалення сценарію чистять разом із виконанням |
 | `execution_stages` | execution_id + stage_id (PK), position, name, status (`pending`/`active`/`done`/`skipped`/`cancelled`), entered_at, due_at, exited_at (F7-02, ADR-004 §2; індекс `due_at` для `active`). Пише `PostgresExecutionStore` як `IStageStore` (заміна всіх рядків виконання однією транзакцією); ретеншн і видалення сценарію чистять разом із кроками. `GET /executions/{id}` віддає `stages[]` з `overdue`; для фінального виконання `pending` → `skipped`, `active` → `cancelled` (`done` після успіху) — так узгоджується скасування без воркера |
 | `violations` | id, execution_id, stage_id, rule_id, workflow_version_id, mode (`block`/`warn`), status (`open`/`resolved`/`overridden`), message, actor_user_id, actor_system (`engine`), reason, context jsonb (items переходу після scrubbing), created_at, resolved_at (F7-03, ADR-004 §3; індекси (execution_id, stage_id, rule_id) і execution_id для `open`). Пише `PostgresExecutionStore.SaveRuleChecksAsync`: невиконане правило відкриває порушення (одне відкрите на правило), виконане закриває (`resolved`); `POST /executions/{id}/overrides` переводить у `overridden` з автором і причиною й будить job виконання, що чекає на `block`. Кожна зміна — `violation.opened/resolved/overridden` в `audit_log` (`entity_type = execution`). `GET /executions/{id}` віддає `violations[]`, а `GET /executions/{id}/violations` — той самий список окремо (F7-04); `GET /executions?hasOpenViolations=true|false` фільтрує за наявністю `open`, «Огляд» (`openViolations`) рахує виконання з відкритими порушеннями; ретеншн і видалення сценарію чистять разом із кроками |
 | `webhook_responses` | execution_id (PK), status_code, headers (jsonb), body (bytea), created_at — відповідь webhook-у з воркера (F6-05, §10.5) |
@@ -235,7 +236,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ## 7. Frontend (Angular)
 
-- Standalone-компоненти, Signals, роутинг: `/` («Огляд», F6-07), `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tables` (таблиці даних, F6-11), `/connectors`, `/credentials`, `/settings`.
+- Standalone-компоненти, Signals, роутинг: `/` («Огляд», F6-07), `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tasks` і `/tasks/:id` (задачі погодження, F6-02; картка — і за токеном з `$execution.taskUrl`), `/tables` (таблиці даних, F6-11), `/connectors`, `/credentials`, `/settings`.
 - Вхід (F3-24): `/login` (email + пароль, `POST /auth/login`, cookie-сесія); решта маршрутів — під guard'ом, який перевіряє сесію через `GET /auth/me` і без неї веде на `/login?returnUrl=…` (лише шлях усередині застосунку). 401 від Api посеред роботи — теж на `/login` з поверненням; «Вийти» — `POST /auth/logout`.
 - Канвас — обраний у спайку фази 2 (ngx-vflow або Rete.js); обгорнутий у власний компонент `CanvasComponent`, щоб бібліотеку можна було замінити.
 - Форма вузла — ngx-formly з JSON Schema; для `mcp.tool` схема береться з `tools_cache`.
@@ -257,7 +258,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   API-ключ створено, відкликано; змінну задано, видалено; таблицю даних створено, змінено, видалено. Запит з API-ключем
   несе claim `api_key_id`, тож у записі видно, через який ключ (REST чи MCP) зроблено зміну. Читає лише admin
   (`GET /audit`, блок у `/settings`); записи старші за `OPENBP_AUDIT_RETENTION_DAYS` (типово 365) видаляє job F4-07.
-  Користувачів, ролей, проєктів і задач F6-02 ще немає — їхні дії додаються разом із цими функціями.
+  Користувачів, ролей і проєктів ще немає — їхні дії додаються разом із цими функціями. Рішення задач F6-02 журнал аудиту
+  не пише: хто і коли вирішив — у самій задачі (`completed_by_user_id`, `completed_by_api_key_id`, `completed_at`).
 - Сповіщення адміністратору (F6-07): подію пише той, хто її помітив, через `db.Notify(...)` у тій самій транзакції
   (воркер — помилку виконання з тригера; запобіжник `disableAfterErrors` — вимкнення сценарію; `ConnectorService` —
   перехід конектора в `error`; `OpsWatchdog` у Api — воркер без heartbeat понад 2 хв і невдалий чи застарілий бекап,
@@ -399,6 +401,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `GET /credentials` · `GET /credentials/{id}` | admin | `CredentialSummary[]` · `CredentialSummary`: `{ id, name, type, fields, createdBy, usedBy: { connectors, workflows }, error }` — `fields` лише шляхи заповнених полів (`apiKey`, `headers.Authorization`), значень немає ніколи |
 | `POST /credentials { name, type, data }` · `PATCH /credentials/{id} { name?, data? }` · `DELETE /credentials/{id}` | admin | 201 `CredentialSummary` · `CredentialSummary` (часткова заміна: ключ замінює, `null` видаляє, решта лишається; для `headers`/`env` — на рівні їхніх ключів) · 204; 400 `CREDENTIAL_INVALID` з `errors: [{ field, message }]`; 409 `CREDENTIAL_IN_USE`, якщо на credential посилається конектор або поточна версія будь-якого сценарію |
 | `GET /forms/{path}` · `POST /forms/{path}` (JSON `{ fields }` або multipart: частина `fields` + файли) | анонімно; доступ задає `auth` вузла: `login` — сесія, `token` — `X-Form-Token` або `?token=` (F6-03) | `FormDefinition` `{ kind, title, description, schema, submitLabel }` · 202 `FormSubmitted` `{ executionId, message, redirectUrl }`; `path = resume/{token}` — форма `core.wait`; 400 `FORM_INVALID` з `errors: [{ field, message }]`, 401 `FORM_LOGIN_REQUIRED` з `loginUrl`, без токена чи з чужим — 401 `UNAUTHENTICATED`, 413 `FORM_TOO_LARGE` |
+| `GET /tasks?scope=mine\|all&status&workflowId&executionId&page&pageSize` · `GET /tasks/{id}` · `POST /tasks/{id}/complete { decision, data? }` | viewer; `scope=all` — admin; картка і рішення — admin, виконавець (користувач, його email чи роль) або для зовнішньої задачі (Telegram id) editor (F6-02) | `PageResult<TaskSummary>` · `TaskDetail` `{ task, description, decisions, fields, data, completedBy, cancelledByExecutionId }` · `TaskDetail`; `{id}` — id або токен з `$execution.taskUrl`; 400 `TASK_DECISION_INVALID`, 400 `FORM_INVALID` з `errors`, 403 `TASK_FORBIDDEN`, 409 `TASK_CLOSED` (і 409 виконання, що не чекає) |
 
 Помилки — RFC 9457 `application/problem+json`: `{ type, title, status, detail, code, errors? }`.
 `code` — машинний код з `OpenBpException`; `errors` — список `WorkflowValidationError` для 422; `unmapped` — для 422 `IMPORT_UNMAPPED`.
@@ -454,7 +457,16 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   (`ExecutionWaits.CloseAsync` + закриття в движку) переводить відкриті задачі виконання в `cancelled` і пише
   `cancelled_by_execution_id` — id виконання, чиє завершення чи скасування їх закрило; задачі вузлів зі скасованої гілки
   `core.merge` `any`/`count` закриваються так само в момент скасування гілки. Задача не може лишитись `open` у
-  завершеному виконанні — F6-02 додає це до тесту інваріанту.
+  завершеному виконанні — тест інваріанту F6-02 (`ApprovalWaitTests`). Реалізація: движок пише кроки `cancelled`
+  (`BRANCH_CANCELLED`, `WAIT_CLOSED`) через `SaveStepAsync`, а `TaskSync` тією ж транзакцією закриває задачу вузла.
+- Задачі погодження (F6-02, `core.approval`): воркер створює токен виду `task` так само, як для `core.wait`, і передає
+  адреси `OPENBP_PUBLIC_URL + /tasks/{token}` у `ExecutionRequest.TaskUrls` (`$execution.taskUrl(s)`). Вузол призупиняється
+  до `maxWaitSec` зі станом `{ deadline, escalated, task: { title, description, decisions, fields, assignee, escalateTo } }`;
+  крок `waiting` створює запис `tasks`. `POST /tasks/{id}/complete` → `ITaskService.CompleteAsync` однією транзакцією:
+  права, ключ рішення, дані за `fields`, `status = done`, потім `IWaitResumeService.ResumeAsync` (вид `task`; у спільній
+  транзакції) з сигналом `{ decision, data, completedBy, completedAt }` — вузол віддає item на вихід рішення. Пробудження
+  за строком без сигналу: з `escalateTo` — новий виконавець і ще `maxWaitSec`, інакше вихід `timeout` і задача `expired`.
+  Токен задачі не приймає `POST /webhook/resume/{token}` (404).
 - `executionTimeoutSec` рахується на кожен прохід окремо, тож час у `waiting` не входить. Ліміт `concurrency` (F6-06)
   `waiting` не рахує; `correlation.skipIfActive` (F5-04) — рахує як активне.
 - Пробудження зовні (F6-01, `core.wait` v3 у режимі `webhook`/`form`): перед стартом графа воркер створює в

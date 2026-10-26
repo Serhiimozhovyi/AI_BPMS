@@ -277,6 +277,44 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 (docs/connectors.md §3.1). Різниця з `core.wait` у режимі `webhook`: там умову перевіряє сам сценарій через tool, тут
 зовнішня система чи людина викликає OpenBP.
 
+### Погодження (`core.approval`)
+
+Людська задача з рішенням (F6-02). Вузол створює задачу (таблиця `tasks`), чекає, не тримаючи воркер (як `core.wait` у
+режимі `webhook`), і продовжує виконання виходом прийнятого рішення.
+
+- Параметри: `title` (обов'язковий), `description`, `decisions: [{ key, label }]` (до 8; типово `approve` «Погодити» і
+  `reject` «Відхилити»), `fields` — JSON Schema даних до рішення (коментар тощо; ті самі типи полів, що в
+  `core.formTrigger`, без файлів), `assignee` — рівно одне з `userId` (користувач OpenBP), `role` (`viewer` | `editor` |
+  `admin` — усі з цією роллю або вищою) чи `expression` (email користувача OpenBP або зовнішній id, напр. Telegram id;
+  можна вираз), `maxWaitSec` (до 90 днів, типово 90 днів), `escalateTo` — виконавець тієї ж форми. Вирази в
+  `title`/`description`/`fields`/`assignee` обчислюються, коли виконання доходить до вузла.
+- Виходи фіксовані: `timeout` (індекс 0), далі `decision0…decision7` — рішення `i` веде на вихід `i + 1`, тож індекси
+  не зсуваються, коли рішення додають чи прибирають; канвас показує `timeout` і по порту на рішення.
+- Рішення: item `{ "decision": "approve", "data": { …за fields }, "completedBy": { "id", "email" } | null, "completedAt" }`.
+- Строк `maxWaitSec` вийшов без рішення: з `escalateTo` задача один раз переходить до нового виконавця ще на такий самий
+  строк (позначка «ескалація»), без нього або після ескалації — вхідні items ідуть на вихід `timeout`, задача стає
+  `expired`.
+- Де людина приймає рішення: сторінка `/tasks` (мої задачі, усі — для admin) і картка `/tasks/{id}`; посилання на картку
+  для листа чи повідомлення — `$execution.taskUrl` (один такий вузол у сценарії) або `$execution.taskUrls["Назва вузла"]`,
+  відоме ще до вузла; без входу сторінка веде на `/login` і повертає на картку. Кнопки в Telegram робить сам сценарій
+  через конектор: `callback_data` — токен з кінця `taskUrl`, обробник викликає `POST /api/v1/tasks/{token}/complete`
+  з API-ключем ролі editor (зовнішню задачу закриває editor і вище). Те саме — MCP-tools `list_tasks`, `get_task`,
+  `complete_task` (docs/mcp-server.md).
+- Права: admin бачить і закриває всі задачі; решта — свої (виконавець — вони, їхній email або їхня роль). Повторне
+  рішення — 409 `TASK_CLOSED`.
+- Завершення або скасування виконання, як і скасування гілки `core.merge` `any`/`count`, закриває відкриту задачу
+  статусом `cancelled` (ADR-004 §5).
+
+```json
+{ "id": "n_appr", "name": "Погодження знижки", "type": "core.approval", "typeVersion": 1, "position": [400, 0],
+  "parameters": { "title": "Знижка {{ $json.discount }}% для {{ $json.client }}", "assignee": { "expression": "{{ $json.managerEmail }}" },
+    "maxWaitSec": 86400, "escalateTo": { "role": "admin" },
+    "fields": { "type": "object", "properties": { "comment": { "type": "string", "format": "textarea", "title": "Коментар" } } } } }
+```
+
+Відмінність від `mcp.waitFor`: там умову перевіряє сценарій через tool зовнішньої системи (задачу закрили в Кіті), тут
+рішення приймає людина в OpenBP або за посиланням; у сценарії можна поєднувати обидва.
+
 ### Підсценарії (`core.executeWorkflow`, `core.workflowTrigger`)
 
 Спільну частину процесу (перевірити склад, створити задачу в CRM) можна винести в окремий сценарій і викликати з

@@ -52,6 +52,17 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/executions/executions.page').then((m) => m.ExecutionsPage),
       },
       {
+        // Задачі погодження core.approval (F6-02); картка — і за токеном з $execution.taskUrl.
+        path: 'tasks',
+        title: $localize`:@@tasks.title:Задачі`,
+        loadComponent: () => import('./pages/tasks/tasks.page').then((m) => m.TasksPage),
+      },
+      {
+        path: 'tasks/:id',
+        title: $localize`:@@task.pageTitle:Задача`,
+        loadComponent: () => import('./pages/tasks/task.page').then((m) => m.TaskPage),
+      },
+      {
         path: 'tables',
         title: $localize`:@@tables.title:Таблиці даних`,
         loadComponent: () => import('./pages/tables/tables.page').then((m) => m.TablesPage),

@@ -187,12 +187,19 @@ export function moveNodes(
 }
 
 /**
- * `core.switch` версії 2 має виходи `fallback, rule0…rule15`: показуємо `fallback` і по порту на кожне задане правило.
+ * `core.switch` версії 2 має виходи `fallback, rule0…rule15`: показуємо `fallback` і по порту на кожне задане правило;
+ * так само `core.approval` (`timeout, decision0…decision7`) — `timeout` і по порту на рішення.
  * Порт, з якого вже йде ребро, показуємо завжди, щоб ребро не зникло. З `continueOnFail` порт `error`
  * стоїть одразу після всіх виходів дескриптора, тож тоді показуємо всі.
  */
 function visibleOutputs(node: WorkflowNode, descriptor: NodeTypeInfo, maxEdgeOutput: number): string[] {
   const outputs = [...descriptor.outputs];
+  if (node.type === 'core.approval' && node.continueOnFail !== true) {
+    // `core.approval` (F6-02): `timeout` і по порту на рішення (типово «Погодити» і «Відхилити»).
+    const decisions = node.parameters?.['decisions'];
+    const count = Array.isArray(decisions) && decisions.length > 0 ? decisions.length : 2;
+    return outputs.slice(0, Math.max(1 + count, maxEdgeOutput + 1));
+  }
   if (node.type !== 'core.switch' || descriptor.version < 2 || node.continueOnFail === true) return outputs;
   const rules = node.parameters?.['rules'];
   const count = Array.isArray(rules) ? rules.length : 0;

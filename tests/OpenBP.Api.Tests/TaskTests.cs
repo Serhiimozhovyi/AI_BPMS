@@ -140,8 +140,13 @@ public class TaskTests(ApiFactory api)
         var now = DateTimeOffset.UtcNow;
         await store.SaveStepAsync(new StepRecord
         {
-            ExecutionId = waiting.ExecutionId, NodeId = "n_appr", Status = StepStatus.Success,
-            Input = [[new Item()]], Output = [[new Item()]], StartedAt = now, FinishedAt = now,
+            ExecutionId = waiting.ExecutionId,
+            NodeId = "n_appr",
+            Status = StepStatus.Success,
+            Input = [[new Item()]],
+            Output = [[new Item()]],
+            StartedAt = now,
+            FinishedAt = now,
         }, CancellationToken.None);
 
         var expired = await JsonAsync(await secondClient.GetAsync($"{Tasks}/{waiting.Token}"));
@@ -205,13 +210,22 @@ public class TaskTests(ApiFactory api)
             var now = DateTimeOffset.UtcNow;
             db.Executions.Add(new ExecutionEntity
             {
-                Id = executionId, WorkflowId = workflowId, VersionId = versionId, Mode = "manual", Status = ExecutionStatuses.Waiting,
-                StartedAt = now, HeartbeatAt = now, ResumeAt = now.AddHours(1), WaitingNodeId = "n_appr",
+                Id = executionId,
+                WorkflowId = workflowId,
+                VersionId = versionId,
+                Mode = "manual",
+                Status = ExecutionStatuses.Waiting,
+                StartedAt = now,
+                HeartbeatAt = now,
+                ResumeAt = now.AddHours(1),
+                WaitingNodeId = "n_appr",
             });
             db.ResumeTokens.Add(new ResumeTokenEntity { Token = token, ExecutionId = executionId, NodeId = "n_appr", Kind = ResumeTokens.TaskKind, CreatedAt = now });
             db.Jobs.Add(new JobEntity
             {
-                Id = Guid.NewGuid(), Kind = JobKinds.Execution, RunAt = now.AddHours(1),
+                Id = Guid.NewGuid(),
+                Kind = JobKinds.Execution,
+                RunAt = now.AddHours(1),
                 Payload = JobJson.Serialize(new ExecutionJobPayload { ExecutionId = executionId, WorkflowId = workflowId, VersionId = versionId, Mode = ExecutionMode.Manual }),
             });
             await db.SaveChangesAsync();

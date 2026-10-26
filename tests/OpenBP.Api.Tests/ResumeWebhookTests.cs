@@ -60,17 +60,18 @@ public class ResumeWebhookTests(ApiFactory api)
     [Fact]
     public async Task Form_body_and_text_body_become_signal()
     {
-        var (_, formToken) = await WaitingExecutionAsync();
+        var (formExecution, formToken) = await WaitingExecutionAsync();
         var form = await api.CreateClient().PostAsync($"/webhook/resume/{formToken}", new FormUrlEncodedContent([new("decision", "reject"), new("comment", "no")]));
         Assert.Equal(HttpStatusCode.Accepted, form.StatusCode);
 
-        var (_, textToken) = await WaitingExecutionAsync();
+        var (textExecution, textToken) = await WaitingExecutionAsync();
         var text = await api.CreateClient().PostAsync($"/webhook/resume/{textToken}", new StringContent("done", Encoding.UTF8, "text/plain"));
         Assert.Equal(HttpStatusCode.Accepted, text.StatusCode);
 
         await using var db = api.CreateDbContext();
         var signals = (await db.Jobs.Where(j => j.Kind == JobKinds.Execution).Select(j => j.Payload).ToListAsync())
-            .Select(JobJson.Deserialize<ExecutionJobPayload>).Where(p => p.Signals is not null).Select(p => p.Signals!["n_wait"]!).ToList();
+            .Select(JobJson.Deserialize<ExecutionJobPayload>)
+            .Where(p => p.Signals is not null && (p.ExecutionId == formExecution || p.ExecutionId == textExecution)).Select(p => p.Signals!["n_wait"]!).ToList();
         Assert.Contains(signals, s => s is JsonObject o && o["decision"]?.GetValue<string>() == "reject" && o["comment"]?.GetValue<string>() == "no");
         Assert.Contains(signals, s => s is JsonValue v && v.GetValue<string>() == "done");
     }
