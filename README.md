@@ -10,6 +10,7 @@ MCP-native BPMS-конструктор: процеси на канвасі, ін
 - Формат сценарію: [docs/workflow-format.md](docs/workflow-format.md)
 - Вузли і конектори: [docs/connectors.md](docs/connectors.md)
 - OpenBP як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
+- Користувачам (вхід, задачі, форми, журнал, імпорт з n8n, Telegram): [docs/guide/users.md](docs/guide/users.md) · підключити Claude і ChatGPT через MCP: [docs/guide/ai-connectors.md](docs/guide/ai-connectors.md)
 - Авторам сценаріїв: [docs/guide/authors.md](docs/guide/authors.md) · інтеграторам (REST, webhook, MCP, вбудовування, свій конектор): [docs/guide/integrators.md](docs/guide/integrators.md)
 - Адміністратору: встановлення, HTTPS, користувачі, бекапи, оновлення — [docs/admin/README.md](docs/admin/README.md) · змінні середовища — [docs/admin/env.md](docs/admin/env.md)
 - Фази: [docs/roadmap.md](docs/roadmap.md) · Задачі: [BACKLOG.md](BACKLOG.md)
