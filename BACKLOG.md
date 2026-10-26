@@ -975,7 +975,7 @@
 - DoD: контрактні тести з Bot API-моком (URL, base64, задовгий підпис, помилка API); README конектора.
 
 ### F6-27 · Погодження в Telegram з очікуванням відповіді
-- model: `opus` · status: `ready` · depends: F6-24, F5-03
+- model: `opus` · status: `review` · depends: F6-24, F5-03
 - Що: аналог n8n Telegram «Send and Wait for Response» (кнопки ✅/❌, сценарій чекає натискання до N год). У `connectors/telegram`: tool `send_approval { chat_id, text, approve_label?, reject_label?, parse_mode? }` → `{ message_id, token }` (inline-кнопки з `callback_data` = токен + рішення) і `get_approval { chat_id, message_id, token }` → `{ answered, approved, by }` (читає `callback_query` через `getUpdates` або буфер подій F6-22, відповідає `answerCallbackQuery`, прибирає кнопки й дописує рішення в повідомлення). У сценарії: `mcp.tool send_approval` → `mcp.waitFor get_approval` з умовою `answered` і `timeoutAfter`; вихід `timeout` — як «не погоджено». Описати обмеження: один споживач оновлень на бота (webhook vs polling), приклад у README.
 - DoD: тести конектора з Bot API-моком (погоджено, відхилено, чужий токен, повторне натискання); CLI-тест сценарію `send_approval → waitFor → if` з моком і перемотуванням часу; `docs/connectors.md` — розділ про погодження.
 
