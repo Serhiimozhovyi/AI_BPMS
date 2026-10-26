@@ -26,6 +26,15 @@ public static class ResumeTokens
     /// <summary>Режим «чекати форму» (сторінка — F6-03).</summary>
     public const string FormKind = "form";
 
+    /// <summary>Задача вузла <c>core.approval</c> (F6-02): токен гасить рішення через <c>ITaskService</c>.</summary>
+    public const string TaskKind = TaskSync.TokenKind;
+
+    /// <summary>Тип вузла людської задачі (F6-02).</summary>
+    public const string ApprovalNodeType = "core.approval";
+
+    /// <summary>Шлях картки задачі після хоста: <c>/tasks/{token}</c> (F6-02).</summary>
+    public const string TaskPathPrefix = "tasks";
+
     /// <summary>Шлях адреси пробудження після хоста: <c>/webhook/resume/{token}</c>. Шляхи тригерів <c>core.webhook</c> з цим префіксом заборонені.</summary>
     public const string PathPrefix = "webhook/resume";
 
@@ -38,11 +47,16 @@ public static class ResumeTokens
     /// <summary>Довжина токена в байтах до base64url.</summary>
     private const int TokenBytes = 32;
 
-    /// <summary>Режим зовнішнього пробудження вузла (<see cref="WebhookKind"/>/<see cref="FormKind"/>) або <c>null</c>, якщо вузол чекає часу чи це не <c>core.wait</c> v3+.</summary>
+    /// <summary>Режим зовнішнього пробудження вузла (<see cref="WebhookKind"/>/<see cref="FormKind"/>, для <c>core.approval</c> — <see cref="TaskKind"/>) або <c>null</c>, якщо вузол чекає часу чи це не <c>core.wait</c> v3+.</summary>
     /// <param name="node">Визначення вузла; <c>mode</c> читається як сталий рядок (вираз у режимі не підтримується).</param>
     public static string? KindOf(NodeDefinition node)
     {
         ArgumentNullException.ThrowIfNull(node);
+        if (node.Type == ApprovalNodeType)
+        {
+            return node.Disabled == true ? null : TaskKind;
+        }
+
         if (node.Type != NodeType || node.TypeVersion < MinVersion || node.Disabled == true)
         {
             return null;
@@ -73,7 +87,13 @@ public static class ResumeTokens
     public static string UrlFor(string? publicUrl, string token, string kind = WebhookKind)
     {
         ArgumentException.ThrowIfNullOrEmpty(token);
-        var path = $"/{(kind == FormKind ? FormPathPrefix : PathPrefix)}/{token}";
+        var prefix = kind switch
+        {
+            FormKind => FormPathPrefix,
+            TaskKind => TaskPathPrefix,
+            _ => PathPrefix,
+        };
+        var path = $"/{prefix}/{token}";
         return string.IsNullOrWhiteSpace(publicUrl) ? path : publicUrl.TrimEnd('/') + path;
     }
 

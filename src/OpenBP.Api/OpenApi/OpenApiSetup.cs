@@ -73,6 +73,9 @@ public static class OpenApiSetup
         /// <summary>Публічні форми (F6-03).</summary>
         public const string Forms = "Форми";
 
+        /// <summary>Людські задачі (F6-02).</summary>
+        public const string Tasks = "Задачі";
+
         /// <summary>Помічник у редакторі.</summary>
         public const string Assistant = "Помічник";
 
@@ -96,6 +99,7 @@ public static class OpenApiSetup
         (Tags.Overview, "Підсумки виконань за 24 год / 7 / 30 днів і поточний стан черги."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
         (Tags.Forms, "Публічні форми для сторінки `/form/{path}`: тригер core.formTrigger і крок core.wait (режим form, `resume/{token}`). Доступ задає вузол: none, login або token."),
+        (Tags.Tasks, "Задачі погодження вузла core.approval: мої задачі, усі (admin), картка і рішення. Рішення будить виконання; зовнішню задачу (Telegram id) закриває роль editor, напр. сценарій бота з API-ключем."),
         (Tags.Assistant, "ШІ-помічник у редакторі: налаштування моделі (admin) і розмова над сценарієм (SSE). Модель не бачить значень credentials."),
         (Tags.Evaluations, "Набори кейсів «вхід → очікуване» для вузлів ai.llm/ai.agent, прогін на поточній версії й історія результатів за версіями. Читає viewer, змінює й запускає editor."),
     ];

@@ -85,4 +85,11 @@ public sealed record ExecutionRequest
     /// (єдиний такий вузол) і <c>$execution.resumeUrls["Назва вузла"]</c>.
     /// </summary>
     public IReadOnlyDictionary<string, string> ResumeUrls { get; init; } = EmptyEnv;
+
+    /// <summary>
+    /// Адреси задач (F6-02): id вузла <c>core.approval</c> → публічна адреса картки задачі (<c>/tasks/{token}</c>), яку
+    /// хост видав цьому виконанню. У виразах — <c>$execution.taskUrl</c> (єдиний такий вузол) і
+    /// <c>$execution.taskUrls["Назва вузла"]</c>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> TaskUrls { get; init; } = EmptyEnv;
 }

@@ -238,7 +238,7 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
     /// <summary>
     /// <c>$execution</c>: <c>id</c>; з адресами пробудження (F6-01) — <c>resumeUrls</c> за назвою вузла і <c>resumeUrl</c>,
     /// коли вузол <c>core.wait</c> у режимі <c>webhook</c>/<c>form</c> у сценарії один (інакше <c>resumeUrl</c> відсутній,
-    /// щоб не підставити адресу не того вузла).
+    /// щоб не підставити адресу не того вузла); так само <c>taskUrls</c>/<c>taskUrl</c> вузлів <c>core.approval</c> (F6-02).
     /// </summary>
     private static string SerializeExecution(ExpressionScope scope)
     {
@@ -249,6 +249,15 @@ public sealed class JintExpressionEvaluator : IExpressionEvaluator
             if (scope.ResumeUrls.Count == 1)
             {
                 execution["resumeUrl"] = scope.ResumeUrls.Values.First();
+            }
+        }
+
+        if (scope.TaskUrls.Count > 0)
+        {
+            execution["taskUrls"] = scope.TaskUrls;
+            if (scope.TaskUrls.Count == 1)
+            {
+                execution["taskUrl"] = scope.TaskUrls.Values.First();
             }
         }
 

@@ -52,6 +52,12 @@ public sealed record ExpressionScope
     /// </summary>
     public IReadOnlyDictionary<string, string> ResumeUrls { get; init; } = EmptyEnv;
 
+    /// <summary>
+    /// Адреси задач вузлів <c>core.approval</c> за <b>назвою</b> вузла (F6-02): <c>$execution.taskUrls["Назва"]</c>;
+    /// якщо такий вузол один — ще й <c>$execution.taskUrl</c>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> TaskUrls { get; init; } = EmptyEnv;
+
     /// <summary>Зручний доступ до <c>$json</c> поточного item'а.</summary>
     public JsonObject Json => Item.Json;
 }

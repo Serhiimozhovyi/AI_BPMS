@@ -175,7 +175,10 @@ public sealed class PostgresExecutionStore(
             throw NotCreated(step.ExecutionId);
         }
 
-        db.ExecutionSteps.Add(ToEntity(step));
+        var entity = ToEntity(step);
+        db.ExecutionSteps.Add(entity);
+        // Задача core.approval (F6-02) живе за кроками свого вузла — тією ж транзакцією, що й крок.
+        await TaskSync.ApplyAsync(db, entity, ct).ConfigureAwait(false);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 

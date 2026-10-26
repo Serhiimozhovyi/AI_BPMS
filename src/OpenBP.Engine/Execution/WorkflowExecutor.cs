@@ -701,7 +701,7 @@ public sealed class WorkflowExecutor
             IReadOnlyList<Item>[] attemptInputs = [.. inputs.Select(i => (IReadOnlyList<Item>)[.. i.Select(RunState.Clone)])];
             var ctx = new EngineNodeContext(
                 definition, node.Impl.Descriptor, request.ExecutionId, attemptInputs, _services,
-                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state, run.ResumeUrlsByName)
+                run.NodeOutputsByName(), request.Env, request.Vars, request.Workflow.Settings.Timezone, startedAt, state, run.ResumeUrlsByName, run.TaskUrlsByName)
             {
                 Resumption = run.Resumptions.GetValueOrDefault(definition.Id),
             };
@@ -990,6 +990,12 @@ public sealed class WorkflowExecutor
             .Where(n => request.ResumeUrls.ContainsKey(n.Id))
             .GroupBy(n => n.Name, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => request.ResumeUrls[g.First().Id], StringComparer.Ordinal);
+
+        /// <summary>Адреси задач (F6-02) за назвою вузла — для <c>$execution.taskUrl(s)</c>.</summary>
+        public IReadOnlyDictionary<string, string> TaskUrlsByName { get; } = request.Workflow.Nodes
+            .Where(n => request.TaskUrls.ContainsKey(n.Id))
+            .GroupBy(n => n.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => request.TaskUrls[g.First().Id], StringComparer.Ordinal);
 
         public static Item Clone(Item item) => new()
         {

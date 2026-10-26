@@ -32,6 +32,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<NodeStateEntity> NodeStates => Set<NodeStateEntity>();
     public DbSet<ResumeTokenEntity> ResumeTokens => Set<ResumeTokenEntity>();
     public DbSet<BinaryFileEntity> BinaryFiles => Set<BinaryFileEntity>();
+    public DbSet<TaskEntity> Tasks => Set<TaskEntity>();
     public DbSet<OAuthStateEntity> OAuthStates => Set<OAuthStateEntity>();
     public DbSet<AuditEntryEntity> AuditLog => Set<AuditEntryEntity>();
     public DbSet<NotificationChannelEntity> NotificationChannels => Set<NotificationChannelEntity>();
@@ -262,6 +263,26 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.Property(x => x.FileName).HasMaxLength(255);
             e.Property(x => x.Sha256).HasMaxLength(64);
             e.HasIndex(x => x.ExecutionId);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasOne<ExecutionEntity>().WithMany().HasForeignKey(x => x.ExecutionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<TaskEntity>(e =>
+        {
+            e.ToTable("tasks");
+            e.Property(x => x.NodeId).HasMaxLength(200);
+            e.Property(x => x.Token).HasMaxLength(64);
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.AssigneeRole).HasMaxLength(20);
+            e.Property(x => x.AssigneeValue).HasMaxLength(320);
+            e.Property(x => x.Decision).HasMaxLength(40);
+            e.Property(x => x.Decisions).HasColumnType("jsonb");
+            e.Property(x => x.Fields).HasColumnType("jsonb");
+            e.Property(x => x.Data).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.ExecutionId, x.NodeId }).IsUnique();
+            e.HasIndex(x => x.Token).IsUnique();
+            // Відкриті задачі для «Мої задачі»: виконавець і роль.
+            e.HasIndex(x => new { x.Status, x.AssigneeUserId });
             e.HasIndex(x => x.CreatedAt);
             e.HasOne<ExecutionEntity>().WithMany().HasForeignKey(x => x.ExecutionId).OnDelete(DeleteBehavior.Cascade);
         });

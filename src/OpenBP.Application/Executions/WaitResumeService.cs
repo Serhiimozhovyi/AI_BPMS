@@ -31,7 +31,8 @@ public sealed class WaitResumeService(OpenBpDbContext db, TimeProvider time) : I
     public async Task<ExecutionSummary> ResumeAsync(string token, JsonNode? signal, string? kind, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
-        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        // Рішення задачі (F6-02) будить виконання у своїй транзакції — тоді вона спільна.
+        await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false) : null;
         var row = await db.ResumeTokens.SingleOrDefaultAsync(t => t.Token == token, ct).ConfigureAwait(false)
                   ?? throw new NotFoundException(Entity, token);
         if (kind is not null && row.Kind != kind)
@@ -86,7 +87,10 @@ public sealed class WaitResumeService(OpenBpDbContext db, TimeProvider time) : I
         job.RunAt = now;
         row.UsedAt = now;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        await tx.CommitAsync(ct).ConfigureAwait(false);
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
 
         return ExecutionMapping.ToSummary(await db.Executions.AsNoTracking().SingleAsync(e => e.Id == row.ExecutionId, ct).ConfigureAwait(false));
     }
