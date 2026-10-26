@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, booleanAttribute, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, computed, input, output, viewChild } from '@angular/core';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowValidationError } from '../workflows/workflows-api.service';
 import { CanvasSelection, EMPTY_SELECTION, NewConnection, connectNodes } from './canvas-edit';
 import { DescriptorIndex, NodePosition, moveNodes, toCanvasModel } from './canvas-model';
+import { moveNotes, notesOf, updateNote } from './canvas-notes';
 import { QuickAddRequest } from './quick-add';
-import { CanvasContextMenuRequest, MissingFieldRequest, NODE_WIDTH, NodeActionRequest, NodeErrors, NodeRenameRequest, NodeRunStatuses, VflowCanvasComponent, nodeHeight } from './vflow/vflow-canvas.component';
+import { CanvasContextMenuRequest, MissingFieldRequest, NODE_WIDTH, NodeActionRequest, NodeErrors, NodeRenameRequest, NodeRunStatuses, NoteChangeRequest, NoteEditRequest, VflowCanvasComponent, nodeHeight } from './vflow/vflow-canvas.component';
 import { layoutLeftToRight } from './auto-layout';
 
 /**
@@ -28,7 +29,14 @@ import { layoutLeftToRight } from './auto-layout';
     [selection]="selection()"
     [renaming]="renaming()"
     [readonly]="readonly()"
+    [notes]="notes()"
+    [editingNote]="editingNote()"
     (nodesMoved)="moved($event)"
+    (notesMoved)="notesMoved($event)"
+    (noteChange)="noteChanged($event)"
+    (noteEdit)="noteEdit.emit($event)"
+    (noteEditStart)="noteEditStart.emit($event)"
+    (noteDelete)="noteDelete.emit($event)"
     (connectionCreated)="connected($event)"
     (selectionChange)="selectionChange.emit($event)"
     (quickAdd)="quickAdd.emit($event)"
@@ -101,11 +109,33 @@ export class CanvasComponent {
   /** Відкрити спливаючу палітру (F3-50); у режимі перегляду не надходить. */
   readonly quickAdd = output<QuickAddRequest>();
 
+  /** Нотатка з відкритим полем тексту (F3-62); `null` — немає. */
+  readonly editingNote = input<string | null>(null);
+
+  /** Текст нотатки збережено (`text`) або редагування скасовано (`null`) — вирішує редактор (F3-62). */
+  readonly noteEdit = output<NoteEditRequest>();
+
+  /** Подвійний клік чи «Редагувати» на нотатці. */
+  readonly noteEditStart = output<string>();
+
+  /** «Видалити» з палітри нотатки. */
+  readonly noteDelete = output<string>();
+
+  private readonly vflow = viewChild(VflowCanvasComponent);
+
   private readonly index = computed(() => new DescriptorIndex(this.descriptors()));
 
   protected readonly model = computed(() => toCanvasModel(this.definition(), this.index()));
 
   protected readonly pinnedNodes = computed(() => new Set(Object.keys(this.definition().pinData ?? {})));
+
+  /** Нотатки сценарію (F3-62); поле може бути відсутнє. */
+  protected readonly notes = computed(() => notesOf(this.definition()));
+
+  /** Лівий верхній кут для нової нотатки в центрі видимої частини канвасу (`Shift+S`). */
+  viewportCenter(): [number, number] {
+    return this.vflow()?.viewportCenter() ?? [0, 0];
+  }
 
   protected readonly nodeErrors = computed<NodeErrors>(() => {
     const byNode = new Map<string, string[]>();
@@ -132,6 +162,19 @@ export class CanvasComponent {
   protected moved(positions: NodePosition[]): void {
     if (this.readonly()) return;
     this.definitionChange.emit(moveNodes(this.definition(), positions, this.index()));
+  }
+
+  protected notesMoved(positions: NodePosition[]): void {
+    if (this.readonly()) return;
+    const next = moveNotes(this.definition(), positions);
+    if (next !== this.definition()) this.definitionChange.emit(next);
+  }
+
+  /** Колір чи розмір нотатки з канвасу — одна зміна визначення. */
+  protected noteChanged(change: NoteChangeRequest): void {
+    if (this.readonly()) return;
+    const next = updateNote(this.definition(), change.id, { color: change.color, size: change.size });
+    if (next !== this.definition()) this.definitionChange.emit(next);
   }
 
   protected connected(connection: NewConnection): void {

@@ -319,6 +319,65 @@ describe('WorkflowEditorComponent', () => {
     put.flush(saved(4, put.request.body as WorkflowDefinition));
   });
 
+  it('F3-62: Shift+S і ПКМ → «Додати нотатку» додають нотатку з відкритим полем; Escape на порожній прибирає її; Delete видаляє виділену', async () => {
+    const { fixture, http, host } = await loaded();
+    const canvas = () => canvasComponent(fixture);
+    const notes = () => canvas().definition().notes ?? [];
+
+    // Shift+S: нова порожня нотатка в центрі канвасу, виділена, у режимі редагування.
+    key({ key: 'S', shiftKey: true });
+    await render(fixture);
+    expect(notes()).toHaveLength(1);
+    expect(notes()[0]).toMatchObject({ text: '', size: [240, 120], color: 'yellow' });
+    expect(canvas().editingNote()).toBe(notes()[0].id);
+    expect(canvas().selection().notes).toEqual([notes()[0].id]);
+
+    // Збережений текст — крок історії; Ctrl+Z повертає порожню нотатку.
+    canvas().noteEdit.emit({ id: notes()[0].id, text: 'Перевірити **ліміт** 1С' });
+    await render(fixture);
+    expect(canvas().editingNote()).toBeNull();
+    expect(notes()[0].text).toBe('Перевірити **ліміт** 1С');
+    key({ key: 'z', ctrlKey: true });
+    await render(fixture);
+    expect(notes()[0].text).toBe('');
+    key({ key: 'y', ctrlKey: true });
+    await render(fixture);
+
+    // ПКМ на порожньому місці → «Додати нотатку» саме там; Escape на порожній нотатці прибирає її.
+    canvas().contextMenu.emit({ target: { kind: 'canvas' }, anchor: { x: 40, y: 40 }, at: [500, 300] });
+    await render(fixture);
+    click(host, '[data-testid="menu-add-note"]');
+    await render(fixture);
+    expect(notes()).toHaveLength(2);
+    expect(notes()[1].position).toEqual([500, 300]);
+    expect(canvas().editingNote()).toBe(notes()[1].id);
+    canvas().noteEdit.emit({ id: notes()[1].id, text: null });
+    await render(fixture);
+    expect(notes()).toHaveLength(1);
+    expect(canvas().editingNote()).toBeNull();
+
+    // ПКМ на нотатці → меню нотатки; «Редагувати нотатку» відкриває поле; Delete видаляє виділену нотатку, вузли лишаються.
+    const id = notes()[0].id;
+    canvas().contextMenu.emit({ target: { kind: 'note', noteId: id }, anchor: { x: 40, y: 40 } });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="context-menu"]')?.getAttribute('data-kind')).toBe('note');
+    click(host, '[data-testid="menu-edit-note"]');
+    await render(fixture);
+    expect(canvas().editingNote()).toBe(id);
+    canvas().noteEdit.emit({ id, text: 'Перевірити **ліміт** 1С' });
+    await render(fixture);
+    expect(button(host, 'delete').disabled).toBe(false);
+    key({ key: 'Delete' });
+    await render(fixture);
+    expect(canvas().definition().notes).toBeUndefined();
+    expect(canvasNodes(fixture)).toHaveLength(2);
+    expect(canvas().selection()).toEqual({ nodes: [], edges: [] });
+
+    fixture.destroy();
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/workflows/w1' });
+    put.flush(saved(4, put.request.body as WorkflowDefinition));
+  });
+
   it('гарячі клавіші не перехоплюються в полях введення і коли дія недоступна', async () => {
     const { fixture, http, host } = await loaded();
     click(host, '[data-item="core.set"]');

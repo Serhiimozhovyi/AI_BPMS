@@ -30,9 +30,40 @@
       "type": "array",
       "description": "Етапи бізнес-процесу над графом (ADR-004, docs/workflow-format.md §«Етапи»). Необов'язкові; без них рушій працює як раніше. Валідатор перевіряє унікальність id, посилання на вузли й етапи, зв'язність етапу.",
       "items": { "$ref": "#/$defs/stage" }
+    },
+    "notes": {
+      "type": "array",
+      "description": "Вільні нотатки на канвасі (docs/workflow-format.md §«Нотатки»): текст у Markdown, положення, розмір і колір. Необов'язкові; не пов'язані з вузлами, рушій їх ігнорує.",
+      "items": { "$ref": "#/$defs/note" }
     }
   },
   "$defs": {
+    "note": {
+      "type": "object",
+      "required": ["id", "text", "position"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "description": "Текст у Markdown." },
+        "position": {
+          "type": "array",
+          "description": "Лівий верхній кут на канвасі [x, y].",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "size": {
+          "type": "array",
+          "description": "[ширина, висота] на канвасі; немає — розмір за замовчуванням редактора.",
+          "items": { "type": "number", "minimum": 1 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "color": {
+          "enum": ["yellow", "green", "blue", "teal", "orange", "red", "violet"],
+          "description": "Highlight-колір AC-Kit; немає — yellow."
+        }
+      }
+    },
     "settings": {
       "type": "object",
       "required": ["timezone", "executionTimeoutSec", "errorWorkflowId", "saveSuccessfulData"],

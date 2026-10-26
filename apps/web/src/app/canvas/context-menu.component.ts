@@ -1,12 +1,12 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, inject, input, output } from '@angular/core';
 
 /** Дія контекстного меню канвасу (F3-58). */
-export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin' | 'copy' | 'paste' | 'delete' | 'insert' | 'add' | 'selectAll';
+export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin' | 'copy' | 'paste' | 'delete' | 'insert' | 'add' | 'selectAll' | 'addNote' | 'editNote';
 
 /**
  * Контекстне меню канвасу (F3-58): ПКМ на вузлі — дії з вузлом (ті самі, що в тулбарі, плюс «Закріпити output», копіювати
- * й вставити), на ребрі — вставити крок або видалити, на порожньому місці — додати крок, вставити, виділити все.
- * Лише показує пункти; що робить пункт — вирішує редактор.
+ * й вставити), на ребрі — вставити крок або видалити, на порожньому місці — додати крок, вставити, виділити все,
+ * додати нотатку (F3-62); на нотатці — редагувати чи видалити. Лише показує пункти; що робить пункт — вирішує редактор.
  */
 @Component({
   selector: 'app-canvas-context-menu',
@@ -42,8 +42,13 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
           <button type="button" role="menuitem" class="menu__item" data-testid="menu-insert" (click)="action.emit('insert')" i18n="@@canvas.menu.insert">Вставити крок між вузлами</button>
           <button type="button" role="menuitem" class="menu__item menu__item--danger" data-testid="menu-delete" (click)="action.emit('delete')"><ng-container i18n="@@canvas.menu.deleteEdge">Видалити з'єднання</ng-container><kbd>Del</kbd></button>
         }
+        @case ('note') {
+          <button type="button" role="menuitem" class="menu__item" data-testid="menu-edit-note" (click)="action.emit('editNote')" i18n="@@canvas.menu.editNote">Редагувати нотатку</button>
+          <button type="button" role="menuitem" class="menu__item menu__item--danger" data-testid="menu-delete" (click)="action.emit('delete')"><ng-container i18n="@@canvas.menu.deleteNote">Видалити нотатку</ng-container><kbd>Del</kbd></button>
+        }
         @default {
           <button type="button" role="menuitem" class="menu__item" data-testid="menu-add" (click)="action.emit('add')"><ng-container i18n="@@canvas.menu.add">Додати крок</ng-container><kbd>Tab</kbd></button>
+          <button type="button" role="menuitem" class="menu__item" data-testid="menu-add-note" (click)="action.emit('addNote')"><ng-container i18n="@@canvas.menu.addNote">Додати нотатку</ng-container><kbd>Shift+S</kbd></button>
           <button type="button" role="menuitem" class="menu__item" data-testid="menu-paste" [disabled]="!canPaste()" (click)="action.emit('paste')"><ng-container i18n="@@canvas.menu.paste">Вставити</ng-container><kbd>Ctrl+V</kbd></button>
           <button type="button" role="menuitem" class="menu__item" data-testid="menu-select-all" (click)="action.emit('selectAll')"><ng-container i18n="@@canvas.menu.selectAll">Виділити все</ng-container><kbd>Ctrl+A</kbd></button>
         }
@@ -97,7 +102,7 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
 })
 export class CanvasContextMenuComponent implements AfterViewInit {
   /** Що під вказівником. */
-  readonly kind = input.required<'node' | 'edge' | 'canvas'>();
+  readonly kind = input.required<'node' | 'edge' | 'note' | 'canvas'>();
 
   /** Вузол вимкнений — пункт «Увімкнути» замість «Вимкнути». */
   readonly nodeDisabled = input(false);

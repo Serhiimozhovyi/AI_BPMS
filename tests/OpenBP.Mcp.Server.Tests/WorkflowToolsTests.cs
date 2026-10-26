@@ -192,6 +192,44 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         Assert.Equal("WORKFLOW_INVALID", (string?)failed["code"]);
     }
 
+    /// <summary>F3-62: нотатки на канвасі проходять validate → create → update → get/resource без втрат; схема перевіряється.</summary>
+    [Fact]
+    public async Task Notes_round_trip_through_create_update_get_and_resource()
+    {
+        await using var client = await mcp.ConnectAsync(UserRole.Editor);
+        var definition = Definition(Unique("Нотатки"));
+        definition["notes"] = JsonNode.Parse("""
+            [
+              { "id": "note_in", "text": "## Вхід\n\nЗаявки з **Telegram**.", "position": [0, -140], "size": [260, 120], "color": "yellow" },
+              { "id": "note_todo", "text": "", "position": [400, 60], "x-author": "agent" }
+            ]
+            """);
+
+        var validation = await CallAsync(client, "validate_workflow", new() { ["definition"] = definition, ["active"] = true });
+        Assert.True((bool)validation["valid"]!, validation.ToJsonString());
+
+        var created = await CallAsync(client, "create_workflow", new() { ["definition"] = definition });
+        var id = (string)created["id"]!;
+        Assert.True(JsonNode.DeepEquals(definition["notes"], created["definition"]!["notes"]), created["definition"]!["notes"]?.ToJsonString());
+
+        definition["notes"]![1]!["text"] = "Перевірити ліміт 1С";
+        definition["notes"]![1]!["color"] = "red";
+        await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+
+        var saved = (await CallAsync(client, "get_workflow", new() { ["id"] = id }))["definition"]!;
+        Assert.True(JsonNode.DeepEquals(definition["notes"], saved["notes"]), saved["notes"]?.ToJsonString());
+        var resource = await client.ReadResourceAsync($"openbp://workflows/{id}");
+        var text = Assert.IsType<TextResourceContents>(Assert.Single(resource.Contents));
+        Assert.True(JsonNode.DeepEquals(definition["notes"], JsonNode.Parse(text.Text)!["notes"]));
+
+        definition["notes"]![0]!["position"] = JsonNode.Parse("[0]");
+        var invalid = await CallAsync(client, "validate_workflow", new() { ["definition"] = definition });
+        Assert.False((bool)invalid["valid"]!);
+        var error = Assert.Single(invalid["errors"]!.AsArray());
+        Assert.Equal("SCHEMA_VIOLATION", (string?)error!["code"]);
+        Assert.StartsWith("/notes/0", (string?)error["path"]);
+    }
+
     [Fact]
     public async Task Invalid_definition_returns_isError_with_codes_and_validate_returns_errors_without_error()
     {
