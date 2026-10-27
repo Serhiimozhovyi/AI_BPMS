@@ -152,6 +152,15 @@ export class CanvasComponent {
     return this.vflow()?.viewportCenter() ?? [0, 0];
   }
 
+  /** Масштаб полотна з клавіш (F3-90). */
+  zoom(action: 'in' | 'out' | 'reset' | 'fit'): void {
+    const flow = this.vflow();
+    if (!flow) return;
+    if (action === 'fit') flow.fit();
+    else if (action === 'reset') flow.zoomReset();
+    else flow.zoomStep(action);
+  }
+
   /** Підсунути вузол у видиму частину полотна (панель вузла відкрилася поруч). */
   revealNode(nodeId: string): void {
     this.vflow()?.revealNode(nodeId);
