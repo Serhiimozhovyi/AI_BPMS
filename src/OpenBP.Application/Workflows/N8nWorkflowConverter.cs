@@ -35,6 +35,7 @@ public static partial class N8nWorkflowConverter
     public const string Check = "check";
 
     private const string TelegramTool = "send_message";
+    private const string HttpReference = "n8n:http";
     private const int MaxNotesLength = 4000;
 
     /// <summary>
@@ -62,7 +63,7 @@ public static partial class N8nWorkflowConverter
     }
 
     /// <summary>Вираз n8n (<c>={{ … }}</c>) → вираз OpenBP; рядок без <c>=</c> — літерал.</summary>
-    internal static string Expression(string value, Action<string>? note = null)
+    internal static string Expression(string value, Action<string>? note = null, string? timezone = null)
     {
         if (!value.StartsWith('='))
         {
@@ -70,6 +71,15 @@ public static partial class N8nWorkflowConverter
         }
 
         var text = NodeAccessRegex().Replace(value[1..], m => $"$node[\"{m.Groups["name"].Value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"].json");
+        // «Send and Wait» у n8n віддає { data: { approved } }, get_approval — { approved } (без відповіді поля немає).
+        text = text.Replace("$json.data.approved", "$json.approved", StringComparison.Ordinal);
+        var rewritten = RewriteLuxon(text, "$now", timezone, note);
+        if (rewritten != text)
+        {
+            note?.Invoke("Дату Luxon ($now.setZone(…).toISODate()/toFormat(…), $today) замінено еквівалентом на Date: в OpenBP $now — звичайний Date, а пояс — пояс сценарію.");
+            text = rewritten;
+        }
+
         if (note is not null)
         {
             if (AllItemsRegex().IsMatch(text))
@@ -84,6 +94,97 @@ public static partial class N8nWorkflowConverter
         }
 
         return text;
+    }
+
+    /// <summary>
+    /// Типові виклики Luxon → еквіваленти на <c>Date</c> (пояс — пояс сценарію): <c>.toISODate()</c>, <c>.toISO()</c>,
+    /// <c>.toMillis()</c>, <c>.toJSDate()</c>, <c>.toFormat('yyyy-MM-dd HH:mm')</c> (токени yyyy, yy, MM, M, dd, d, HH, H, mm,
+    /// ss) на <c>$now</c>, <c>$now.setZone('…')</c> і <c>$today</c>. Решта (<c>plus</c>, <c>startOf</c>, назви місяців) лишається.
+    /// </summary>
+    /// <param name="text">Вираз чи код.</param>
+    /// <param name="now">Як у цьому місці отримати «зараз»: <c>$now</c> у виразі, <c>new Date()</c> у коді.</param>
+    /// <param name="timezone">Пояс сценарію.</param>
+    /// <param name="note">Зауваження.</param>
+    internal static string RewriteLuxon(string text, string now, string? timezone, Action<string>? note) =>
+        LuxonCallRegex().Replace(text, m =>
+        {
+            var zone = m.Groups["zone"].Success ? m.Groups["zone"].Value : null;
+            var baseExpression = m.Groups["base"].Value.StartsWith("$today", StringComparison.Ordinal)
+                ? $"((d) => (d.setHours(0, 0, 0, 0), d))(new Date({now}))"
+                : now;
+            string? replacement = m.Groups["method"].Value switch
+            {
+                "toISO" => $"{baseExpression}.toISOString()",
+                "toMillis" => $"{baseExpression}.getTime()",
+                "toJSDate" => baseExpression,
+                "toISODate" => FormatDate(baseExpression, "yyyy-MM-dd"),
+                _ => m.Groups["fmt"].Success ? FormatDate(baseExpression, m.Groups["fmt"].Value) : null,
+            };
+            if (replacement is not null && zone is not null && timezone is not null && !zone.Equals(timezone, StringComparison.OrdinalIgnoreCase))
+            {
+                note?.Invoke($"Пояс «{zone}» у виразі відрізняється від пояса сценарію «{timezone}»: OpenBP рахує дату в поясі сценарію — змініть його в налаштуваннях сценарію.");
+            }
+
+            return replacement ?? m.Value;
+        });
+
+    /// <summary>Формат Luxon → конкатенація з геттерів <c>Date</c>; <c>null</c>, якщо в форматі є токени, яких не підтримано.</summary>
+    private static string? FormatDate(string date, string format)
+    {
+        var parts = new List<string>();
+        var literal = new StringBuilder();
+        void Flush()
+        {
+            if (literal.Length > 0)
+            {
+                parts.Add("'" + literal.ToString().Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal) + "'");
+                literal.Clear();
+            }
+        }
+
+        for (var i = 0; i < format.Length;)
+        {
+            var c = format[i];
+            if (!char.IsLetter(c))
+            {
+                literal.Append(c);
+                i++;
+                continue;
+            }
+
+            var run = 1;
+            while (i + run < format.Length && format[i + run] == c)
+            {
+                run++;
+            }
+
+            var token = new string(c, run);
+            string? part = token switch
+            {
+                "yyyy" => "d.getFullYear()",
+                "yy" => "p(d.getFullYear() % 100)",
+                "MM" => "p(d.getMonth() + 1)",
+                "M" => "(d.getMonth() + 1)",
+                "dd" => "p(d.getDate())",
+                "d" => "d.getDate()",
+                "HH" => "p(d.getHours())",
+                "H" => "d.getHours()",
+                "mm" => "p(d.getMinutes())",
+                "ss" => "p(d.getSeconds())",
+                _ => null,
+            };
+            if (part is null)
+            {
+                return null;
+            }
+
+            Flush();
+            parts.Add(part);
+            i += run;
+        }
+
+        Flush();
+        return $"((d, p) => {string.Join(" + ", parts.Count == 0 ? ["''"] : parts)})({date}, (n) => String(n).padStart(2, '0'))";
     }
 
     /// <summary>Код n8n у <c>core.code</c>: емуляція <c>$input</c>, <c>$('Назва')</c>, <c>items</c> і результату <c>[{ json }]</c>.</summary>
@@ -145,11 +246,25 @@ public static partial class N8nWorkflowConverter
     [GeneratedRegex("""\$now\s*\.\s*(?:setZone|toISO|toFormat|plus|minus|startOf|endOf|toMillis)|\$today|\bDateTime\.""")]
     private static partial Regex LuxonRegex();
 
+    [GeneratedRegex("""(?<base>\$now(?:\s*\.\s*setZone\(\s*(?<q1>['"])(?<zone>[^'"]+)\k<q1>\s*\))?|\$today)\s*\.\s*(?<method>toISODate|toISO|toFormat|toMillis|toJSDate)\(\s*(?:(?<q2>['"])(?<fmt>[^'"]*)\k<q2>)?\s*\)""", RegexOptions.CultureInvariant)]
+    private static partial Regex LuxonCallRegex();
+
     [GeneratedRegex("[^A-Za-z0-9._~/-]+")]
     private static partial Regex PathCharsRegex();
 
     /// <summary>Вузол OpenBP, у який перетворено вузол n8n.</summary>
-    private sealed record Mapped(string Type, int Version, JsonObject Parameters, int Outputs);
+    /// <summary>
+    /// Вузол OpenBP, у який перетворено вузол n8n. <paramref name="Outputs"/> — виходи n8n; <paramref name="Prefix"/> і
+    /// <paramref name="Suffix"/> — службові вузли до й після (Execute Once, розгортання відповіді HTTP, очікування
+    /// відповіді погодження): вхідні зв'язки йдуть у перший, вихідні — з останнього.
+    /// </summary>
+    private sealed record Mapped(string Type, int Version, JsonObject Parameters, int Outputs, ExtraNode? Prefix = null, ExtraNode? Suffix = null, int? TimeoutSec = null);
+
+    /// <summary>Службовий вузол поруч з основним.</summary>
+    private sealed record ExtraNode(string Name, string Type, int Version, JsonObject Parameters, int Outputs, bool MirrorTimeout = false);
+
+    /// <summary>Вузол n8n у перетвореному сценарії: <paramref name="Head"/> приймає зв'язки, <paramref name="Tail"/> — віддає.</summary>
+    private sealed record NodeRef(string Id, Mapped Node, string? OnError, int? N8nErrorOutput, string Head, string Tail);
 
     private sealed class Conversion(JsonObject source)
     {
@@ -161,10 +276,11 @@ public static partial class N8nWorkflowConverter
         public N8nConversion Run()
         {
             var nodes = new JsonArray();
-            var ids = new Dictionary<string, (string Id, Mapped Node, string? OnError, int? N8nErrorOutput)>(StringComparer.Ordinal);
+            var ids = new Dictionary<string, NodeRef>(StringComparer.Ordinal);
             var connections = source["connections"] as JsonObject ?? [];
             var skippedSticky = 0;
             var index = 0;
+            var usedNames = new HashSet<string>((source["nodes"] as JsonArray ?? []).OfType<JsonObject>().Select(n => Str(n["name"]) ?? ""), StringComparer.Ordinal);
             foreach (var n8n in (source["nodes"] as JsonArray ?? []).OfType<JsonObject>())
             {
                 var type = Str(n8n["type"]) ?? "";
@@ -203,6 +319,11 @@ public static partial class N8nWorkflowConverter
                 node["type"] = mapped.Type;
                 node["typeVersion"] = mapped.Version;
                 node["parameters"] = mapped.Parameters;
+                if (mapped.TimeoutSec is { } nodeTimeout)
+                {
+                    node["timeoutSec"] = nodeTimeout;
+                }
+
                 if (onError is "continueErrorOutput" or "continueRegularOutput")
                 {
                     node["continueOnFail"] = true;
@@ -223,9 +344,13 @@ public static partial class N8nWorkflowConverter
                     _notes.Add(new(Check, name, "У n8n вузол вимкнено; в OpenBP вимкнення діє лише для тригерів — видаліть вузол, якщо він не потрібен."));
                 }
 
+                var prefix = mapped.Prefix;
                 if (Bool(n8n["executeOnce"]))
                 {
-                    _notes.Add(new(Check, name, "«Execute Once» не переноситься: вузол виконається для кожного item'а. Якщо треба один раз — поставте перед ним core.code з return [items[0]]."));
+                    prefix ??= new ExtraNode(
+                        $"{name}: лише перший item", "core.code", 1,
+                        new JsonObject { ["code"] = "return items.slice(0, 1);", ["mode"] = "allItems" }, 1);
+                    _notes.Add(new(Check, name, $"«Execute Once» перенесено вузлом core.code «{prefix.Name}» перед цим вузлом: далі йде лише перший item."));
                 }
 
                 if (Bool(n8n["alwaysOutputData"]))
@@ -233,10 +358,22 @@ public static partial class N8nWorkflowConverter
                     _notes.Add(new(Check, name, "«Always Output Data» не переноситься: без результатів вузол не віддасть порожній item."));
                 }
 
+                var head = id;
+                if (prefix is not null)
+                {
+                    head = AddExtra(nodes, prefix, n8n, -1, ++index, usedNames);
+                }
+
+                var tail = id;
+                nodes.Add(node);
+                if (mapped.Suffix is { } suffix)
+                {
+                    tail = AddExtra(nodes, suffix, n8n, 1, ++index, usedNames);
+                }
+
                 // У n8n вихід помилки (continueErrorOutput) — останній з використаних.
                 int? errorOutput = onError == "continueErrorOutput" && connections[name]?["main"] is JsonArray outs ? outs.Count - 1 : null;
-                ids[name] = (id, mapped, onError, errorOutput);
-                nodes.Add(node);
+                ids[name] = new NodeRef(id, mapped, onError, errorOutput, head, tail);
             }
 
             if (skippedSticky > 0)
@@ -285,13 +422,50 @@ public static partial class N8nWorkflowConverter
 
         private static string Truncate(string text) => text.Length <= MaxNotesLength ? text : text[..MaxNotesLength] + "…";
 
+        /// <summary>Додає службовий вузол над (<paramref name="side"/> −1) чи під (+1) основним; повертає його id.</summary>
+        private static string AddExtra(JsonArray nodes, ExtraNode extra, JsonObject n8n, int side, int index, HashSet<string> usedNames)
+        {
+            var name = extra.Name;
+            for (var n = 2; !usedNames.Add(name); n++)
+            {
+                name = $"{extra.Name} ({n})";
+            }
+
+            var position = Position(n8n["position"]);
+            var id = $"n_{index}";
+            nodes.Add(new JsonObject
+            {
+                ["id"] = id,
+                ["name"] = name,
+                ["type"] = extra.Type,
+                ["typeVersion"] = extra.Version,
+                ["position"] = new JsonArray(Int(position[0]) ?? 0, (Int(position[1]) ?? 0) + (side * 110)),
+                ["parameters"] = extra.Parameters,
+            });
+            return id;
+        }
+
         private static JsonArray Position(JsonNode? position) =>
             position is JsonArray { Count: >= 2 } p ? [Int(p[0]) ?? 0, Int(p[1]) ?? 0] : [0, 0];
 
-        private JsonArray Edges(JsonObject connections, Dictionary<string, (string Id, Mapped Node, string? OnError, int? N8nErrorOutput)> ids)
+        private JsonArray Edges(JsonObject connections, Dictionary<string, NodeRef> ids)
         {
             var edges = new List<(string From, int Output, string To, int Input)>();
             var otherTypes = new SortedSet<string>(StringComparer.Ordinal);
+            // Службові вузли до й після основного (Execute Once, очікування відповіді, тіло відповіді HTTP).
+            foreach (var reference in ids.Values)
+            {
+                if (reference.Head != reference.Id)
+                {
+                    edges.Add((reference.Head, 0, reference.Id, 0));
+                }
+
+                if (reference.Tail != reference.Id)
+                {
+                    edges.Add((reference.Id, 0, reference.Tail, 0));
+                }
+            }
+
             foreach (var (fromName, byType) in connections)
             {
                 if (byType is not JsonObject types || !ids.TryGetValue(fromName, out var from))
@@ -311,9 +485,11 @@ public static partial class N8nWorkflowConverter
                     for (var k = 0; k < list.Count; k++)
                     {
                         int output;
+                        var source = from.Tail;
                         if (from.N8nErrorOutput == k)
                         {
                             output = from.Node.Outputs;
+                            source = from.Id;
                         }
                         else if (k < from.Node.Outputs)
                         {
@@ -336,12 +512,18 @@ public static partial class N8nWorkflowConverter
                                 continue;
                             }
 
-                            var input = to.Node.Type == "core.merge" ? Math.Clamp(Int(target["index"]) ?? 0, 0, 7) : 0;
-                            edges.Add((from.Id, output, to.Id, input));
+                            var input = to.Node.Type == "core.merge" && to.Head == to.Id ? Math.Clamp(Int(target["index"]) ?? 0, 0, 7) : 0;
+                            edges.Add((source, output, to.Head, input));
                             // «Continue (regular output)»: помилка йде тим самим шляхом, що й успіх.
                             if (from.OnError == "continueRegularOutput" && k == 0)
                             {
-                                edges.Add((from.Id, from.Node.Outputs, to.Id, input));
+                                edges.Add((from.Id, from.Node.Outputs, to.Head, input));
+                            }
+
+                            // Очікування відповіді: таймаут веде туди ж, куди й відповідь (у n8n вихід один, а відповіді немає).
+                            if (from.Node.Suffix is { MirrorTimeout: true } && k == 0)
+                            {
+                                edges.Add((from.Tail, 1, to.Head, input));
                             }
                         }
                     }
@@ -353,7 +535,13 @@ public static partial class N8nWorkflowConverter
                 _notes.Add(new(Check, null, $"З'єднання підвузлів n8n ({string.Join(", ", otherTypes)}) не переносяться: в OpenBP модель і tools задаються в самому вузлі ai.llm / ai.agent."));
             }
 
-            var names = ids.ToDictionary(p => p.Value.Id, p => p.Key, StringComparer.Ordinal);
+            var names = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var (nodeName, reference) in ids)
+            {
+                names[reference.Id] = nodeName;
+                names.TryAdd(reference.Head, nodeName);
+                names.TryAdd(reference.Tail, nodeName);
+            }
             var result = new JsonArray();
             var kept = new List<(string From, int Output, string To, int Input)>();
             foreach (var edge in edges.Distinct())
@@ -397,7 +585,7 @@ public static partial class N8nWorkflowConverter
             return false;
         }
 
-        private JsonObject PinData(Dictionary<string, (string Id, Mapped Node, string? OnError, int? N8nErrorOutput)> ids)
+        private JsonObject PinData(Dictionary<string, NodeRef> ids)
         {
             var result = new JsonObject();
             if (source["pinData"] is not JsonObject pins)
@@ -412,7 +600,7 @@ public static partial class N8nWorkflowConverter
                     continue;
                 }
 
-                result[node.Id] = new JsonArray([.. list.OfType<JsonObject>().Select(i => (JsonNode)new JsonObject
+                result[node.Tail] = new JsonArray([.. list.OfType<JsonObject>().Select(i => (JsonNode)new JsonObject
                 {
                     ["json"] = (i["json"] is JsonObject json ? json : i).DeepClone(),
                 })]);
@@ -448,6 +636,13 @@ public static partial class N8nWorkflowConverter
 
                     var eachItem = Str(p["mode"]) == "runOnceForEachItem";
                     var code = Str(p["jsCode"]) ?? "return items;";
+                    var rewritten = RewriteLuxon(code, "new Date()", Timezone, Note);
+                    if (rewritten != code)
+                    {
+                        Note("Дату Luxon ($now.setZone(…).toISODate()/toFormat(…), $today) в коді замінено еквівалентом на new Date() (пояс сценарію).");
+                        code = rewritten;
+                    }
+
                     CodeNotes(code, Note);
                     return new("core.code", 1, new JsonObject { ["code"] = CodeShim(code, eachItem), ["mode"] = eachItem ? "eachItem" : "allItems" }, 1);
 
@@ -469,6 +664,12 @@ public static partial class N8nWorkflowConverter
                 case "n8n-nodes-base.dataTable":
                     return DataTable(p, E, Note, out reason);
 
+                case "n8n-nodes-base.rssFeedRead":
+                    return RssRead(p, E);
+
+                case "n8n-nodes-base.httpRequest":
+                    return HttpRequest(name, p, E, Note);
+
                 case "n8n-nodes-base.telegram":
                     return Telegram(n8n, p, E, Note, out reason);
 
@@ -483,10 +684,8 @@ public static partial class N8nWorkflowConverter
 
         private static string UnsupportedReason(string type) => type switch
         {
-            "n8n-nodes-base.rssFeedRead" or "n8n-nodes-base.rssFeedReadTrigger" =>
-                "Читання RSS у OpenBP немає: потрібен MCP-конектор (наприклад, RSS/HTTP-сервер через «Конектори»), а тут — вузол mcp.tool.",
-            "n8n-nodes-base.httpRequest" =>
-                "HTTP-запитів напряму в OpenBP немає (інтеграції лише через MCP): підключіть HTTP/OpenAPI-конектор і замініть вузол на mcp.tool.",
+            "n8n-nodes-base.rssFeedReadTrigger" =>
+                "Тригер RSS не переноситься: поставте core.schedule, далі mcp.tool rss_read (конектор «HTTP і RSS») і відсікайте вже бачені записи таблицею даних чи кодом.",
             _ when type.StartsWith("@n8n/n8n-nodes-langchain.", StringComparison.Ordinal) =>
                 "ШІ-вузол n8n без прямого відповідника: замініть на ai.llm (одна відповідь моделі) або ai.agent (агент з tools).",
             _ => "Вузол n8n без відповідника в OpenBP: замініть його вузлом OpenBP або mcp.tool відповідного конектора.",
@@ -499,9 +698,12 @@ public static partial class N8nWorkflowConverter
             return new("core.code", 1, new JsonObject { ["code"] = code, ["mode"] = "allItems" }, 1);
         }
 
-        private static JsonNode? Expr(JsonNode? value, Action<string> note) => value switch
+        private string Timezone =>
+            Str(source["settings"]?["timezone"]) is { Length: > 0 } tz && tz != "DEFAULT" ? tz : "Europe/Kyiv";
+
+        private JsonNode? Expr(JsonNode? value, Action<string> note) => value switch
         {
-            JsonValue v when v.TryGetValue<string>(out var s) => JsonValue.Create(Expression(s, note)),
+            JsonValue v when v.TryGetValue<string>(out var s) => JsonValue.Create(Expression(s, note, Timezone)),
             JsonObject o => new JsonObject(o.Select(p => KeyValuePair.Create(p.Key, Expr(p.Value, note)))),
             JsonArray a => new JsonArray([.. a.Select(i => Expr(i, note))]),
             null => null,
@@ -887,26 +1089,164 @@ public static partial class N8nWorkflowConverter
             return new("core.dataTable", 1, parameters, 1);
         }
 
+        private string HttpConnector()
+        {
+            _connectors.TryAdd(HttpReference, new ManifestConnector(HttpReference, "HTTP і RSS", ""));
+            return HttpReference;
+        }
+
+        private string TelegramConnector(JsonObject n8n)
+        {
+            var credential = n8n["credentials"]?["telegramApi"];
+            var reference = $"n8n:telegramApi:{Str(credential?["id"]) ?? "default"}";
+            _connectors.TryAdd(reference, new ManifestConnector(reference, Str(credential?["name"]) ?? "Telegram", ""));
+            return reference;
+        }
+
+        private Mapped RssRead(JsonObject p, Func<JsonNode?, JsonNode?> e) =>
+            new("mcp.tool", 1, new JsonObject
+            {
+                ["serverId"] = HttpConnector(),
+                ["toolName"] = "rss_read",
+                ["arguments"] = new JsonObject { ["url"] = e(p["url"]) },
+                ["itemsPath"] = "items",
+            }, 1);
+
+        private Mapped HttpRequest(string name, JsonObject p, Func<JsonNode?, JsonNode?> e, Action<string> note)
+        {
+            var arguments = new JsonObject
+            {
+                ["url"] = e(p["url"]),
+                ["method"] = (Str(p["method"]) ?? "GET").ToUpperInvariant(),
+            };
+            var options = p["options"] as JsonObject ?? [];
+            var response = options["response"]?["response"] as JsonObject ?? [];
+
+            JsonObject Pairs(JsonNode? list)
+            {
+                var result = new JsonObject();
+                foreach (var pair in (list?["parameters"] as JsonArray ?? []).OfType<JsonObject>())
+                {
+                    if (Str(pair["name"]) is { Length: > 0 } key)
+                    {
+                        result[key] = e(pair["value"]);
+                    }
+                }
+
+                return result;
+            }
+
+            var query = Bool(p["sendQuery"]) ? Pairs(p["queryParameters"]) : [];
+            if (Bool(p["sendQuery"]) && Str(p["specifyQuery"]) == "json")
+            {
+                note("Параметри запиту, задані JSON-ом (specifyQuery), не перенесено: заповніть query вручну.");
+            }
+
+            if (query.Count > 0)
+            {
+                arguments["query"] = query;
+            }
+
+            var headers = Bool(p["sendHeaders"]) ? Pairs(p["headerParameters"]) : [];
+            if (Bool(p["sendBody"]))
+            {
+                var contentType = Str(p["contentType"]) ?? "json";
+                switch (contentType)
+                {
+                    case "json" when (Str(p["specifyBody"]) ?? "keypair") == "json":
+                        arguments["body"] = e(p["jsonBody"]);
+                        headers["Content-Type"] ??= "application/json";
+                        break;
+                    case "json":
+                        var json = Pairs(p["bodyParameters"]);
+                        if (json.Count > 0)
+                        {
+                            arguments["json"] = json;
+                        }
+
+                        break;
+                    case "raw":
+                        arguments["body"] = e(p["body"]);
+                        headers["Content-Type"] ??= Str(p["rawContentType"]) ?? "text/plain";
+                        break;
+                    default:
+                        note($"Тіло запиту типу «{contentType}» (форма, файли) не перенесено: http_request надсилає json або текст — задайте body вручну.");
+                        break;
+                }
+            }
+
+            if (headers.Count > 0)
+            {
+                arguments["headers"] = headers;
+            }
+
+            if (Str(p["authentication"]) is { Length: > 0 } auth && auth != "none")
+            {
+                note("Авторизацію n8n (credential) не перенесено: додайте заголовок Authorization (чи ключ у query) у вузол.");
+            }
+
+            int? timeoutSec = null;
+            if (options["timeout"] is JsonValue ms && ms.TryGetValue<double>(out var millis) && millis > 0)
+            {
+                var seconds = (int)Math.Clamp(Math.Ceiling(millis / 1000), 1, 300);
+                arguments["timeoutSec"] = seconds;
+                timeoutSec = seconds + 10;
+            }
+
+            if (Bool(response["neverError"]))
+            {
+                arguments["fail_on_status_error"] = false;
+            }
+
+            var full = Bool(response["fullResponse"]);
+            if (full || Str(response["responseFormat"]) == "file")
+            {
+                note("Відповідь повертається як { status, headers, json | text | base64 } (не форма n8n «full response» чи файл): перевірте вузли, що її читають.");
+            }
+
+            var parameters = new JsonObject { ["serverId"] = HttpConnector(), ["toolName"] = "http_request", ["arguments"] = arguments };
+            ExtraNode? unwrap = null;
+            if (!full)
+            {
+                unwrap = new ExtraNode(
+                    $"{name}: тіло відповіді", "core.code", 1,
+                    new JsonObject
+                    {
+                        ["code"] = "// n8n віддає тіло відповіді: JSON — полями item'а, текст чи base64 — у data.\n" +
+                                   "return items.map((r) => (r.json !== undefined && r.json !== null\n" +
+                                   "  ? (typeof r.json === 'object' && !Array.isArray(r.json) ? r.json : { data: r.json })\n" +
+                                   "  : { data: r.text !== undefined ? r.text : r.base64 }));",
+                        ["mode"] = "allItems",
+                    },
+                    1);
+                note($"Відповідь http_request ({{ status, json | text | base64 }}) розгорнуто вузлом core.code «{unwrap.Name}» у форму n8n: JSON-тіло — полями item'а.");
+            }
+
+            return new("mcp.tool", 1, parameters, 1, Suffix: unwrap, TimeoutSec: timeoutSec);
+        }
+
         private Mapped? Telegram(JsonObject n8n, JsonObject p, Func<JsonNode?, JsonNode?> e, Action<string> note, out string? reason)
         {
             reason = null;
             var resource = Str(p["resource"]) ?? "message";
             var operation = Str(p["operation"]) ?? "sendMessage";
+            if (resource == "message" && operation == "sendPhoto")
+            {
+                return SendPhoto(n8n, p, e, note);
+            }
+
+            if (resource == "message" && operation == "sendAndWait")
+            {
+                return SendAndWait(n8n, p, e, note);
+            }
+
             if (resource != "message" || operation != "sendMessage")
             {
-                reason = operation switch
-                {
-                    "sendAndWait" => "Telegram «Send and Wait for Response» (погодження з очікуванням відповіді) не переноситься: надішліть повідомлення з кнопками (send_message з reply_markup) і чекайте натискання через mcp.waitFor або окремий сценарій на webhook-у бота.",
-                    "sendPhoto" => "У конекторі Telegram немає send_photo: використайте send_document або send_message з посиланням на зображення.",
-                    _ => $"Операцію Telegram «{resource}.{operation}» не перенесено: див. tools конектора Telegram (send_message, send_document, edit_message_text…).",
-                };
+                reason = $"Операцію Telegram «{resource}.{operation}» не перенесено: див. tools конектора Telegram (send_message, send_photo, send_document, edit_message_text, send_approval…).";
                 return null;
             }
 
-            var credential = n8n["credentials"]?["telegramApi"];
-            var reference = $"n8n:telegramApi:{Str(credential?["id"]) ?? "default"}";
-            _connectors.TryAdd(reference, new ManifestConnector(reference, Str(credential?["name"]) ?? "Telegram", ""));
-
+            var reference = TelegramConnector(n8n);
             var fields = p["additionalFields"] as JsonObject ?? [];
             var arguments = new JsonObject { ["chat_id"] = e(p["chatId"]), ["text"] = e(p["text"]) };
             if (Str(fields["parse_mode"]) is { Length: > 0 } parseMode)
@@ -925,6 +1265,105 @@ public static partial class N8nWorkflowConverter
             }
 
             return new("mcp.tool", 1, new JsonObject { ["serverId"] = reference, ["toolName"] = TelegramTool, ["arguments"] = arguments }, 1);
+        }
+
+        private Mapped SendPhoto(JsonObject n8n, JsonObject p, Func<JsonNode?, JsonNode?> e, Action<string> note)
+        {
+            var reference = TelegramConnector(n8n);
+            var fields = p["additionalFields"] as JsonObject ?? [];
+            var arguments = new JsonObject { ["chat_id"] = e(p["chatId"]) };
+            if (Bool(p["binaryData"]))
+            {
+                arguments["photo_base64"] = "{{ $json.image_base64 }}";
+                note("Картинка в n8n бралась з бінарного поля, а send_photo приймає base64 у photo_base64: у вузол підставлено {{ $json.image_base64 }} — вкажіть поле з base64 картинки (наприклад, images[0] з відповіді генератора).");
+            }
+            else
+            {
+                arguments["photo_url"] = e(p["file"]);
+            }
+
+            if (e(fields["caption"]) is { } caption)
+            {
+                arguments["caption"] = caption;
+            }
+
+            if (Str(fields["parse_mode"]) is { Length: > 0 } parseMode)
+            {
+                arguments["parse_mode"] = parseMode;
+            }
+
+            if (p["replyMarkup"] is not null && Str(p["replyMarkup"]) != "none")
+            {
+                note("Клавіатуру (reply markup) не перенесено: задайте reply_markup у send_photo.");
+            }
+
+            return new("mcp.tool", 1, new JsonObject { ["serverId"] = reference, ["toolName"] = "send_photo", ["arguments"] = arguments }, 1);
+        }
+
+        private Mapped SendAndWait(JsonObject n8n, JsonObject p, Func<JsonNode?, JsonNode?> e, Action<string> note)
+        {
+            var reference = TelegramConnector(n8n);
+            var name = Str(n8n["name"]) ?? "Погодження";
+            var approval = p["approvalOptions"]?["values"] as JsonObject ?? [];
+            var arguments = new JsonObject { ["chat_id"] = e(p["chatId"]), ["text"] = e(p["message"]) };
+            if (Str(approval["approveLabel"]) is { Length: > 0 } approve)
+            {
+                arguments["approve_label"] = approve;
+            }
+
+            if (Str(approval["disapproveLabel"]) is { Length: > 0 } reject)
+            {
+                arguments["reject_label"] = reject;
+            }
+
+            if (Str(approval["approvalType"]) == "single")
+            {
+                note("Погодження з однією кнопкою (single) перенесено з двома: «погодити» і «відхилити».");
+            }
+
+            // Ліміт очікування n8n (limitWaitTime): за замовчуванням чекає без обмеження, а Telegram тримає оновлення добу.
+            var wait = n8n["parameters"]?["options"]?["limitWaitTime"]?["values"] as JsonObject;
+            var hours = 24.0;
+            if (wait is not null && wait["resumeAmount"] is JsonValue amount && amount.TryGetValue<double>(out var value) && value > 0)
+            {
+                hours = Str(wait["resumeUnit"]) switch
+                {
+                    "minutes" => value / 60,
+                    "days" => value * 24,
+                    _ => value,
+                };
+            }
+
+            if (hours > 24)
+            {
+                note($"Очікування відповіді {hours:0.#} год скорочено до 24: Telegram тримає непідтверджені оновлення добу (get_approval читає їх через getUpdates).");
+                hours = 24;
+            }
+            else if (wait is null)
+            {
+                note("У n8n очікування не обмежене, в OpenBP — доба (Telegram тримає непідтверджені оновлення 24 год).");
+            }
+
+            note("«Send and Wait» перенесено двома вузлами: mcp.tool send_approval і mcp.waitFor get_approval (кожну хвилину, умова answered). Вихід «Без відповіді» (timeout) з'єднано туди ж, куди й відповідь: вираз $json.data.approved переписано на $json.approved (без відповіді поля немає, тож це «не погоджено»). Бот не повинен мати webhook (get_approval читає оновлення через getUpdates).");
+            var waitFor = new ExtraNode(
+                $"{name}: очікування відповіді", "mcp.waitFor", 1,
+                new JsonObject
+                {
+                    ["serverId"] = reference,
+                    ["toolName"] = "get_approval",
+                    ["arguments"] = new JsonObject
+                    {
+                        ["chat_id"] = "{{ $json.chat_id }}",
+                        ["message_id"] = "{{ $json.message_id }}",
+                        ["token"] = "{{ $json.token }}",
+                    },
+                    ["conditions"] = new JsonArray(new JsonObject { ["field"] = "answered", ["operator"] = "isTrue" }),
+                    ["intervalMinutes"] = 1,
+                    ["timeoutHours"] = hours,
+                },
+                2,
+                MirrorTimeout: true);
+            return new("mcp.tool", 1, new JsonObject { ["serverId"] = reference, ["toolName"] = "send_approval", ["arguments"] = arguments }, 1, Suffix: waitFor);
         }
 
         private Mapped? Ollama(JsonObject n8n, JsonObject p, Func<JsonNode?, JsonNode?> e, Action<string> note, out string? reason)

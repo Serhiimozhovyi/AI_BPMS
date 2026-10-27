@@ -9,13 +9,24 @@ namespace OpenBP.Connectors.Telegram.Tools;
 /// <param name="Text">Текст.</param>
 /// <param name="Caption">Підпис до файлу.</param>
 /// <param name="Document">Надісланий документ.</param>
+/// <param name="Photo">Розміри надісланого фото (від меншого до більшого).</param>
 public sealed record TelegramMessage(
     [property: JsonPropertyName("message_id")] long MessageId,
     [property: JsonPropertyName("chat")] TelegramChat Chat,
     [property: JsonPropertyName("date")] long Date,
     [property: JsonPropertyName("text")] string? Text = null,
     [property: JsonPropertyName("caption")] string? Caption = null,
-    [property: JsonPropertyName("document")] TelegramDocument? Document = null);
+    [property: JsonPropertyName("document")] TelegramDocument? Document = null,
+    [property: JsonPropertyName("photo")] IReadOnlyList<TelegramPhotoSize>? Photo = null);
+
+/// <summary>Розмір фото в повідомленні.</summary>
+/// <param name="FileId">Ідентифікатор файлу в Telegram.</param>
+/// <param name="Width">Ширина, пікселів.</param>
+/// <param name="Height">Висота, пікселів.</param>
+public sealed record TelegramPhotoSize(
+    [property: JsonPropertyName("file_id")] string FileId,
+    [property: JsonPropertyName("width")] int Width = 0,
+    [property: JsonPropertyName("height")] int Height = 0);
 
 /// <summary>Чат.</summary>
 /// <param name="Id">Id чату.</param>
@@ -75,3 +86,46 @@ public sealed record BatchSendItem(
     [property: JsonPropertyName("message_id")] long? MessageId = null,
     [property: JsonPropertyName("error")] string? Error = null,
     [property: JsonPropertyName("permanent")] bool Permanent = false);
+
+/// <summary>Результат <c>send_approval</c>.</summary>
+/// <param name="MessageId">Повідомлення з кнопками.</param>
+/// <param name="ChatId">Чат.</param>
+/// <param name="Token">Токен для <c>get_approval</c>.</param>
+public sealed record ApprovalRequest(
+    [property: JsonPropertyName("message_id")] long MessageId,
+    [property: JsonPropertyName("chat_id")] long ChatId,
+    [property: JsonPropertyName("token")] string Token);
+
+/// <summary>Результат <c>get_approval</c>.</summary>
+/// <param name="Answered">Кнопку натиснули.</param>
+/// <param name="Approved">Погоджено (лише коли <paramref name="Answered"/>).</param>
+/// <param name="Decision"><c>approve</c> або <c>reject</c>.</param>
+/// <param name="By">Хто натиснув.</param>
+public sealed record ApprovalAnswer(
+    [property: JsonPropertyName("answered")] bool Answered,
+    [property: JsonPropertyName("approved")] bool? Approved = null,
+    [property: JsonPropertyName("decision")] string? Decision = null,
+    [property: JsonPropertyName("by")] ApprovalUser? By = null);
+
+/// <summary>Користувач, що відповів на погодження.</summary>
+/// <param name="Id">Telegram id.</param>
+/// <param name="Username">Ім'я користувача без @.</param>
+/// <param name="FirstName">Ім'я.</param>
+/// <param name="LastName">Прізвище.</param>
+public sealed record ApprovalUser(
+    [property: JsonPropertyName("id")] long Id,
+    [property: JsonPropertyName("username")] string? Username = null,
+    [property: JsonPropertyName("first_name")] string? FirstName = null,
+    [property: JsonPropertyName("last_name")] string? LastName = null)
+{
+    /// <summary>Ім'я для повідомлення: «Олена Коваль (@olena)».</summary>
+    [JsonIgnore]
+    public string DisplayName
+    {
+        get
+        {
+            var name = string.Join(' ', new[] { FirstName, LastName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            return Username is { Length: > 0 } user ? (name.Length > 0 ? $"{name} (@{user})" : $"@{user}") : (name.Length > 0 ? name : Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+}

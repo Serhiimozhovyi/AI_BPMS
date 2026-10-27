@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { GROUPS_COLLAPSE_KEY } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowSummary, emptyWorkflowDefinition } from '../../workflows/workflows-api.service';
@@ -33,6 +34,7 @@ describe('WorkflowsPage', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } } },
       ],
     });
@@ -49,7 +51,25 @@ describe('WorkflowsPage', () => {
   const toggleInput = (host: HTMLElement, id: string) =>
     row(host, id).querySelector<HTMLButtonElement>('[data-testid="active-toggle"] button[role="switch"]')!;
 
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  /** Меню й діалоги живуть в оверлеї поза хостом компонента. */
+  const overlay = (testid: string) => document.body.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!;
+  const menuItem = (testid: string) => document.body.querySelector<HTMLElement>(`.mat-mdc-menu-panel [data-testid="${testid}"]`)!;
+
+  async function settle(fixture: ComponentFixture<WorkflowsPage>) {
+    await render(fixture);
+    await new Promise((resolve) => setTimeout(resolve));
+    await render(fixture);
+  }
+
+  async function openMenu(fixture: ComponentFixture<WorkflowsPage>, host: HTMLElement, id: string) {
+    row(host, id).querySelector<HTMLButtonElement>('[data-testid="row-menu"]')!.click();
+    await settle(fixture);
+  }
+
+  afterEach(() => {
+    document.body.querySelectorAll('.cdk-overlay-container').forEach((el) => (el.innerHTML = ''));
+    TestBed.inject(HttpTestingController).verify();
+  });
 
   it('показує список сценаріїв з посиланням у канвас', async () => {
     const { host } = await setup();
@@ -62,12 +82,51 @@ describe('WorkflowsPage', () => {
     expect(toggleInput(host, 'w2').getAttribute('aria-checked')).toBe('true');
   });
 
+  it('показує тригер і останній запуск, а для нових сценаріїв — прочерки (F3-80)', async () => {
+    const ran: WorkflowSummary = {
+      ...draft,
+      triggerType: 'core.schedule',
+      lastExecution: { id: 'e1', status: 'error', startedAt: '2026-10-27T08:30:00Z' },
+    };
+    const fresh: WorkflowSummary = { ...live, active: false, triggerType: null, lastExecution: null };
+    const { host } = await setup([ran, fresh]);
+
+    expect(row(host, 'w1').querySelector('[data-testid="trigger-cell"]')?.textContent).toContain('За розкладом');
+    expect(row(host, 'w1').querySelector('[data-testid="last-run-state"]')?.textContent?.trim()).toBe('Помилка');
+    expect(row(host, 'w1').querySelector('[data-testid="last-run-at"]')?.textContent).toMatch(/^\s*27\.10\.2026 \d{2}:\d{2}\s*$/);
+    expect(row(host, 'w1').querySelector('[data-testid="last-run-link"]')?.getAttribute('href')).toBe('/executions/e1');
+    expect(row(host, 'w2').querySelector('[data-testid="trigger-cell"]')?.textContent).toContain('Немає');
+    expect(row(host, 'w2').querySelector('[data-testid="last-run-cell"]')?.textContent).toContain('Не запускався');
+  });
+
+  it('перемикач без тригера вимкнено з поясненням; неопублікований сценарій — підказка про публікацію (F3-80)', async () => {
+    const noTrigger: WorkflowSummary = { ...draft, triggerType: null, publishedVersion: null };
+    const unpublished: WorkflowSummary = { ...live, active: false, triggerType: 'core.manualTrigger', publishedVersion: null };
+    const { host } = await setup([noTrigger, unpublished]);
+
+    const blocked = row(host, 'w1');
+    expect(toggleInput(host, 'w1').disabled).toBe(true);
+    expect(blocked.querySelector('[data-testid="active-toggle-hint"]')?.getAttribute('title')).toContain('додайте тригер');
+    expect(toggleInput(host, 'w2').disabled).toBe(false);
+    expect(row(host, 'w2').querySelector('[data-testid="active-toggle-hint"]')?.getAttribute('title')).toContain('опублікує');
+  });
+
+  it('у рядку лишаються «Відкрити» і меню «⋯» з діями (F3-80)', async () => {
+    const { fixture, host } = await setup();
+    expect(row(host, 'w1').querySelectorAll('.row__actions > a, .row__actions > button')).toHaveLength(2);
+    await openMenu(fixture, host, 'w1');
+    const items = [...document.body.querySelectorAll('.mat-mdc-menu-panel [data-testid]')].map((e) => e.getAttribute('data-testid'));
+    expect(items).toEqual(['open-new-tab', 'rename-button', 'move-button', 'export-button', 'delete-button']);
+    expect(menuItem('open-new-tab').getAttribute('target')).toBe('_blank');
+  });
+
   it('«Експортувати» завантажує файл з визначенням і маніфестом', async () => {
     const { fixture, http, host } = await setup();
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
     const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    row(host, 'w1').querySelector<HTMLButtonElement>('[data-testid="export-button"]')!.click();
+    await openMenu(fixture, host, 'w1');
+    menuItem('export-button').click();
     http.expectOne({ method: 'GET', url: '/api/v1/workflows/w1/export' }).flush({
       definition: emptyWorkflowDefinition('Заявки'),
       manifest: { connectors: [], credentials: [], variables: [] },
@@ -102,11 +161,12 @@ describe('WorkflowsPage', () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
     host.querySelector<HTMLButtonElement>('[data-testid="create-button"]')!.click();
-    await render(fixture);
-    const input = host.querySelector<HTMLInputElement>('[data-testid="create-name"]')!;
+    await settle(fixture);
+    const input = overlay('create-name') as HTMLInputElement;
     input.value = '  Нові замовлення ';
     input.dispatchEvent(new Event('input'));
-    host.querySelector<HTMLFormElement>('[data-testid="create-form"]')!.dispatchEvent(new Event('submit'));
+    overlay('create-form').dispatchEvent(new Event('submit'));
+    await settle(fixture);
 
     const req = http.expectOne({ method: 'POST', url: '/api/v1/workflows' });
     expect(req.request.body.name).toBe('Нові замовлення');
@@ -115,23 +175,24 @@ describe('WorkflowsPage', () => {
     await render(fixture);
 
     expect(row(host, 'w9').textContent).toContain('Нові замовлення');
-    expect(host.querySelector('[data-testid="create-form"]')).toBeNull();
     expect(navigate).toHaveBeenCalledWith(['/workflows', 'w9']);
   });
 
   it('створення з порожньою назвою не надсилає запит', async () => {
     const { fixture, host } = await setup([]);
     fixture.componentInstance.startCreate();
-    await render(fixture);
-    host.querySelector<HTMLFormElement>('[data-testid="create-form"]')!.dispatchEvent(new Event('submit'));
-    await render(fixture);
-    expect(host.querySelector('mat-error')?.textContent).toContain('Вкажіть назву');
+    await settle(fixture);
+    overlay('create-form').dispatchEvent(new Event('submit'));
+    await settle(fixture);
+    expect(document.body.querySelector('mat-error')?.textContent).toContain('Вкажіть назву');
+    expect(host.querySelectorAll('[data-workflow]')).toHaveLength(0);
   });
 
   it('перейменування: PATCH і оновлений рядок', async () => {
     const { fixture, http, host } = await setup();
-    row(host, 'w1').querySelector<HTMLButtonElement>('[data-testid="rename-button"]')!.click();
-    await render(fixture);
+    await openMenu(fixture, host, 'w1');
+    menuItem('rename-button').click();
+    await settle(fixture);
     const input = row(host, 'w1').querySelector<HTMLInputElement>('[data-testid="rename-input"]')!;
     expect(input.value).toBe('Заявки');
     input.value = 'Заявки з Telegram';
@@ -162,7 +223,8 @@ describe('WorkflowsPage', () => {
     await render(fixture);
     expect(fixture.componentInstance.workflows().find((w) => w.id === 'w1')?.active).toBe(true);
     expect(toggleInput(host, 'w1').getAttribute('aria-checked')).toBe('true');
-    expect(row(host, 'w1').querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.disabled).toBe(true);
+    await openMenu(fixture, host, 'w1');
+    expect((menuItem('delete-button') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('невдала активація: помилка з Api і перемикач повертається', async () => {
@@ -187,8 +249,9 @@ describe('WorkflowsPage', () => {
 
   it('видалення з підтвердженням: DELETE і рядок зникає', async () => {
     const { fixture, http, host } = await setup();
-    row(host, 'w1').querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.click();
-    await render(fixture);
+    await openMenu(fixture, host, 'w1');
+    menuItem('delete-button').click();
+    await settle(fixture);
     expect(row(host, 'w1').textContent).toContain('Видалити сценарій');
     row(host, 'w1').querySelector<HTMLButtonElement>('[data-testid="delete-confirm"]')!.click();
     http.expectOne({ method: 'DELETE', url: '/api/v1/workflows/w1' }).flush(null, { status: 204, statusText: 'No Content' });
@@ -199,7 +262,8 @@ describe('WorkflowsPage', () => {
 
   it('активний сценарій видалити не можна; 409 від Api показується', async () => {
     const { fixture, http, host } = await setup();
-    expect(row(host, 'w2').querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.disabled).toBe(true);
+    await openMenu(fixture, host, 'w2');
+    expect((menuItem('delete-button') as HTMLButtonElement).disabled).toBe(true);
 
     fixture.componentInstance.startDelete('w2');
     fixture.componentInstance.confirmDelete('w2');
@@ -300,12 +364,13 @@ describe('WorkflowsPage', () => {
       expect(sectionIds(host)).toEqual(['g1', 'g3', 'none']);
 
       section(host, 'g3').querySelector<HTMLButtonElement>('[data-testid="section-create"]')!.click();
-      await render(fixture);
-      expect(host.querySelector('[data-testid="create-group-hint"]')?.textContent).toContain('Склад');
-      const name = host.querySelector<HTMLInputElement>('[data-testid="create-name"]')!;
+      await settle(fixture);
+      expect(overlay('create-group').textContent).toContain('Склад');
+      const name = overlay('create-name') as HTMLInputElement;
       name.value = 'Залишки';
       name.dispatchEvent(new Event('input'));
-      host.querySelector<HTMLFormElement>('[data-testid="create-form"]')!.dispatchEvent(new Event('submit'));
+      overlay('create-form').dispatchEvent(new Event('submit'));
+      await settle(fixture);
       const post = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/workflows');
       expect(post.request.params.get('groupId')).toBe('g3');
     });

@@ -12,7 +12,24 @@ namespace OpenBP.Application.Workflows;
 /// <param name="UpdatedAt">Останнє збереження, перейменування або зміна активності.</param>
 /// <param name="GroupId">Група сценарію (F3-63); <c>null</c> — без групи.</param>
 /// <param name="PublishedVersion">Номер опублікованої версії (F6-10); <c>null</c> — сценарій ще не публікувався.</param>
-public sealed record WorkflowSummary(Guid Id, string Name, bool Active, int Version, DateTimeOffset UpdatedAt, Guid? GroupId = null, int? PublishedVersion = null);
+/// <param name="TriggerType">Тип першого увімкненого тригера поточної версії (<c>core.schedule</c> тощо); <c>null</c> — тригера немає (F3-80).</param>
+/// <param name="LastExecution">Останнє виконання сценарію; <c>null</c> — сценарій ще не запускали (F3-80).</param>
+public sealed record WorkflowSummary(
+    Guid Id,
+    string Name,
+    bool Active,
+    int Version,
+    DateTimeOffset UpdatedAt,
+    Guid? GroupId = null,
+    int? PublishedVersion = null,
+    string? TriggerType = null,
+    WorkflowLastExecution? LastExecution = null);
+
+/// <summary>Останнє виконання в рядку списку сценаріїв (F3-80).</summary>
+/// <param name="Id"><c>executions.id</c>.</param>
+/// <param name="Status">Стан виконання (<c>success</c>, <c>error</c>, <c>running</c> тощо — як у <c>executions.status</c>).</param>
+/// <param name="StartedAt">Початок; <c>null</c> — виконання ще в черзі.</param>
+public sealed record WorkflowLastExecution(Guid Id, string Status, DateTimeOffset? StartedAt);
 
 /// <summary>Сценарій з визначенням чернетки — поточної версії (<c>GET /workflows/{id}</c>).</summary>
 /// <param name="Id"><c>workflows.id</c>.</param>

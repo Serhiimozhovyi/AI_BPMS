@@ -1,8 +1,8 @@
 {
   "$schema": "../../tools/connector-template/schemas/connector.schema.json",
   "id": "msgraph",
-  "name": "Microsoft Graph: пошта",
-  "description": "Листи, вкладення й надсилання пошти через Microsoft Graph (client credentials).",
+  "name": "Microsoft Graph: пошта й Excel",
+  "description": "Листи, вкладення й надсилання пошти, рядки книг Excel у SharePoint/OneDrive через Microsoft Graph (client credentials).",
   "icon": "✉️",
   "transport": "stdio",
   "stdio": {

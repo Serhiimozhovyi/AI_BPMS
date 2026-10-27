@@ -2,10 +2,13 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { DateAdapter, MAT_DATE_FORMATS, MAT_DATE_LOCALE, MAT_NATIVE_DATE_FORMATS } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { MatSelectModule } from '@angular/material/select';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription, catchError, forkJoin, map, of } from 'rxjs';
 import { BusinessViewComponent } from '../../business-view/business-view.component';
 import { BusinessRun } from '../../business-view/business-run';
@@ -13,6 +16,17 @@ import { EditorView, readEditorView, writeEditorView } from '../../business-view
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
 import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
 import { StageStripComponent } from '../../executions/stage-strip.component';
+import {
+  ExecutionsQuery,
+  executionsQueryParams,
+  formatExecutionDuration,
+  fromIsoDay,
+  parseExecutionsQuery,
+  sameExecutionsQuery,
+  toIsoDay,
+} from '../../executions/executions-query';
+import { CardTableDirective } from '../../shared/card-table.directive';
+import { UkDateAdapter } from '../../shared/uk-date-adapter';
 import { ConnectorsApiService, apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
   EXECUTION_STATES,
@@ -61,55 +75,83 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
  * з input/output (та сама панель, що в тестовому запуску), живе оновлення через SSE, «Скасувати», «Повторити» і
  * «Продовжити з вузла» (F6-08) з редактором вхідних items вузла, що впав.
  * `?workflowId=` — журнал одного сценарію (посилання з канвасу).
+ *
+ * F3-81: виконання має власну адресу `/executions/:id` — деталі в правій панелі поруч зі списком (на вузьких екранах
+ * замість списку), «Назад» і пряме посилання працюють; фільтри живуть у query-параметрах адреси.
  */
 @Component({
   selector: 'app-executions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, BusinessViewComponent, NodeRunDataComponent, StageStripComponent],
+  imports: [
+    CardTableDirective,
+    DatePipe,
+    RouterLink,
+    MatButtonModule,
+    MatDatepickerModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+    MatSelectModule,
+    BusinessViewComponent,
+    NodeRunDataComponent,
+    StageStripComponent,
+  ],
+  // Дати фільтра — `дд.мм.рррр` (F3-81): нативний `input[type=date]` показував би формат локалі браузера.
+  providers: [
+    { provide: MAT_DATE_LOCALE, useValue: 'uk-UA' },
+    { provide: DateAdapter, useClass: UkDateAdapter },
+    { provide: MAT_DATE_FORMATS, useValue: MAT_NATIVE_DATE_FORMATS },
+  ],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@executions.title">Виконання</h1>
 
-      <div class="mb-4 flex flex-wrap items-end gap-4" data-testid="filters">
-        <label class="flex flex-col text-sm">
-          <span i18n="@@executions.filter.workflow">Сценарій</span>
-          <select data-testid="filter-workflow" class="rounded border p-1" [value]="workflowId() ?? ''" (change)="setWorkflow($any($event.target).value)">
-            <option value="" i18n="@@executions.filter.allWorkflows">Усі сценарії</option>
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div [class]="listClass()" data-testid="journal">
+      <div class="mb-4 flex flex-wrap items-start gap-3" data-testid="filters">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-56">
+          <mat-label i18n="@@executions.filter.workflow">Сценарій</mat-label>
+          <mat-select data-testid="filter-workflow" [value]="workflowId()" (selectionChange)="setWorkflow($event.value ?? '')">
+            <mat-option [value]="null" i18n="@@executions.filter.allWorkflows">Усі сценарії</mat-option>
             @for (w of workflows(); track w.id) {
-              <option [value]="w.id" [selected]="w.id === workflowId()">{{ w.name }}</option>
+              <mat-option [value]="w.id">{{ w.name }}</mat-option>
             }
-          </select>
-        </label>
-        <label class="flex flex-col text-sm">
-          <span i18n="@@executions.filter.status">Стан</span>
-          <select data-testid="filter-status" class="rounded border p-1" [value]="status() ?? ''" (change)="setStatus($any($event.target).value)">
-            <option value="" i18n="@@executions.filter.allStatuses">Усі стани</option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-44">
+          <mat-label i18n="@@executions.filter.status">Стан</mat-label>
+          <mat-select data-testid="filter-status" [value]="status()" (selectionChange)="setStatus($event.value ?? '')">
+            <mat-option [value]="null" i18n="@@executions.filter.allStatuses">Усі стани</mat-option>
             @for (s of states; track s) {
-              <option [value]="s">{{ stateLabel(s) }}</option>
+              <mat-option [value]="s">{{ stateLabel(s) }}</mat-option>
             }
-          </select>
-        </label>
-        <label class="flex flex-col text-sm">
-          <span i18n="@@executions.filter.from">З</span>
-          <input type="date" data-testid="filter-from" class="rounded border p-1" [value]="from()" (change)="setFrom($any($event.target).value)" />
-        </label>
-        <label class="flex flex-col text-sm">
-          <span i18n="@@executions.filter.to">По</span>
-          <input type="date" data-testid="filter-to" class="rounded border p-1" [value]="to()" (change)="setTo($any($event.target).value)" />
-        </label>
-        <label class="flex flex-col text-sm">
-          <span i18n="@@executions.filter.correlationKey">Ключ кореляції</span>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-44">
+          <mat-label i18n="@@executions.filter.from">З</mat-label>
+          <input matInput [matDatepicker]="fromPicker" data-testid="filter-from" placeholder="дд.мм.рррр" i18n-placeholder="@@executions.filter.datePlaceholder" [value]="fromDate()" (dateChange)="setFromDate($event.value)" />
+          <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
+          <mat-datepicker #fromPicker />
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-44">
+          <mat-label i18n="@@executions.filter.to">По</mat-label>
+          <input matInput [matDatepicker]="toPicker" data-testid="filter-to" placeholder="дд.мм.рррр" i18n-placeholder="@@executions.filter.datePlaceholder" [value]="toDate()" (dateChange)="setToDate($event.value)" />
+          <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
+          <mat-datepicker #toPicker />
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-48">
+          <mat-label i18n="@@executions.filter.correlationKey">Ключ кореляції</mat-label>
           <input
+            matInput
             type="search"
             data-testid="filter-correlation-key"
-            class="rounded border p-1"
             placeholder="напр. id угоди"
             i18n-placeholder="@@executions.filter.correlationKey.placeholder"
             [value]="correlationKey()"
             (change)="setCorrelationKey($any($event.target).value)"
           />
-        </label>
-        <label class="flex items-center gap-2 text-sm">
+        </mat-form-field>
+        <label class="flex items-center gap-2 pt-4 text-sm">
           <input type="checkbox" data-testid="filter-violations" [checked]="onlyViolations()" (change)="setOnlyViolations($any($event.target).checked)" />
           <span i18n="@@executions.filter.violations">Лише з відкритими порушеннями</span>
         </label>
@@ -127,13 +169,15 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
       }
 
       @if (executions().length > 0) {
-        <table class="mb-2 w-full text-left" data-testid="executions-table">
+        <div class="overflow-x-auto">
+        <table appCardTable class="mb-2 w-full text-left" data-testid="executions-table">
           <thead>
             <tr>
-              <th class="p-2" i18n="@@executions.col.startedAt">Початок</th>
+              <th class="p-2" data-no-label i18n="@@executions.col.startedAt">Початок</th>
               <th class="p-2" i18n="@@executions.col.workflow">Сценарій</th>
               <th class="p-2" i18n="@@executions.col.mode">Режим</th>
               <th class="p-2" i18n="@@executions.col.state">Стан</th>
+              <th class="p-2" i18n="@@executions.col.duration">Тривалість</th>
               <th class="p-2" i18n="@@executions.col.finishedAt">Завершено</th>
               <th class="p-2" i18n="@@executions.col.correlationKey">Ключ</th>
             </tr>
@@ -142,12 +186,15 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             @for (e of executions(); track e.id) {
               <tr [attr.data-execution]="e.id" [class.font-semibold]="selected()?.summary?.id === e.id">
                 <td class="p-2">
-                  <button mat-button type="button" (click)="select(e.id)">{{ e.startedAt ? (e.startedAt | date: 'short') : '—' }}</button>
+                  <button mat-button type="button" data-testid="open-execution" (click)="select(e.id)">{{ e.startedAt ? (e.startedAt | date: dateTime) : '—' }}</button>
                 </td>
-                <td class="p-2">{{ workflowName(e.workflowId) }}</td>
+                <td class="p-2">
+                  <a class="hover:underline" data-testid="workflow-link" [routerLink]="['/workflows', e.workflowId]">{{ workflowName(e.workflowId) }}</a>
+                </td>
                 <td class="p-2">{{ modeLabel(e.mode) }}</td>
                 <td class="p-2" [class]="stateClass(e.state)" data-testid="state">{{ stateLabel(e.state) }}</td>
-                <td class="p-2">{{ e.finishedAt ? (e.finishedAt | date: 'short') : '—' }}</td>
+                <td class="p-2 whitespace-nowrap" data-testid="duration">{{ duration(e) }}</td>
+                <td class="p-2">{{ e.finishedAt ? (e.finishedAt | date: dateTime) : '—' }}</td>
                 <td class="p-2" data-testid="correlation-key">
                   @if (e.correlationKey; as key) {
                     <button mat-button type="button" title="Показати всі виконання з цим ключем" i18n-title="@@executions.correlationKey.filter" (click)="setCorrelationKey(key)">
@@ -161,6 +208,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             }
           </tbody>
         </table>
+        </div>
       }
 
       @if (total() > pageSize) {
@@ -171,16 +219,27 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
         </div>
       }
 
+      </div>
+      @if (selectedId()) {
+      <div class="w-full min-w-0 lg:w-1/2 xl:w-7/12" data-testid="detail-pane">
+        <button mat-button type="button" class="mb-2" data-testid="detail-back" (click)="close()">
+          <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+          <span i18n="@@executions.back">Назад</span>
+        </button>
+        @if (detailLoading()) {
+          <mat-progress-bar mode="indeterminate" />
+        }
       @if (selected(); as d) {
-        <article class="mt-4" data-testid="execution-detail" [attr.data-state]="d.summary.state">
+        <article data-testid="execution-detail" [attr.data-state]="d.summary.state">
           <div class="mb-2 flex flex-wrap items-center gap-4">
             <h2 class="text-lg font-semibold">
               <a [routerLink]="['/workflows', d.summary.workflowId]" data-testid="detail-workflow">{{ workflowName(d.summary.workflowId) }}</a>
             </h2>
             <span [class]="stateClass(d.summary.state)" data-testid="detail-state">{{ stateLabel(d.summary.state) }}</span>
             <span class="opacity-70">{{ modeLabel(d.summary.mode) }}</span>
+            <a mat-stroked-button data-testid="open-in-editor" [routerLink]="['/workflows', d.summary.workflowId]" [queryParams]="editorParams()" i18n="@@executions.openInEditor">Відкрити в редакторі</a>
             @if (d.summary.state === 'waiting' && waitingUntil(d); as until) {
-              <span data-testid="detail-resume-at" i18n="@@executions.waitingUntil">до {{ until | date: 'short' }}</span>
+              <span data-testid="detail-resume-at" i18n="@@executions.waitingUntil">до {{ until | date: dateTime }}</span>
             }
             @if (canCancel(d.summary.state)) {
               <button mat-stroked-button type="button" data-testid="cancel-button" [disabled]="acting()" (click)="cancel(d.summary.id)" i18n="@@executions.cancel">
@@ -280,10 +339,10 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
                     <p data-testid="violation-message">{{ v.message }}</p>
                   }
                   <p class="opacity-70" data-testid="violation-times">
-                    <span i18n="@@violations.createdAt">Виникло {{ v.createdAt | date: 'short' }}</span>
+                    <span i18n="@@violations.createdAt">Виникло {{ v.createdAt | date: dateTime }}</span>
                     @if (v.resolvedAt; as at) {
                       <span> · </span>
-                      <span i18n="@@violations.resolvedAt">закрито {{ at | date: 'short' }}</span>
+                      <span i18n="@@violations.resolvedAt">закрито {{ at | date: dateTime }}</span>
                     }
                   </p>
                   @if (v.status === 'overridden') {
@@ -359,6 +418,9 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
           </div>
         </article>
       }
+      </div>
+      }
+      </div>
     </section>
   `,
 })
@@ -368,8 +430,11 @@ export class ExecutionsPage implements OnInit {
   private readonly nodesApi = inject(NodesApiService);
   private readonly connectorsApi = inject(ConnectorsApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
+  /** Формат дати й часу в журналі — по-українськи, незалежно від локалі браузера. */
+  readonly dateTime = 'dd.MM.yyyy HH:mm:ss';
   readonly pageSize = EXECUTIONS_PAGE_SIZE;
   readonly states = EXECUTION_STATES;
 
@@ -387,6 +452,9 @@ export class ExecutionsPage implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
+  /** `:id` з адреси `/executions/:id` — виконання в правій панелі (F3-81). */
+  readonly selectedId = signal<string | null>(null);
+  readonly detailLoading = signal(false);
   readonly selected = signal<ExecutionDetail | null>(null);
   readonly selectedStepId = signal<string | null>(null);
   /** Визначення сценарію вибраного виконання (поточна версія; вузол, якого вже немає, — за id). */
@@ -422,6 +490,15 @@ export class ExecutionsPage implements OnInit {
     return 'error' in parsed ? parsed.error : null;
   });
 
+  readonly fromDate = computed(() => fromIsoDay(this.from()));
+  readonly toDate = computed(() => fromIsoDay(this.to()));
+  /** Класи колонки списку: поруч із деталями — половина ширини, на вузьких екранах деталі замість списку. */
+  readonly listClass = computed(() => (this.selectedId() ? 'hidden min-w-0 lg:block lg:w-1/2 xl:w-5/12' : 'w-full min-w-0'));
+  /** `?node=` для «Відкрити в редакторі»: вузол, що впав, виділяється на канвасі. */
+  readonly editorParams = computed(() => {
+    const failed = this.resumeStep();
+    return failed ? { node: failed.nodeId } : null;
+  });
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
   readonly selectedStep = computed<ExecutionStep | null>(() => {
     const detail = this.selected();
@@ -437,13 +514,14 @@ export class ExecutionsPage implements OnInit {
 
   ngOnInit(): void {
     if (this.view() === 'business') this.loadBusiness();
-    this.workflowId.set(this.route.snapshot.queryParamMap.get('workflowId') || null);
-    this.onlyViolations.set(this.route.snapshot.queryParamMap.get('hasOpenViolations') === 'true');
     this.workflowsApi
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (page) => this.workflows.set(page.items), error: () => this.workflows.set([]) });
-    this.load();
+    // Адреса — джерело фільтрів і вибраного виконання: перший збіг завантажує журнал, наступні (перехід з «Огляду»,
+    // «Назад», посилання на інше виконання) — лише коли справді щось змінилось.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => this.applyQuery(parseExecutionsQuery(params)));
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => this.showId(params.get('id')));
   }
 
   load(): void {
@@ -485,6 +563,14 @@ export class ExecutionsPage implements OnInit {
     this.resetPage();
   }
 
+  setFromDate(date: Date | null): void {
+    this.setFrom(date ? toIsoDay(date) : '');
+  }
+
+  setToDate(date: Date | null): void {
+    this.setTo(date ? toIsoDay(date) : '');
+  }
+
   setCorrelationKey(key: string): void {
     this.correlationKey.set(key.trim());
     this.resetPage();
@@ -498,20 +584,21 @@ export class ExecutionsPage implements OnInit {
   goTo(page: number): void {
     this.page.set(Math.min(Math.max(1, page), this.pageCount()));
     this.load();
+    this.syncUrl();
   }
 
+  /** Відкрити виконання: перехід на `/executions/:id` із збереженням фільтрів; деталі завантажує {@link showId}. */
   select(id: string): void {
-    this.stopLive();
-    this.actionError.set(null);
-    this.resumeOpen.set(false);
-    this.overrideId.set(null);
-    this.api
-      .get(id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (detail) => this.show(detail),
-        error: (e: unknown) => this.error.set(apiErrorMessage(e)),
-      });
+    void this.router.navigate(['/executions', id], { queryParamsHandling: 'preserve' });
+  }
+
+  /** «Назад»: закрити деталі, фільтри лишаються. */
+  close(): void {
+    void this.router.navigate(['/executions'], { queryParamsHandling: 'preserve' });
+  }
+
+  duration(execution: ExecutionSummary): string {
+    return formatExecutionDuration(execution.startedAt, execution.finishedAt);
   }
 
   cancel(id: string): void {
@@ -736,6 +823,76 @@ export class ExecutionsPage implements OnInit {
   private resetPage(): void {
     this.page.set(1);
     this.load();
+    this.syncUrl();
+  }
+
+  private query(): ExecutionsQuery {
+    return {
+      workflowId: this.workflowId(),
+      status: this.status(),
+      from: this.from(),
+      to: this.to(),
+      correlationKey: this.correlationKey(),
+      hasOpenViolations: this.onlyViolations(),
+      page: this.page(),
+    };
+  }
+
+  private queryApplied = false;
+
+  /** Фільтри з адреси в стан сторінки; збіг із поточним станом (наш власний `syncUrl`) — нічого не робить. */
+  private applyQuery(query: ExecutionsQuery): void {
+    const first = !this.queryApplied;
+    this.queryApplied = true;
+    if (!first && sameExecutionsQuery(query, this.query())) return;
+    this.workflowId.set(query.workflowId);
+    this.status.set(query.status);
+    this.from.set(query.from);
+    this.to.set(query.to);
+    this.correlationKey.set(query.correlationKey);
+    this.onlyViolations.set(query.hasOpenViolations);
+    this.page.set(query.page);
+    this.load();
+  }
+
+  /** Поточні фільтри — у query-параметри адреси (без запису в історію): посилання відтворює той самий журнал. */
+  private syncUrl(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: executionsQueryParams(this.query()),
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  /** Вибране в адресі виконання: завантажити деталі або закрити панель. */
+  private showId(id: string | null): void {
+    if (id === this.selectedId()) return;
+    this.selectedId.set(id);
+    this.stopLive();
+    this.actionError.set(null);
+    this.resumeOpen.set(false);
+    this.overrideId.set(null);
+    this.selected.set(null);
+    if (!id) {
+      this.definition.set(null);
+      this.detailLoading.set(false);
+      return;
+    }
+    this.detailLoading.set(true);
+    this.api
+      .get(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (detail) => {
+          this.detailLoading.set(false);
+          if (this.selectedId() === id) this.show(detail);
+        },
+        error: (e: unknown) => {
+          this.detailLoading.set(false);
+          this.error.set(apiErrorMessage(e));
+        },
+      });
   }
 
   private show(detail: ExecutionDetail): void {

@@ -51,11 +51,17 @@ interface PanelState {
     @let s = state();
     <section class="panel" data-testid="node-panel" [attr.data-node]="s.node.id">
       <header class="panel__header">
-        <div class="panel__title-row">
-          <h2 class="mat-font-title-sm m-0 panel__name" data-testid="node-panel-name">{{ s.node.name }}</h2>
-          <ng-content select="[panelActions]" />
-        </div>
-        <span class="panel__type">{{ s.node.type }}</span>
+        @if (!compactHeader()) {
+          <div class="panel__title-row">
+            @if (readonly()) {
+              <h2 class="mat-font-title-sm m-0 panel__name" data-testid="node-panel-name">{{ s.node.name }}</h2>
+            } @else {
+              <h2 class="mat-font-title-sm m-0 panel__name panel__name--editable" data-testid="node-panel-name" tabindex="0" role="button" i18n-title="@@nodeform.renameHint" title="Перейменувати (F2)" (click)="renameRequest.emit()" (keydown.enter)="renameRequest.emit()">{{ s.node.name }}</h2>
+            }
+            <ng-content select="[panelActions]" />
+          </div>
+          <span class="panel__type" [title]="s.node.type">{{ descriptor()?.displayName ?? s.node.type }}</span>
+        }
         @if (isMcp(s.node)) {
           <span class="panel__type" data-testid="node-panel-tool">{{ s.node.parameters['serverId'] }} · {{ s.node.parameters['toolName'] }}</span>
         }
@@ -127,12 +133,19 @@ interface PanelState {
         }
       }
 
-      <h3 class="panel__subtitle" i18n="@@nodeform.common">Налаштування вузла</h3>
-      @for (k of [s]; track k.id) {
-        <div class="panel__form" data-testid="node-common" [attr.inert]="readonly() ? '' : null">
-          <formly-form [form]="k.commonForm" [fields]="k.commonFields" [model]="k.commonModel" (modelChange)="commonChanged($event)" />
-        </div>
-      }
+      <details class="panel__extra" data-testid="node-extra" [open]="extraOpen()" (toggle)="extraOpen.set($any($event.target).open)">
+        <summary class="panel__extra-head" data-testid="node-extra-toggle">
+          <span i18n="@@nodeform.extra">Додатково</span>
+          @if (hasCustomCommon()) {
+            <span class="panel__extra-badge" data-testid="node-extra-changed" i18n="@@nodeform.extra.changed">змінено</span>
+          }
+        </summary>
+        @for (k of [s]; track k.id) {
+          <div class="panel__form" data-testid="node-common" [attr.inert]="readonly() ? '' : null">
+            <formly-form [form]="k.commonForm" [fields]="k.commonFields" [model]="k.commonModel" (modelChange)="commonChanged($event)" />
+          </div>
+        }
+      </details>
     </section>
   `,
   styles: `
@@ -156,6 +169,10 @@ interface PanelState {
       flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+    }
+
+    .panel__name--editable {
+      cursor: text;
     }
 
     .panel__name {
@@ -214,9 +231,28 @@ interface PanelState {
       font-size: 13px;
     }
 
-    .panel__subtitle {
-      margin: 16px 0 8px;
+    .panel__extra {
+      margin-top: 16px;
+      border-top: 1px solid var(--ac-line);
+      padding-top: 8px;
+    }
+
+    .panel__extra-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .panel__extra-badge {
+      padding: 0 6px;
+      border-radius: 8px;
+      background: var(--ac-button, #ebe9fd);
+      color: var(--ac-kit, #5f53dc);
+      font-size: 11px;
+      font-weight: 400;
     }
   `,
 })
@@ -226,6 +262,8 @@ export class NodePanelComponent {
 
   /** Дескриптор типу вузла; немає — тип невідомий, форма параметрів недоступна. */
   readonly descriptor = input<NodeTypeInfo | undefined>(undefined);
+  /** Шапку з назвою, типом і діями малює редактор (F3-88): тут лишається лише рядок tool'а конектора. */
+  readonly compactHeader = input(false);
 
   /** Для `mcp.tool`: tool із `tools_cache` (його `inputSchema` описує `arguments`). */
   readonly tool = input<McpToolInfo | null>(null);
@@ -245,8 +283,15 @@ export class NodePanelComponent {
   /** Змінений вузол після кожної зміни у формі. */
   readonly nodeChange = output<WorkflowNode>();
 
+  /** Клік по назві вузла в панелі: редактор вмикає inline-перейменування на канвасі. */
+  readonly renameRequest = output<void>();
+
   /** Обрано іншу дію конектора (F3-55): редактор змінює `toolName` і скидає `arguments` (`changeNodeTool`). */
   readonly toolChange = output<McpToolInfo>();
+
+  /** Секція «Додатково» (тайм-аут, повтори, пауза, нотатки): за замовчуванням згорнута; позначка — якщо щось не стандартне. */
+  protected readonly extraOpen = signal(false);
+  protected readonly hasCustomCommon = computed(() => hasCustomCommon(this.state().node));
 
   /** Дії конектора вузла, згруповані «Ресурс → Операція». */
   protected readonly actionGroups = computed(() => groupActions(this.serverTools() ?? []));
@@ -400,4 +445,16 @@ function createState({ node, descriptor, tool, credentials }: PanelSource, formS
     commonModel: commonModel(node),
     commonFields: commonFields(),
   };
+}
+
+/** Чи відрізняється хоч одне загальне поле вузла від стандартного (форма «Додатково» має позначку «змінено»). */
+export function hasCustomCommon(node: WorkflowNode): boolean {
+  return (
+    node.timeoutSec !== undefined ||
+    node.retry?.maxTries !== undefined ||
+    node.retry?.waitMs !== undefined ||
+    node.continueOnFail === true ||
+    node.disabled === true ||
+    (typeof node.notes === 'string' ? node.notes.trim() !== '' : node.notes != null)
+  );
 }

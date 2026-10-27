@@ -13,8 +13,13 @@ MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), 
 | `set_webhook` | `setWebhook` | `url` (https), `secret_token?`, `allowed_updates?`, `drop_pending_updates?` | `{ "ok": true }` |
 | `delete_webhook` | `deleteWebhook` | `drop_pending_updates?` | `{ "ok": true }` |
 | `send_document` | `sendDocument` | `chat_id`, `document_url` **або** `document_base64` + `file_name?`, `caption?` | надіслане повідомлення з `document` |
+| `send_photo` | `sendPhoto` | `chat_id`, `photo_url` **або** `photo_base64` (до 10 МБ, JPEG/PNG) + `file_name?`, `caption?` (до 1024 символів), `parse_mode?`, `reply_markup?` | надіслане повідомлення з `photo` (розміри з `file_id`); задовгий підпис чи завелика картинка — `isError` з поясненням, без запиту до Bot API |
+| `send_approval` | `sendMessage` з кнопками | `chat_id`, `text`, `approve_label?` (типово «✅ Погодити»), `reject_label?` (типово «❌ Відхилити»), `parse_mode?` | `{ message_id, chat_id, token }` |
+| `get_approval` | `getUpdates` без `offset` | `chat_id`, `message_id`, `token` (з `send_approval`) | `{ answered: false }` або `{ answered: true, approved, decision: "approve" \| "reject", by: { id, username, first_name, last_name } }` |
 | `get_updates` | `getUpdates` | `offset?`, `limit?` (1–100) | `{ "result": [Update, …] }`, кожне з унікальним `update_id` |
 | `get_chat` | `getChat` | `chat_id` | `id`, `type`, `title`/`username`/`first_name` |
+
+У конструкторі OpenBP `reply_markup` редагується візуально (інлайн-кнопки чи клавіатура, `x-openbp-widget: keyboard`), `commands` — таблицею, `parse_mode` — списком, `text`/`caption` мають лічильник символів (docs/connectors.md §2).
 
 `chat_id` — числовий id чату або `@username` каналу. `reply_markup` — об'єкт Bot API як є (рядок з JSON теж
 підходить), з рівно одним з полів:
@@ -107,3 +112,40 @@ Telegram доставляє оновлення **або** на webhook, **або
    `cron = */1 * * * *`. OpenBP пам'ятає оброблені `update_id` і запускає сценарій лише з новими.
 3. Повідомлення — у `$json.message`. Без `offset` Telegram віддає непідтверджені оновлення до 24 годин, тож ті
    самі `update_id` приходять кілька разів — `mcp.poll` відкидає вже бачені за `keyField`.
+
+## 5. Погодження з очікуванням відповіді (аналог n8n «Send and Wait»)
+
+`send_approval` надсилає повідомлення з двома кнопками, `get_approval` перевіряє, чи натиснули одну з них. Сценарій:
+`mcp.tool send_approval` → `mcp.waitFor get_approval` з умовою `answered isTrue` → `core.if` на `approved`; вихід
+`timeout` вузла `mcp.waitFor` — «ніхто не відповів» (вважайте як «не погоджено»).
+
+```json
+{ "id": "n_ask", "name": "Запит на погодження", "type": "mcp.tool", "typeVersion": 1, "position": [200, 0],
+  "parameters": { "serverId": "srv_telegram", "toolName": "send_approval",
+    "arguments": { "chat_id": 42, "text": "Погодити пост «{{ $json.title }}»?" } } },
+{ "id": "n_wait", "name": "Чекати відповідь", "type": "mcp.waitFor", "typeVersion": 1, "position": [400, 0],
+  "parameters": { "serverId": "srv_telegram", "toolName": "get_approval",
+    "arguments": { "chat_id": "{{ $json.chat_id }}", "message_id": "{{ $json.message_id }}", "token": "{{ $json.token }}" },
+    "conditions": [ { "field": "answered", "operator": "isTrue" } ], "intervalMinutes": 1, "timeoutHours": 4 } },
+{ "id": "n_if", "name": "Погоджено?", "type": "core.if", "typeVersion": 1, "position": [600, 0],
+  "parameters": { "conditions": [ { "left": "{{ $json.approved }}", "operator": "isTrue" } ], "combine": "and" } }
+```
+
+Як це працює:
+
+- кнопки несуть `callback_data` = `apv:<token>:1` (погодити) чи `apv:<token>:0` (відхилити); токен випадковий для
+  кожного запиту, тож натискання в іншому повідомленні чи з чужим токеном не зараховуються;
+- коли кнопку натиснули, `get_approval` відповідає на натискання («Рішення записано»), прибирає кнопки й дописує в
+  повідомлення «✅ Погоджено: Олена (@olena)» або «❌ Відхилено: …» (розмітка оригіналу зберігається);
+- зараховується перше натискання; після нього кнопок уже немає. Якщо Telegram відмовив у відповіді чи редагуванні
+  (натискання давнє, текст задовгий) — рішення все одно повертається, а кнопки прибираються окремим запитом.
+
+Обмеження:
+
+- **Один споживач оновлень на бота.** `get_approval` читає непідтверджені оновлення через `getUpdates` і нічого не
+  підтверджує. Поки боту встановлено webhook, `getUpdates` не працює — `get_approval` поверне помилку з поясненням;
+  зніміть webhook (`delete_webhook`) або візьміть окремого бота для погоджень. Тригер `mcp.poll` на `get_updates` без
+  `offset` (розділ 4) поруч працює.
+- Telegram тримає непідтверджені оновлення 24 години і віддає не більше 100: погодження чекайте не довше доби й не
+  на боті з великим потоком повідомлень без споживача.
+- У групі натиснути кнопку може будь-хто з учасників; хто саме — у `by`.

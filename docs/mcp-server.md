@@ -41,7 +41,9 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 
 ### Claude Desktop
 
-«Користувацькі конектори» Claude Desktop вміють лише OAuth, а OpenBP приймає API-ключ у заголовку, тому підключайте
+OpenBP приймає лише API-ключ у заголовку, а OAuth для `/mcp` немає. Custom connector claude.ai можна додати лише з бета-розділом
+«Request headers» ([docs/guide/ai-connectors.md §3.3](guide/ai-connectors.md#33-claudeai--custom-connector-веб-desktop-мобільний)); ChatGPT Developer mode
+заголовків не підтримує ([там же §4](guide/ai-connectors.md#4-chatgpt-та-інші-продукти-openai)). Для Claude Desktop надійніше підключати
 через локальний міст [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (потрібен Node.js). У
 `claude_desktop_config.json` (Settings → Developer → Edit Config):
 
@@ -77,7 +79,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 |---|---|---|---|
 | `describe_connectors` | viewer | — | `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }`; `outputSchema` — форма `json` item'а на виході `mcp.tool` (`null`, якщо сервер її не оголосив) |
 | `describe_nodes` | viewer | — | `{ nodes: [{ type, version, displayName, group, description, trigger, inputs, outputs, parametersSchema, credentials: [{ parameter, type, required }] }] }` — типи вузлів, які можна вписати в `type`/`typeVersion`; кілька версій одного типу — окремі записи (напр. `core.wait` 1, 2 і 3: у версії 3 режими `webhook`/`form` і вихід `timeout`, F6-01) |
-| `list_workflows` | viewer | `search?`, `active?`, `groupId?` (id групи або `"none"` — без групи), `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt`, `groupId`, `publishedVersion` |
+| `list_workflows` | viewer | `search?`, `active?`, `groupId?` (id групи або `"none"` — без групи), `page?` | сторінка `{ items, page, pageSize, total }` з `id`, `name`, `active`, `version`, `updatedAt`, `groupId`, `publishedVersion`, `triggerType` (тип першого увімкненого тригера чернетки або `null`), `lastExecution` (`{ id, status, startedAt }` останнього виконання або `null`, F3-80) |
 | `get_workflow` | viewer | `id`, `version?` (`draft` — типово, або `published`) | сценарій з `definition` чернетки чи опублікованої версії (F6-10): `version` — чернетка, `publishedVersion` — що виконують тригери, `hasUnpublishedChanges`, `definitionVersion` — чиє визначення віддано; `published` до першої публікації — `WORKFLOW_NOT_PUBLISHED` |
 | `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }], warnings }` (`path` — JSON Pointer; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню); помилки сценарію не є помилкою tool'а |
 | `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |

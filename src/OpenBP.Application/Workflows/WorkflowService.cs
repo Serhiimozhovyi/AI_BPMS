@@ -80,14 +80,48 @@ public sealed class WorkflowService(
         }
 
         var total = await query.CountAsync(ct);
-        var items = await query
+        // Останнє виконання й визначення версії (для типу тригера) — тим самим запитом: без N+1 на сторінку.
+        var rows = await query
             .OrderByDescending(w => w.UpdatedAt).ThenByDescending(w => w.Id)
             .Skip(page.Skip).Take(page.PageSize)
             .Join(db.WorkflowVersions, w => w.CurrentVersionId, v => v.Id,
-                (w, v) => new WorkflowSummary(w.Id, w.Name, w.Active, v.Version, w.UpdatedAt, w.GroupId,
-                    db.WorkflowVersions.Where(p => p.Id == w.PublishedVersionId).Select(p => (int?)p.Version).FirstOrDefault()))
+                (w, v) => new
+                {
+                    w.Id,
+                    w.Name,
+                    w.Active,
+                    v.Version,
+                    w.UpdatedAt,
+                    w.GroupId,
+                    v.Definition,
+                    PublishedVersion = db.WorkflowVersions.Where(p => p.Id == w.PublishedVersionId).Select(p => (int?)p.Version).FirstOrDefault(),
+                    Last = db.Executions
+                        .Where(e => e.WorkflowId == w.Id)
+                        .OrderByDescending(e => e.StartedAt).ThenByDescending(e => e.Id)
+                        .Select(e => new { e.Id, e.Status, e.StartedAt })
+                        .FirstOrDefault(),
+                })
             .ToListAsync(ct);
+        var items = rows
+            .Select(r => new WorkflowSummary(
+                r.Id, r.Name, r.Active, r.Version, r.UpdatedAt, r.GroupId, r.PublishedVersion,
+                FirstTriggerType(r.Definition),
+                r.Last is null ? null : new WorkflowLastExecution(r.Last.Id, r.Last.Status, r.Last.StartedAt)))
+            .ToList();
         return new PageResult<WorkflowSummary>(items, page.Page, page.PageSize, total);
+    }
+
+    /// <summary>Тип першого увімкненого тригера визначення; <c>null</c> — тригера немає або JSON не читається.</summary>
+    private string? FirstTriggerType(string definition)
+    {
+        try
+        {
+            return WorkflowJson.Deserialize(definition).Nodes.FirstOrDefault(n => n.Disabled != true && _validator.IsTrigger(n))?.Type;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />

@@ -38,7 +38,7 @@ interface PortView {
         </div>
       }
       @if (subSteps().length > 0) {
-        <h4 class="run__subtitle" i18n="@@noderun.subSteps">Кроки агента · {{ subSteps().length }}:count:</h4>
+        <h4 class="run__subtitle" i18n="@@noderun.subSteps">Кроки агента · {{ subSteps().length }}</h4>
         <ol class="run__subs" data-testid="node-run-substeps">
           @for (sub of subSteps(); track $index) {
             <li class="run__sub" [attr.data-kind]="sub.kind" [class.run__sub--error]="!!sub.error">

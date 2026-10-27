@@ -14,7 +14,7 @@ export interface CanvasNode {
   id: string;
   name: string;
   type: string;
-  /** Другий рядок картки: тип вузла або назва tool'а для `mcp.tool`. */
+  /** Другий рядок картки: назва tool'а для `mcp.*`, інакше людська назва типу, якщо вузол перейменовано. */
   subtitle: string;
   group: CanvasNodeGroup;
   x: number;
@@ -119,7 +119,7 @@ export function toCanvasModel(
       id: node.id,
       name: node.name,
       type: node.type,
-      subtitle: subtitleOf(node),
+      subtitle: subtitleOf(node, descriptor),
       group: descriptor?.group ?? 'unknown',
       x,
       y,
@@ -224,14 +224,15 @@ function padPorts(ports: string[], maxIndex: number, prefix: string | undefined)
   }
 }
 
-function subtitleOf(node: WorkflowNode): string {
+function subtitleOf(node: WorkflowNode, descriptor: NodeTypeInfo | undefined): string {
   if (node.type === 'mcp.tool' || node.type === 'mcp.poll' || node.type === 'mcp.waitFor') {
     const toolName = node.parameters?.['toolName'];
-    if (typeof toolName === 'string' && toolName) return `${node.type} · ${toolName}`;
+    if (typeof toolName === 'string' && toolName) return toolName;
   }
   if (node.type === 'mcp.subscribe') {
     const uri = node.parameters?.['resourceUri'];
-    if (typeof uri === 'string' && uri) return `${node.type} · ${uri}`;
+    if (typeof uri === 'string' && uri) return uri;
   }
-  return node.type;
+  // Людська назва типу під назвою вузла, якщо вузол перейменовано (F3-91); інакше вона повторювала б назву.
+  return descriptor && descriptor.displayName !== node.name ? descriptor.displayName : '';
 }

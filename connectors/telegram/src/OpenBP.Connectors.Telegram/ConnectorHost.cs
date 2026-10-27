@@ -24,7 +24,7 @@ public static class ConnectorHost
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         AddConnector(builder.Services, builder.Configuration);
         builder.Services.AddMcpServer(Configure).WithStdioServerTransport().WithTools<TelegramTools>();
-        builder.Services.PostConfigure<McpServerOptions>(AnnotateChatIds);
+        builder.Services.PostConfigure<McpServerOptions>(AnnotateInputs);
         return builder.Build();
     }
 
@@ -41,7 +41,7 @@ public static class ConnectorHost
         builder.Services.AddMcpServer(Configure)
             .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
             .WithTools<TelegramTools>();
-        builder.Services.PostConfigure<McpServerOptions>(AnnotateChatIds);
+        builder.Services.PostConfigure<McpServerOptions>(AnnotateInputs);
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;
@@ -91,6 +91,7 @@ public static class ConnectorHost
                 continue;
             }
 
+            chatId["x-openbp-widget"] = "chat";
             chatId["x-openbp-options"] = new JsonObject
             {
                 ["tool"] = "get_updates",
@@ -99,6 +100,68 @@ public static class ConnectorHost
                 ["valuePath"] = "message.chat.id",
                 ["labelPath"] = new JsonArray("message.chat.title", "message.chat.username", "message.chat.first_name"),
             };
+            protocol.InputSchema = JsonSerializer.SerializeToElement(schema);
+        }
+    }
+
+    private static readonly JsonArray ParseModes = new("HTML", "MarkdownV2", "Markdown");
+
+    /// <summary>Види оновлень Bot API для <c>allowed_updates</c> (множинний вибір у формі).</summary>
+    private static readonly string[] UpdateTypes =
+    [
+        "message", "edited_message", "channel_post", "edited_channel_post", "callback_query", "inline_query", "chosen_inline_result",
+        "shipping_query", "pre_checkout_query", "poll", "poll_answer", "my_chat_member", "chat_member", "chat_join_request",
+    ];
+
+    /// <summary>
+    /// Анотації й межі для повних форм у конструкторі (F6-30, docs/connectors.md §2): <c>reply_markup</c> — редактор кнопок
+    /// (<c>x-openbp-widget: keyboard</c>), <c>commands</c> — таблиця, <c>chat_id</c> — вибір чату; <c>parse_mode</c> — список,
+    /// <c>text</c>/<c>caption</c> — <c>maxLength</c> (лічильник символів), <c>allowed_updates</c> — множинний вибір.
+    /// Тут лише метадані схеми: поведінка tools не змінюється.
+    /// </summary>
+    /// <param name="options">Налаштування MCP-сервера з уже зареєстрованими tools.</param>
+    internal static void AnnotateInputs(McpServerOptions options)
+    {
+        AnnotateChatIds(options);
+        foreach (var tool in options.ToolCollection ?? [])
+        {
+            var protocol = tool.ProtocolTool;
+            if (JsonNode.Parse(protocol.InputSchema.GetRawText()) is not JsonObject schema || schema["properties"] is not JsonObject properties)
+            {
+                continue;
+            }
+
+            var name = protocol.Name;
+            if (properties["reply_markup"] is JsonObject markup)
+            {
+                markup["x-openbp-widget"] = "keyboard";
+            }
+
+            if (properties["commands"] is JsonObject commands)
+            {
+                commands["x-openbp-widget"] = "commands";
+            }
+
+            if (properties["parse_mode"] is JsonObject parseMode)
+            {
+                parseMode["enum"] = ParseModes.DeepClone();
+            }
+
+            if (properties["text"] is JsonObject text)
+            {
+                text["maxLength"] = name == "answer_callback_query" ? 200 : 4096;
+            }
+
+            if (properties["caption"] is JsonObject caption)
+            {
+                caption["maxLength"] = 1024;
+            }
+
+            if (properties["allowed_updates"] is JsonObject allowed)
+            {
+                allowed["items"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray([.. UpdateTypes.Select(u => (JsonNode)JsonValue.Create(u)!)]) };
+            }
+
             protocol.InputSchema = JsonSerializer.SerializeToElement(schema);
         }
     }

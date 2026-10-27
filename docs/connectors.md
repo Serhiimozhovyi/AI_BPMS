@@ -151,6 +151,26 @@ workflow не змінюється. Список вантажиться чере
 
 Розклад (F2-12): активний сценарій отримує Quartz-тригер за `cron` вузла (формат і перевірка — як у `core.schedule`, §6; часовий пояс — `settings.timezone`). Спрацювання ставить job `poll`; воркер виконує лише цей вузол зі станом з `node_state`. Нових записів немає — виконання не створюється; є — новий стан і виконання (`trigger`, `startItems` = нові записи) комітяться однією транзакцією. Помилка вузла не змінює стан, повтор — наступним спрацюванням.
 
+
+### Редактори полів: `x-openbp-widget` (F6-30)
+
+Необов'язкова анотація властивості `inputSchema`: підказує формі вузла, яким редактором показати значення. Схема —
+`tools/connector-template/schemas/x-openbp-widget.schema.json`; значення — рядок:
+
+| Значення | Редактор у формі | Значення в сценарії |
+|---|---|---|
+| `keyboard` | «Кнопки»: перемикач **Без кнопок / Інлайн-кнопки / Клавіатура / Прибрати клавіатуру**; рядки й кнопки з додаванням, видаленням і перестановкою; інлайн — текст і дія (`callback_data` або `url`), клавіатура — текст, «запросити контакт» / «геолокацію», `resize` і `one_time`; зауваження (порожній текст, `callback_data` понад 64 байти, поганий `url`, понад 8 кнопок в інлайн-рядку чи 100 усього); живий перегляд кнопок | об'єкт Bot API як є: `{ "inline_keyboard": [[{ "text", "callback_data" \| "url" }]] }`, `{ "keyboard": [[{ "text", "request_contact"? }]], "resize_keyboard"?, "one_time_keyboard"? }` або `{ "remove_keyboard": true }`; без кнопок поле не пишеться |
+| `commands` | таблиця «команда — опис» з підказками правил Bot API (1–32 малі латинські літери, цифри, `_`; опис 3–256 символів) | масив `[{ "command", "description" }]` |
+| `chat` | вибір чату (разом з `x-openbp-options`, див. вище) | id чату |
+
+Решта підказок — звичайні ключові слова JSON Schema, окремої анотації не потребують: `enum` — список (`parse_mode`:
+HTML, MarkdownV2, Markdown), `maxLength` рядка — лічильник символів під полем (понад 200 — багаторядкове поле), `items.enum`
+масиву рядків — множинний вибір (`allowed_updates`). Тексти й вирази `{{ }}` у кнопках зберігаються рядками і
+обчислюються під час виконання; розмітка, яку редактор не вміє показати без втрат (вираз, `web_app`, `login_url`,
+`input_field_placeholder` тощо), лишається «як є» в режимі «Код» і не змінюється. Невідоме значення анотації
+ігнорується — поле редагується звичайним способом. Формат workflow анотація не змінює; продукт не знає конкретних
+конекторів: аргумент з такою анотацією у будь-якого конектора отримує той самий редактор.
+
 ### 3.1. `mcp.waitFor` — чекати умову (F5-03)
 
 «Чекати, доки умова виконається» в зовнішній системі (задача закрита в Кіті, оплата надійшла). Параметри: `serverId`,
@@ -172,6 +192,13 @@ tool'а — помилка вузла (з `continueOnFail` — item помилк
     "conditions": [ { "field": "status", "operator": "equals", "right": "Виконано" } ],
     "intervalMinutes": 30, "timeoutHours": 48 } }
 ```
+
+Погодження в Telegram з очікуванням відповіді (F6-27) — саме такий випадок: `mcp.tool send_approval` (повідомлення з
+кнопками ✅/❌, відповідь `{ message_id, chat_id, token }`) → `mcp.waitFor get_approval` з умовою `answered isTrue` →
+`core.if` на `approved`; вихід `timeout` — «ніхто не відповів». `get_approval` читає непідтверджені оновлення
+(`getUpdates` без `offset`, нічого не підтверджує), тож з webhook-ом того самого бота не працює; натискання з чужим токеном
+чи в іншому повідомленні не зараховуються, зараховується перше; після відповіді конектор прибирає кнопки й дописує
+рішення в повідомлення. Приклад і обмеження — `connectors/telegram/README.md` §5.
 
 ## 4. `ai.llm`
 
@@ -316,7 +343,8 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
   Вбудовані: `telegram` — «Нове повідомлення Telegram» (`mcp.poll` на `get_updates`, `keyField = update_id`; після F6-22
   стане `mcp.subscribe`), `msgraph` — «Новий лист» (`list_messages`, `keyField = id`, `mailbox` вкажіть у вузлі), `onec` —
   «Новий документ 1С» (`list_document_orders`; назву tool'а звірте зі своїм `Connector:Source`), `kit-crm` — «Нова угода» і
-  «Нова чи змінена задача» (`changes_since`).
+  «Нова чи змінена задача» (`changes_since`), `sql` — «Нові рядки в таблиці» і «Нові або змінені рядки» (`changes_since`,
+  `keyField = _changeKey`; таблицю оберіть у вузлі).
 - Типовий шлях stdio — `/opt/openbp/connectors/<id>/<збірка>.dll`: туди адміністратор кладе `dotnet publish` конектора
   (docs/admin/README.md). Інший шлях чи URL змінюється після встановлення так само, як у доданого вручну конектора.
 
@@ -337,20 +365,33 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 
 - `connectors/telegram` — Telegram Bot API (F3-13, F3-27): `send_message` (з `reply_markup`: `inline_keyboard`,
   `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_messages` (до 100 повідомлень
-  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64),
+  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26), `send_approval`/`get_approval` (погодження кнопками, F6-27, §3.1),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
-  `get_chat`; `chat_id` має `x-openbp-options` на `get_updates` (§2); токен — лише змінна
+  `get_chat`; `chat_id` має `x-openbp-options` на `get_updates`, `reply_markup` — `x-openbp-widget: keyboard`, `commands` — `commands`, `parse_mode` — `enum`, `text`/`caption` — `maxLength` 4096/1024 (§2, F6-30; в `edit_message_text` Telegram приймає лише інлайн-кнопки); токен — лише змінна
   `TELEGRAM_BOT_TOKEN` (у шляху запитів Bot API, тому журнали `HttpClient` вимкнено, тексти помилок очищуються).
 - `connectors/http` — HTTP і RSS (F6-25): `rss_read` (`{ feedTitle, feedLink, items }` з полями як у n8n «RSS Read»; RSS 2.0/1.0 і
   Atom; у `mcp.tool` — `itemsPath: "items"`) і `http_request` (`{ status, ok, reason, url, headers, contentType }` + `json`/`text`/`base64`;
   не 2xx — `isError`, якщо не `fail_on_status_error: false`). Захист від SSRF: приватні адреси й метадані хмари заборонені
   на підключенні й у редіректах, окрім хостів з `HTTP_ALLOW_PRIVATE`; `HTTP_ALLOWED_HOSTS` обмежує цілі; ліміт розміру
   відповіді; параметри адреси не потрапляють у відповіді й журнали.
+- `connectors/sql` — база даних Postgres або MySQL/MariaDB (F6-31): `list_tables`, `describe_table`, `query` (одна
+  інструкція `SELECT`/`WITH`/`SHOW`/`EXPLAIN` з параметрами `@назва` у транзакції `READ ONLY` → `{ result, columns, rowCount,
+  truncated }`), `changes_since` (§8; `entity` — таблиця, `column` — курсор `updated_at` чи числовий ключ, кожен рядок має
+  `_changeKey` = ключ + `@` + значення курсора), запис лише з `SQL_ALLOW_WRITE=true`: `insert_rows`, `upsert_rows { keyColumns }`
+  (Postgres `ON CONFLICT`, MySQL `ON DUPLICATE KEY`), `update_rows`/`delete_rows` (умова `where` обов'язкова), `execute`
+  (одна інструкція). Таблиці й колонки звіряються з каталогом бази, значення — лише параметрами; `table`/`entity` мають
+  `x-openbp-options` на `list_tables`; пресети тригерів «Нові рядки в таблиці» і «Нові або змінені рядки». Провайдер і
+  рядок підключення — `SQL_PROVIDER`, `SQL_CONNECTION_STRING` (секрет); пароль у тексти помилок не потрапляє.
 - `connectors/msgraph` — Microsoft Graph, пошта (F3-15): `list_messages` (`{ result }`, для `mcp.poll` —
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
   `send_mail`; client credentials з `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, токен кешується, на 401 — одне повторне
   отримання токена, 429/503 → `isError` з `Retry-After`. Канали Teams — ні: `ChannelMessage.Send` лише делегований.
+  Excel у SharePoint/OneDrive (F3-32): «табличний» контракт `gsheets` (`read_sheets`, `update_row`, `append_row`,
+  `upsert_row`, `append_rows`) поверх Graph Excel API; `spreadsheet_id` — `"<drive_id>/<item_id>"` або посилання на файл;
+  дописування — лише `tables/{id}/rows/add` (без таблиці Excel — `isError` з підказкою створити), записи — в сесії книги
+  на виклик; RAW-текст, схожий на формулу чи число, пишеться з `'`; 423/429/503 → `isError` з `Retry-After`. Дозволи —
+  `Sites.Selected` з доступом до потрібного сайту, запасний варіант `Files.ReadWrite.All`.
 - `connectors/gsheets` — Google Sheets (F3-28): «табличний» контракт, спільний з Excel у `msgraph` (F3-32) —
   `read_sheets` (`{ sheets: { <лист>: [{ row_number, <колонка>: значення }] }, headers }`, без форматування, порожні
   рядки пропускаються), `update_row`/`append_row`/`upsert_row` за назвами колонок живого заголовка (невідома колонка →

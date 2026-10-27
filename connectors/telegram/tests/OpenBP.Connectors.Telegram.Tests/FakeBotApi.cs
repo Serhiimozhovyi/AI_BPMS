@@ -35,6 +35,12 @@ public sealed class FakeBotApi : IAsyncDisposable
     /// <summary>Якщо задано — кожна відповідь має цей статус і тіло.</summary>
     public (int Status, string Body)? FailWith { get; set; }
 
+    /// <summary>Якщо не порожній — <c>getUpdates</c> повертає ці оновлення замість типових.</summary>
+    public ConcurrentQueue<object> Updates { get; } = new();
+
+    /// <summary>Відповіді-помилки для окремих методів Bot API (назва → статус і тіло).</summary>
+    public ConcurrentDictionary<string, (int Status, string Body)> FailMethod { get; } = new();
+
     /// <summary>Відповіді-помилки для окремих чатів (<c>chat_id</c> → статус і тіло).</summary>
     public ConcurrentDictionary<long, (int Status, string Body)> FailForChat { get; } = new();
 
@@ -130,6 +136,13 @@ public sealed class FakeBotApi : IAsyncDisposable
             return;
         }
 
+        if (FailMethod.TryGetValue(method, out var methodFail))
+        {
+            ctx.Response.StatusCode = methodFail.Status;
+            await ctx.Response.WriteAsync(methodFail.Body);
+            return;
+        }
+
         if (json is { ValueKind: JsonValueKind.Object } body && body.TryGetProperty("chat_id", out var chatId) &&
             chatId.ValueKind == JsonValueKind.Number && FailForChat.TryGetValue(chatId.GetInt64(), out var chatFail))
         {
@@ -145,8 +158,13 @@ public sealed class FakeBotApi : IAsyncDisposable
                 json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
                 caption: json?.TryGetProperty("caption", out var c) == true ? c.GetString() : form.GetValueOrDefault("caption"),
                 document: new { file_id = "BQACAgIAAxk", file_name = form.TryGetValue("document", out var f) ? f.Split(':')[0] : "remote.pdf" }),
+            "sendPhoto" => PhotoMessage(
+                json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
+                json?.TryGetProperty("caption", out var pc) == true ? pc.GetString() : form.GetValueOrDefault("caption")),
+            "getUpdates" when !Updates.IsEmpty => Updates.ToArray(),
             "getUpdates" => await UpdatesAsync(json, ctx.RequestAborted),
             "getWebhookInfo" => new { url = WebhookUrl, has_custom_certificate = false, pending_update_count = 0 },
+            "editMessageReplyMarkup" => Message(json!.Value.GetProperty("chat_id")),
             "getChat" => new { id = 42, type = "private", first_name = "Олена", username = "olena" },
             "editMessageText" => Message(json!.Value.GetProperty("chat_id"), text: json.Value.GetProperty("text").GetString()),
             "answerCallbackQuery" or "setMyCommands" or "setWebhook" or "deleteWebhook" => true,
@@ -161,6 +179,17 @@ public sealed class FakeBotApi : IAsyncDisposable
 
         await ctx.Response.WriteAsJsonAsync(new { ok = true, result });
     }
+
+    private static object PhotoMessage(JsonElement chat, string? caption) => new
+    {
+        message_id = 78,
+        date = 1761200000,
+        chat = chat.ValueKind == JsonValueKind.Number
+            ? (object)new { id = chat.GetInt64(), type = "private" }
+            : new { id = -1001234567890, type = "channel", username = chat.GetString()!.TrimStart('@') },
+        caption,
+        photo = new[] { new { file_id = "AgACAgIAAxk-small", width = 90, height = 90 }, new { file_id = "AgACAgIAAxk-big", width = 1280, height = 1280 } },
+    };
 
     private static object Message(JsonElement chat, string? text = null, string? caption = null, object? document = null) => new
     {

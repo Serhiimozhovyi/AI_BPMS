@@ -13,7 +13,8 @@ namespace OpenBP.Connectors.MsGraph.Tests;
 /// <param name="Target">Шлях із query без декодування.</param>
 /// <param name="Authorization">Заголовок <c>Authorization</c>.</param>
 /// <param name="Body">Тіло.</param>
-public sealed record GraphRequest(string Method, string Target, string? Authorization, string Body);
+/// <param name="Session">Заголовок <c>workbook-session-id</c>.</param>
+public sealed record GraphRequest(string Method, string Target, string? Authorization, string Body, string? Session = null);
 
 /// <summary>
 /// In-process фейк Entra ID (<c>/{tenant}/oauth2/v2.0/token</c>) і Graph (<c>/v1.0/…</c>) на випадковому порту: видає
@@ -30,6 +31,9 @@ public sealed class FakeGraph : IAsyncDisposable
     private string? _valid;
 
     private FakeGraph(WebApplication app) => _app = app;
+
+    /// <summary>Книга Excel (F3-32).</summary>
+    public FakeWorkbook Workbook { get; } = new();
 
     /// <summary>Запити до Graph.</summary>
     public ConcurrentQueue<GraphRequest> Requests { get; } = new();
@@ -91,7 +95,8 @@ public sealed class FakeGraph : IAsyncDisposable
         using var reader = new StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var authorization = ctx.Request.Headers.Authorization.FirstOrDefault();
-        Requests.Enqueue(new GraphRequest(ctx.Request.Method, ctx.Features.Get<IHttpRequestFeature>()!.RawTarget, authorization, body));
+        Requests.Enqueue(new GraphRequest(
+            ctx.Request.Method, ctx.Features.Get<IHttpRequestFeature>()!.RawTarget, authorization, body, ctx.Request.Headers["workbook-session-id"].FirstOrDefault()));
         if (RejectAllTokens || _valid is null || authorization != $"Bearer {_valid}")
         {
             ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -112,6 +117,11 @@ public sealed class FakeGraph : IAsyncDisposable
         }
 
         var decoded = Uri.UnescapeDataString(ctx.Request.Path.Value!);
+        if (await Workbook.HandleAsync(ctx, decoded, body))
+        {
+            return;
+        }
+
         object? result = (ctx.Request.Method, decoded) switch
         {
             ("GET", "/v1.0/users/orders@contoso.com/mailFolders/inbox/messages") or ("GET", "/v1.0/users/orders@contoso.com/messages") => new

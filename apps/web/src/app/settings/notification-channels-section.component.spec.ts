@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { NotificationChannel } from './notification-channels-api.service';
+import { NotificationChannel, channelTypeLabel } from './notification-channels-api.service';
 import { NotificationChannelsSection, channelInput } from './notification-channels-section.component';
 
 const telegram: NotificationChannel = {
@@ -70,6 +70,14 @@ describe('NotificationChannelsSection', () => {
     el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input'));
   }
 
+  /** Відкриває `mat-select` і обирає варіант за підписом (варіанти — в overlay поза панеллю). */
+  async function choose(fixture: { detectChanges(): void; whenStable(): Promise<unknown> }, host: HTMLElement, testid: string, label: string) {
+    host.querySelector<HTMLElement>(`[data-testid="${testid}"] .mat-mdc-select-trigger`)!.click();
+    await render(fixture);
+    [...document.querySelectorAll<HTMLElement>('mat-option')].find((o) => o.textContent?.trim() === label)!.click();
+    await render(fixture);
+  }
+
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
   it('показує канали з подіями', async () => {
@@ -91,11 +99,11 @@ describe('NotificationChannelsSection', () => {
     flushOptions(http);
     await render(fixture);
     input(host, 'channel-name', 'SIEM');
-    input(host, 'channel-type', 'webhook');
+    await choose(fixture, host, 'channel-type', channelTypeLabel('webhook'));
     await render(fixture);
     expect(host.querySelector('[data-testid="channel-connector"]')).toBeNull();
     input(host, 'channel-url', 'https://siem.test/hook');
-    input(host, 'channel-credential', 'cred');
+    await choose(fixture, host, 'channel-credential', 'Токен вебхука');
     host.querySelector<HTMLInputElement>('[data-event="worker.stale"]')!.click();
     await render(fixture);
     host.querySelector<HTMLButtonElement>('[data-testid="channel-save"]')!.click();

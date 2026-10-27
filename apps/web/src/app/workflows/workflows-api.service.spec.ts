@@ -91,7 +91,15 @@ describe('WorkflowsApiService', () => {
   });
 
   it('toSummary бере поля рядка з деталей', () => {
-    expect(toSummary(detail)).toEqual({ id: 'w1', name: 'Заявки', active: false, version: 1, updatedAt: '2026-10-23T10:00:00Z', groupId: null });
+    expect(toSummary(detail)).toEqual({
+      id: 'w1',
+      name: 'Заявки',
+      active: false,
+      version: 1,
+      updatedAt: '2026-10-23T10:00:00Z',
+      groupId: null,
+      publishedVersion: null,
+    });
     expect(toSummary({ ...detail, groupId: 'g1' }).groupId).toBe('g1');
   });
 

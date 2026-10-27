@@ -59,7 +59,7 @@ public class N8nWorkflowConverterTests
 
         Assert.Equal("Новини — дайджест", definition.Name);
         Assert.Equal("Europe/Kyiv", definition.Settings.Timezone);
-        Assert.Equal(15, definition.Nodes.Count); // нотатку на полотні пропущено
+        Assert.Equal(18, definition.Nodes.Count); // нотатку пропущено; +3 допоміжні вузли (Execute Once, очікування відповіді, тіло відповіді)
         Assert.Equal("30 6,18 * * *", Node(definition, "Розклад").Parameters["cron"]!.GetValue<string>());
         Assert.Equal("core.merge", Node(definition, "Злити").Type);
         Assert.Equal("list", Node(definition, "Історія").Parameters["operation"]!.GetValue<string>());
@@ -94,8 +94,27 @@ public class N8nWorkflowConverterTests
         Assert.True(Node(definition, "Стрічка A").ContinueOnFail);
         Assert.Contains(("Є кандидати?", 1, "Без поста", 0), edges);
         // «Continue (error output)» — вихід помилки n8n стає виходом помилки OpenBP.
-        Assert.Contains(("Картинка", 0, "Опублікувати", 0), edges);
         Assert.Contains(("Картинка", 1, "Опублікувати", 0), edges);
+        Assert.Contains(("Картинка", 0, "Картинка: тіло відповіді", 0), edges);
+        Assert.Contains(("Картинка: тіло відповіді", 0, "Опублікувати", 0), edges);
+        // Execute Once: окремий вузол перед «Історія».
+        Assert.Contains(("Злити", 0, "Історія: лише перший item", 0), edges);
+        Assert.Contains(("Історія: лише перший item", 0, "Історія", 0), edges);
+        // Send and Wait: send_approval → waitFor; вихід timeout веде туди ж, куди й done.
+        Assert.Contains(("Надіслати чернетку", 0, "Погодити?", 0), edges);
+        Assert.Contains(("Погодити?", 0, "Погодити?: очікування відповіді", 0), edges);
+        Assert.Contains(("Погодити?: очікування відповіді", 0, "Погоджено?", 0), edges);
+        Assert.Contains(("Погодити?: очікування відповіді", 1, "Погоджено?", 0), edges);
+        Assert.Equal("{{ $json.approved }}", Node(definition, "Погоджено?").Parameters["conditions"]![0]!["left"]!.GetValue<string>());
+
+        var rss = Node(definition, "Стрічка A");
+        Assert.Equal("rss_read", rss.Parameters["toolName"]!.GetValue<string>());
+        Assert.Equal("items", rss.Parameters["itemsPath"]!.GetValue<string>());
+        var approval = Node(definition, "Погодити?");
+        Assert.Equal("send_approval", approval.Parameters["toolName"]!.GetValue<string>());
+        var wait = Node(definition, "Погодити?: очікування відповіді");
+        Assert.Equal("get_approval", wait.Parameters["toolName"]!.GetValue<string>());
+        Assert.Equal("answered", wait.Parameters["conditions"]![0]!["field"]!.GetValue<string>());
     }
 
     [Fact]
@@ -103,17 +122,13 @@ public class N8nWorkflowConverterTests
     {
         var result = N8nWorkflowConverter.Convert(Sample());
 
-        var replace = result.Notes.Where(n => n.Level == N8nWorkflowConverter.Replace).Select(n => n.Node).ToList();
-        Assert.Equal(["Стрічка A", "Стрічка B", "Погодити?", "Картинка"], replace);
-        Assert.Equal(N8nWorkflowConverter.Replace, result.Notes[0].Level); // спершу те, що треба замінити
+        // Усі вузли зразка мають відповідники: заглушок «замінити» немає.
+        Assert.DoesNotContain(result.Notes, n => n.Level == N8nWorkflowConverter.Replace);
+        Assert.DoesNotContain(result.Definition.Nodes, n => n.Type == "core.code" && n.Parameters["code"]!.GetValue<string>().Contains("throw new Error", StringComparison.Ordinal));
+        Assert.Contains(result.Notes, n => n.Node == "Погодити?" && n.Message.Contains("send_approval", StringComparison.Ordinal));
 
-        var placeholder = Node(result.Definition, "Погодити?");
-        Assert.Equal("core.code", placeholder.Type);
-        Assert.Contains("throw new Error", placeholder.Parameters["code"]!.GetValue<string>(), StringComparison.Ordinal);
-        Assert.Contains("sendAndWait", placeholder.Notes, StringComparison.Ordinal);
-
-        var connector = Assert.Single(result.Manifest.Connectors);
-        Assert.Equal("newsbot", connector.Name);
+        Assert.Equal(["HTTP і RSS", "newsbot"], result.Manifest.Connectors.Select(c => c.Name).Order(StringComparer.Ordinal).ToList());
+        var connector = result.Manifest.Connectors.Single(c => c.Name == "newsbot");
         Assert.Equal("", connector.Transport);
         Assert.Equal(connector.Ref, Node(result.Definition, "Опублікувати").Parameters["serverId"]!.GetValue<string>());
         var credential = Assert.Single(result.Manifest.Credentials);
@@ -207,5 +222,25 @@ public class N8nWorkflowConverterTests
             """)!.AsObject();
 
         Assert.Equal(cron, N8nWorkflowConverter.Convert(workflow).Definition.Nodes[0].Parameters["cron"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Agro_mvp_scenario_converts_without_placeholders()
+    {
+        var workflow = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "N8n", "agro-mvp.json")))!.AsObject();
+        var result = N8nWorkflowConverter.Convert(workflow);
+
+        var errors = await new WorkflowValidator(new NodeRegistrySchemaProvider(Registry())).ValidateAsync(WorkflowJson.Serialize(result.Definition));
+        Assert.Empty(errors);
+        Assert.DoesNotContain(result.Notes, n => n.Level == N8nWorkflowConverter.Replace);
+
+        var types = result.Definition.Nodes.GroupBy(n => n.Type).ToDictionary(g => g.Key, g => g.Count());
+        Assert.Equal(4, result.Definition.Nodes.Count(n => n.Parameters["toolName"]?.GetValue<string>() == "rss_read"));
+        Assert.Equal(2, result.Definition.Nodes.Count(n => n.Parameters["toolName"]?.GetValue<string>() == "send_photo"));
+        Assert.Single(result.Definition.Nodes, n => n.Parameters["toolName"]?.GetValue<string>() == "send_approval");
+        Assert.Single(result.Definition.Nodes, n => n.Type == "mcp.waitFor");
+        Assert.Equal(1, types["ai.llm"]);
+        Assert.Equal(["HTTP і RSS", "agrobot"], result.Manifest.Connectors.Select(c => c.Name).Order(StringComparer.Ordinal).ToList());
+        Assert.DoesNotContain(result.Definition.Nodes, n => n.Parameters.ToJsonString().Contains("$('", StringComparison.Ordinal) && n.Type != "core.code");
     }
 }

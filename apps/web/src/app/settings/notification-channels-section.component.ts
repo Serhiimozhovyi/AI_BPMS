@@ -3,6 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { NotifyService } from '../shared/notify.service';
 import { ConnectorSummary, ConnectorsApiService, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialSummary, CredentialsApiService } from '../credentials/credentials-api.service';
 import {
@@ -90,7 +92,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
 @Component({
   selector: 'app-notification-channels-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <div class="mb-2 flex items-center gap-4">
       <h2 class="text-lg font-semibold" i18n="@@notifications.title">Сповіщення</h2>
@@ -118,23 +120,23 @@ function draftOf(c: NotificationChannel): ChannelDraft {
           </mat-form-field>
           <mat-form-field appearance="outline" class="w-56">
             <mat-label i18n="@@notifications.form.type">Куди</mat-label>
-            <select matNativeControl data-testid="channel-type" [value]="d.type" (change)="patch({ type: $any(text($event)) })">
+            <mat-select data-testid="channel-type" [value]="d.type" (selectionChange)="patch({ type: $event.value })">
               @for (t of types; track t) {
-                <option [value]="t">{{ typeLabel(t) }}</option>
+                <mat-option [value]="t">{{ typeLabel(t) }}</mat-option>
               }
-            </select>
+            </mat-select>
           </mat-form-field>
         </div>
 
         @if (d.type !== 'webhook') {
           <mat-form-field appearance="outline" class="w-72">
             <mat-label i18n="@@notifications.form.connector">Конектор</mat-label>
-            <select matNativeControl data-testid="channel-connector" [value]="d.connectorId" (change)="patch({ connectorId: text($event) })">
-              <option value=""></option>
+            <mat-select data-testid="channel-connector" [value]="d.connectorId" (selectionChange)="patch({ connectorId: $event.value })">
+              <mat-option value="">—</mat-option>
               @for (c of connectors(); track c.id) {
-                <option [value]="c.id">{{ c.name }}</option>
+                <mat-option [value]="c.id">{{ c.name }}</mat-option>
               }
-            </select>
+            </mat-select>
           </mat-form-field>
         }
         @if (d.type === 'email') {
@@ -163,12 +165,12 @@ function draftOf(c: NotificationChannel): ChannelDraft {
             </mat-form-field>
             <mat-form-field appearance="outline" class="w-72">
               <mat-label i18n="@@notifications.form.credential">Заголовки з облікових даних</mat-label>
-              <select matNativeControl data-testid="channel-credential" [value]="d.credentialId" (change)="patch({ credentialId: text($event) })">
-                <option value="" i18n="@@notifications.form.noCredential">Без заголовків</option>
+              <mat-select data-testid="channel-credential" [value]="d.credentialId" (selectionChange)="patch({ credentialId: $event.value })">
+                <mat-option value="" i18n="@@notifications.form.noCredential">Без заголовків</mat-option>
                 @for (c of credentials(); track c.id) {
-                  <option [value]="c.id">{{ c.name }}</option>
+                  <mat-option [value]="c.id">{{ c.name }}</mat-option>
                 }
-              </select>
+              </mat-select>
             </mat-form-field>
           </div>
         }
@@ -247,6 +249,7 @@ export class NotificationChannelsSection implements OnInit {
   private readonly connectorsApi = inject(ConnectorsApiService);
   private readonly credentialsApi = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notify = inject(NotifyService);
 
   readonly types = NOTIFICATION_CHANNEL_TYPES;
   readonly events = NOTIFICATION_EVENTS;
@@ -317,6 +320,7 @@ export class NotificationChannelsSection implements OnInit {
         this.saving.set(false);
         this.cancel();
         this.load();
+        this.notify.success(id ? $localize`:@@notifications.updated:Канал збережено.` : $localize`:@@notifications.created:Канал додано.`);
       },
       error: (e: unknown) => {
         this.saving.set(false);
@@ -330,7 +334,13 @@ export class NotificationChannelsSection implements OnInit {
     this.api
       .remove(channel.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: () => this.load(), error: (e: unknown) => this.error.set(apiErrorMessage(e)) });
+      .subscribe({
+        next: () => {
+          this.load();
+          this.notify.success($localize`:@@notifications.removed:Канал «${channel.name}:name:» видалено.`);
+        },
+        error: (e: unknown) => this.error.set(apiErrorMessage(e)),
+      });
   }
 
   test(channel: NotificationChannel): void {

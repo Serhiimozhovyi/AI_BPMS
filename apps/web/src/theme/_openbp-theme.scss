@@ -5,8 +5,10 @@
 /// CSS-змінні AC-Kit (--ac-*).
 @mixin tokens() {
   // Primary colours
-  --ac-kit: #7a6ff0;
-  --ac-kit-hover: #5f53e0;
+  // Kit і Cool Grey 4 трохи темніші за Figma (#7A6FF0, #8D86A3): із фігмівськими текст і кнопки не проходять контраст AA 4,5:1
+  // (3,9:1 і 3,5:1 на білому) — F3-86. Відтінок той самий.
+  --ac-kit: #5f53dc;
+  --ac-kit-hover: #4d41c9;
   --ac-vivid: #261f4b;
   --ac-mid: #372f6c;
   --ac-button: #ebe9fd;
@@ -18,7 +20,7 @@
   --ac-cool-grey: #f4f3f8;
   --ac-cool-grey-2: #f2f1fd;
   --ac-cool-grey-3: #bdbbd2;
-  --ac-cool-grey-4: #8d86a3;
+  --ac-cool-grey-4: #6b6580;
   // Highlight colours і їхні 15%-відтінки
   --ac-teal: #27c7be;
   --ac-teal-15: #dff7f5;
@@ -68,7 +70,7 @@
   // Точні кольори AC-Kit поверх згенерованої палітри.
   @include mat.theme-overrides(
     (
-      primary: #7a6ff0,
+      primary: #5f53dc,
       on-primary: #ffffff,
       primary-container: #ebe9fd,
       on-primary-container: #372f6c,
@@ -79,7 +81,7 @@
       surface: #ffffff,
       on-surface: #261f4b,
       surface-variant: #f2f1fd,
-      on-surface-variant: #8d86a3,
+      on-surface-variant: #6b6580,
       surface-container-lowest: #ffffff,
       surface-container-low: #f9f8f8,
       surface-container: #f4f3f8,

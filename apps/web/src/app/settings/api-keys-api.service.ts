@@ -49,3 +49,15 @@ export function mcpClientConfig(mcpUrl: string, key: string): string {
     2,
   );
 }
+
+/** Claude Desktop: міст `mcp-remote` у `claude_desktop_config.json`; ключ у `env`, бо пробіл в аргументі ламає запуск на Windows. */
+export function mcpDesktopConfig(mcpUrl: string, key: string): string {
+  const args = ['-y', 'mcp-remote', mcpUrl, '--header', 'Authorization:${OPENBP_AUTH}'];
+  if (mcpUrl.startsWith('http://')) args.push('--allow-http');
+  return JSON.stringify({ mcpServers: { openbp: { command: 'npx', args, env: { OPENBP_AUTH: `Bearer ${key}` } } } }, null, 2);
+}
+
+/** Claude Code: команда додавання HTTP MCP-сервера з ключем у заголовку. */
+export function mcpClaudeCodeCommand(mcpUrl: string, key: string): string {
+  return `claude mcp add --transport http openbp ${mcpUrl} --header "Authorization: Bearer ${key}"`;
+}

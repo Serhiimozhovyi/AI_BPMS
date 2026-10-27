@@ -109,7 +109,8 @@ test('завантажити сценарій, змінити, зберегти 
   const moved = api.definition.nodes.find((n) => n.id === 'n_set')!;
   expect(moved.position).not.toEqual([320, 0]);
 
-  // Палітра працює: новий вузол → ще одна версія.
+  // Палітра працює: у сценарії з вузлами вона — смуга (F3-89), розгортаємо; новий вузол → ще одна версія.
+  await page.getByTestId('palette-expand').click();
   await page.locator('[data-item="core.set"]').click();
   await expect(page.locator('[data-node-id]')).toHaveCount(3);
   await expect.poll(() => api.version).toBe(3);
@@ -117,6 +118,8 @@ test('завантажити сценарій, змінити, зберегти 
 
   // Backspace у полі панелі вузла (усередині Shadow DOM) редагує текст, а не видаляє вузол.
   await card(page, 'Старт').click();
+  // «Додатково» (F3-78) згорнуте за замовчуванням.
+  await page.getByTestId('node-extra-toggle').click();
   const name = page.getByTestId('node-common').locator('input').first();
   await name.click();
   await name.press('End');
@@ -155,6 +158,7 @@ test('Виконати → подія openbp-run і живий статус че
   await expect.poll(() => hostEvents(page)).toContainEqual({ type: 'openbp-run', detail: { executionId } });
   expect(sseAuthorization).toBe(`Bearer ${TOKEN}`);
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('settings').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -236,7 +240,7 @@ test('стилі хоста не ламають канвас, а стилі ка
   expect(button.font).toContain('Ubuntu');
   // Тема AC-Kit — на :host елемента.
   const kit = await page.locator('openbp-canvas').evaluate((el) => getComputedStyle(el).getPropertyValue('--ac-kit').trim());
-  expect(kit).toBe('#7a6ff0');
+  expect(kit).toBe('#5f53dc');
 });
 
 test('невідомий сценарій → подія openbp-error з кодом Api', async ({ page }) => {

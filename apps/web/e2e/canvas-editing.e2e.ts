@@ -41,14 +41,14 @@ interface Definition {
 const WORKFLOW_ID = '11111111-2222-3333-4444-555555555555';
 const ERROR_WORKFLOW_ID = '66666666-7777-8888-9999-000000000000';
 
-function descriptor(type: string, displayName: string, group: string, inputs: string[], outputs: string[]) {
-  return { type, version: 1, displayName, group, inputs, outputs, parametersSchema: { type: 'object' }, isTrigger: inputs.length === 0 };
+function descriptor(type: string, displayName: string, group: string, inputs: string[], outputs: string[], parametersSchema: object = { type: 'object' }) {
+  return { type, version: 1, displayName, group, inputs, outputs, parametersSchema, isTrigger: inputs.length === 0 };
 }
 
 const DESCRIPTORS = [
   descriptor('core.manualTrigger', 'Ручний запуск', 'trigger', [], ['main']),
   descriptor('core.set', 'Задати поля', 'transform', ['main'], ['main']),
-  descriptor('core.code', 'Код (JavaScript)', 'transform', ['main'], ['main']),
+  descriptor('core.code', 'Код (JavaScript)', 'transform', ['main'], ['main'], { type: 'object', properties: { note: { type: 'string', title: 'Коментар' } } }),
 ];
 
 /** Шаблон «Почати з прикладу» (F3-59), як його віддає `GET /workflows/templates`. */
@@ -90,6 +90,8 @@ class FakeApi {
   /** Визначення кожної збереженої версії (індекс = номер − 1) — для «Історії» (F3-61). */
   saved: Definition[] = [];
   assistantRequests: unknown[] = [];
+  /** Останнє виконання сценарію (F3-76); `null` — запусків не було. */
+  lastExecution: { summary: Record<string, unknown>; steps: Record<string, unknown>[] } | null = null;
   definition: Definition = {
     formatVersion: 1,
     name: 'E2E',
@@ -107,7 +109,7 @@ class FakeApi {
   detail() {
     return {
       id: WORKFLOW_ID,
-      name: 'E2E',
+      name: this.definition.name,
       active: false,
       version: this.version,
       versionId: `v${this.version}`,
@@ -135,6 +137,11 @@ class FakeApi {
         this.assistantRequests.push(request.postDataJSON());
         return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(TEMPLATES[0].definition) });
       }
+      if (path === '/api/v1/executions' && request.method() === 'GET') {
+        const items = this.lastExecution ? [this.lastExecution.summary] : [];
+        return route.fulfill({ json: { items, page: 1, pageSize: 1, total: items.length } });
+      }
+      if (path === '/api/v1/executions/e1' && this.lastExecution) return route.fulfill({ json: this.lastExecution });
       if (path === '/api/v1/workflows') {
         const items = [this.detail(), { id: ERROR_WORKFLOW_ID, name: 'Сповіщення про помилки', active: true, version: 2, updatedAt: '' }];
         return route.fulfill({ json: { items, page: 1, pageSize: 200, total: items.length } });
@@ -143,7 +150,7 @@ class FakeApi {
         if (request.method() === 'GET') return route.fulfill({ json: this.detail() });
         if (request.method() === 'PUT') {
           this.saved = this.history();
-          this.definition = { ...(request.postDataJSON() as Definition), name: 'E2E' };
+          this.definition = request.postDataJSON() as Definition;
           this.version++;
           this.saved.push(this.definition);
           return route.fulfill({ json: this.detail() });
@@ -184,6 +191,128 @@ async function waitSaved(page: Page): Promise<void> {
   await expect(page.getByTestId('saved')).toBeVisible();
   await expect(page.getByTestId('dirty')).toHaveCount(0);
 }
+
+test('F3-78: подвійний клік по вузлу відкриває панель з фокусом у першому полі, не вмикаючи перейменування; F2 перейменовує', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.code"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+
+  await page.locator('[data-node-id] .node__name').dblclick();
+  await expect(page.getByTestId('node-rename')).toHaveCount(0);
+  await expect(page.getByTestId('node-panel')).toBeVisible();
+  await expect(page.locator('[data-testid="node-parameters"] input, [data-testid="node-parameters"] textarea').first()).toBeFocused();
+
+  // «Додатково» згорнуте, поки там немає змін.
+  await expect(page.getByTestId('node-extra')).not.toHaveAttribute('open', '');
+
+  await page.locator('[data-node-id]').click();
+  await page.keyboard.press('F2');
+  // F2 перейменовує в шапці панелі (F3-88), не на картці.
+  await expect(page.getByTestId('node-panel-name-input')).toBeVisible();
+  await expect(page.getByTestId('node-rename')).toHaveCount(0);
+});
+
+test('F3-88: Esc і «×» закривають панель вузла; вузол біля правого краю лишається видимим поруч із панеллю', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  for (let i = 0; i < 6; i++) await page.locator('[data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(6);
+
+  const last = page.locator('[data-node-id]').last();
+  await last.click();
+  await expect(page.getByTestId('editor-panel')).toBeVisible();
+  const canvas = await page.locator('.editor__canvas').boundingBox();
+  await expect
+    .poll(async () => {
+      const box = await last.boundingBox();
+      return !!box && !!canvas && box.x >= canvas.x && box.x + box.width <= canvas.x + canvas.width && box.y >= canvas.y && box.y + box.height <= canvas.y + canvas.height;
+    })
+    .toBe(true);
+
+  await page.getByTestId('node-panel-header').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('editor-panel')).toHaveCount(0);
+
+  await last.click();
+  await expect(page.getByTestId('editor-panel')).toBeVisible();
+  await page.getByTestId('panel-close').click();
+  await expect(page.getByTestId('editor-panel')).toHaveCount(0);
+});
+
+test('F3-89: у сценарії з вузлами палітра — смуга 48 px, канвас майже на всю ширину; «+ Додати крок» додає вузол, вибір запам’ятовується', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  // Порожній сценарій — палітра розгорнута.
+  await page.locator('[data-item="core.manualTrigger"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+  await waitSaved(page);
+
+  await page.reload();
+  await expect(page.getByTestId('palette-rail')).toBeVisible();
+  await expect(page.locator('app-palette')).toHaveCount(0);
+  const canvas = await page.locator('.editor__canvas').boundingBox();
+  expect(canvas!.width).toBeGreaterThanOrEqual(1200);
+
+  await page.getByTestId('rail-add').click();
+  await expect(page.getByTestId('quick-add')).toBeVisible();
+  await page.locator('[data-testid="quick-add"] [data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(2);
+
+  await page.getByTestId('palette-expand').click();
+  await expect(page.locator('app-palette')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('app-palette')).toBeVisible();
+});
+
+test('F3-90: масштаб у відсотках, клавіші 0/1/+/−, «?» відкриває довідку гарячих клавіш', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(5));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  const level = page.getByTestId('canvas-zoom-level');
+  await expect(level).toHaveText(/^\d+%$/);
+
+  // Клацаємо по порожньому полотну, щоб фокус був на канвасі.
+  await page.locator('.editor__canvas').click({ position: { x: 600, y: 30 } });
+  await page.keyboard.press('0');
+  await expect(level).toHaveText('100%');
+  await page.keyboard.press('+');
+  await expect(level).not.toHaveText('100%');
+  await page.keyboard.press('0');
+  await expect(level).toHaveText('100%');
+  await page.keyboard.press('-');
+  await expect.poll(async () => parseInt((await level.textContent()) ?? '100', 10)).toBeLessThan(100);
+  await page.keyboard.press('1');
+  for (const id of ['n0', 'n4']) await expect(page.locator(`[data-node-id="${id}"]`)).toBeInViewport();
+
+  await page.keyboard.press('Shift+Slash');
+  await expect(page.locator('div[data-testid="shortcuts"]')).toBeVisible();
+  await expect(page.locator('div[data-testid="shortcuts"]')).toContainText('Масштаб 100 %');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('div[data-testid="shortcuts"]')).toHaveCount(0);
+
+  await page.getByTestId('toolbar-more').click();
+  await page.getByRole('menuitem', { name: 'Гарячі клавіші' }).click();
+  await expect(page.locator('div[data-testid="shortcuts"]')).toBeVisible();
+});
+
+test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-item="core.manualTrigger"]')).toBeVisible();
+  await expect(page.getByTestId('tools-error')).toHaveCount(0);
+  await expect(page.getByTestId('no-connectors')).toContainText('Конекторів ще немає');
+  await expect(page.locator('[data-item="core.manualTrigger"]')).not.toContainText('core.manualTrigger');
+});
 
 test('додати 3 вузли, з’єднати, undo, redo, перезавантажити — граф той самий', async ({ page }) => {
   const api = new FakeApi();
@@ -304,6 +433,7 @@ test('налаштування сценарію: зміни йдуть у settin
   await page.goto(`/workflows/${WORKFLOW_ID}`);
   await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('settings').click();
   const dialog = page.getByTestId('workflow-settings');
   await expect(dialog.getByTestId('settings-timeout')).toHaveValue('300');
@@ -379,9 +509,11 @@ test('F3-50: з’єднання, відпущене в порожньому м�
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
   await waitSaved(page);
   expect(graph(api.definition).edges).toEqual(['Ручний запуск#0->Код (JavaScript)#0']);
-  // Вузол там, де відпустили, а не на типовому місці.
+  // Вузол там, де відпустили, а не на типовому місці (панель нового вузла звужує полотно, тож сценарій може зсунутись —
+  // міряємо відстань між картками, а не абсолютні координати).
+  const a2 = (await card(page, 'Ручний запуск').boundingBox())!;
   const b = (await card(page, 'Код (JavaScript)').boundingBox())!;
-  expect(b.x).toBeGreaterThan(a.x + a.width + 200);
+  expect(b.x).toBeGreaterThan(a2.x + a2.width + 200);
 });
 
 test('F3-50: «+» на виділеному ребрі вставляє крок між вузлами', async ({ page }) => {
@@ -457,6 +589,8 @@ test('F3-58: «Вирівняти» розставляє вузли зліва �
   await api.install(page);
   await page.goto(`/workflows/${WORKFLOW_ID}`);
   await expect(page.locator('[data-node-id]')).toHaveCount(3);
+  await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(0);
+  await page.getByTestId('canvas-minimap').click();
   await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(1);
 
   await page.getByTestId('canvas-arrange').click();
@@ -554,6 +688,7 @@ test('F3-61: змінити, відкрити історію, відновити
   await waitSaved(page);
   expect(api.version).toBe(3);
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('history').click();
   const versions = page.getByTestId('version');
   await expect(versions).toHaveCount(3);
@@ -571,6 +706,7 @@ test('F3-61: змінити, відкрити історію, відновити
   expect(graph(api.definition)).toEqual(graph(api.saved[1]));
 
   // «Переглянути» версію 3: канвас лише для читання, без палітри; «До поточної версії» повертає редагування.
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('history').click();
   await page.locator('[data-version="3"]').getByTestId('version-view').click();
   await expect(page).toHaveURL(/version=3/);
@@ -647,4 +783,177 @@ test('F3-62: ПКМ → «Додати нотатку», Markdown-текст, к
   await expect(reloaded.locator('p')).toHaveText('Готово');
   await waitSaved(page);
   expect(api.definition.notes![0].text).toBe('Готово');
+});
+
+/** F3-75: шапка в один рядок, «Виконати» й «Опублікувати» видимі та клікабельні на 1024, 1280 і 1920 px. */
+for (const width of [1024, 1280, 1920]) {
+  test(`шапка на ${width} px: один рядок, «Виконати» й «Опублікувати» у видимій частині`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const api = new FakeApi();
+    await api.install(page);
+    await page.goto(`/workflows/${WORKFLOW_ID}`);
+    await page.locator('[data-item="core.manualTrigger"]').click();
+    await expect(page.locator('[data-node-id]')).toHaveCount(1);
+
+    const bar = page.locator('app-editor-toolbar header');
+    const box = await bar.boundingBox();
+    expect(box!.height).toBeLessThanOrEqual(56);
+    for (const id of ['run', 'publish']) {
+      const button = page.getByTestId(id);
+      await expect(button).toBeVisible();
+      const rect = await button.boundingBox();
+      expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
+      expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+    await expect(page.getByTestId('run')).toBeEnabled();
+    await expect(page.getByTestId('publish')).toBeEnabled();
+  });
+}
+
+test('назва сценарію перейменовується в шапці: Enter зберігає, Esc скасовує', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.getByTestId('workflow-name')).toContainText('E2E');
+
+  await page.getByTestId('workflow-name-edit').click();
+  await page.getByTestId('workflow-name-input').fill('Інша назва');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('workflow-name')).toContainText('E2E');
+
+  await page.getByTestId('workflow-name-edit').click();
+  await page.getByTestId('workflow-name-input').fill('Заявки клієнтів');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('workflow-name')).toContainText('Заявки клієнтів');
+  await expect.poll(() => api.definition.name).toBe('Заявки клієнтів');
+});
+
+/** Ряд із `count` вузлів «Задати поля» завдовжки більше за екран, з'єднаних ланцюжком. */
+function longChain(count: number): Pick<Definition, 'nodes' | 'connections'> {
+  const nodes: Node[] = Array.from({ length: count }, (_, i) => ({
+    id: i === 0 ? 'n0' : `n${i}`,
+    name: i === 0 ? 'Старт' : `Крок ${i}`,
+    type: i === 0 ? 'core.manualTrigger' : 'core.set',
+    typeVersion: 1,
+    position: [i * 280, 120],
+    parameters: {},
+  }));
+  const connections: Connection[] = nodes.slice(1).map((n, i) => ({ from: { node: nodes[i].id, output: 0 }, to: { node: n.id, input: 0 } }));
+  return { nodes, connections };
+}
+
+test('F3-91: довгий сценарій відкривається читабельно, а клавіша 1 вписує його повністю', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(8));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+
+  const canvas = (await page.locator('.editor__canvas').boundingBox())!;
+  const zoomOf = async () => Number.parseInt((await page.getByTestId('canvas-zoom-level').innerText()).replace(/\D/g, ''), 10);
+  // Відкриття: не дрібніше за 70 %, початок сценарію видно з відступом.
+  await expect.poll(zoomOf).toBeGreaterThanOrEqual(70);
+  const first = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+  expect(first.x).toBeGreaterThanOrEqual(canvas.x + 20);
+  expect(first.x + first.width).toBeLessThanOrEqual(canvas.x + canvas.width);
+
+  // Клавіша 1 вписує весь сценарій у вікно.
+  await page.locator('.editor__canvas').click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press('1');
+  await expect.poll(async () => {
+    const f = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+    const l = (await page.locator('[data-node-id="n7"]').boundingBox())!;
+    return f.x >= canvas.x + 20 && l.x + l.width <= canvas.x + canvas.width - 20;
+  }).toBe(true);
+});
+
+test('F3-76: мінікарта згорнута за замовчуванням і розгортається кнопкою', async ({ page }) => {
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(3));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id]')).toHaveCount(3);
+  const minimap = page.locator('svg.root-svg > svg');
+  await expect(minimap).toHaveCount(0);
+
+  await page.getByTestId('canvas-minimap').click();
+  await expect(minimap).toHaveCount(1);
+  // Рамка мінікарти (її розмір задає ngx-vflow: 20 % полотна, далі стискається до 180×110).
+  const box = (await page.locator('svg rect[stroke="#b9b4cc"]').boundingBox())!;
+  expect(box.width).toBeLessThanOrEqual(181);
+  expect(box.height).toBeLessThanOrEqual(111);
+});
+
+test('F3-76: масштаб і положення сценарію запам\'ятовуються й відновлюються при наступному відкритті', async ({ page }) => {
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(3));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  await page.getByTestId('canvas-zoom-out').click();
+  await page.waitForTimeout(900);
+  const before = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+
+  await page.reload();
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  const after = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+  expect(Math.abs(after.x - before.x)).toBeLessThan(3);
+  expect(Math.abs(after.width - before.width)).toBeLessThan(2);
+});
+
+test('F3-76: останній запуск, що впав, видно на вузлі; після правки й вимкнення значки зникають', async ({ page }) => {
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(3));
+  const step = (nodeId: string, status: string, error?: string) => ({
+    id: `s-${nodeId}`,
+    nodeId,
+    runIndex: 0,
+    status,
+    input: [],
+    output: [],
+    error: error ? { message: error } : null,
+    startedAt: '2026-10-27T18:10:40',
+    finishedAt: '2026-10-27T18:10:41',
+  });
+  const summary = { id: 'e1', workflowId: WORKFLOW_ID, versionId: 'v1', mode: 'manual', state: 'error', startedAt: '2026-10-27T18:10:40', finishedAt: '2026-10-27T18:10:42', error: 'boom' };
+  api.lastExecution = { summary, steps: [step('n0', 'success'), step('n1', 'error', 'Крок 1: ділення на нуль'), step('n2', 'skipped')] };
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+
+  await expect(page.locator('[data-node-id="n1"]')).toHaveAttribute('data-run-status', 'error');
+  await expect(page.locator('[data-node-id="n0"]')).toHaveAttribute('data-run-status', 'success');
+  await expect(page.locator('[data-node-id="n0"] [data-testid="node-run-time"]')).toHaveText('18:10:41');
+  await expect(page.getByTestId('last-run-menu')).toHaveCount(0);
+
+  // Перемикач у керуванні канвасом.
+  await page.getByTestId('canvas-last-run').click();
+  await expect(page.locator('[data-node-id="n1"]')).not.toHaveAttribute('data-run-status', 'error');
+  await page.getByTestId('canvas-last-run').click();
+  await expect(page.locator('[data-node-id="n1"]')).toHaveAttribute('data-run-status', 'error');
+
+  // Будь-яка правка робить дані неактуальними.
+  await card(page, 'Крок 2').click({ position: { x: 12, y: 12 } });
+  await page.getByTestId('delete').click();
+  await expect(page.locator('[data-run-status]')).toHaveCount(0);
+  await page.getByTestId('toolbar-more').click();
+  await expect(page.getByTestId('last-run-menu')).toContainText('18:10, помилка');
+});
+
+test('F3-76: вузол, доданий з палітри за межі екрана, одразу видно', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(5));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  for (let i = 0; i < 3; i++) await page.getByTestId('canvas-zoom-in').click();
+
+  // У сценарії з вузлами палітра — смуга (F3-89): розгортаємо.
+  await page.getByTestId('palette-expand').click();
+  await page.locator('[data-item="core.code"]').click();
+  const added = card(page, 'Код (JavaScript)');
+  await expect(added).toHaveCount(1);
+  await expect(added).toBeInViewport({ ratio: 0.9 });
 });

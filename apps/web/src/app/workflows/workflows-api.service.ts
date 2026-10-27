@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE, PageResult } from '../connectors/connectors-api.service';
+import type { ExecutionState } from '../executions/executions-api.service';
 
 /** `WorkflowSummary` — рядок списку `GET /api/v1/workflows`. */
 export interface WorkflowSummary {
@@ -12,6 +13,20 @@ export interface WorkflowSummary {
   updatedAt: string;
   /** Група сценарію (F3-63); `null` — без групи. */
   groupId?: string | null;
+  /** Номер опублікованої версії (F6-10); `null` — сценарій ще не публікувався. */
+  publishedVersion?: number | null;
+  /** Тип першого увімкненого тригера (`core.schedule` тощо); `null` — тригера немає; відсутнє — ще не відомо (F3-80). */
+  triggerType?: string | null;
+  /** Останнє виконання; `null` — сценарій ще не запускали (F3-80). */
+  lastExecution?: WorkflowLastExecution | null;
+}
+
+/** Останнє виконання в рядку списку сценаріїв (`lastExecution`, F3-80). */
+export interface WorkflowLastExecution {
+  id: string;
+  status: ExecutionState;
+  /** `null` — виконання ще в черзі. */
+  startedAt: string | null;
 }
 
 /** Роль у проєкті (F6-14): `admin` — адміністратор інстансу бачить і змінює все. */
@@ -436,7 +451,15 @@ export class WorkflowsApiService {
 
 /** Рядок списку з деталей (після створення, перейменування, зміни активності). */
 export function toSummary(detail: WorkflowDetail): WorkflowSummary {
-  return { id: detail.id, name: detail.name, active: detail.active, version: detail.version, updatedAt: detail.updatedAt, groupId: detail.groupId ?? null };
+  return {
+    id: detail.id,
+    name: detail.name,
+    active: detail.active,
+    version: detail.version,
+    updatedAt: detail.updatedAt,
+    groupId: detail.groupId ?? null,
+    publishedVersion: detail.publishedVersion ?? null,
+  };
 }
 
 /** Маніфест залежностей експорту (F6-09): id середовища-джерела з назвами й типами, без секретів. */

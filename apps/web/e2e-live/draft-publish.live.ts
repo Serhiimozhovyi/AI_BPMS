@@ -57,7 +57,7 @@ test('F6-10: зміна активного сценарію — чернетка
     await expect(page.getByTestId('node-panel-name')).toHaveText('Задати поля', { timeout: 1_000 });
   }).toPass({ timeout: 15_000 });
   await page.getByTestId('delete').click();
-  await expect(page.getByTestId('saved')).toContainText('версія 2', { timeout: 15_000 });
+  await expect(page.getByTestId('saved')).toHaveAttribute('title', /Версія 2/, { timeout: 15_000 });
   await expect(page.getByTestId('publish-state')).toHaveAttribute('data-state', 'changed');
   await expect(page.getByTestId('publish-diff')).toContainText('видалено: Задати поля');
 

@@ -20,7 +20,7 @@ public static class ConnectorHost
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         AddConnector(builder.Services, builder.Configuration);
-        builder.Services.AddMcpServer(Configure).WithStdioServerTransport().WithTools<MailTools>();
+        builder.Services.AddMcpServer(Configure).WithStdioServerTransport().WithTools<MailTools>().WithTools<ExcelTools>();
         return builder.Build();
     }
 
@@ -36,7 +36,7 @@ public static class ConnectorHost
         // Сесії для клієнтів з initialize: лише в сесії сервер може сам надіслати notifications/resources/updated (EventHub).
         builder.Services.AddMcpServer(Configure)
             .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
-            .WithTools<MailTools>();
+            .WithTools<MailTools>().WithTools<ExcelTools>();
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;

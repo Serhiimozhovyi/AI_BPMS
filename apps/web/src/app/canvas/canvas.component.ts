@@ -25,6 +25,10 @@ import { layoutLeftToRight } from './auto-layout';
     [pinnedNodes]="pinnedNodes()"
     [itemCounts]="itemCounts()"
     [runErrors]="runErrors()"
+    [runTimes]="runTimes()"
+    [viewportKey]="viewportKey()"
+    [lastRunToggle]="lastRunToggle()"
+    (lastRunToggled)="lastRunToggled.emit($event)"
     [missingFields]="missingFields()"
     [selection]="selection()"
     [renaming]="renaming()"
@@ -75,6 +79,17 @@ export class CanvasComponent {
 
   /** Повідомлення помилок вузлів у тестовому запуску (F3-57). */
   readonly runErrors = input<ReadonlyMap<string, string>>(new Map());
+
+  /** Час завершення кроку на картці вузла (F3-76). */
+  readonly runTimes = input<ReadonlyMap<string, string>>(new Map());
+
+  /** Ключ збереження положення полотна — id сценарію (F3-76); `null` — не запам'ятовувати. */
+  readonly viewportKey = input<string | null>(null);
+
+  /** Перемикач «Останній запуск» (F3-76): `null` — кнопки немає. */
+  readonly lastRunToggle = input<boolean | null>(null);
+
+  readonly lastRunToggled = output<boolean>();
 
   /** Незаповнені обов'язкові параметри за id вузла (F3-57). */
   readonly missingFields = input<ReadonlyMap<string, readonly string[]>>(new Map());
@@ -135,6 +150,20 @@ export class CanvasComponent {
   /** Лівий верхній кут для нової нотатки в центрі видимої частини канвасу (`Shift+S`). */
   viewportCenter(): [number, number] {
     return this.vflow()?.viewportCenter() ?? [0, 0];
+  }
+
+  /** Масштаб полотна з клавіш (F3-90). */
+  zoom(action: 'in' | 'out' | 'reset' | 'fit'): void {
+    const flow = this.vflow();
+    if (!flow) return;
+    if (action === 'fit') flow.fit();
+    else if (action === 'reset') flow.zoomReset();
+    else flow.zoomStep(action);
+  }
+
+  /** Підсунути вузол у видиму частину полотна (панель вузла відкрилася поруч). */
+  revealNode(nodeId: string): void {
+    this.vflow()?.revealNode(nodeId);
   }
 
   protected readonly nodeErrors = computed<NodeErrors>(() => {

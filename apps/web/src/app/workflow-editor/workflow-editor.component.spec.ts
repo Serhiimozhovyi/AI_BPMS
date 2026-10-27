@@ -73,7 +73,16 @@ describe('WorkflowEditorComponent', () => {
     return (canvas.componentInstance as CanvasComponent).definition().nodes;
   }
 
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  // Палітра за замовчуванням згорнута, коли у сценарії є вузли (F3-89): більшість тестів користується палітрою — вона розгорнута вибором.
+  beforeEach(() => localStorage.setItem('openbp.editor.palette', '1'));
+
+  afterEach(() => {
+    localStorage.removeItem('openbp.editor.palette');
+    const http = TestBed.inject(HttpTestingController);
+    // Запит останнього виконання при відкритті (F3-76) більшість тестів не цікавить — окремий блок нижче.
+    http.match((r) => r.method === 'GET' && r.url === '/api/v1/executions');
+    http.verify();
+  });
 
   it('«не заповнено: N» (F3-57): обов’язкові аргументи tool’а; клік відкриває вузол і ставить фокус на перше поле', async () => {
     const { fixture, http, host } = setup();
@@ -119,9 +128,9 @@ describe('WorkflowEditorComponent', () => {
     expect(palette.find((s) => s.id === 'trigger-presets')?.items.map((i) => i.key)).toEqual(['trigger:c1/new_update']);
   });
 
-  async function loaded() {
+  async function loaded(detail: WorkflowDetail = workflow) {
     const ctx = setup();
-    ctx.http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    ctx.http.expectOne('/api/v1/workflows/w1').flush(detail);
     ctx.http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
     flushConnectors(ctx.http);
     await render(ctx.fixture);
@@ -134,6 +143,19 @@ describe('WorkflowEditorComponent', () => {
 
   function click(host: HTMLElement, selector: string): void {
     (host.querySelector(selector) as HTMLButtonElement).click();
+  }
+
+  /** Пункт меню «⋯» шапки панелі вузла (F3-88): відкриває меню, якщо воно закрите; пункту немає — `null`. */
+  async function menuItem(fixture: ReturnType<typeof setup>['fixture'], host: HTMLElement, testId: string): Promise<HTMLButtonElement | null> {
+    if (!host.querySelector('[data-testid="node-menu"]')) {
+      (host.querySelector('[data-testid="node-more"]') as HTMLButtonElement).click();
+      await render(fixture);
+    }
+    return host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+  }
+
+  async function menuClick(fixture: ReturnType<typeof setup>['fixture'], host: HTMLElement, testId: string): Promise<void> {
+    (await menuItem(fixture, host, testId))!.click();
   }
 
   function button(host: HTMLElement, testId: string): HTMLButtonElement {
@@ -180,7 +202,9 @@ describe('WorkflowEditorComponent', () => {
   });
 
   it('посилання «Журнал виконань» веде на журнал цього сценарію', async () => {
-    const { host } = await loaded();
+    const { fixture, host } = await loaded();
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
     const link = host.querySelector<HTMLAnchorElement>('[data-testid="executions-link"]')!;
     expect(link.getAttribute('href')).toBe('/executions?workflowId=w1');
   });
@@ -236,7 +260,7 @@ describe('WorkflowEditorComponent', () => {
     put.flush(saved(4, body));
     await render(fixture);
     expect(host.querySelector('[data-testid="dirty"]')).toBeNull();
-    expect(host.querySelector('[data-testid="saved"]')?.textContent).toContain('4');
+    expect(host.querySelector('[data-testid="saved"]')?.getAttribute('title')).toContain('4');
     expect(canvasNodes(fixture)).toBe(body.nodes);
   });
 
@@ -308,17 +332,20 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvas().selection().nodes).toEqual(['n_set']);
 
-    // F2: inline-поле; зайнята назва — повідомлення, нова — перейменування.
-    key({ key: 'F2' });
-    await render(fixture);
-    expect(canvas().renaming()).toBe('n_set');
-    canvas().renamed.emit({ nodeId: 'n_set', name: 'Нова заявка' });
-    await render(fixture);
-    expect(canvas().renaming()).toBeNull();
+    // F2: inline-поле в шапці панелі (F3-88); зайнята назва — повідомлення, нова — перейменування.
+    const rename = async (name: string) => {
+      key({ key: 'F2' });
+      await render(fixture);
+      const input = host.querySelector<HTMLInputElement>('[data-testid="node-panel-name-input"]')!;
+      expect(input).not.toBeNull();
+      input.value = name;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await render(fixture);
+    };
+    await rename('Нова заявка');
+    expect(host.querySelector('[data-testid="node-panel-name-input"]')).toBeNull();
     expect(host.querySelector('[data-testid="editor-notice"]')?.textContent).toContain('вже є');
-    key({ key: 'F2' });
-    canvas().renamed.emit({ nodeId: 'n_set', name: 'Поля заявки' });
-    await render(fixture);
+    await rename('Поля заявки');
     expect(nodes().find((n) => n.id === 'n_set')?.name).toBe('Поля заявки');
 
     // ПКМ на вузлі → меню; «Дублювати» додає копію.
@@ -534,6 +561,201 @@ describe('WorkflowEditorComponent', () => {
     expect(canvasNodes(fixture)).toHaveLength(2);
   });
 
+  it('focusNode (?node=, F3-81) виділяє вузол після завантаження; невідомий id ігнорується', async () => {
+    for (const [focus, expected] of [['n_set', ['n_set']], ['n_nope', []]] as const) {
+      TestBed.resetTestingModule();
+      const { fixture, http } = setup();
+      fixture.componentRef.setInput('focusNode', focus);
+      http.expectOne('/api/v1/workflows/w1').flush(workflow);
+      http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+      http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+      await render(fixture);
+      expect(canvasComponent(fixture).selection().nodes).toEqual(expected);
+    }
+  });
+
+  it('без конекторів у палітрі нейтральна підказка, а не помилка (F3-77)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
+    expect(host.querySelector('[data-testid="no-connectors"]')?.textContent).toContain('Конекторів ще немає');
+    expect(host.querySelector('[data-testid="no-connectors"] a')?.getAttribute('href')).toBe('/connectors');
+  });
+
+  it('збій конекторів показує причину і «Повторити» перезавантажує список (F3-77)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ title: 'x', detail: 'База недоступна' }, { status: 500, statusText: 'Server Error' });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="tools-error"]')?.textContent).toContain('База недоступна');
+
+    (host.querySelector('[data-testid="tools-retry"]') as HTMLButtonElement).click();
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
+  });
+
+  describe('палітра: смуга й розгорнутий вигляд (F3-89)', () => {
+    beforeEach(() => localStorage.removeItem('openbp.editor.palette'));
+
+    it('у сценарії з вузлами палітра згорнута в смугу з «+ Додати крок»; «Розгорнути» показує палітру й запам’ятовує вибір', async () => {
+      const { fixture, host } = await loaded();
+      expect(host.querySelector('[data-testid="palette-rail"]')).not.toBeNull();
+      expect(host.querySelector('app-palette')).toBeNull();
+
+      click(host, '[data-testid="palette-expand"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="palette-rail"]')).toBeNull();
+      expect(host.querySelector('app-palette')).not.toBeNull();
+      expect(localStorage.getItem('openbp.editor.palette')).toBe('1');
+
+      click(host, '[data-testid="palette-collapse"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="palette-rail"]')).not.toBeNull();
+      expect(localStorage.getItem('openbp.editor.palette')).toBe('0');
+    });
+
+    it('порожній сценарій відкривається з розгорнутою палітрою, і вона не згортається, коли додано перший вузол', async () => {
+      const { fixture, host } = await loaded({ ...workflow, definition: emptyWorkflowDefinition('Порожній') });
+      expect(host.querySelector('app-palette')).not.toBeNull();
+      (host.querySelector('[data-item="core.manualTrigger"]') as HTMLButtonElement).click();
+      await render(fixture);
+      expect(canvasNodes(fixture)).toHaveLength(1);
+      expect(host.querySelector('app-palette')).not.toBeNull();
+    });
+
+    it('збережений вибір «згорнуто» діє і в порожньому сценарії', async () => {
+      localStorage.setItem('openbp.editor.palette', '0');
+      const { host } = await loaded({ ...workflow, definition: emptyWorkflowDefinition('Порожній') });
+      expect(host.querySelector('[data-testid="palette-rail"]')).not.toBeNull();
+    });
+
+    it('«+ Додати крок» зі смуги відкриває спливаючу палітру, вибір додає вузол', async () => {
+      const { fixture, host } = await loaded();
+      click(host, '[data-testid="rail-add"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="quick-add"]')).not.toBeNull();
+      const before = canvasNodes(fixture).length;
+      (host.querySelector('[data-testid="quick-add"] [data-item]') as HTMLButtonElement).click();
+      await render(fixture);
+      expect(canvasNodes(fixture)).toHaveLength(before + 1);
+    });
+  });
+
+  describe('керування канвасом (F3-90)', () => {
+    const press = (init: KeyboardEventInit) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, composed: true, ...init }));
+
+    it('клавіші 1, 0, +, − масштабують канвас; у полі введення й з Ctrl — ні', async () => {
+      const { fixture, host } = await loaded();
+      const zoom = vi.spyOn(canvasComponent(fixture), 'zoom');
+      press({ key: '1' });
+      press({ key: '0' });
+      press({ key: '+' });
+      press({ key: '=' });
+      press({ key: '-' });
+      expect(zoom.mock.calls.map((c) => c[0])).toEqual(['fit', 'reset', 'in', 'in', 'out']);
+
+      press({ key: '1', ctrlKey: true });
+      const search = host.querySelector<HTMLInputElement>('[data-testid="palette-search"]')!;
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, composed: true }));
+      expect(zoom).toHaveBeenCalledTimes(5);
+    });
+
+    it('«?» і пункт «Гарячі клавіші» в меню «⋯» відкривають довідку; у полі введення «?» — звичайний символ', async () => {
+      const { fixture, host } = await loaded();
+      const search = host.querySelector<HTMLInputElement>('[data-testid="palette-search"]')!;
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true, composed: true }));
+      await render(fixture);
+      expect(document.querySelector('[data-testid="shortcuts"]')).toBeNull();
+
+      press({ key: '?' });
+      await render(fixture);
+      expect(document.querySelector('[data-testid="shortcuts"]')).not.toBeNull();
+      (document.querySelector('[data-testid="shortcuts-close"]') as HTMLButtonElement).click();
+      await render(fixture);
+
+      click(host, '[data-testid="toolbar-more"]');
+      await render(fixture);
+      click(host, '[data-testid="shortcuts"]');
+      await render(fixture);
+      expect(document.querySelector('[data-testid="shortcuts"] [data-group="canvas"]')).not.toBeNull();
+    });
+  });
+
+  describe('шапка панелі вузла (F3-88)', () => {
+    it('назва, людська назва типу в підказці, головна дія, меню «⋯» і «×»', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      const header = host.querySelector('[data-testid="node-panel-header"]')!;
+      expect(header.querySelector('[data-testid="node-panel-name"]')?.textContent).toContain('Поля');
+      expect(header.querySelector('[data-testid="node-panel-type"]')?.getAttribute('title')).toBe('core.set');
+      expect(header.querySelector('[data-testid="run-node"]')?.textContent).toContain('Тестувати крок');
+      expect(host.querySelector('[data-testid="node-menu"]')).toBeNull();
+      for (const id of ['run-until', 'pin-manual', 'assistant-explain', 'assistant-expression']) expect(await menuItem(fixture, host, id)).not.toBeNull();
+      expect(await menuItem(fixture, host, 'assistant-fix')).toBeNull();
+    });
+
+    it('клік по назві в шапці — inline-перейменування, Enter зберігає, Esc скасовує без закриття панелі', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      click(host, 'button[data-testid="node-panel-name"]');
+      await render(fixture);
+      const input = host.querySelector<HTMLInputElement>('[data-testid="node-panel-name-input"]')!;
+      input.value = 'Інша назва';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await render(fixture);
+      expect(host.querySelector('[data-testid="node-panel-name-input"]')).toBeNull();
+      expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+      expect(canvasComponent(fixture).definition().nodes.find((n) => n.id === 'n_set')?.name).toBe('Поля');
+
+      click(host, 'button[data-testid="node-panel-name"]');
+      await render(fixture);
+      const again = host.querySelector<HTMLInputElement>('[data-testid="node-panel-name-input"]')!;
+      again.value = 'Інша назва';
+      again.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await render(fixture);
+      expect(canvasComponent(fixture).definition().nodes.find((n) => n.id === 'n_set')?.name).toBe('Інша назва');
+    });
+
+    it('«×» і Esc поза полем закривають панель і знімають виділення; Esc у полі лише знімає з нього фокус', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      click(host, '[data-testid="panel-close"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
+      expect(canvasComponent(fixture).selection()).toEqual({ nodes: [], edges: [] });
+
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      const field = host.querySelector<HTMLInputElement>('[data-testid="panel-params"] input:not([type="hidden"])')!;
+      field.focus();
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await render(fixture);
+      expect(document.activeElement).not.toBe(field);
+      expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+
+      key({ key: 'Escape' });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
+    });
+
+    it('виділений вузол підсувається з-під панелі: канвас просять показати його', async () => {
+      const { fixture } = await loaded();
+      const reveal = vi.spyOn(canvasComponent(fixture), 'revealNode');
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      expect(reveal).toHaveBeenCalledWith('n_set');
+    });
+  });
+
   describe('тестовий запуск (F2-20)', () => {
     function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success'): ExecutionStep {
       return {
@@ -698,11 +920,11 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, http, host } = await ran();
       canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
       await render(fixture);
-      expect(button(host, 'unpin-output')).toBeNull();
-      click(host, '[data-testid="pin-output"]');
+      expect(await menuItem(fixture, host, 'unpin-output')).toBeNull();
+      await menuClick(fixture, host, 'pin-output');
       await render(fixture);
       expect(Object.keys(canvasComponent(fixture).definition().pinData)).toEqual(['n_set']);
-      expect(button(host, 'pin-output')).toBeNull();
+      expect(await menuItem(fixture, host, 'pin-output')).toBeNull();
 
       // «Виконати» одразу зберігає відкладену зміну — у тілі вже є pinData.
       click(host, '[data-testid="run"]');
@@ -718,17 +940,17 @@ describe('WorkflowEditorComponent', () => {
       FakeEventSource.last!.emit('status', { executionId: 'e2', state: 'success', error: null });
       await render(fixture);
 
-      click(host, '[data-testid="unpin-output"]');
+      await menuClick(fixture, host, 'unpin-output');
       await render(fixture);
       expect(canvasComponent(fixture).definition().pinData).toEqual({});
-      expect(button(host, 'pin-output')).not.toBeNull();
+      expect(await menuItem(fixture, host, 'pin-output')).not.toBeNull();
     });
 
     it('«До цього вузла» (F3-51): лише вузол-призначення, попередники виконуються заново', async () => {
       const { fixture, http, host } = await ran();
       canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
       await render(fixture);
-      click(host, '[data-testid="run-until"]');
+      await menuClick(fixture, host, 'run-until');
       await render(fixture);
       expect(http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).request.body).toEqual({ destinationNodeId: 'n_set' });
     });
@@ -737,9 +959,9 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, host } = await loaded();
       canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
       await render(fixture);
-      expect(host.querySelector('[data-testid="node-panel"] [data-testid="node-actions"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="node-panel-header"] [data-testid="node-actions"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="pinned-editor"]')).toBeNull();
-      click(host, '[data-testid="pin-manual"]');
+      await menuClick(fixture, host, 'pin-manual');
       await render(fixture);
       expect(canvasComponent(fixture).definition().pinData).toEqual({ n_set: [{ json: {} }] });
 
@@ -964,10 +1186,74 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, host } = await loaded();
       fixture.componentRef.setInput('embedded', true);
       await render(fixture);
+      click(host, '[data-testid="toolbar-more"]');
+      await render(fixture);
       expect(host.querySelector('[data-testid="executions-link"]')).toBeNull();
       expect(host.querySelector('a[href="/workflows"]')).toBeNull();
     });
   });
+  describe('останній запуск (F3-76)', () => {
+    const summary = { id: 'e1', workflowId: 'w1', versionId: 'v1', mode: 'manual', state: 'error', startedAt: '2026-10-27T18:10:40', finishedAt: '2026-10-27T18:10:42', error: 'boom' };
+    const step = (nodeId: string, status: string, error?: string) => ({ id: `s-${nodeId}`, nodeId, runIndex: 0, status, input: [], output: [], error: error ? { message: error } : null, startedAt: '2026-10-27T18:10:40', finishedAt: '2026-10-27T18:10:41' });
+
+    afterEach(() => localStorage.removeItem('openbp.editor.showLastRun'));
+
+    async function loadedWithLastRun() {
+      const ctx = setup();
+      ctx.http.expectOne('/api/v1/workflows/w1').flush(workflow);
+      ctx.http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+      flushConnectors(ctx.http);
+      const list = ctx.http.expectOne((r) => r.method === 'GET' && r.url === '/api/v1/executions');
+      expect(list.request.params.get('workflowId')).toBe('w1');
+      expect(list.request.params.get('pageSize')).toBe('1');
+      list.flush({ items: [summary], page: 1, pageSize: 1, total: 1 });
+      ctx.http.expectOne('/api/v1/executions/e1').flush({ summary, steps: [step('n_hook', 'success'), step('n_set', 'error', 'Порахувати: ділення на нуль')] });
+      await render(ctx.fixture);
+      return ctx;
+    }
+
+    it('при відкритті статуси й помилка останнього запуску видно на вузлах, у шапці — підпис', async () => {
+      const { fixture, host } = await loadedWithLastRun();
+      expect(Object.fromEntries(canvasComponent(fixture).runStatuses())).toEqual({ n_hook: 'success', n_set: 'error' });
+      expect(canvasComponent(fixture).runErrors().get('n_set')).toBe('Порахувати: ділення на нуль');
+      expect(canvasComponent(fixture).runTimes().get('n_hook')).toBe('18:10:41');
+      expect(canvasComponent(fixture).viewportKey()).toBe('w1');
+      expect(host.querySelector('[data-testid="last-run"]')?.textContent).toContain('18:10, помилка');
+    });
+
+    it('після правки вузла значки зникають, підпис у шапці лишається', async () => {
+      const { fixture, host } = await loadedWithLastRun();
+      const def = canvasComponent(fixture).definition();
+      canvasComponent(fixture).definitionChange.emit({ ...def, nodes: def.nodes.map((n) => (n.id === 'n_set' ? { ...n, name: 'Інша назва' } : n)) });
+      await render(fixture);
+      expect(canvasComponent(fixture).runStatuses().size).toBe(0);
+      expect(canvasComponent(fixture).lastRunToggle()).toBeNull();
+      expect(host.querySelector('[data-testid="last-run"]')).not.toBeNull();
+    });
+
+    it('перемикач «Останній запуск» ховає значки й запам’ятовує вибір', async () => {
+      const { fixture } = await loadedWithLastRun();
+      expect(canvasComponent(fixture).lastRunToggle()).toBe(true);
+      canvasComponent(fixture).lastRunToggled.emit(false);
+      await render(fixture);
+      expect(canvasComponent(fixture).runStatuses().size).toBe(0);
+      expect(canvasComponent(fixture).lastRunToggle()).toBe(false);
+      expect(localStorage.getItem('openbp.editor.showLastRun')).toBe('0');
+    });
+
+    it('сценарій без запусків: ні значків, ні підпису, ні перемикача', async () => {
+      const { fixture, http, host } = setup();
+      http.expectOne('/api/v1/workflows/w1').flush(workflow);
+      http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+      flushConnectors(http);
+      http.expectOne((r) => r.method === 'GET' && r.url === '/api/v1/executions').flush({ items: [], page: 1, pageSize: 1, total: 0 });
+      await render(fixture);
+      expect(canvasComponent(fixture).runStatuses().size).toBe(0);
+      expect(canvasComponent(fixture).lastRunToggle()).toBeNull();
+      expect(host.querySelector('[data-testid="last-run"]')).toBeNull();
+    });
+  });
+
   describe('«Бізнес | Технічний» (F3-66)', () => {
     afterEach(() => {
       localStorage.removeItem('openbp.editor.view');
@@ -1131,7 +1417,7 @@ describe('WorkflowEditorComponent', () => {
     const { fixture, http, host } = await loaded();
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
     await render(fixture);
-    click(host, '[data-testid="assistant-explain"]');
+    await menuClick(fixture, host, 'assistant-explain');
     await render(fixture);
 
     expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
@@ -1155,6 +1441,8 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
 
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
     click(host, '[data-testid="assistant-toggle"]');
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
     await render(fixture);

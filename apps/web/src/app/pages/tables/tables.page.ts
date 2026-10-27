@@ -5,6 +5,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../auth/auth.service';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NotifyService } from '../../shared/notify.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
   DATA_COLUMN_NAME_PATTERN,
@@ -28,7 +30,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
 @Component({
   selector: 'app-tables-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule],
+  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
@@ -100,7 +102,15 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
       }
 
       @if (!loading() && tables().length === 0 && !error()) {
-        <p class="opacity-70" data-testid="empty" i18n="@@tables.empty">Таблиць ще немає.</p>
+        <app-empty-state
+          icon="table"
+          i18n-title="@@tables.empty.title"
+          title="Таблиць ще немає"
+          i18n-description="@@tables.empty.text"
+          description="Таблиця зберігає довідники, черги й стан між запусками — сценарії читають і пишуть її вузлом «Таблиця даних»."
+          [actionLabel]="canEdit() ? createLabel : null"
+          (action)="startCreate()"
+        />
       }
 
       <div class="flex flex-wrap items-start gap-6">
@@ -126,7 +136,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
           <div class="min-w-0 flex-1" data-testid="table-view">
             <div class="mb-2 flex flex-wrap items-center gap-2">
               <h2 class="text-lg font-semibold">{{ t.name }}</h2>
-              <span class="opacity-60" i18n="@@tables.view.count">рядків: {{ total() }}:count:</span>
+              <span class="opacity-60" i18n="@@tables.view.count">рядків: {{ total() }}</span>
               @if (canEdit()) {
                 <button mat-button type="button" data-testid="table-edit" (click)="startEdit(t)" i18n="@@tables.view.edit">Структура</button>
                 <button mat-button type="button" data-testid="table-delete" (click)="confirmingDelete.set(true)" i18n="@@tables.view.delete">
@@ -136,7 +146,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
             </div>
             @if (confirmingDelete()) {
               <div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg p-3 state-bad" data-testid="delete-confirm">
-                <span i18n="@@tables.view.deleteConfirm">Видалити таблицю «{{ t.name }}:name:» з усіма рядками? Сценарії з нею почнуть падати.</span>
+                <span i18n="@@tables.view.deleteConfirm">Видалити таблицю «{{ t.name }}» з усіма рядками? Сценарії з нею почнуть падати.</span>
                 <button mat-flat-button type="button" data-testid="delete-yes" (click)="removeTable(t)" i18n="@@tables.view.deleteYes">Видалити</button>
                 <button mat-button type="button" (click)="confirmingDelete.set(false)" i18n="@@tables.view.deleteNo">Ні</button>
               </div>
@@ -236,7 +246,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                 </button>
                 @if (imported(); as r) {
                   <p role="status" class="mt-2 state-ok rounded-lg p-2" data-testid="import-result" i18n="@@tables.import.result">
-                    Додано: {{ r.inserted }}:inserted:, оновлено: {{ r.updated }}:updated:
+                    Додано: {{ r.inserted }}, оновлено: {{ r.updated }}
                   </p>
                 }
               </div>
@@ -250,6 +260,8 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
 export class TablesPage implements OnInit {
   private readonly api = inject(DataTablesApiService);
   private readonly auth = inject(AuthService);
+  private readonly notify = inject(NotifyService);
+  protected readonly createLabel = $localize`:@@tables.empty.action:Створити таблицю`;
   private readonly destroyRef = inject(DestroyRef);
 
   readonly types = DATA_COLUMN_TYPES;
@@ -396,6 +408,7 @@ export class TablesPage implements OnInit {
       next: (saved) => {
         this.saving.set(false);
         this.designing.set(false);
+        this.notify.success(id ? $localize`:@@tables.saved:Структуру таблиці збережено.` : $localize`:@@tables.created:Таблицю створено.`);
         this.tables.update((list) => [...list.filter((t) => t.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)));
         this.select(saved);
       },
@@ -416,8 +429,9 @@ export class TablesPage implements OnInit {
           this.tables.update((list) => list.filter((t) => t.id !== table.id));
           this.selected.set(null);
           this.rows.set([]);
+          this.notify.success($localize`:@@tables.removed:Таблицю «${table.name}:name:» видалено.`);
         },
-        error: (e: unknown) => this.error.set(apiErrorMessage(e)),
+        error: (e: unknown) => this.notify.error($localize`:@@tables.removeFailed:Не вдалося видалити таблицю.`, apiErrorMessage(e)),
       });
   }
 
@@ -531,6 +545,7 @@ export class TablesPage implements OnInit {
         next: (result) => {
           this.saving.set(false);
           this.imported.set(result);
+          this.notify.success($localize`:@@tables.imported:CSV імпортовано.`);
           this.csv.set('');
           this.loadRows(1);
         },

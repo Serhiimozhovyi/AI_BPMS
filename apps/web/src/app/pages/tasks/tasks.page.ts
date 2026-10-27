@@ -1,7 +1,9 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { CardTableDirective } from '../../shared/card-table.directive';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
@@ -21,7 +23,7 @@ import {
 @Component({
   selector: 'app-tasks-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatProgressBarModule],
+  imports: [DatePipe, RouterLink, MatProgressBarModule, EmptyStateComponent, CardTableDirective],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@tasks.title">Задачі</h1>
@@ -54,14 +56,23 @@ import {
         <p role="alert" class="mb-4 text-red-700" data-testid="page-error">{{ error() }}</p>
       }
       @if (!loading() && !error() && tasks().length === 0) {
-        <p class="opacity-70" data-testid="empty" i18n="@@tasks.empty">Задач за цими умовами немає.</p>
+        <app-empty-state
+          icon="task_alt"
+          i18n-title="@@tasks.empty.title"
+          title="Задач за цими умовами немає"
+          i18n-description="@@tasks.empty.text"
+          description="Задачі з'являються, коли сценарій доходить до вузла «Погодження»: додайте його у сценарій, і виконавець побачить задачу тут."
+          i18n-actionLabel="@@tasks.empty.action"
+          actionLabel="Відкрити сценарії"
+          (action)="openWorkflows()"
+        />
       }
 
       @if (tasks().length > 0) {
-        <table class="mb-2 w-full text-left" data-testid="tasks-table">
+        <table appCardTable class="mb-2 w-full text-left" data-testid="tasks-table">
           <thead>
             <tr>
-              <th class="p-2" i18n="@@tasks.col.title">Задача</th>
+              <th class="p-2" data-no-label i18n="@@tasks.col.title">Задача</th>
               <th class="p-2" i18n="@@tasks.col.workflow">Сценарій</th>
               <th class="p-2" i18n="@@tasks.col.assignee">Виконавець</th>
               <th class="p-2" i18n="@@tasks.col.status">Статус</th>
@@ -93,6 +104,7 @@ import {
 export class TasksPage implements OnInit {
   private readonly api = inject(TasksApiService);
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
 
   protected readonly statuses = TASK_STATUSES;
   protected readonly scope = signal<'mine' | 'all'>('mine');
@@ -141,5 +153,9 @@ export class TasksPage implements OnInit {
         this.loading.set(false);
       },
     });
+  }
+
+  openWorkflows(): void {
+    void this.router.navigateByUrl('/workflows');
   }
 }

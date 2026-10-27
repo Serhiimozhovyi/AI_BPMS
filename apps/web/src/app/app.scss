@@ -41,6 +41,8 @@
 }
 
 .shell-project__select {
+  display: inline-flex;
+  align-items: center;
   min-width: 200px;
   height: 36px;
   padding: 0 12px;
@@ -48,15 +50,14 @@
   border-radius: var(--ac-radius-sm);
   background: rgb(255 255 255 / 0.08);
   color: var(--ac-white);
+  --mat-select-enabled-trigger-text-color: var(--ac-white);
+  --mat-select-enabled-arrow-color: var(--ac-white);
+  --mat-select-focused-arrow-color: var(--ac-white);
   font: 400 14px/20px Ubuntu, sans-serif;
 
   &:focus-visible {
     outline: 2px solid var(--ac-kit);
     outline-offset: 2px;
-  }
-
-  option {
-    color: var(--ac-vivid);
   }
 }
 
@@ -70,6 +71,31 @@
 .shell-user__email {
   font: 400 14px/20px Ubuntu, sans-serif;
   opacity: 0.85;
+}
+
+// Планшет: у шапці лише значок користувача, вужчий перемикач проєктів.
+@media (max-width: 1100px) {
+  .shell-top {
+    padding: 0 16px;
+  }
+
+  .shell-project {
+    margin-left: 8px;
+  }
+
+  .shell-project__select {
+    min-width: 140px;
+    max-width: 200px;
+  }
+
+  .shell-user__email {
+    display: none;
+  }
+
+  .shell-nav {
+    padding: 0 16px;
+    scrollbar-width: thin;
+  }
 }
 
 .shell-icon-button {
@@ -133,5 +159,116 @@
   &.active {
     border-bottom-color: var(--ac-white);
     color: var(--ac-white);
+  }
+}
+
+.shell-top .shell-burger {
+  margin-left: auto;
+}
+
+// Банер «Немає зв'язку із сервером» (F3-84).
+.shell-offline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 2px solid var(--ac-red);
+  background: #ffe9e9;
+  color: var(--ac-vivid);
+  font: 500 14px/20px Ubuntu, sans-serif;
+}
+
+.shell-offline__text {
+  flex: 1;
+}
+
+.shell-offline__retry {
+  padding: 4px 16px;
+  border: 1px solid var(--ac-vivid);
+  border-radius: var(--ac-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgb(38 31 75 / 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+// Drawer навігації на телефоні (F3-84).
+.shell-backdrop {
+  position: fixed;
+  padding: 0;
+  border: 0;
+  inset: 0;
+  z-index: 1000;
+  background: rgb(38 31 75 / 0.5);
+}
+
+.shell-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  width: min(86vw, 320px);
+  overflow-y: auto;
+  background: var(--ac-mid);
+  color: var(--ac-white);
+}
+
+.shell-drawer__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+
+  .shell-nav__link {
+    min-height: 48px;
+    padding: 0 20px;
+    border-bottom: 0;
+    border-left: 3px solid transparent;
+    font-size: 16px;
+
+    &.active {
+      border-left-color: var(--ac-white);
+      background: rgb(255 255 255 / 0.08);
+    }
+  }
+}
+
+.shell-drawer__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+
+  .shell-project {
+    margin-left: 0;
+  }
+
+  .shell-project__select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .shell-user {
+    margin-left: 0;
+  }
+
+  .shell-user__email {
+    display: block;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

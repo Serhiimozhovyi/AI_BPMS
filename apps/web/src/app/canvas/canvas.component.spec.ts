@@ -50,9 +50,9 @@ describe('CanvasComponent', () => {
     const cards = (fixture.nativeElement as HTMLElement).querySelectorAll('[data-node-id]');
     expect(Array.from(cards).map((c) => c.getAttribute('data-node-id'))).toEqual(['n_webhook', 'n_if', 'n_1c']);
     expect(cards[0].textContent).toContain('Нова заявка');
-    expect(cards[0].textContent).toContain('core.webhook');
+    expect(cards[0].textContent).not.toContain('core.webhook');
     expect(cards[0].textContent).toContain('Тригери');
-    expect(cards[2].textContent).toContain('mcp.tool · create_order');
+    expect(cards[2].textContent).toContain('create_order');
   });
 
   it('F3-62: нотатки — картки з Markdown-текстом і кольором; зміна кольору чи розміру з канвасу — нове визначення', async () => {
@@ -350,5 +350,14 @@ describe('CanvasComponent', () => {
     fixture.componentRef.setInput('readonly', true);
     fixture.detectChanges();
     expect(hint().length).toBe(0);
+  });
+
+  it('подвійний клік по картці (зокрема по назві) віддає «open», а не «rename» (F3-78)', async () => {
+    const fixture = await create(demo());
+    const actions: unknown[] = [];
+    fixture.componentInstance.nodeAction.subscribe((a) => actions.push(a));
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-node-id="n_if"]')!;
+    card.querySelector('.node__name')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(actions).toEqual([{ nodeId: 'n_if', action: 'open' }]);
   });
 });

@@ -32,7 +32,21 @@ import { ExpressionEditorService } from './expression-editor-dialog.component';
 import { ExpressionSegment, expressionSegments, expressionSyntaxError, hasExpression } from './expression-tools';
 import { CodeEditorHandle, MONACO_LOADER } from './monaco-loader';
 import { ValueRules, formatValue, isExpression, isPlainObject, parseValue, valueError, valueErrorMessage } from './node-value';
-import { ARRAY_FIELD, ASSIGNMENTS_FIELD, CODE_FIELD, COMBINE_FIELD, CONDITION_FIELD, DECISION_RULES_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD } from './schema-fields';
+import {
+  ARRAY_FIELD,
+  ASSIGNMENTS_FIELD,
+  CODE_FIELD,
+  COMBINE_FIELD,
+  COMMANDS_FIELD,
+  CONDITION_FIELD,
+  DECISION_RULES_FIELD,
+  KEYBOARD_FIELD,
+  MULTI_CHOICE_FIELD,
+  NodeFieldProps,
+  SECTION_WRAPPER,
+  VALUE_FIELD,
+} from './schema-fields';
+import { NodeCommandsFieldComponent, NodeKeyboardFieldComponent, NodeMultiChoiceFieldComponent } from './widget-fields.component';
 import { NodeDecisionRulesFieldComponent } from './decision-table-field.component';
 
 /** Спільний стан форми вузла (`FormlyFormOptions.formState`): контекст підказок виразів і конектор вузла. */
@@ -197,6 +211,9 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
           @if (props.description) {
             <mat-hint>{{ props.description }}</mat-hint>
           }
+          @if (maxLength) {
+            <mat-hint align="end" [class.value__over]="charCount > maxLength" [attr.data-testid]="'counter-' + key">{{ charCount }} / {{ maxLength }}</mat-hint>
+          }
           @if (errorText(); as message) {
             <mat-error [attr.data-testid]="'error-' + key">{{ message }}</mat-error>
           }
@@ -268,6 +285,10 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
       pointer-events: none;
       font: inherit;
       letter-spacing: inherit;
+    }
+
+    .value__over {
+      color: var(--ac-red, #c62828);
     }
 
     .value__backdrop--multiline {
@@ -407,6 +428,17 @@ export class NodeValueFieldComponent extends FieldType<FieldTypeConfig> implemen
 
   protected get label(): string {
     return (this.props as NodeFieldProps).label ?? String(this.key ?? '');
+  }
+
+  /** Межа довжини зі схеми (`maxLength`): під полем показується лічильник символів. */
+  protected get maxLength(): number | undefined {
+    return (this.props as NodeFieldProps).maxChars;
+  }
+
+  /** Довжина тексту поля; вираз `{{ }}` перевищити ліміт не показує — його розмір відомий лише під час виконання. */
+  protected get charCount(): number {
+    const value = this.text.value;
+    return typeof value === 'string' && !value.includes('{{') ? value.length : 0;
   }
 
   protected get multiline(): boolean {
@@ -1339,6 +1371,9 @@ export function provideNodeForm() {
       { name: COMBINE_FIELD, component: NodeCombineFieldComponent },
       { name: ASSIGNMENTS_FIELD, component: NodeAssignmentsFieldComponent },
       { name: DECISION_RULES_FIELD, component: NodeDecisionRulesFieldComponent },
+      { name: KEYBOARD_FIELD, component: NodeKeyboardFieldComponent },
+      { name: COMMANDS_FIELD, component: NodeCommandsFieldComponent },
+      { name: MULTI_CHOICE_FIELD, component: NodeMultiChoiceFieldComponent },
     ],
     wrappers: [{ name: SECTION_WRAPPER, component: NodeSectionWrapperComponent }],
     validators: [{ name: 'node-value', validation: nodeValueValidator }],

@@ -79,7 +79,20 @@ describe('canvas-model', () => {
     const webhook = byId.get('n_webhook')!;
     expect(webhook).toMatchObject({ x: 100, y: 200, group: 'trigger', inputs: [], outputs: ['main'], disabled: false });
     expect(byId.get('n_if')!.outputs).toEqual(['true', 'false', ERROR_OUTPUT]);
-    expect(byId.get('n_1c')).toMatchObject({ group: 'integration', disabled: true, subtitle: 'mcp.tool · create_order' });
+    expect(byId.get('n_1c')).toMatchObject({ group: 'integration', disabled: true, subtitle: 'create_order' });
+  });
+
+  it('підрядок картки: назва tool\'а для mcp.*, людська назва типу — лише коли вузол перейменовано (F3-91)', () => {
+    const model = toCanvasModel(workflowWithExtras(), SAMPLE_DESCRIPTORS);
+    const ifNode = model.nodes.find((n) => n.id === 'n_if')!;
+    const descriptor = SAMPLE_DESCRIPTORS.find((d) => d.type === ifNode.type)!;
+    expect(ifNode.subtitle).toBe(descriptor.displayName === ifNode.name ? '' : descriptor.displayName);
+
+    const def = workflowWithExtras();
+    def.nodes.find((n) => n.id === 'n_if')!.name = 'Велике замовлення?';
+    expect(toCanvasModel(def, SAMPLE_DESCRIPTORS).nodes.find((n) => n.id === 'n_if')!.subtitle).toBe(descriptor.displayName);
+    def.nodes.find((n) => n.id === 'n_if')!.name = descriptor.displayName;
+    expect(toCanvasModel(def, SAMPLE_DESCRIPTORS).nodes.find((n) => n.id === 'n_if')!.subtitle).toBe('');
   });
 
   it('core.switch v2: fallback і по порту на правило; порт з ребром не ховається; v1 — усі 5 портів', () => {

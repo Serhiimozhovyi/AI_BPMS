@@ -1,8 +1,10 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
+import { ENUM_LABELS_ANNOTATION } from './core-labels';
 import { isAssignmentSchema, isCombineSchema, isConditionSchema, isRuleSchema, operatorLabel } from './conditions';
 import { isDecisionRulesSchema } from './decision-table';
 import { OPTIONS_ANNOTATION, OptionsSource, parseOptionsSource } from './dynamic-options';
 import { ValueRules, isPlainObject } from './node-value';
+import { WIDGET_ANNOTATION, parseWidget } from './widgets';
 
 /**
  * JSON Schema параметрів → поля ngx-formly (F2-18). Підтримується підмножина, яку дають дескриптори `core.*`
@@ -29,6 +31,13 @@ export const COMBINE_FIELD = 'app-combine';
 export const ASSIGNMENTS_FIELD = 'app-assignments';
 /** Правила таблиці рішень `core.decisionTable` таблицею «умови на входи → значення виходів» (F6-19). */
 export const DECISION_RULES_FIELD = 'app-decision-rules';
+
+/** Редактор кнопок `reply_markup` — анотація `x-openbp-widget: keyboard` (F6-30). */
+export const KEYBOARD_FIELD = 'app-keyboard';
+/** Таблиця «команда — опис» — анотація `x-openbp-widget: commands` (F6-30). */
+export const COMMANDS_FIELD = 'app-commands';
+/** Множинний вибір із `items.enum` (F6-30). */
+export const MULTI_CHOICE_FIELD = 'app-multi-choice';
 
 /** Глибина вкладеності, після якої об'єкти й масиви редагуються як JSON (захист від рекурсивних `$ref`). */
 const MAX_DEPTH = 6;
@@ -59,6 +68,8 @@ export interface NodeFieldProps {
   compact?: boolean;
   /** Рядок-назва присвоєння: автодоповнення іменами полів входу. */
   suggestInputFields?: boolean;
+  /** Рядок: межа довжини зі схеми (`maxLength`; не `maxLength` у props — це вмикає вбудовану перевірку formly, що не знає про вирази) — під полем лічильник символів. */
+  maxChars?: number;
   /** Анотація `x-openbp-options`: значення обирається зі списку, який повертає tool конектора (F3-54). */
   optionsSource?: OptionsSource;
 }
@@ -82,6 +93,13 @@ export function schemaFields(schema: JsonSchema | null | undefined, options: Sch
 }
 
 function fieldFor(key: string | undefined, raw: JsonSchema, required: boolean, root: JsonSchema, depth: number): FormlyFieldConfig {
+  const widget = parseWidget(resolve(raw, root, 0)[WIDGET_ANNOTATION]);
+  if (widget === 'keyboard' || widget === 'commands') {
+    const schema = resolve(raw, root, 0);
+    const label = typeof schema['title'] === 'string' && schema['title'] ? schema['title'] : key;
+    const description = typeof schema['description'] === 'string' ? schema['description'] : undefined;
+    return { key, type: widget === 'keyboard' ? KEYBOARD_FIELD : COMMANDS_FIELD, props: { label, description, required } };
+  }
   const field = typedField(key, raw, required, root, depth);
   const source = field.type === VALUE_FIELD ? parseOptionsSource(resolve(raw, root, 0)[OPTIONS_ANNOTATION]) : null;
   return source ? { ...field, props: { ...field.props, multiline: false, optionsSource: source } } : field;
@@ -102,7 +120,10 @@ function typedField(key: string | undefined, raw: JsonSchema, required: boolean,
     return { key, type: COMBINE_FIELD, props: { ...props, label, rules: { kind: 'enum', options: enumValues } } };
   }
   if (enumValues) {
-    return valueField(key, props, { kind: 'enum', options: enumValues });
+    const labels = schema[ENUM_LABELS_ANNOTATION];
+    const rules: ValueRules = { kind: 'enum', options: enumValues };
+    if (Array.isArray(labels) && labels.length === enumValues.length) rules.labels = labels.map(String);
+    return valueField(key, props, rules);
   }
 
   const types = typesOf(schema);
@@ -124,6 +145,9 @@ function typedField(key: string | undefined, raw: JsonSchema, required: boolean,
 
   if (type === 'array' && depth < MAX_DEPTH && isPlainObject(schema['items'])) {
     const items = resolve(schema['items'], root, 0);
+    if (Array.isArray(items['enum']) && items['enum'].length > 0 && items['enum'].every((o) => typeof o === 'string')) {
+      return { key, type: MULTI_CHOICE_FIELD, props: { ...props, rules: { kind: 'enum', options: items['enum'] } } };
+    }
     if (typeof schema['minItems'] === 'number') props.minItems = schema['minItems'];
     if (typeof schema['maxItems'] === 'number') props.maxItems = schema['maxItems'];
     // Назва без `title` у схемі — ключ; для впізнаних масивів — людська назва.
@@ -154,8 +178,11 @@ function typedField(key: string | undefined, raw: JsonSchema, required: boolean,
   }
 
   switch (type) {
-    case 'string':
-      return valueField(key, props, { kind: 'string' });
+    case 'string': {
+      // Довгий текст (повідомлення, підпис) — багаторядкове поле з лічильником символів.
+      const max = typeof schema['maxLength'] === 'number' ? schema['maxLength'] : undefined;
+      return valueField(key, max === undefined ? props : { ...props, maxChars: max, multiline: max > 200 }, { kind: 'string' });
+    }
     case 'number':
     case 'integer':
     case 'boolean':

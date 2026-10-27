@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { AUDIT_ENTITY_TYPES, AuditApiService, AuditEntry, auditActionLabel, auditEntityLabel, auditSummary } from './audit-api.service';
 
@@ -17,7 +18,7 @@ export const AUDIT_PAGE_SIZE = 50;
 @Component({
   selector: 'app-audit-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [DatePipe, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.audit.title">Журнал аудиту</h2>
     <p class="mb-4 max-w-3xl opacity-70" i18n="@@settings.audit.hint">
@@ -27,12 +28,12 @@ export const AUDIT_PAGE_SIZE = 50;
     <div class="mb-2 flex flex-wrap items-start gap-2">
       <mat-form-field appearance="outline" class="w-56">
         <mat-label i18n="@@settings.audit.entity">Що змінено</mat-label>
-        <select matNativeControl data-testid="audit-entity" [value]="entityType()" (change)="filterBy(value($event))">
-          <option value="" i18n="@@settings.audit.all">Усе</option>
+        <mat-select data-testid="audit-entity" [value]="entityType()" (selectionChange)="filterBy($event.value)">
+          <mat-option value="" i18n="@@settings.audit.all">Усе</mat-option>
           @for (t of entityTypes; track t) {
-            <option [value]="t">{{ entityLabel(t) }}</option>
+            <mat-option [value]="t">{{ entityLabel(t) }}</mat-option>
           }
-        </select>
+        </mat-select>
       </mat-form-field>
     </div>
 
@@ -67,7 +68,7 @@ export const AUDIT_PAGE_SIZE = 50;
                   }
                   @if (e.apiKeyId) {
                     <span class="block text-sm opacity-60" data-testid="audit-key" i18n="@@settings.audit.viaKey">
-                      ключ {{ e.apiKeyName ?? e.apiKeyId }}:key:
+                      ключ {{ e.apiKeyName ?? e.apiKeyId }}
                     </span>
                   }
                 </td>
@@ -111,10 +112,6 @@ export class AuditSection implements OnInit {
 
   ngOnInit(): void {
     this.load(1);
-  }
-
-  value(event: Event): string {
-    return (event.target as HTMLSelectElement).value;
   }
 
   filterBy(entityType: string): void {

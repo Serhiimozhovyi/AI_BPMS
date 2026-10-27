@@ -6,6 +6,10 @@ import { DEFAULT_NOTE_SIZE, MIN_NOTE_SIZE, NOTE_COLORS, noteColorToken, noteSize
 import { groupLabel } from '../palette';
 import { QuickAddRequest, ScreenPoint } from '../quick-add';
 import { NodeRunStatus } from '../test-run';
+import { nodeIcon } from '../node-icon';
+import { Box, MAX_ZOOM, MIN_ZOOM, Viewport, contentBounds, fitViewport, loadViewport, openViewport, revealBox, saveViewport, viewportShowsContent } from '../viewport';
+import { debounceTime, map } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NoteColor, WorkflowNote } from '../../workflows/workflows-api.service';
 
 /** Дані картки вузла в ngx-vflow. */
@@ -25,6 +29,8 @@ interface CardData {
   runError: string | null;
   /** Незаповнені обов'язкові параметри (F3-57) — ключі полів у порядку форми. */
   missing: readonly string[];
+  /** Час завершення кроку в запуску (F3-76), напр. `18:10:42`; `null` — немає. */
+  runTime: string | null;
 }
 
 /** Дані нотатки на канвасі (F3-62): та сама `nodeHtml`-картка ngx-vflow, інший вигляд. */
@@ -68,7 +74,7 @@ export interface NoteEditRequest {
 }
 
 /** Дія з тулбару над карткою вузла (F3-58). */
-export type NodeToolbarAction = 'run' | 'toggle' | 'duplicate' | 'delete' | 'rename';
+export type NodeToolbarAction = 'run' | 'toggle' | 'duplicate' | 'delete' | 'rename' | 'open';
 
 /** Дія над вузлом з тулбару. */
 export interface NodeActionRequest {
@@ -118,13 +124,27 @@ const NO_MISSING: ReadonlyMap<string, readonly string[]> = new Map();
 
 const NO_PINNED: ReadonlySet<string> = new Set();
 const NO_COUNTS: ReadonlyMap<string, number> = new Map();
+const NO_RUN_TIMES: ReadonlyMap<string, string> = new Map();
+
+/** Найбільша мінікарта (F3-76), px; ngx-vflow малює її як 20 % полотна. */
+const MINIMAP_MAX = { width: 180, height: 110 };
+const MINIMAP_RATIO = 0.2;
+const MINIMAP_KEY = 'openbp.minimap';
+/** Відступ від краю полотна, коли вузол підсувається з-під панелі, px. */
+const REVEAL_PADDING = 32;
 
 export const NODE_WIDTH = 220;
 
+function readMinimapOpen(): boolean {
+  try {
+    return localStorage.getItem(MINIMAP_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Крок кнопок «+»/«−» і межі масштабу. */
 const ZOOM_STEP = 1.25;
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 2;
 
 const MIN_NODE_HEIGHT = 72;
 /** Вертикальний крок між портами: стільки, щоб підписи портів не накладались. */
@@ -163,12 +183,15 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
   selector: 'app-vflow-canvas',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Vflow],
+  host: { '[style.--minimap-scale]': 'minimapScale()' },
   template: `
     <vflow
       view="auto"
+      [minZoom]="MIN_ZOOM"
+      [maxZoom]="MAX_ZOOM"
       [nodes]="nodes()"
       [edges]="edges()"
-      [optimization]="{ virtualization: virtualization() }"
+      [optimization]="{ virtualization: virtualization(), virtualizationZoomThreshold: MIN_ZOOM }"
       background="#f4f3f8"
       [snapGrid]="[10, 10]"
       [connection]="connectionSettings"
@@ -248,6 +271,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           <div
             class="node"
             selectable
+            (dblclick)="act($event, ctx.node.id, 'open')"
             [class.selected]="ctx.selected()"
             [class.disabled]="d.node.disabled"
             [class.invalid]="d.errors.length > 0"
@@ -278,7 +302,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               }
             }
             <div class="node__head">
-              <span class="node__group">{{ d.groupLabel }}</span>
+              <span class="node__lead">
+                <span class="material-symbols-outlined node__icon" aria-hidden="true" data-testid="node-icon">{{ icon(d.node) }}</span>
+                <span class="node__group">{{ d.groupLabel }}</span>
+              </span>
               @if (d.pinned) {
                 <span class="node__pin" data-testid="node-pinned" role="img" title="Output закріплено" i18n-title="@@canvas.pinned">📌</span>
               }
@@ -286,6 +313,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
                 <span class="node__run node__run--success" data-testid="node-run-badge" role="img" title="Виконано" i18n-title="@@canvas.run.success">✓</span>
               } @else if (d.runStatus === 'error') {
                 <span class="node__run node__run--error" data-testid="node-run-badge" role="img" title="Помилка" i18n-title="@@canvas.run.error">✕</span>
+              } @else if (d.runStatus === 'skipped' || d.runStatus === 'cancelled') {
+                <span class="node__run node__run--skipped" data-testid="node-run-badge" role="img" title="Пропущено" i18n-title="@@canvas.run.skipped">–</span>
+              }
+              @if (d.runStatus && d.runTime) {
+                <span class="node__time" data-testid="node-run-time">{{ d.runTime }}</span>
               }
               @if (d.errors.length > 0) {
                 <span class="node__errors" data-testid="node-errors" role="img" [title]="d.errors.join('\n')"
@@ -294,7 +326,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               }
             </div>
             @if (!readonly()) {
-              <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
+              <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (dblclick)="$event.stopPropagation()" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
                 <button type="button" class="node__tool" data-testid="node-tool-run" i18n-title="@@canvas.tool.run" title="Виконати вузол" (click)="act($event, ctx.node.id, 'run')">▶</button>
                 <button
                   type="button"
@@ -314,6 +346,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               <input
                 class="node__rename"
                 data-testid="node-rename"
+                (dblclick)="$event.stopPropagation()"
                 i18n-aria-label="@@canvas.rename.label"
                 aria-label="Нова назва вузла"
                 [value]="d.node.name"
@@ -324,11 +357,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
                 (blur)="commitRename(ctx.node.id, $any($event.target).value)"
               />
             } @else {
-              <div class="node__name" [title]="d.node.name" (dblclick)="act($event, ctx.node.id, 'rename')">{{ d.node.name }}</div>
+              <div class="node__name" [title]="d.node.name">{{ d.node.name }}</div>
             }
             @if (d.runError; as runError) {
               <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
-            } @else {
+            } @else if (d.node.subtitle) {
               <div class="node__type" [title]="d.node.subtitle">{{ d.node.subtitle }}</div>
             }
             @if (d.missing.length > 0) {
@@ -412,15 +445,22 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           }
         </span>
       </ng-template>
-      <mini-map position="bottom-left" maskColor="rgb(244 243 248 / 0.7)" strokeColor="#b9b4cc" />
+      @if (minimapOpen()) {
+        <mini-map position="bottom-left" maskColor="rgb(244 243 248 / 0.7)" strokeColor="#b9b4cc" [scaleOnHover]="false" />
+      }
     </vflow>
     <div class="controls" role="toolbar" i18n-aria-label="@@canvas.controls" aria-label="Керування канвасом" data-testid="canvas-controls">
       @if (!readonly()) {
         <button type="button" class="controls__btn controls__btn--wide" data-testid="canvas-arrange" i18n-title="@@canvas.arrange.hint" title="Розставити вузли зліва направо за з'єднаннями" (click)="arrangeClicked()" i18n="@@canvas.arrange">Вирівняти</button>
       }
-      <button type="button" class="controls__btn" data-testid="canvas-fit" i18n-title="@@canvas.fit" title="Показати весь сценарій" (click)="fit()">⤢</button>
-      <button type="button" class="controls__btn" data-testid="canvas-zoom-in" i18n-title="@@canvas.zoomIn" title="Збільшити" (click)="zoomBy(ZOOM_STEP)">+</button>
-      <button type="button" class="controls__btn" data-testid="canvas-zoom-out" i18n-title="@@canvas.zoomOut" title="Зменшити" (click)="zoomBy(1 / ZOOM_STEP)">−</button>
+      @if (lastRunToggle() !== null) {
+        <button type="button" class="controls__btn controls__btn--wide" data-testid="canvas-last-run" [attr.aria-pressed]="lastRunToggle()" [class.controls__btn--on]="lastRunToggle()" i18n-title="@@canvas.lastRun.hint" title="Показувати на вузлах результат останнього запуску" (click)="lastRunToggled.emit(!lastRunToggle())" i18n="@@canvas.lastRun">Останній запуск</button>
+      }
+      <button type="button" class="controls__btn" data-testid="canvas-minimap" [attr.aria-pressed]="minimapOpen()" [class.controls__btn--on]="minimapOpen()" i18n-title="@@canvas.minimap" title="Мінікарта" (click)="toggleMinimap()">▣</button>
+      <button type="button" class="controls__btn" data-testid="canvas-fit" i18n-title="@@canvas.fit" title="Показати весь сценарій (1)" i18n-aria-label="@@canvas.fit.label" aria-label="Показати весь сценарій" (click)="fit()">⤢</button>
+      <button type="button" class="controls__btn controls__btn--zoom" data-testid="canvas-zoom-level" i18n-title="@@canvas.zoomReset" title="Масштаб: клік — 100 % (0)" (click)="zoomReset()">{{ zoomPercent() }}%</button>
+      <button type="button" class="controls__btn" data-testid="canvas-zoom-in" i18n-title="@@canvas.zoomIn" title="Збільшити (+)" i18n-aria-label="@@canvas.zoomIn.label" aria-label="Збільшити" (click)="zoomBy(ZOOM_STEP)">+</button>
+      <button type="button" class="controls__btn" data-testid="canvas-zoom-out" i18n-title="@@canvas.zoomOut" title="Зменшити (−)" i18n-aria-label="@@canvas.zoomOut.label" aria-label="Зменшити" (click)="zoomBy(1 / ZOOM_STEP)">−</button>
     </div>
   `,
   styles: `
@@ -435,6 +475,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     :host ::ng-deep svg.root-svg > svg,
     :host ::ng-deep svg.root-svg > rect {
       pointer-events: none;
+      /* Мінікарта ≤ 180×110 px: ngx-vflow дає 20 % полотна, тож стискаємо від лівого нижнього кута. */
+      transform-box: view-box;
+      transform-origin: 10px calc(100% - 10px);
+      transform: scale(var(--minimap-scale, 0.7));
     }
 
     /* Кнопки канвасу (F3-58) — внизу праворуч, над полотном. */
@@ -444,6 +488,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       bottom: 12px;
       display: flex;
       gap: 4px;
+    }
+
+    .controls__btn--zoom {
+      min-width: 52px;
+      font-variant-numeric: tabular-nums;
     }
 
     .controls__btn {
@@ -462,6 +511,12 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .controls__btn--wide {
       padding: 0 10px;
       font-size: 13px;
+    }
+
+    .controls__btn--on {
+      border-color: var(--ac-kit);
+      background: var(--ac-button);
+      color: var(--ac-kit);
     }
 
     .controls__btn:hover {
@@ -534,6 +589,16 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       color: var(--ac-red);
     }
 
+    .node__run--skipped {
+      color: var(--ac-cool-grey-4);
+    }
+
+    .node__time {
+      margin-right: 4px;
+      font-size: 10px;
+      color: var(--ac-cool-grey-4);
+    }
+
     .node.disabled {
       opacity: 0.55;
       border-style: dashed;
@@ -555,7 +620,8 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__group {
-      color: var(--node-color);
+      /* Яскравий колір групи на білому не проходить контраст AA — підмішуємо Vivid (F3-86). */
+      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #261f4b));
       font-weight: 600;
       text-transform: uppercase;
     }
@@ -570,7 +636,20 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__name {
       margin-top: 4px;
+      font-size: 14px;
       font-weight: 500;
+    }
+
+    .node__lead {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .node__icon {
+      font-size: 16px;
+      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #261f4b));
     }
 
     .node__type {
@@ -863,6 +942,17 @@ export class VflowCanvasComponent {
   /** Статуси вузлів останнього тестового запуску — вузол зеленіє/червоніє. */
   readonly runStatuses = input<NodeRunStatuses>(NO_RUN);
 
+  /** Час завершення кроку останнього запуску за id вузла (F3-76) — підпис на картці поруч зі значком. */
+  readonly runTimes = input<ReadonlyMap<string, string>>(NO_RUN_TIMES);
+
+  /** Ключ збереження положення полотна (F3-76, id сценарію); `null` — не запам'ятовувати. */
+  readonly viewportKey = input<string | null>(null);
+
+  /** Перемикач «Останній запуск» у керуванні канвасом (F3-76): `null` — кнопки немає, інакше — чи увімкнено. */
+  readonly lastRunToggle = input<boolean | null>(null);
+
+  readonly lastRunToggled = output<boolean>();
+
   /** Вузли із закріпленим output (`pinData`). */
   readonly pinnedNodes = input<ReadonlySet<string>>(NO_PINNED);
 
@@ -940,6 +1030,28 @@ export class VflowCanvasComponent {
 
   private readonly flow = viewChild(VflowComponent);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Мінікарта згорнута за замовчуванням (F3-76); вибір користувача запам'ятовується. */
+  protected readonly minimapOpen = signal(readMinimapOpen());
+
+  /** Розмір полотна: з нього рахуються масштаб мінікарти й вписування сценарію. */
+  private readonly size = signal({ width: 0, height: 0 });
+
+  /** Масштаб, до якого стискається мінікарта, щоб не перевищити {@link MINIMAP_MAX}. */
+  protected readonly minimapScale = computed(() => {
+    const { width, height } = this.size();
+    if (!width || !height) return 0.7;
+    return Math.min(1, MINIMAP_MAX.width / (width * MINIMAP_RATIO), MINIMAP_MAX.height / (height * MINIMAP_RATIO));
+  });
+
+  /** Id сценарію, для якого початкове положення вже застосовано; нові вузли після порожнього сценарію вписуються знову. */
+  private viewAppliedFor: string | null | undefined;
+  private viewHadNodes = false;
+  private viewSubscribed = false;
+  private knownNodeIds: ReadonlySet<string> = new Set();
+  /** Положення, яке виставили ми (вписування або відновлення), — його не зберігаємо як вибір користувача. */
+  private appliedView: Viewport | null = null;
   /** Вузол, для якого inline-перейменування вже віддано (Enter + blur не дублюються). */
   private renameDone: string | null = null;
 
@@ -961,6 +1073,7 @@ export class VflowCanvasComponent {
     const pinned = this.pinnedNodes();
     const runErrors = this.runErrors();
     const missing = this.missingFields();
+    const runTimes = this.runTimes();
     const draggable = !this.readonly();
     // Виділення лише при перебудові; далі його синхронізує ефект нижче, без перебудови всіх вузлів.
     const selection = untracked(this.selection);
@@ -976,7 +1089,7 @@ export class VflowCanvasComponent {
         height,
         draggable,
         selected: selected.has(n.id),
-        data: { kind: 'node', node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id), runError: runErrors.get(n.id) ?? null, missing: missing.get(n.id) ?? [] },
+        data: { kind: 'node', node: n, color: GROUP_COLORS[n.group], groupLabel: groupLabel(n.group), height, errors: errors.get(n.id) ?? [], runStatus: run.get(n.id) ?? null, pinned: pinned.has(n.id), runError: runErrors.get(n.id) ?? null, missing: missing.get(n.id) ?? [], runTime: runTimes.get(n.id) ?? null },
       };
     });
     // Нотатки (F3-62) — перед вузлами, щоб картка вузла малювалась поверх нотатки, яка її перекриває.
@@ -1027,6 +1140,24 @@ export class VflowCanvasComponent {
   });
 
   constructor() {
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver((entries) => {
+        const rect = entries[0]?.contentRect;
+        if (rect) this.size.set({ width: rect.width, height: rect.height });
+      });
+      observer.observe(this.host.nativeElement);
+      inject(DestroyRef).onDestroy(() => observer.disconnect());
+    }
+
+    // Початкове положення (F3-76): збережене для цього сценарію або «вписати все» з відступом 48 px, масштаб ≤ 100 %.
+    effect(() => {
+      const flow = this.flow();
+      if (!flow || !flow.initialized()) return;
+      const key = this.viewportKey();
+      const hasContent = this.model().nodes.length > 0 || this.notes().length > 0;
+      untracked(() => this.updateView(flow, key, hasContent));
+    });
+
     // Слухач без зміни стану компонента: лише запам'ятовує координати, тож change detection не потрібен.
     const track = (e: PointerEvent) => (this.pointer = { x: e.clientX, y: e.clientY });
     document.addEventListener('pointermove', track, { capture: true, passive: true });
@@ -1119,6 +1250,10 @@ export class VflowCanvasComponent {
   }
 
   protected readonly ZOOM_STEP = ZOOM_STEP;
+  /** Нижня межа масштабу: ngx-vflow малює вузли сірими заглушками при масштабі менше за 0.5, а вписаний довгий сценарій має лишатись читабельним. */
+  protected readonly icon = (node: CanvasNode): string => nodeIcon(node.type, node.group);
+  protected readonly MIN_ZOOM = MIN_ZOOM;
+  protected readonly MAX_ZOOM = MAX_ZOOM;
 
   protected arrangeClicked(): void {
     if (this.readonly()) return;
@@ -1127,14 +1262,154 @@ export class VflowCanvasComponent {
     requestAnimationFrame(() => requestAnimationFrame(() => this.fit()));
   }
 
-  protected fit(): void {
+  /** Перший вигляд сценарію і повторне вписування, коли порожній сценарій отримав вузли («Почати з прикладу»). */
+  private updateView(flow: VflowComponent, key: string | null, hasContent: boolean): void {
+    if (!this.viewSubscribed) {
+      this.viewSubscribed = true;
+      this.zoom.set(flow.viewport().zoom);
+      flow.viewportChange$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((v) => this.zoom.set(v.zoom));
+      flow.viewportChange$
+        .pipe(
+          // Положення, яке ми самі щойно виставили (вписування), не вважаємо вибором користувача.
+          map((v) => ({ v, own: this.isAppliedView(v) })),
+          debounceTime(400),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe(({ v, own }) => {
+          const current = this.viewportKey();
+          if (!current || !this.viewHadNodes || own) return;
+          saveViewport(current, { x: v.x, y: v.y, zoom: v.zoom });
+        });
+    }
+    const ids = new Set(this.model().nodes.map((n) => n.id));
+    const previousIds = this.knownNodeIds;
+    this.knownNodeIds = ids;
+    if (!hasContent) {
+      this.viewHadNodes = false;
+      return;
+    }
+    if (this.viewHadNodes) {
+      this.revealAdded(flow, [...ids].filter((id) => !previousIds.has(id)));
+      return;
+    }
+    const firstOpen = this.viewAppliedFor !== key;
+    this.viewHadNodes = true;
+    this.viewAppliedFor = key;
+    this.placeView(flow, firstOpen && key ? loadViewport(key) : null);
+  }
+
+  /** Тригер (вузол без входів, лівіший) або найлівіший вузол — з нього починається показ довгого сценарію. */
+  private startBox(): Box | null {
+    const nodes = this.model().nodes;
+    const triggers = nodes.filter((n) => n.inputs.length === 0);
+    const pool = triggers.length > 0 ? triggers : nodes;
+    const first = pool.reduce<(typeof nodes)[number] | null>((best, n) => (!best || n.x < best.x ? n : best), null);
+    return first ? { x: first.x, y: first.y, width: NODE_WIDTH, height: nodeHeight(first) } : null;
+  }
+
+  /** `open` — при відкритті: не дрібніше за `OPEN_MIN_ZOOM`; `all` — вписати все (новий вузол за межами екрана). */
+  private placeView(flow: VflowComponent, saved: Viewport | null, mode: 'open' | 'all' = 'open'): void {
+    let tries = 0;
+    const apply = () => {
+      const rect = this.host.nativeElement.getBoundingClientRect();
+      // Полотно ще не має розміру (вкладка прихована, перший кадр) — чекаємо.
+      if ((rect.width < 50 || rect.height < 50) && ++tries < 30) {
+        requestAnimationFrame(apply);
+        return;
+      }
+      const bounds = contentBounds(this.contentBoxes());
+      if (!bounds) return;
+      const size = { width: rect.width, height: rect.height };
+      const start = this.startBox();
+      const fitted = mode === 'open' && start ? openViewport(bounds, start, size) : fitViewport(bounds, size);
+      const view = saved && viewportShowsContent(saved, bounds, size) ? saved : fitted;
+      this.appliedView = view;
+      flow.viewportTo(view);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(apply));
+  }
+
+  /** Новий вузол (з палітри, вставка, undo) опинився за межами екрана — вписуємо весь сценарій, щоб його було видно. */
+  private revealAdded(flow: VflowComponent, addedIds: string[]): void {
+    if (addedIds.length === 0) return;
+    const rect = this.host.nativeElement.getBoundingClientRect();
+    if (rect.width < 50 || rect.height < 50) return;
+    const view = flow.viewport();
+    const visible: Box = { x: -view.x / view.zoom, y: -view.y / view.zoom, width: rect.width / view.zoom, height: rect.height / view.zoom };
+    const added = new Set(addedIds);
+    const boxes = this.model().nodes.filter((n) => added.has(n.id)).map((n): Box => ({ x: n.x, y: n.y, width: NODE_WIDTH, height: nodeHeight(n) }));
+    const seen = boxes.some((b) => b.x < visible.x + visible.width && b.x + b.width > visible.x && b.y < visible.y + visible.height && b.y + b.height > visible.y);
+    if (!seen) this.placeView(flow, null, 'all');
+  }
+
+  /**
+   * Вузол (виділений, а біля нього відкрилася панель) не має ховатися за краєм полотна (F3-88): зсуваємо полотно, масштаб лишається.
+   * Панель змінює розмір полотна за кадр-два, тому міряємо після них.
+   */
+  revealNode(nodeId: string): void {
+    const flow = this.flow();
+    if (!flow) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const node = this.model().nodes.find((n) => n.id === nodeId);
+        const rect = this.host.nativeElement.getBoundingClientRect();
+        if (!node || rect.width < 50 || rect.height < 50) return;
+        const view = revealBox(flow.viewport(), { x: node.x, y: node.y, width: NODE_WIDTH, height: nodeHeight(node) }, { width: rect.width, height: rect.height }, REVEAL_PADDING);
+        if (view) flow.viewportTo(view);
+      }),
+    );
+  }
+
+  private isAppliedView(v: Viewport): boolean {
+    const a = this.appliedView;
+    return !!a && Math.abs(v.x - a.x) < 0.5 && Math.abs(v.y - a.y) < 0.5 && Math.abs(v.zoom - a.zoom) < 0.001;
+  }
+
+  /** Прямокутники вузлів і нотаток у координатах сценарію. */
+  private contentBoxes(): Box[] {
+    const cards = this.model().nodes.map((n): Box => ({ x: n.x, y: n.y, width: NODE_WIDTH, height: nodeHeight(n) }));
+    const notes = this.notes().map((note): Box => {
+      const [width, height] = noteSize(note);
+      const { x, y } = parsePosition(note.position);
+      return { x, y, width, height };
+    });
+    return [...cards, ...notes];
+  }
+
+  protected toggleMinimap(): void {
+    const open = !this.minimapOpen();
+    this.minimapOpen.set(open);
+    try {
+      localStorage.setItem(MINIMAP_KEY, open ? '1' : '0');
+    } catch {
+      // Сховище недоступне — вибір діє до перезавантаження.
+    }
+  }
+
+  /** Поточний масштаб, % — у групі керування (F3-90). */
+  protected readonly zoom = signal(1);
+  protected readonly zoomPercent = computed(() => Math.round(this.zoom() * 100));
+
+  /** «Показати весь сценарій»; з клавіші `1` теж. */
+  fit(): void {
     this.flow()?.fitView({ padding: 0.15, duration: 200 });
   }
 
-  protected zoomBy(factor: number): void {
+  /** Масштаб у `factor` разів (з клавіш `+`/`−` і кнопок), у межах `MIN_ZOOM…MAX_ZOOM`. */
+  zoomBy(factor: number): void {
     const flow = this.flow();
     if (!flow) return;
     flow.zoomTo(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, flow.viewport().zoom * factor)));
+  }
+
+  /** Масштаб 100 % (клавіша `0`, клік по відсотку). */
+  zoomReset(): void {
+    this.flow()?.zoomTo(1);
+  }
+
+  /** Крок масштабу для клавіш. */
+  zoomStep(direction: 'in' | 'out'): void {
+    this.zoomBy(direction === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP);
   }
 
   protected readonly disableLabel = $localize`:@@canvas.tool.disable:Вимкнути (D)`;
@@ -1142,7 +1417,8 @@ export class VflowCanvasComponent {
 
   protected act(event: MouseEvent, nodeId: string, action: NodeToolbarAction): void {
     event.stopPropagation();
-    if (this.readonly()) return;
+    // «Відкрити» лише показує панель, тож доступне і в режимі перегляду.
+    if (this.readonly() && action !== 'open') return;
     this.nodeAction.emit({ nodeId, action });
   }
 

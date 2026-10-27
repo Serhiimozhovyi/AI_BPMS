@@ -24,13 +24,28 @@ public sealed class GraphClient(HttpClient http, TokenProvider tokens, Connector
     /// <param name="ct">Скасування.</param>
     /// <returns>JSON відповіді або <c>null</c> для порожньої (202, 204).</returns>
     /// <exception cref="ConnectorException">Помилка Graph, Entra ID чи мережі.</exception>
-    public async Task<JsonElement?> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    public Task<JsonElement?> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct) => SendAsync(method, path, body, null, ct);
+
+    /// <summary>Запит до Graph у сесії книги Excel.</summary>
+    /// <param name="method">Метод.</param>
+    /// <param name="path">Шлях із query відносно <see cref="ConnectorOptions.GraphUrl"/>.</param>
+    /// <param name="body">Тіло JSON або <c>null</c>.</param>
+    /// <param name="sessionId">Сесія книги (<c>workbook-session-id</c>) або <c>null</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>JSON відповіді або <c>null</c> для порожньої (202, 204).</returns>
+    /// <exception cref="ConnectorException">Помилка Graph, Entra ID чи мережі.</exception>
+    public async Task<JsonElement?> SendAsync(HttpMethod method, string path, object? body, string? sessionId, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
             var token = await tokens.GetAsync(ct).ConfigureAwait(false);
             using var request = new HttpRequestMessage(method, new Uri(path, UriKind.Relative));
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (sessionId is not null)
+            {
+                request.Headers.Add("workbook-session-id", sessionId);
+            }
+
             if (body is not null)
             {
                 request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
@@ -86,8 +101,11 @@ public sealed class GraphClient(HttpClient http, TokenProvider tokens, Connector
         var retry = response.Headers.RetryAfter is { } after
             ? $" Повторіть через {(after.Delta?.TotalSeconds ?? Math.Max(0, (after.Date!.Value - DateTimeOffset.UtcNow).TotalSeconds)):0} с (Retry-After)."
             : "";
+        var hint = response.StatusCode == HttpStatusCode.Locked
+            ? " Книгу Excel заблоковано (зайнята іншою операцією чи сесією) — повторіть пізніше."
+            : "";
         var resource = path.Split('?', 2)[0];
         return $"Graph {method} {resource}: HTTP {(int)response.StatusCode} {response.ReasonPhrase}" +
-               (detail.Length > 0 ? $" — {detail}." : ".") + retry;
+               (detail.Length > 0 ? $" — {detail}." : ".") + hint + retry;
     }
 }
