@@ -185,6 +185,16 @@ async function waitSaved(page: Page): Promise<void> {
   await expect(page.getByTestId('dirty')).toHaveCount(0);
 }
 
+test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-item="core.manualTrigger"]')).toBeVisible();
+  await expect(page.getByTestId('tools-error')).toHaveCount(0);
+  await expect(page.getByTestId('no-connectors')).toContainText('Конекторів ще немає');
+  await expect(page.locator('[data-item="core.manualTrigger"]')).not.toContainText('core.manualTrigger');
+});
+
 test('додати 3 вузли, з’єднати, undo, redo, перезавантажити — граф той самий', async ({ page }) => {
   const api = new FakeApi();
   await api.install(page);
