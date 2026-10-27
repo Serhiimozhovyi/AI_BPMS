@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { NotifyService } from '../shared/notify.service';
 import { ConnectorSummary, ConnectorsApiService, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialSummary, CredentialsApiService } from '../credentials/credentials-api.service';
 import {
@@ -247,6 +248,7 @@ export class NotificationChannelsSection implements OnInit {
   private readonly connectorsApi = inject(ConnectorsApiService);
   private readonly credentialsApi = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notify = inject(NotifyService);
 
   readonly types = NOTIFICATION_CHANNEL_TYPES;
   readonly events = NOTIFICATION_EVENTS;
@@ -317,6 +319,7 @@ export class NotificationChannelsSection implements OnInit {
         this.saving.set(false);
         this.cancel();
         this.load();
+        this.notify.success(id ? $localize`:@@notifications.updated:Канал збережено.` : $localize`:@@notifications.created:Канал додано.`);
       },
       error: (e: unknown) => {
         this.saving.set(false);
@@ -330,7 +333,13 @@ export class NotificationChannelsSection implements OnInit {
     this.api
       .remove(channel.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: () => this.load(), error: (e: unknown) => this.error.set(apiErrorMessage(e)) });
+      .subscribe({
+        next: () => {
+          this.load();
+          this.notify.success($localize`:@@notifications.removed:Канал «${channel.name}:name:» видалено.`);
+        },
+        error: (e: unknown) => this.error.set(apiErrorMessage(e)),
+      });
   }
 
   test(channel: NotificationChannel): void {

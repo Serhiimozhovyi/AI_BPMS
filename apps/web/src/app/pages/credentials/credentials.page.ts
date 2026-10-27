@@ -3,6 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { forkJoin } from 'rxjs';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NotifyService } from '../../shared/notify.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { CredentialFormComponent } from '../../credentials/credential-form.component';
 import { DOCUMENT } from '@angular/common';
@@ -14,7 +16,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
 @Component({
   selector: 'app-credentials-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule, CredentialFormComponent],
+  imports: [MatButtonModule, MatProgressBarModule, CredentialFormComponent, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
@@ -56,7 +58,15 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
       }
 
       @if (!loading() && credentials().length === 0 && !error()) {
-        <p class="opacity-70" data-testid="empty" i18n="@@credentials.empty">Ще немає жодних облікових даних.</p>
+        <app-empty-state
+          icon="key"
+          i18n-title="@@credentials.empty.title"
+          title="Ще немає облікових даних"
+          i18n-description="@@credentials.empty.text"
+          description="Тут зберігаються ключі, токени й паролі для конекторів, AI-вузлів і webhook-ів — у сценаріях лишається лише посилання на них."
+          [actionLabel]="types().length > 0 ? addLabel : null"
+          (action)="startAdd()"
+        />
       }
 
       @if (credentials().length > 0) {
@@ -145,6 +155,8 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
 export class CredentialsPage implements OnInit {
   private readonly api = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notify = inject(NotifyService);
+  protected readonly addLabel = $localize`:@@credentials.empty.action:Додати облікові дані`;
   private readonly document = inject(DOCUMENT);
   private readonly route = inject(ActivatedRoute);
 
@@ -234,6 +246,7 @@ export class CredentialsPage implements OnInit {
   }
 
   onSaved(saved: CredentialSummary): void {
+    this.notify.success($localize`:@@credentials.saved:Облікові дані «${saved.name}:name:» збережено.`);
     this.adding.set(false);
     this.editing.set(null);
     this.credentials.update((list) => {
@@ -251,9 +264,11 @@ export class CredentialsPage implements OnInit {
         next: () => {
           this.confirming.set(null);
           this.credentials.update((list) => list.filter((x) => x.id !== c.id));
+          this.notify.success($localize`:@@credentials.removed:Облікові дані «${c.name}:name:» видалено.`);
         },
         error: (e: unknown) => {
           this.confirming.set(null);
+          this.notify.error($localize`:@@credentials.removeFailed:Не вдалося видалити облікові дані.`, apiErrorMessage(e));
           this.error.set(apiErrorMessage(e));
         },
       });
