@@ -54,16 +54,25 @@ test('невідома адреса → «Не знайдено» з посил�
 
 test('Api недоступний → банер з «Повторити», після відповіді банер зникає', async ({ page }) => {
   let down = true;
+  let meChecked = false;
+  let retried = false;
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (down && path !== '/api/v1/auth/me') return route.abort('connectionrefused');
-    if (path === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    // Сесію перевіряємо до падіння Api; далі все недоступне — інакше успішні відповіді гасили б банер між збоями.
+    if (path === '/api/v1/auth/me' && (!meChecked || !down)) {
+      meChecked = true;
+      return route.fulfill({ json: USER });
+    }
+    // Api «оживає» лише на запит «Повторити» — інакше будь-яка інша успішна відповідь погасила б банер ще до кліку.
+    if (path === '/api/v1/auth/providers' && retried) down = false;
+    if (down) return route.abort('connectionrefused');
     return route.fulfill({ json: { items: [], page: 1, pageSize: 50, total: 0 } });
   });
   await page.goto('/workflows');
   await expect(page.getByTestId('offline-banner')).toContainText('Немає зв’язку із сервером OpenBP');
 
-  down = false;
-  await page.getByTestId('offline-retry').click();
+  retried = true;
+  // «Повторити» перезавантажує сторінку, тож кнопка зникає з DOM посеред кліку — не чекаємо навігації після нього.
+  await page.getByTestId('offline-retry').click({ noWaitAfter: true });
   await expect(page.getByTestId('offline-banner')).toHaveCount(0);
 });
