@@ -1,10 +1,13 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Application.Auth;
 using OpenBP.Data;
@@ -284,6 +287,55 @@ public class WorkflowTests(ApiFactory api)
         var active = await JsonAsync(await editor.GetAsync($"{Base}?search={tag}&active=true"));
         Assert.Equal([second], active.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToArray());
         Assert.True(active.GetProperty("items")[0].GetProperty("active").GetBoolean());
+    }
+
+    [Fact]
+    public async Task List_returns_trigger_type_and_last_execution_in_one_executions_query()
+    {
+        var counter = new SqlCounter();
+        await using var factory = api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.ConfigureDbContext<OpenBpDbContext>(o => o.AddInterceptors(counter))));
+        var editor = await LoginAsync(UserRole.Editor, factory);
+        var tag = Guid.NewGuid().ToString("N");
+        var ran = IdOf(await CreateAsync(editor, Definition($"Запуск {tag} 1")));
+        var fresh = IdOf(await CreateAsync(editor, Definition($"Запуск {tag} 2", SetOnlyNode)));
+        var started = await editor.PostAsync($"{Base}/{ran}/executions", null);
+        Assert.Equal(HttpStatusCode.Accepted, started.StatusCode);
+        var executionId = (await JsonAsync(started)).GetProperty("id").GetGuid();
+
+        counter.Commands.Clear();
+        var page = await JsonAsync(await editor.GetAsync($"{Base}?search={tag}&pageSize=10"));
+
+        var items = page.GetProperty("items").EnumerateArray().ToDictionary(i => i.GetProperty("id").GetGuid());
+        var withRun = items[ran];
+        Assert.Equal("core.manualTrigger", withRun.GetProperty("triggerType").GetString());
+        var last = withRun.GetProperty("lastExecution");
+        Assert.Equal(executionId, last.GetProperty("id").GetGuid());
+        Assert.False(string.IsNullOrEmpty(last.GetProperty("status").GetString()));
+        var never = items[fresh];
+        Assert.Equal(JsonValueKind.Null, never.GetProperty("triggerType").ValueKind);
+        Assert.Equal(JsonValueKind.Null, never.GetProperty("lastExecution").ValueKind);
+        // Останній запуск береться підзапитом у тому самому SELECT, а не запитом на кожен сценарій сторінки.
+        Assert.Single(counter.Commands, c => c.Contains("executions", StringComparison.Ordinal));
+    }
+
+    /// <summary>Збирає тексти SQL-команд, виконаних хостом.</summary>
+    private sealed class SqlCounter : DbCommandInterceptor
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Commands { get; } = new();
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Commands.Enqueue(command.CommandText);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            Commands.Enqueue(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
     }
 
     [Fact]

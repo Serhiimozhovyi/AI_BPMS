@@ -90,7 +90,8 @@ test('створити групу, перетягнути в неї сценар
   await expect(page.locator('[data-section="none"] [data-workflow="w2"]')).toBeVisible();
 
   // Перемістити з меню рядка назад «Без групи».
-  await page.locator('[data-workflow="w1"]').getByTestId('move-button').click();
+  await page.locator('[data-workflow="w1"]').getByTestId('row-menu').click();
+  await page.getByTestId('move-button').click();
   await page.locator('[data-testid="move-to"][data-target="none"]').click();
   await expect(page.locator('[data-section="none"] [data-workflow="w1"]')).toBeVisible();
   await expect.poll(() => api.workflows.find((w) => w.id === 'w1')?.groupId).toBeNull();

@@ -339,7 +339,9 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   - `POST /workflows/{id}/discard-draft` («Скасувати зміни»): `current_version_id` = `published_version_id`, нових
     версій не створює; не публікувався — 409 `WORKFLOW_NOT_PUBLISHED`.
   - Виконання, що вже йдуть або чекають (`waiting`), довиконуються на своєму `version_id`.
-  - `WorkflowDetail`/`WorkflowSummary` мають `publishedVersion`, деталь — ще `hasUnpublishedChanges`. Міграція
+  - `WorkflowDetail`/`WorkflowSummary` мають `publishedVersion`, деталь — ще `hasUnpublishedChanges`; рядок списку
+    (`WorkflowSummary`, F3-80) — ще `triggerType` (перший увімкнений тригер чернетки) і `lastExecution`
+    (`{ id, status, startedAt }`), обидва тим самим запитом, що й сторінка. Міграція
     `DraftPublish`: наявні активні сценарії отримали `published = current`.
   Конфлікт `webhooks.path` — помилка валідації з кодом `WEBHOOK_PATH_CONFLICT` при публікації чи активації.
 - Видалення — тільки неактивного сценарію (інакше 409); видаляє версії, `webhooks`, `node_state`, виконання і кроки.
