@@ -1083,7 +1083,7 @@
 - DoD: тести каталогу (валідація пресету за схемою, невалідний → помилка завантаження з назвою конектора); Vitest палітри; приклад у `docs/guide/authors.md`.
 
 ### F6-22 · Події в конекторах: Telegram, kit-crm, msgraph і заготовка в Connector Kit
-- model: `opus` · status: `ready` · depends: F6-13
+- model: `opus` · status: `done` · depends: F6-13
 - Що: за контрактом `docs/connectors.md` §9.2: у шаблоні Connector Kit — `EventResource` (буфер подій на N записів, `resources/list`/`read`/`subscribe`/`unsubscribe`, розсилка `resources/updated`, `HttpServerSessionMode.StatefulForInitializeClients` для `--http`) з тестом «підписка → подія → сповіщення; `resources/read` віддає буфер»; `connectors/telegram` — ресурс `telegram://updates` (внутрішній long-polling `getUpdates` лише поки є підписники; з `set_webhook` ресурс недоступний — `isError` з поясненням); `connectors/kit-crm` — `kit://changes/{entity}` поверх `changes_since` з внутрішнім опитуванням раз на N с (налаштування `Connector:Events:IntervalSec`); `connectors/msgraph` — `msgraph://mail/{mailbox}/inbox` через Graph change notifications (webhook на адресу конектора) або внутрішнє опитування `list_messages`, якщо публічної адреси немає. Пресети `triggers[]` у маніфестах перевести на `mcp.subscribe`.
 - DoD: контрактні тести кожного конектора проти моків (FakeServer-стиль); e2e: `examples/telegram-1c.json` з `mcp.subscribe` замість `core.webhook` проходить у CLI-тесті з Telegram-моком; `docs/connectors.md` §9.2 — таблиця ресурсів подій по конекторах.
 
