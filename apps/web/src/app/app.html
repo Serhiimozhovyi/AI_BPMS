@@ -8,20 +8,20 @@
 <ng-template #projectBlock>
 <div class="shell-project">
         <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
-        <select
+        <mat-select
           class="shell-project__select"
           data-testid="project-select"
           aria-label="Проєкт"
           i18n-aria-label="@@app.project.label"
           [value]="projects.current() ?? ''"
-          (change)="selectProject($any($event.target).value)"
+          (selectionChange)="selectProject($event.value)"
         >
-          <option value="" i18n="@@app.project.all" [selected]="projects.current() === null">Усі проєкти</option>
-          <option [value]="sharedSpace" i18n="@@app.project.shared" [selected]="projects.current() === sharedSpace">Спільний простір</option>
+          <mat-option value="" i18n="@@app.project.all">Усі проєкти</mat-option>
+          <mat-option [value]="sharedSpace" i18n="@@app.project.shared">Спільний простір</mat-option>
           @for (p of projects.projects(); track p.id) {
-            <option [value]="p.id" [selected]="projects.current() === p.id">{{ p.name }}</option>
+            <mat-option [value]="p.id">{{ p.name }}</mat-option>
           }
-        </select>
+        </mat-select>
         @if (projects.currentProject(); as current) {
           <a
             class="shell-icon-button"

@@ -41,14 +41,14 @@ interface Definition {
 const WORKFLOW_ID = '11111111-2222-3333-4444-555555555555';
 const ERROR_WORKFLOW_ID = '66666666-7777-8888-9999-000000000000';
 
-function descriptor(type: string, displayName: string, group: string, inputs: string[], outputs: string[]) {
-  return { type, version: 1, displayName, group, inputs, outputs, parametersSchema: { type: 'object' }, isTrigger: inputs.length === 0 };
+function descriptor(type: string, displayName: string, group: string, inputs: string[], outputs: string[], parametersSchema: object = { type: 'object' }) {
+  return { type, version: 1, displayName, group, inputs, outputs, parametersSchema, isTrigger: inputs.length === 0 };
 }
 
 const DESCRIPTORS = [
   descriptor('core.manualTrigger', 'Ручний запуск', 'trigger', [], ['main']),
   descriptor('core.set', 'Задати поля', 'transform', ['main'], ['main']),
-  descriptor('core.code', 'Код (JavaScript)', 'transform', ['main'], ['main']),
+  descriptor('core.code', 'Код (JavaScript)', 'transform', ['main'], ['main'], { type: 'object', properties: { note: { type: 'string', title: 'Коментар' } } }),
 ];
 
 /** Шаблон «Почати з прикладу» (F3-59), як його віддає `GET /workflows/templates`. */
@@ -184,6 +184,26 @@ async function waitSaved(page: Page): Promise<void> {
   await expect(page.getByTestId('saved')).toBeVisible();
   await expect(page.getByTestId('dirty')).toHaveCount(0);
 }
+
+test('F3-78: подвійний клік по вузлу відкриває панель з фокусом у першому полі, не вмикаючи перейменування; F2 перейменовує', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.code"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+
+  await page.locator('[data-node-id] .node__name').dblclick();
+  await expect(page.getByTestId('node-rename')).toHaveCount(0);
+  await expect(page.getByTestId('node-panel')).toBeVisible();
+  await expect(page.locator('[data-testid="node-parameters"] input, [data-testid="node-parameters"] textarea').first()).toBeFocused();
+
+  // «Додатково» згорнуте, поки там немає змін.
+  await expect(page.getByTestId('node-extra')).not.toHaveAttribute('open', '');
+
+  await page.locator('[data-node-id]').click();
+  await page.keyboard.press('F2');
+  await expect(page.getByTestId('node-rename')).toBeVisible();
+});
 
 test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
   const api = new FakeApi();

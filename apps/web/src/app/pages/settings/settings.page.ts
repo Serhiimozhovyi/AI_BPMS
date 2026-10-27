@@ -1,5 +1,5 @@
 import { Clipboard } from '@angular/cdk/clipboard';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DOCUMENT, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -7,45 +7,98 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
+import { MatTabsModule } from '@angular/material/tabs';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { map } from 'rxjs';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NotifyService } from '../../shared/notify.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
-import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
+import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClaudeCodeCommand, mcpClientConfig, mcpDesktopConfig } from '../../settings/api-keys-api.service';
 import { AuthService } from '../../auth/auth.service';
 import { AssistantSection } from '../../settings/assistant-section.component';
 import { AuditSection } from '../../settings/audit-section.component';
 import { NotificationChannelsSection } from '../../settings/notification-channels-section.component';
 import { VariablesSection } from '../../settings/variables-section.component';
 
+export interface SettingsSectionItem {
+  id: 'api-keys' | 'agent' | 'variables' | 'assistant' | 'notifications' | 'audit';
+  label: string;
+}
+
 /**
- * `/settings`: свої API-ключі (створення, відкликання), підключення ШІ-агента до `/mcp` (F3-07), змінні інстансу (F6-09)
+ * `/settings`: розділи з навігацією (`?section=`, F3-83) — свої API-ключі (створення, відкликання), підключення ШІ-агента до `/mcp` (F3-07), змінні інстансу (F6-09)
  * канали сповіщень (F6-07) і журнал аудиту (F6-15) для admin.
  */
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection],
+  imports: [DatePipe, NgTemplateOutlet, ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, MatTabsModule, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
 
+      <div class="flex flex-col gap-6 md:flex-row">
+        <nav class="settings-nav" aria-label="Розділи налаштувань" i18n-aria-label="@@settings.nav" data-testid="settings-nav">
+          @for (item of sections(); track item.id) {
+            <a
+              class="settings-nav__item"
+              [routerLink]="[]"
+              [queryParams]="{ section: item.id }"
+              [attr.aria-current]="item.id === section() ? 'page' : null"
+              [attr.data-section]="item.id"
+              >{{ item.label }}</a
+            >
+          }
+        </nav>
+
+        <div class="min-w-0 flex-1">
+          @switch (section()) {
+            @case ('api-keys') {
+              <ng-container *ngTemplateOutlet="apiKeys" />
+            }
+            @case ('agent') {
+              <ng-container *ngTemplateOutlet="agent" />
+            }
+            @case ('variables') {
+              <app-variables-section />
+            }
+            @case ('assistant') {
+              <div data-testid="assistant-section"><app-assistant-section /></div>
+            }
+            @case ('notifications') {
+              <div data-testid="notifications-section"><app-notification-channels-section /></div>
+            }
+            @case ('audit') {
+              <div data-testid="audit-section"><app-audit-section /></div>
+            }
+          }
+        </div>
+      </div>
+    </section>
+
+    <ng-template #apiKeys>
       <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.apiKeys.title">API-ключі</h2>
       <p class="mb-4 opacity-70" i18n="@@settings.apiKeys.hint">
         Ключ дає доступ до REST і MCP-сервера OpenBP з вашими правами. Зберігайте його як пароль. Ключ проєкту бачить лише
         сценарії, облікові дані й конектори цього проєкту.
       </p>
 
-      <div class="mb-4 flex items-start gap-2">
+      <div class="mb-4 flex flex-wrap items-start gap-2">
         <mat-form-field appearance="outline" class="w-80">
           <mat-label i18n="@@settings.apiKeys.name">Назва ключа</mat-label>
           <input matInput [formControl]="name" name="name" data-testid="key-name" (keydown.enter)="create()" />
         </mat-form-field>
-        <select class="border" data-testid="key-project" aria-label="Дія ключа" i18n-aria-label="@@settings.apiKeys.scope" [value]="keyProject()" (change)="keyProject.set($any($event.target).value)">
-          <option value="" i18n="@@settings.apiKeys.scope.all">Увесь інстанс</option>
-          @for (p of projects.projects(); track p.id) {
-            <option [value]="p.id">{{ p.name }}</option>
-          }
-        </select>
+        <mat-form-field appearance="outline" class="w-64">
+          <mat-label i18n="@@settings.apiKeys.scope">Дія ключа</mat-label>
+          <mat-select data-testid="key-project" [value]="keyProject()" (selectionChange)="keyProject.set($event.value)">
+            <mat-option value="" i18n="@@settings.apiKeys.scope.all">Увесь інстанс</mat-option>
+            @for (p of projects.projects(); track p.id) {
+              <mat-option [value]="p.id">{{ p.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
         <button mat-flat-button type="button" data-testid="create-button" (click)="create()" [disabled]="creating()" i18n="@@settings.apiKeys.create">
           Створити ключ
         </button>
@@ -118,35 +171,72 @@ import { VariablesSection } from '../../settings/variables-section.component';
         </table>
       }
 
+    </ng-template>
+
+    <ng-template #agent>
       <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.mcp.title">Підключити ШІ-агента</h2>
       <p class="mb-2 max-w-3xl opacity-70" i18n="@@settings.mcp.hint">
-        OpenBP — MCP-сервер. Додайте цей фрагмент у конфігурацію MCP-клієнта (Claude, Cursor тощо), підставивши свій API-ключ.
+        OpenBP — MCP-сервер. Виберіть клієнта, скопіюйте фрагмент і підставте свій API-ключ (щойно створений ключ підставляється сам).
         Агент зможе описувати конектори, створювати й запускати сценарії та тестувати вузли.
       </p>
       <p class="mb-2 font-mono text-sm" data-testid="mcp-url">{{ mcpUrl }}</p>
-      <div class="flex max-w-3xl items-start gap-2">
-        <pre class="flex-1 overflow-x-auto rounded bg-black/5 p-3 font-mono text-sm" data-testid="mcp-config">{{ config() }}</pre>
-        <button mat-stroked-button type="button" data-testid="copy-config" (click)="copy(config())" i18n="@@settings.copy">
+      <mat-tab-group class="max-w-3xl" animationDuration="0ms" data-testid="mcp-tabs">
+        <mat-tab label="Claude Desktop">
+          <ng-container *ngTemplateOutlet="snippet; context: { $implicit: desktopConfig(), id: 'desktop' }" />
+        </mat-tab>
+        <mat-tab label="Claude Code">
+          <ng-container *ngTemplateOutlet="snippet; context: { $implicit: claudeCodeCommand(), id: 'code' }" />
+        </mat-tab>
+        <mat-tab label="Інше" i18n-label="@@settings.mcp.other">
+          <ng-container *ngTemplateOutlet="snippet; context: { $implicit: config(), id: 'other' }" />
+        </mat-tab>
+      </mat-tab-group>
+    </ng-template>
+
+    <ng-template #snippet let-text let-id="id">
+      <div class="flex items-start gap-2 pt-3">
+        <pre class="flex-1 overflow-x-auto rounded bg-black/5 p-3 font-mono text-sm" [attr.data-testid]="'mcp-config-' + id">{{ text }}</pre>
+        <button mat-stroked-button type="button" [attr.data-testid]="'copy-config-' + id" (click)="copy(text)" i18n="@@settings.copy">
           Скопіювати
         </button>
       </div>
-
-      <div class="mt-8">
-        <app-variables-section />
-      </div>
-
-      @if (isAdmin()) {
-        <div class="mt-8" data-testid="assistant-section">
-          <app-assistant-section />
-        </div>
-        <div class="mt-8" data-testid="notifications-section">
-          <app-notification-channels-section />
-        </div>
-        <div class="mt-8" data-testid="audit-section">
-          <app-audit-section />
-        </div>
+    </ng-template>
+  `,
+  styles: `
+    .settings-nav {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--ac-line);
+    }
+    .settings-nav__item {
+      padding: 8px 14px;
+      border-radius: var(--ac-radius-sm);
+      color: var(--ac-vivid);
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .settings-nav__item:hover {
+      background: var(--ac-cool-grey-2);
+    }
+    .settings-nav__item[aria-current='page'] {
+      background: var(--ac-button);
+      color: var(--ac-kit);
+      font-weight: 600;
+    }
+    .settings-nav__item:focus-visible {
+      outline: 2px solid var(--ac-kit);
+      outline-offset: 2px;
+    }
+    @media (min-width: 768px) {
+      .settings-nav {
+        flex-direction: column;
+        width: 14rem;
+        flex-shrink: 0;
+        align-self: flex-start;
+        border-bottom: 0;
       }
-    </section>
+    }
   `,
 })
 export class SettingsPage implements OnInit {
@@ -160,6 +250,29 @@ export class SettingsPage implements OnInit {
   readonly keyProject = signal('');
 
   readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
+
+  /** Розділи сторінки; три останніх — лише для admin. */
+  readonly sections = computed<SettingsSectionItem[]>(() => {
+    const common: SettingsSectionItem[] = [
+      { id: 'api-keys', label: $localize`:@@settings.nav.apiKeys:API-ключі` },
+      { id: 'agent', label: $localize`:@@settings.nav.agent:Підключити ШІ-агента` },
+      { id: 'variables', label: $localize`:@@settings.nav.variables:Змінні` },
+    ];
+    if (!this.isAdmin()) return common;
+    return [
+      ...common,
+      { id: 'assistant', label: $localize`:@@settings.nav.assistant:Помічник` },
+      { id: 'notifications', label: $localize`:@@settings.nav.notifications:Сповіщення` },
+      { id: 'audit', label: $localize`:@@settings.nav.audit:Журнал аудиту` },
+    ];
+  });
+
+  private readonly requested = toSignal(inject(ActivatedRoute).queryParamMap.pipe(map((q) => q.get('section'))), { initialValue: null });
+  /** Відкритий розділ: з `?section=`, а недоступний (чужий для ролі, невідомий) — перший. */
+  readonly section = computed(() => {
+    const list = this.sections();
+    return list.find((i) => i.id === this.requested())?.id ?? list[0].id;
+  });
   readonly keys = signal<ApiKeyInfo[]>([]);
   readonly created = signal<ApiKeyCreated | null>(null);
   readonly loading = signal(false);
@@ -173,9 +286,14 @@ export class SettingsPage implements OnInit {
   readonly mcpUrl = `${inject(DOCUMENT).location.origin}/mcp`;
 
   /** Фрагмент конфігурації: зі щойно створеним ключем, інакше із заглушкою. */
-  readonly config = computed(() =>
-    mcpClientConfig(this.mcpUrl, this.created()?.key ?? $localize`:@@settings.mcp.keyPlaceholder:<ваш API-ключ>`),
-  );
+  readonly config = computed(() => mcpClientConfig(this.mcpUrl, this.keyOrPlaceholder()));
+
+  readonly desktopConfig = computed(() => mcpDesktopConfig(this.mcpUrl, this.keyOrPlaceholder()));
+  readonly claudeCodeCommand = computed(() => mcpClaudeCodeCommand(this.mcpUrl, this.keyOrPlaceholder()));
+
+  private keyOrPlaceholder(): string {
+    return this.created()?.key ?? $localize`:@@settings.mcp.keyPlaceholder:<ваш API-ключ>`;
+  }
 
   ngOnInit(): void {
     this.load();

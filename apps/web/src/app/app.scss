@@ -41,6 +41,8 @@
 }
 
 .shell-project__select {
+  display: inline-flex;
+  align-items: center;
   min-width: 200px;
   height: 36px;
   padding: 0 12px;
@@ -48,15 +50,14 @@
   border-radius: var(--ac-radius-sm);
   background: rgb(255 255 255 / 0.08);
   color: var(--ac-white);
+  --mat-select-enabled-trigger-text-color: var(--ac-white);
+  --mat-select-enabled-arrow-color: var(--ac-white);
+  --mat-select-focused-arrow-color: var(--ac-white);
   font: 400 14px/20px Ubuntu, sans-serif;
 
   &:focus-visible {
     outline: 2px solid var(--ac-kit);
     outline-offset: 2px;
-  }
-
-  option {
-    color: var(--ac-vivid);
   }
 }
 

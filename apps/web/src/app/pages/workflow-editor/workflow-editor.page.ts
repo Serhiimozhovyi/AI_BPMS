@@ -7,7 +7,7 @@ import { MOBILE_QUERY } from '../../layout/breakpoints';
 import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.component';
 
 /**
- * `/workflows/:id[?version=N]` — {@link WorkflowEditorComponent} на всю висоту під шапкою; `:id` змінюється без перестворення.
+ * `/workflows/:id[?version=N][&node=<id>]` — {@link WorkflowEditorComponent} на всю висоту під шапкою; `:id` змінюється без перестворення.
  * На телефоні (< 768 px) редактор лише для читання з підказкою «Редагування доступне на комп'ютері» (F3-84).
  */
 @Component({
@@ -21,7 +21,7 @@ import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.c
       </p>
     }
     <div class="editor">
-      <app-workflow-editor [workflowId]="id()" [version]="version()" [readonly]="version() !== null || narrow()" />
+      <app-workflow-editor [workflowId]="id()" [version]="version()" [focusNode]="node()" [readonly]="version() !== null || narrow()" />
     </div>
   `,
   styles: `
@@ -59,5 +59,7 @@ export class WorkflowEditorPage {
   });
   protected readonly id = toSignal(this.route.paramMap.pipe(map((p) => p.get('id') ?? '')), { initialValue: '' });
   /** `?version=N` — переглянути стару версію лише для читання (F3-61). */
+  /** `?node=<id>` — відкрити з виділеним вузлом (напр. упалим у виконанні, F3-81). */
+  protected readonly node = toSignal(this.route.queryParamMap.pipe(map((q) => q.get('node'))), { initialValue: null });
   protected readonly version = toSignal(this.route.queryParamMap.pipe(map((q) => (q.get('version') ? Number(q.get('version')) || null : null))), { initialValue: null });
 }

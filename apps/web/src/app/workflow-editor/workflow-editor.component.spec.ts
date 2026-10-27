@@ -536,6 +536,19 @@ describe('WorkflowEditorComponent', () => {
     expect(canvasNodes(fixture)).toHaveLength(2);
   });
 
+  it('focusNode (?node=, F3-81) виділяє вузол після завантаження; невідомий id ігнорується', async () => {
+    for (const [focus, expected] of [['n_set', ['n_set']], ['n_nope', []]] as const) {
+      TestBed.resetTestingModule();
+      const { fixture, http } = setup();
+      fixture.componentRef.setInput('focusNode', focus);
+      http.expectOne('/api/v1/workflows/w1').flush(workflow);
+      http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+      http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+      await render(fixture);
+      expect(canvasComponent(fixture).selection().nodes).toEqual(expected);
+    }
+  });
+
   it('без конекторів у палітрі нейтральна підказка, а не помилка (F3-77)', async () => {
     const { fixture, http, host } = setup();
     http.expectOne('/api/v1/workflows/w1').flush(workflow);

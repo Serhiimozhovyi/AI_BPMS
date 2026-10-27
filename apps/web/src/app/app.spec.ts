@@ -96,7 +96,7 @@ describe('routes', () => {
       'workflows',
       'workflows/:id',
       'projects/:id',
-      'executions',
+      undefined, // /executions[/:id] — matcher (F3-81)
       'tasks',
       'tasks/:id',
       'tables',
@@ -163,12 +163,14 @@ describe('App: вибір проєкту (F6-14)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
-    const select = host.querySelector<HTMLSelectElement>('[data-testid="project-select"]')!;
-    expect([...select.options].map((o) => o.textContent?.trim())).toEqual(['Усі проєкти', 'Спільний простір', 'Продажі']);
+    host.querySelector<HTMLElement>('[data-testid="project-select"] .mat-mdc-select-trigger')!.click();
+    fixture.detectChanges();
+    const options = [...document.querySelectorAll<HTMLElement>('mat-option')];
+    expect(options.map((o) => o.textContent?.trim())).toEqual(['Усі проєкти', 'Спільний простір', 'Продажі']);
     expect(host.querySelector('[data-testid="project-members"]')).toBeNull();
+    expect(host.querySelector('select')).toBeNull();
 
-    select.value = 'p1';
-    select.dispatchEvent(new Event('change'));
+    options[2].click();
     fixture.detectChanges();
     await fixture.whenStable();
     expect(TestBed.inject(ProjectContextService).current()).toBe('p1');

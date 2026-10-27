@@ -18,6 +18,10 @@ import { AssistantApiService, WorkflowExplanation } from './assistant-api.servic
 /** Як часто перепитувати пояснення, що готується, мс. */
 export const EXPLANATION_POLL_MS = 5000;
 
+/** Довше за це (символів) або більше рядків — картка згортається до {@link EXPLANATION_CLAMP_LINES} рядків із «Показати все». */
+export const EXPLANATION_CLAMP_CHARS = 360;
+export const EXPLANATION_CLAMP_LINES = 6;
+
 /** Скільки разів перепитувати (5 хв), далі — лише за «Оновити» чи наступним збереженням. */
 const MAX_POLLS = 60;
 
@@ -81,7 +85,16 @@ export function mcpExplainPrompt(name: string | null): string {
               </p>
             }
           }
-          <div class="explanation__text" data-testid="explanation-text">{{ e.text }}</div>
+          <div class="explanation__text" data-testid="explanation-text" [class.explanation__text--clamped]="isLong(e.text) && !expanded()">{{ e.text }}</div>
+          @if (isLong(e.text)) {
+            <button mat-button type="button" class="explanation__more" data-testid="explanation-toggle" [attr.aria-expanded]="expanded()" (click)="expanded.set(!expanded())">
+              @if (expanded()) {
+                <ng-container i18n="@@explanation.collapse">Згорнути</ng-container>
+              } @else {
+                <ng-container i18n="@@explanation.showAll">Показати все</ng-container>
+              }
+            </button>
+          }
         } @else if (e.status === 'none' || e.status === 'not_configured') {
           <p class="explanation__note" data-testid="explanation-status" i18n="@@explanation.viaMcp">
             Пояснення ще немає. Відкрийте Claude чи ChatGPT, підключений до OpenBP через MCP, і
@@ -123,8 +136,6 @@ export function mcpExplainPrompt(name: string | null): string {
     .explanation {
       display: flex;
       flex-direction: column;
-      max-height: 45%;
-      overflow-y: auto;
       padding: 8px 10px;
       border: 1px solid var(--ac-line);
       border-radius: var(--ac-radius);
@@ -170,6 +181,19 @@ export function mcpExplainPrompt(name: string | null): string {
       margin-top: 6px;
       white-space: pre-wrap;
     }
+
+    /* Обрізання по цілих рядках з «…», а не посередині рядка; повний текст — за «Показати все». */
+    .explanation__text--clamped {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 6;
+      line-clamp: 6;
+      overflow: hidden;
+    }
+
+    .explanation__more {
+      align-self: flex-start;
+    }
   `,
 })
 export class ExplanationCardComponent {
@@ -186,6 +210,7 @@ export class ExplanationCardComponent {
   protected readonly explanation = signal<WorkflowExplanation | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly open = signal(true);
+  protected readonly expanded = signal(false);
   protected readonly mcpPrompt = computed(() => mcpExplainPrompt(this.name()));
   private readonly reload = new Subject<void>();
 
@@ -215,6 +240,10 @@ export class ExplanationCardComponent {
       this.version();
       untracked(() => this.reload.next());
     });
+  }
+
+  protected isLong(text: string): boolean {
+    return text.length > EXPLANATION_CLAMP_CHARS || text.split('\n').length > EXPLANATION_CLAMP_LINES;
   }
 
   protected refresh(): void {

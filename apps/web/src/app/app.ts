@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, HostListener, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatSelectModule } from '@angular/material/select';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
@@ -13,7 +14,7 @@ import { ProjectContextService } from './projects/project-context.service';
 import { NO_GROUP } from './workflows/workflow-groups';
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatToolbarModule, MatButtonModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatToolbarModule, MatButtonModule, MatSelectModule],
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './app.scss',

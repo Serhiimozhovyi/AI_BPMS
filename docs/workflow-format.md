@@ -109,6 +109,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 - Сценарій: `formatVersion` (= 1), `name`, `settings`, `nodes`, `connections`, `pinData` (може бути `{}`).
 - `settings`: `timezone`, `executionTimeoutSec`, `errorWorkflowId` (`null`, якщо немає), `saveSuccessfulData`.
   У редакторі їх змінює діалог «Налаштування» (кнопка на панелі інструментів).
+  REST (`POST`/`PUT` сценарію): якщо в тілі немає `settings.timezone`, Api підставляє пояс інстансу `OPENBP_DEFAULT_TIMEZONE` (типово `Europe/Kyiv`); явне значення (зокрема `UTC`) не змінюється.
   `saveSuccessfulData: false` — у кроках успішних виконань (крім ручного тесту) лишаються лише статус і час (docs/architecture.md §10.4).
 - Необов'язкові `settings` (F6-06): `concurrency`, `throttle`, `disableAfterErrors` — див. «Ліміти навантаження».
 - Необов'язкове `settings.correlation` (F5-04): `{ "skipIfActive": true }` — див. «Ключ кореляції».

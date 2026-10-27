@@ -351,4 +351,13 @@ describe('CanvasComponent', () => {
     fixture.detectChanges();
     expect(hint().length).toBe(0);
   });
+
+  it('подвійний клік по картці (зокрема по назві) віддає «open», а не «rename» (F3-78)', async () => {
+    const fixture = await create(demo());
+    const actions: unknown[] = [];
+    fixture.componentInstance.nodeAction.subscribe((a) => actions.push(a));
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-node-id="n_if"]')!;
+    card.querySelector('.node__name')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(actions).toEqual([{ nodeId: 'n_if', action: 'open' }]);
+  });
 });
