@@ -48,6 +48,15 @@ describe('NodePanelComponent', () => {
     custom: { keep: true },
   };
 
+  it('технічний тип вузла не в тілі панелі: показується назва типу, тип — у підказці', async () => {
+    const descriptor: NodeTypeInfo = { ...SET_DESCRIPTOR, type: 'core.loop', displayName: 'Цикл' };
+    const { host } = await setup({ ...setNode, type: 'core.loop', parameters: {} }, descriptor);
+    const type = host.querySelector<HTMLElement>('.panel__type')!;
+    expect(type.textContent?.trim()).toBe('Цикл');
+    expect(type.title).toBe('core.loop');
+    expect(host.textContent).not.toContain('core.loop');
+  });
+
   it('core.set: поля масиву з параметрів; додавання поля з виразом потрапляє у вузол', async () => {
     const { fixture, host, last, emitted } = await setup(setNode, SET_DESCRIPTOR);
     expect(emitted).toEqual([]);

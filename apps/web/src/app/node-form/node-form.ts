@@ -3,6 +3,7 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { CredentialOption } from '../credentials/credentials-api.service';
 import { CredentialRequirement, NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowNode } from '../workflows/workflows-api.service';
+import { withCoreLabels } from './core-labels';
 import { isPlainObject } from './node-value';
 import { CODE_FIELD, NodeFieldProps, SECTION_WRAPPER, VALUE_FIELD, schemaFields } from './schema-fields';
 
@@ -85,9 +86,10 @@ function isExpressionText(value: string): boolean {
 }
 
 function baseFields(type: string, descriptor: NodeTypeInfo, tool: McpToolInfo | null | undefined): FormlyFieldConfig[] {
-  if (type === CODE_NODE_TYPE) return schemaFields(descriptor.parametersSchema).map((f) => (f.key === 'code' ? { ...f, type: CODE_FIELD } : f));
-  if (type === SUBSCRIBE_NODE_TYPE) return schemaFields(descriptor.parametersSchema, { omit: ['serverId', 'resourceUri'] });
-  if (!MCP_TOOL_TYPES.includes(type)) return schemaFields(descriptor.parametersSchema);
+  const params = withCoreLabels(type, descriptor.parametersSchema);
+  if (type === CODE_NODE_TYPE) return schemaFields(params).map((f) => (f.key === 'code' ? { ...f, type: CODE_FIELD } : f));
+  if (type === SUBSCRIBE_NODE_TYPE) return schemaFields(params, { omit: ['serverId', 'resourceUri'] });
+  if (!MCP_TOOL_TYPES.includes(type)) return schemaFields(params);
   const argumentsSchema = isPlainObject(tool?.inputSchema)
     ? { ...tool.inputSchema, title: $localize`:@@nodeform.arguments:Аргументи` }
     : undefined;
