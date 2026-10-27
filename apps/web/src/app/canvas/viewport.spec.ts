@@ -1,4 +1,4 @@
-import { contentBounds, fitViewport, loadViewport, revealBox, saveViewport, viewportShowsContent } from './viewport';
+import { OPEN_MIN_ZOOM, contentBounds, fitViewport, loadViewport, openViewport, revealBox, saveViewport, viewportShowsContent } from './viewport';
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -93,6 +93,24 @@ describe('viewport', () => {
     it('вузол ширший за видиму зону притискається лівим краєм', () => {
       const next = revealBox(view, { x: 400, y: 100, width: 800, height: 80 }, { width: 500, height: 500 }, 32)!;
       expect(next.x).toBe(32 - 400);
+    });
+  });
+
+  describe('openViewport (F3-91)', () => {
+    const size = { width: 1200, height: 700 };
+
+    it('короткий сценарій вписується повністю', () => {
+      const bounds = { x: 0, y: 0, width: 800, height: 200 };
+      expect(openViewport(bounds, { x: 0, y: 0, width: 220, height: 80 }, size)).toEqual(fitViewport(bounds, size));
+    });
+
+    it('довгий сценарій відкривається з початку на масштабі не менше 0,7: тригер зліва по центру висоти', () => {
+      const bounds = { x: 0, y: 0, width: 4000, height: 200 };
+      expect(fitViewport(bounds, size).zoom).toBeLessThan(OPEN_MIN_ZOOM);
+      const view = openViewport(bounds, { x: 100, y: 40, width: 220, height: 80 }, size);
+      expect(view.zoom).toBe(OPEN_MIN_ZOOM);
+      expect(view.x).toBe(48 - 100 * OPEN_MIN_ZOOM);
+      expect(view.y).toBe(350 - 80 * OPEN_MIN_ZOOM);
     });
   });
 });
