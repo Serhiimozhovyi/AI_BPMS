@@ -227,8 +227,12 @@ export interface EditorErrorEvent {
                 </p>
               } @else if (noConnectors()) {
                 <p role="status" class="editor__hint" data-testid="no-connectors">
-                  <ng-container i18n="@@workfloweditor.noConnectors">Конекторів ще немає — додайте в розділі</ng-container>
-                  <a routerLink="/connectors" i18n="@@workfloweditor.noConnectorsLink">Конектори</a>.
+                  @if (embedded()) {
+                    <ng-container i18n="@@workfloweditor.noConnectorsEmbedded">Конекторів ще немає.</ng-container>
+                  } @else {
+                    <ng-container i18n="@@workfloweditor.noConnectors">Конекторів ще немає — додайте в розділі</ng-container>
+                    <a routerLink="/connectors" i18n="@@workfloweditor.noConnectorsLink">Конектори</a>.
+                  }
                 </p>
               }
               <app-palette [sections]="palette()" (pick)="add($event)" />
