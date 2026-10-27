@@ -56,7 +56,14 @@ import {
           <div class="rounded-lg border border-ac-line p-4" data-testid="stat-total">
             <div class="text-sm opacity-70" i18n="@@overview.total">Виконань</div>
             <div class="text-2xl font-semibold">{{ d.total }}</div>
-            <div class="text-sm opacity-70" i18n="@@overview.failedCount">з помилкою: {{ d.failed }}:failed:</div>
+            <a
+              class="text-sm underline opacity-70"
+              routerLink="/executions"
+              [queryParams]="{ status: 'failed' }"
+              data-testid="stat-failed"
+              i18n="@@overview.failedCount"
+              >з помилкою: {{ d.failed }}</a
+            >
           </div>
           <div class="rounded-lg border border-ac-line p-4" data-testid="stat-rate">
             <div class="text-sm opacity-70" i18n="@@overview.successRate">Успішних</div>
@@ -107,7 +114,14 @@ import {
                     <td class="p-2">
                       <a class="underline" [routerLink]="['/workflows', w.workflowId]">{{ w.name ?? w.workflowId }}</a>
                     </td>
-                    <td class="p-2">{{ w.failed }}</td>
+                    <td class="p-2">
+                      <a
+                        class="underline"
+                        routerLink="/executions"
+                        [queryParams]="{ workflowId: w.workflowId, status: 'failed' }"
+                        >{{ w.failed }}</a
+                      >
+                    </td>
                     <td class="p-2">{{ w.total }}</td>
                   </tr>
                 }

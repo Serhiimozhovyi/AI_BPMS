@@ -67,7 +67,7 @@ export const AUDIT_PAGE_SIZE = 50;
                   }
                   @if (e.apiKeyId) {
                     <span class="block text-sm opacity-60" data-testid="audit-key" i18n="@@settings.audit.viaKey">
-                      ключ {{ e.apiKeyName ?? e.apiKeyId }}:key:
+                      ключ {{ e.apiKeyName ?? e.apiKeyId }}
                     </span>
                   }
                 </td>

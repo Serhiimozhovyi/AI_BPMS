@@ -77,6 +77,14 @@ describe('OverviewPage', () => {
     expect(free.textContent).toContain('s2');
   });
 
+  it('картка «з помилкою» без службового хвоста і веде в журнал з фільтром (F3-79)', async () => {
+    const { host } = await setup();
+    const failed = host.querySelector<HTMLAnchorElement>('[data-testid="stat-failed"]')!;
+    expect(failed.textContent?.trim()).toBe('з помилкою: 3');
+    expect(failed.getAttribute('href')).toContain('/executions?status=failed');
+    expect(host.textContent).not.toMatch(/:[a-z]+:/);
+  });
+
   it('без підписок показує порожній стан (F6-20)', async () => {
     const { host } = await setup();
     expect(host.querySelector('[data-testid="subscriptions-empty"]')).not.toBeNull();
