@@ -117,6 +117,7 @@ test('telegram-1c: закріплений output 1С не викликає 1С; 
   const first = await orderNumber(page);
 
   // Закріпити: наступний повний запуск не викликає 1С — той самий номер, бейдж 📌 на вузлі, pinData збережено.
+  await page.getByTestId('node-more').click();
   await page.getByTestId('pin-output').click();
   await expect(page.locator('[data-node-id="n_1c"]')).toHaveAttribute('data-pinned', 'true');
   await runAndWait(page, 'run');
@@ -125,6 +126,7 @@ test('telegram-1c: закріплений output 1С не викликає 1С; 
   expect(Object.keys(saved.definition.pinData)).toContain('n_1c');
 
   // Відкріпити: 1С викликається знову — новий номер.
+  await page.getByTestId('node-more').click();
   await page.getByTestId('unpin-output').click();
   await expect(page.locator('[data-node-id="n_1c"]')).not.toHaveAttribute('data-pinned', 'true');
   await runAndWait(page, 'run');
@@ -148,6 +150,7 @@ test('telegram-1c: відредагований закріплений output 1�
   await page.locator('[data-node-id="n_1c"]').click();
 
   // Вузол ще не виконувався: дані вводяться вручну з шаблону, далі — JSON у панелі.
+  await page.getByTestId('node-more').click();
   await page.getByTestId('pin-manual').click();
   await expect(page.locator('[data-node-id="n_1c"]')).toHaveAttribute('data-pinned', 'true');
   await page.getByTestId('pinned-json').fill('[{ "json": { "number": 777001, "status": "created" } }]');
