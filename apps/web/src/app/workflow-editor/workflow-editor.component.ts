@@ -313,7 +313,7 @@ export interface EditorErrorEvent {
                   </app-node-data-view>
                 </div>
                 <div class="editor__col editor__col--params" data-testid="panel-params" [hidden]="!wide() && panelTab() !== 'params'">
-                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)">
+                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)" (renameRequest)="startRename(node.id)">
                     @if (!readonly()) {
                       <div panelActions class="editor__node-actions" data-testid="node-actions">
                         <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
@@ -1089,6 +1089,22 @@ export class WorkflowEditorComponent implements OnInit {
     writeRecent(recent);
   }
 
+  /** Подвійний клік по вузлу: виділити, показати вкладку параметрів і сфокусувати перше поле форми. */
+  protected openNode(nodeId: string): void {
+    this.selection.set({ nodes: [nodeId], edges: [] });
+    this.panelTab.set('params');
+    let tries = 0;
+    const focus = () => {
+      const root = this.host.nativeElement;
+      const control = root.querySelector<HTMLElement>(
+        '[data-testid="panel-params"] [data-testid="node-parameters"] input:not([type="hidden"]), [data-testid="panel-params"] [data-testid="node-parameters"] textarea, [data-testid="panel-params"] [data-testid="node-parameters"] mat-select, [data-testid="panel-params"] [data-testid="node-parameters"] [contenteditable="true"]',
+      );
+      if (control) control.focus();
+      else if (++tries < 20) requestAnimationFrame(focus);
+    };
+    requestAnimationFrame(focus);
+  }
+
   /** «не заповнено: N» на картці: відкрити вузол на вкладці параметрів і поставити фокус на перше незаповнене поле. */
   protected openMissing(request: MissingFieldRequest): void {
     this.selection.set({ nodes: [request.nodeId], edges: [] });
@@ -1123,6 +1139,11 @@ export class WorkflowEditorComponent implements OnInit {
 
   /** Тулбар над карткою вузла (F3-58). */
   protected nodeAction(request: NodeActionRequest): void {
+    // Подвійний клік: лише відкриває панель і ставить фокус на перше поле (перейменування — F2, тулбар або клік по назві в панелі).
+    if (request.action === 'open') {
+      this.openNode(request.nodeId);
+      return;
+    }
     if (this.readonly()) return;
     switch (request.action) {
       case 'run':

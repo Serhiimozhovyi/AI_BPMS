@@ -83,12 +83,12 @@ export interface WorkflowSettingsDialogData {
 
         <div class="flex flex-wrap gap-2">
           <mat-form-field appearance="outline" class="settings__number">
-            <mat-label i18n="@@workflowsettings.concurrency">Одночасних виконань, макс.</mat-label>
+            <mat-label i18n="@@workflowsettings.concurrency">Одночасних виконань</mat-label>
             <input matInput inputmode="numeric" data-testid="settings-concurrency-max" [value]="value().concurrencyMax" (input)="patch({ concurrencyMax: text($event) })" />
             @if (limitMessage('concurrencyMax'); as message) {
               <mat-hint class="settings__error" data-testid="settings-concurrency-max-error">{{ message }}</mat-hint>
             } @else {
-              <mat-hint i18n="@@workflowsettings.concurrency.hint">Порожньо — без ліміту</mat-hint>
+              <mat-hint i18n="@@workflowsettings.concurrency.hint">Максимум; порожньо — без ліміту</mat-hint>
             }
           </mat-form-field>
           <mat-form-field appearance="outline" class="settings__action">
@@ -102,12 +102,12 @@ export interface WorkflowSettingsDialogData {
 
         <div class="flex flex-wrap gap-2">
           <mat-form-field appearance="outline" class="settings__number">
-            <mat-label i18n="@@workflowsettings.throttle">Запусків за період, макс.</mat-label>
+            <mat-label i18n="@@workflowsettings.throttle">Запусків за період</mat-label>
             <input matInput inputmode="numeric" data-testid="settings-throttle-limit" [value]="value().throttleLimit" (input)="patch({ throttleLimit: text($event) })" />
             @if (limitMessage('throttleLimit'); as message) {
               <mat-hint class="settings__error" data-testid="settings-throttle-limit-error">{{ message }}</mat-hint>
             } @else {
-              <mat-hint i18n="@@workflowsettings.throttle.hint">Порожньо — без ліміту</mat-hint>
+              <mat-hint i18n="@@workflowsettings.throttle.hint">Максимум; порожньо — без ліміту</mat-hint>
             }
           </mat-form-field>
           <mat-form-field appearance="outline" class="settings__number">
@@ -127,7 +127,7 @@ export interface WorkflowSettingsDialogData {
         </div>
 
         <mat-form-field appearance="outline">
-            <mat-label i18n="@@workflowsettings.disableAfterErrors">Вимкнути після помилок поспіль</mat-label>
+            <mat-label i18n="@@workflowsettings.disableAfterErrors">Вимкнути після помилок</mat-label>
             <input matInput inputmode="numeric" data-testid="settings-disable-after-errors" [value]="value().disableAfterErrors" (input)="patch({ disableAfterErrors: text($event) })" />
             @if (limitMessage('disableAfterErrors'); as message) {
               <mat-hint class="settings__error" data-testid="settings-disable-after-errors-error">{{ message }}</mat-hint>
@@ -166,10 +166,10 @@ export interface WorkflowSettingsDialogData {
       color: var(--mat-sys-on-surface-variant);
     }
     .settings__number {
-      flex: 1 1 10rem;
+      flex: 1 1 14rem;
     }
     .settings__action {
-      flex: 1 1 12rem;
+      flex: 1 1 14rem;
     }
   `,
 })

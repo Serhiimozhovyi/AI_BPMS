@@ -141,4 +141,29 @@ describe('ExplanationCardComponent', () => {
     expect(host.querySelector('[data-testid="explanation-status"]')).toBeNull();
     expect(text(host, 'explanation-mcp-prompt')).toContain('«Бот підтримки»');
   });
+
+  it('довге пояснення згорнуто до цілих рядків, «Показати все» розгортає повний текст (F3-78)', () => {
+    const { fixture, host, http } = create();
+    const long = 'Процес приймає заявку, перевіряє її та передає на погодження. '.repeat(10);
+    http.expectOne(URL).flush(explanation({ status: 'ready', version: 2, text: long }));
+    fixture.detectChanges();
+
+    const body = host.querySelector('[data-testid="explanation-text"]')!;
+    const toggle = host.querySelector<HTMLButtonElement>('[data-testid="explanation-toggle"]')!;
+    expect(body.textContent).toBe(long);
+    expect(body.classList.contains('explanation__text--clamped')).toBe(true);
+    expect(toggle.textContent?.trim()).toBe('Показати все');
+
+    toggle.click();
+    fixture.detectChanges();
+    expect(body.classList.contains('explanation__text--clamped')).toBe(false);
+    expect(toggle.textContent?.trim()).toBe('Згорнути');
+  });
+
+  it('коротке пояснення без кнопки «Показати все» (F3-78)', () => {
+    const { fixture, host, http } = create();
+    http.expectOne(URL).flush(explanation({ status: 'ready', version: 2, text: 'Коротко.' }));
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="explanation-toggle"]')).toBeNull();
+  });
 });

@@ -107,6 +107,33 @@ public class WorkflowTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Create_without_timezone_uses_instance_default_and_explicit_timezone_is_kept()
+    {
+        var editor = await LoginAsync(UserRole.Editor);
+        var withoutZone = $$"""
+            { "formatVersion": 1, "name": "{{Unique("Без поясу")}}", "settings": { "executionTimeoutSec": 0 },
+              "nodes": {{ManualNode}}, "connections": [], "pinData": {} }
+            """;
+        var created = await JsonAsync(await editor.PostAsync(Base, Json(withoutZone)));
+        Assert.Equal("Europe/Kyiv", created.GetProperty("definition").GetProperty("settings").GetProperty("timezone").GetString());
+
+        var noSettings = $$"""
+            { "formatVersion": 1, "name": "{{Unique("Без налаштувань")}}", "nodes": {{ManualNode}}, "connections": [], "pinData": {} }
+            """;
+        var second = await JsonAsync(await editor.PostAsync(Base, Json(noSettings)));
+        Assert.Equal("Europe/Kyiv", second.GetProperty("definition").GetProperty("settings").GetProperty("timezone").GetString());
+
+        var utc = Definition(Unique("Явний UTC")).Replace("\"Europe/Kyiv\"", "\"UTC\"");
+        var explicitUtc = await JsonAsync(await editor.PostAsync(Base, Json(utc)));
+        Assert.Equal("UTC", explicitUtc.GetProperty("definition").GetProperty("settings").GetProperty("timezone").GetString());
+
+        await using var configured = api.WithWebHostBuilder(b => b.UseSetting("OPENBP_DEFAULT_TIMEZONE", "America/New_York"));
+        var other = await LoginAsync(UserRole.Editor, configured);
+        var custom = await JsonAsync(await other.PostAsync(Base, Json(withoutZone.Replace("Без поясу", "Інший пояс"))));
+        Assert.Equal("America/New_York", custom.GetProperty("definition").GetProperty("settings").GetProperty("timezone").GetString());
+    }
+
+    [Fact]
     public async Task Create_invalid_definition_returns_422_with_codes_and_creates_nothing()
     {
         var editor = await LoginAsync(UserRole.Editor);

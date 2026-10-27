@@ -117,6 +117,8 @@ test('завантажити сценарій, змінити, зберегти 
 
   // Backspace у полі панелі вузла (усередині Shadow DOM) редагує текст, а не видаляє вузол.
   await card(page, 'Старт').click();
+  // «Додатково» (F3-78) згорнуте за замовчуванням.
+  await page.getByTestId('node-extra-toggle').click();
   const name = page.getByTestId('node-common').locator('input').first();
   await name.click();
   await name.press('End');
