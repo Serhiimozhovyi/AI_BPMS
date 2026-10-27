@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { AuthService } from '../auth/auth.service';
+import { NotifyService } from '../shared/notify.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { VARIABLE_KEY_PATTERN, VARIABLE_MAX_VALUE, VariableInfo, VariablesApiService } from './variables-api.service';
 
@@ -92,6 +93,7 @@ export class VariablesSection implements OnInit {
   private readonly api = inject(VariablesApiService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notify = inject(NotifyService);
 
   readonly variables = signal<VariableInfo[]>([]);
   readonly loading = signal(false);
@@ -155,6 +157,7 @@ export class VariablesSection implements OnInit {
             [...list.filter((v) => v.key !== saved.key), saved].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
           );
           this.reset();
+          this.notify.success($localize`:@@settings.vars.saved:Змінну «${saved.key}:key:» збережено.`);
         },
         error: (e: unknown) => {
           this.saving.set(false);
@@ -172,6 +175,7 @@ export class VariablesSection implements OnInit {
         next: () => {
           this.variables.update((list) => list.filter((x) => x.key !== v.key));
           if (this.editing() === v.key) this.reset();
+          this.notify.success($localize`:@@settings.vars.removed:Змінну «${v.key}:key:» видалено.`);
         },
         error: (e: unknown) => this.error.set(apiErrorMessage(e)),
       });

@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { forkJoin } from 'rxjs';
 import { ASSISTANT_PROVIDERS, AssistantApiService } from '../assistant/assistant-api.service';
+import { NotifyService } from '../shared/notify.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 
@@ -52,6 +53,7 @@ export class AssistantSection implements OnInit {
   private readonly api = inject(AssistantApiService);
   private readonly credentials = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notify = inject(NotifyService);
 
   protected readonly options = signal<CredentialOption[]>([]);
   protected readonly error = signal<string | null>(null);
@@ -85,6 +87,7 @@ export class AssistantSection implements OnInit {
         next: () => {
           this.saving.set(false);
           this.saved.set(true);
+          this.notify.success($localize`:@@assistant.saved:Налаштування помічника збережено.`);
         },
         error: (e: unknown) => {
           this.saving.set(false);
