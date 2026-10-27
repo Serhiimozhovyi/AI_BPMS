@@ -221,7 +221,15 @@ export interface EditorErrorEvent {
           @if (!readonly()) {
             <aside class="editor__palette">
               @if (toolsError()) {
-                <p role="status" class="editor__warning" data-testid="tools-error">{{ toolsError() }}</p>
+                <p role="status" class="editor__warning" data-testid="tools-error">
+                  {{ toolsError() }}
+                  <button type="button" class="editor__warning-retry" data-testid="tools-retry" (click)="reloadServers()" i18n="@@workfloweditor.toolsRetry">Повторити</button>
+                </p>
+              } @else if (noConnectors()) {
+                <p role="status" class="editor__hint" data-testid="no-connectors">
+                  <ng-container i18n="@@workfloweditor.noConnectors">Конекторів ще немає — додайте в розділі</ng-container>
+                  <a routerLink="/connectors" i18n="@@workfloweditor.noConnectorsLink">Конектори</a>.
+                </p>
               }
               <app-palette [sections]="palette()" (pick)="add($event)" />
             </aside>
@@ -577,6 +585,23 @@ export interface EditorErrorEvent {
       color: var(--mat-sys-error);
     }
 
+    .editor__warning-retry {
+      margin-left: 4px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .editor__hint {
+      margin: 12px 12px 0;
+      font-size: 12px;
+      color: var(--ac-cool-grey-4);
+    }
+
     .editor__canvas {
       position: relative;
       flex: 1;
@@ -775,6 +800,8 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly toolsError = signal<string | null>(null);
+  /** Конекторів у системі немає взагалі — у палітрі нейтральна підказка замість помилки. */
+  protected readonly noConnectors = signal(false);
   protected readonly workflow = signal<WorkflowDetail | null>(null);
   protected readonly definition = signal<WorkflowDefinition | null>(null);
   protected readonly descriptors = signal<NodeTypeInfo[]>([]);
@@ -1055,9 +1082,7 @@ export class WorkflowEditorComponent implements OnInit {
         this.loading.set(false);
       });
 
-    this.loadServers()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((servers) => this.servers.set(servers));
+    this.reloadServers();
 
     this.credentialsApi
       .options()
@@ -1802,26 +1827,36 @@ export class WorkflowEditorComponent implements OnInit {
       });
   }
 
+  /** Завантажує конектори для палітри; повторюється кнопкою «Повторити» біля помилки. */
+  protected reloadServers(): void {
+    this.toolsError.set(null);
+    this.loadServers()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((servers) => this.servers.set(servers));
+  }
+
   /** Конектори з закешованими tools; помилка не ламає редактор — палітра лишається з `core.*`. */
   private loadServers(): Observable<PaletteServer[]> {
     return this.connectors.list().pipe(
-      switchMap((page) => {
+      switchMap((page): Observable<PaletteServer[]> => {
+        this.noConnectors.set(page.items.length === 0);
         const withTools = page.items.filter((c) => c.toolCount > 0);
         if (withTools.length === 0) return of([]);
         // Пресети тригерів (F6-21) — з каталогу; запит лише коли є конектори, встановлені з нього. Без каталогу — палітра без пресетів.
         const presets$ = withTools.some((c) => c.catalogId)
           ? this.connectors.catalog().pipe(catchError(() => of([] as ConnectorCatalogEntry[])))
           : of([] as ConnectorCatalogEntry[]);
-        return forkJoin([forkJoin(withTools.map((c) => this.connectors.get(c.id))), presets$]);
+        return forkJoin([forkJoin(withTools.map((c) => this.connectors.get(c.id))), presets$]).pipe(
+          map(([details, catalog]) =>
+            details.map((d) => ({
+              id: d.summary.id,
+              name: d.summary.name,
+              tools: d.tools,
+              triggers: catalog.find((e) => e.manifest.id === d.summary.catalogId)?.manifest.triggers ?? [],
+            })),
+          ),
+        );
       }),
-      map(([details, catalog]) =>
-        details.map((d) => ({
-          id: d.summary.id,
-          name: d.summary.name,
-          tools: d.tools,
-          triggers: catalog.find((e) => e.manifest.id === d.summary.catalogId)?.manifest.triggers ?? [],
-        })),
-      ),
       catchError((e: unknown) => {
         this.toolsError.set($localize`:@@workfloweditor.toolsError:Tools MCP-серверів недоступні: ${apiErrorMessage(e)}:error:`);
         return of([]);

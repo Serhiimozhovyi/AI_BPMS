@@ -227,11 +227,11 @@ function padPorts(ports: string[], maxIndex: number, prefix: string | undefined)
 function subtitleOf(node: WorkflowNode): string {
   if (node.type === 'mcp.tool' || node.type === 'mcp.poll' || node.type === 'mcp.waitFor') {
     const toolName = node.parameters?.['toolName'];
-    if (typeof toolName === 'string' && toolName) return `${node.type} · ${toolName}`;
+    if (typeof toolName === 'string' && toolName) return toolName;
   }
   if (node.type === 'mcp.subscribe') {
     const uri = node.parameters?.['resourceUri'];
-    if (typeof uri === 'string' && uri) return `${node.type} · ${uri}`;
+    if (typeof uri === 'string' && uri) return uri;
   }
-  return node.type;
+  return '';
 }

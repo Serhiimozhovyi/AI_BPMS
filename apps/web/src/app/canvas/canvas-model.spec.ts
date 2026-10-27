@@ -79,7 +79,7 @@ describe('canvas-model', () => {
     const webhook = byId.get('n_webhook')!;
     expect(webhook).toMatchObject({ x: 100, y: 200, group: 'trigger', inputs: [], outputs: ['main'], disabled: false });
     expect(byId.get('n_if')!.outputs).toEqual(['true', 'false', ERROR_OUTPUT]);
-    expect(byId.get('n_1c')).toMatchObject({ group: 'integration', disabled: true, subtitle: 'mcp.tool · create_order' });
+    expect(byId.get('n_1c')).toMatchObject({ group: 'integration', disabled: true, subtitle: 'create_order' });
   });
 
   it('core.switch v2: fallback і по порту на правило; порт з ребром не ховається; v1 — усі 5 портів', () => {
