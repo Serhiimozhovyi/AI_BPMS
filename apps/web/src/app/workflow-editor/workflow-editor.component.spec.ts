@@ -180,7 +180,9 @@ describe('WorkflowEditorComponent', () => {
   });
 
   it('посилання «Журнал виконань» веде на журнал цього сценарію', async () => {
-    const { host } = await loaded();
+    const { fixture, host } = await loaded();
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
     const link = host.querySelector<HTMLAnchorElement>('[data-testid="executions-link"]')!;
     expect(link.getAttribute('href')).toBe('/executions?workflowId=w1');
   });
@@ -236,7 +238,7 @@ describe('WorkflowEditorComponent', () => {
     put.flush(saved(4, body));
     await render(fixture);
     expect(host.querySelector('[data-testid="dirty"]')).toBeNull();
-    expect(host.querySelector('[data-testid="saved"]')?.textContent).toContain('4');
+    expect(host.querySelector('[data-testid="saved"]')?.getAttribute('title')).toContain('4');
     expect(canvasNodes(fixture)).toBe(body.nodes);
   });
 
@@ -964,6 +966,8 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, host } = await loaded();
       fixture.componentRef.setInput('embedded', true);
       await render(fixture);
+      click(host, '[data-testid="toolbar-more"]');
+      await render(fixture);
       expect(host.querySelector('[data-testid="executions-link"]')).toBeNull();
       expect(host.querySelector('a[href="/workflows"]')).toBeNull();
     });
@@ -1155,6 +1159,8 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
 
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
     click(host, '[data-testid="assistant-toggle"]');
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
     await render(fixture);
