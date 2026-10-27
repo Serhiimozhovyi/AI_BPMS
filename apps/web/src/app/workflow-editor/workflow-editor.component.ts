@@ -26,6 +26,7 @@ import { EditHistory } from '../canvas/edit-history';
 import { PaletteItem, PaletteServer, actionKey, addNode, buildPalette, randomNodeId } from '../canvas/palette';
 import { changeNodeTool } from '../canvas/connector-actions';
 import { PaletteComponent } from '../canvas/palette.component';
+import { paletteExpanded, readPaletteChoice, writePaletteChoice } from '../canvas/palette-state';
 import { DataFieldPick, DataPort, NodeDataViewComponent } from '../canvas/node-data-view.component';
 import { PathSegment, expressionFor } from '../canvas/data-schema';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
@@ -180,8 +181,25 @@ export interface EditorErrorEvent {
           <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
         } @else {
         <div class="editor__body">
-          @if (!readonly()) {
+          @if (!readonly() && !paletteOpen()) {
+            <aside class="editor__rail" data-testid="palette-rail" i18n-aria-label="@@workfloweditor.rail" aria-label="Додавання кроків">
+              <button #railAdd type="button" class="editor__rail-add" data-testid="rail-add" i18n-title="@@workfloweditor.rail.add.hint" title="Додати крок (Tab)" i18n-aria-label="@@workfloweditor.rail.add" aria-label="Додати крок" (click)="quickAddFromRail(railAdd)">
+                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+              </button>
+              <span class="editor__rail-label" aria-hidden="true" i18n="@@workfloweditor.rail.label">Додати крок</span>
+              <button type="button" class="editor__rail-expand" data-testid="palette-expand" i18n-title="@@workfloweditor.rail.expand.hint" title="Показати палітру вузлів" i18n-aria-label="@@workfloweditor.rail.expand" aria-label="Показати палітру вузлів" (click)="setPaletteOpen(true)">
+                <span class="material-symbols-outlined" aria-hidden="true">keyboard_double_arrow_right</span>
+              </button>
+            </aside>
+          }
+          @if (!readonly() && paletteOpen()) {
             <aside class="editor__palette">
+              <div class="editor__palette-head">
+                <span class="editor__palette-title" i18n="@@workfloweditor.palette.title">Вузли</span>
+                <button type="button" class="editor__rail-expand" data-testid="palette-collapse" i18n-title="@@workfloweditor.palette.collapse.hint" title="Згорнути палітру: більше місця для сценарію" i18n-aria-label="@@workfloweditor.palette.collapse" aria-label="Згорнути палітру" (click)="setPaletteOpen(false)">
+                  <span class="material-symbols-outlined" aria-hidden="true">keyboard_double_arrow_left</span>
+                </button>
+              </div>
               @if (toolsError()) {
                 <p role="status" class="editor__warning" data-testid="tools-error">
                   {{ toolsError() }}
@@ -445,6 +463,78 @@ export interface EditorErrorEvent {
       width: 260px; /* PALETTE_WIDTH */
       border-right: 1px solid var(--mat-sys-outline-variant);
       overflow-y: auto;
+    }
+
+    .editor__palette-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 8px 0 16px;
+    }
+
+    .editor__palette-title {
+      font: 700 11px/16px Ubuntu, sans-serif;
+      color: var(--ac-vivid);
+      text-transform: uppercase;
+    }
+
+    /* Згорнута палітра (F3-89): смуга 48 px з «+ Додати крок» і кнопкою розгортання. */
+    .editor__rail {
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 8px;
+      width: 48px; /* RAIL_WIDTH */
+      padding: 8px 0;
+      border-right: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    .editor__rail-add,
+    .editor__rail-expand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--ac-radius-sm);
+      cursor: pointer;
+    }
+
+    .editor__rail-add {
+      background: var(--ac-kit);
+      color: #fff;
+    }
+
+    .editor__rail-expand {
+      background: transparent;
+      color: var(--ac-vivid);
+    }
+
+    .editor__rail-add:hover,
+    .editor__rail-expand:hover {
+      filter: brightness(0.95);
+    }
+
+    .editor__rail-expand:hover {
+      background: var(--ac-button);
+      filter: none;
+    }
+
+    .editor__rail-add:focus-visible,
+    .editor__rail-expand:focus-visible {
+      outline: 2px solid var(--ac-kit);
+      outline-offset: 2px;
+    }
+
+    .editor__rail-label {
+      margin-top: 4px;
+      color: var(--ac-cool-grey-4, #6b6580);
+      font-size: 12px;
+      white-space: nowrap;
+      writing-mode: vertical-rl;
     }
 
     /* Бічні панелі непрозорі й над канвасом: вузли не просвічують крізь форму (AC-Kit: біле тло, тінь). */
@@ -741,6 +831,24 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly quickAddSections = computed(() => quickAddSections(this.palette(), this.quickAdd()?.mode ?? 'step', this.recent()));
   private readonly descriptorIndex = computed(() => new DescriptorIndex(this.descriptors()));
 
+  // ---------- палітра: розгорнута чи смуга (F3-89) ----------
+
+  private readonly paletteChoice = signal<boolean | null>(readPaletteChoice());
+  /** Типове значення, яке визначається один раз при відкритті сценарію: порожній — розгорнута, з вузлами — смуга. */
+  private readonly paletteDefault = signal(true);
+  protected readonly paletteOpen = computed(() => paletteExpanded(this.paletteChoice(), this.paletteDefault()));
+
+  protected setPaletteOpen(open: boolean): void {
+    this.paletteChoice.set(open);
+    writePaletteChoice(open);
+  }
+
+  /** «+ Додати крок» зі смуги: та сама спливаюча палітра, що й на `Tab`, але біля кнопки. */
+  protected quickAddFromRail(button: HTMLElement): void {
+    const box = button.getBoundingClientRect();
+    this.quickAddFromKeyboard({ x: box.right + 8, y: box.top });
+  }
+
   /** Вузол для панелі — коли виділено рівно один. */
   protected readonly selectedNode = computed<WorkflowNode | null>(() => {
     const ids = this.selection().nodes;
@@ -993,6 +1101,7 @@ export class WorkflowEditorComponent implements OnInit {
         if (loaded) {
           this.workflow.set(loaded.workflow);
           this.definition.set(loaded.version ?? loaded.workflow.definition);
+          this.paletteDefault.set((loaded.version ?? loaded.workflow.definition).nodes.length === 0);
           this.history.reset(loaded.version ?? loaded.workflow.definition);
           this.descriptors.set(loaded.descriptors);
           this.loadGroupName(loaded.workflow);
@@ -1050,12 +1159,12 @@ export class WorkflowEditorComponent implements OnInit {
    * `Tab`/`N`: порожній сценарій — лише тригери; виділено один вузол з виходами — наступний крок після виходу 0;
    * інакше — крок без з'єднання.
    */
-  private quickAddFromKeyboard(): void {
+  private quickAddFromKeyboard(anchor?: ScreenPoint): void {
     const def = this.definition();
     const area = this.canvasArea()?.nativeElement;
     if (!def || !area) return;
     const box = area.getBoundingClientRect();
-    const center: ScreenPoint = { x: box.left + box.width / 2 - QUICK_ADD_WIDTH / 2, y: box.top + 48 };
+    const center: ScreenPoint = anchor ?? { x: box.left + box.width / 2 - QUICK_ADD_WIDTH / 2, y: box.top + 48 };
     if (def.nodes.length === 0) {
       this.showQuickAdd({ kind: 'free' }, 'trigger', center);
       return;
@@ -1063,7 +1172,7 @@ export class WorkflowEditorComponent implements OnInit {
     const node = this.selectedNode();
     if (node && (this.selectedDescriptor()?.outputs.length ?? 0) > 0) {
       const card = area.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`)?.getBoundingClientRect();
-      this.showQuickAdd({ kind: 'port', from: { node: node.id, output: 0 } }, 'step', card ? { x: card.right + 48, y: card.top } : center);
+      this.showQuickAdd({ kind: 'port', from: { node: node.id, output: 0 } }, 'step', card && !anchor ? { x: card.right + 48, y: card.top } : center);
       return;
     }
     this.showQuickAdd({ kind: 'free' }, 'step', center);

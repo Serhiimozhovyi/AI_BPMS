@@ -109,7 +109,8 @@ test('завантажити сценарій, змінити, зберегти 
   const moved = api.definition.nodes.find((n) => n.id === 'n_set')!;
   expect(moved.position).not.toEqual([320, 0]);
 
-  // Палітра працює: новий вузол → ще одна версія.
+  // Палітра працює: у сценарії з вузлами вона — смуга (F3-89), розгортаємо; новий вузол → ще одна версія.
+  await page.getByTestId('palette-expand').click();
   await page.locator('[data-item="core.set"]').click();
   await expect(page.locator('[data-node-id]')).toHaveCount(3);
   await expect.poll(() => api.version).toBe(3);

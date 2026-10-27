@@ -243,6 +243,33 @@ test('F3-88: Esc і «×» закривають панель вузла; вуз�
   await expect(page.getByTestId('editor-panel')).toHaveCount(0);
 });
 
+test('F3-89: у сценарії з вузлами палітра — смуга 48 px, канвас майже на всю ширину; «+ Додати крок» додає вузол, вибір запам’ятовується', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  // Порожній сценарій — палітра розгорнута.
+  await page.locator('[data-item="core.manualTrigger"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+  await waitSaved(page);
+
+  await page.reload();
+  await expect(page.getByTestId('palette-rail')).toBeVisible();
+  await expect(page.locator('app-palette')).toHaveCount(0);
+  const canvas = await page.locator('.editor__canvas').boundingBox();
+  expect(canvas!.width).toBeGreaterThanOrEqual(1200);
+
+  await page.getByTestId('rail-add').click();
+  await expect(page.getByTestId('quick-add')).toBeVisible();
+  await page.locator('[data-testid="quick-add"] [data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(2);
+
+  await page.getByTestId('palette-expand').click();
+  await expect(page.locator('app-palette')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('app-palette')).toBeVisible();
+});
+
 test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
   const api = new FakeApi();
   await api.install(page);
@@ -879,6 +906,8 @@ test('F3-76: вузол, доданий з палітри за межі екра
   await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
   for (let i = 0; i < 3; i++) await page.getByTestId('canvas-zoom-in').click();
 
+  // У сценарії з вузлами палітра — смуга (F3-89): розгортаємо.
+  await page.getByTestId('palette-expand').click();
   await page.locator('[data-item="core.code"]').click();
   const added = card(page, 'Код (JavaScript)');
   await expect(added).toHaveCount(1);
