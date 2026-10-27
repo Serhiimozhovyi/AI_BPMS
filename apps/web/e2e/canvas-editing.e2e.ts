@@ -107,7 +107,7 @@ class FakeApi {
   detail() {
     return {
       id: WORKFLOW_ID,
-      name: 'E2E',
+      name: this.definition.name,
       active: false,
       version: this.version,
       versionId: `v${this.version}`,
@@ -143,7 +143,7 @@ class FakeApi {
         if (request.method() === 'GET') return route.fulfill({ json: this.detail() });
         if (request.method() === 'PUT') {
           this.saved = this.history();
-          this.definition = { ...(request.postDataJSON() as Definition), name: 'E2E' };
+          this.definition = request.postDataJSON() as Definition;
           this.version++;
           this.saved.push(this.definition);
           return route.fulfill({ json: this.detail() });
@@ -304,6 +304,7 @@ test('налаштування сценарію: зміни йдуть у settin
   await page.goto(`/workflows/${WORKFLOW_ID}`);
   await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('settings').click();
   const dialog = page.getByTestId('workflow-settings');
   await expect(dialog.getByTestId('settings-timeout')).toHaveValue('300');
@@ -554,6 +555,7 @@ test('F3-61: змінити, відкрити історію, відновити
   await waitSaved(page);
   expect(api.version).toBe(3);
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('history').click();
   const versions = page.getByTestId('version');
   await expect(versions).toHaveCount(3);
@@ -571,6 +573,7 @@ test('F3-61: змінити, відкрити історію, відновити
   expect(graph(api.definition)).toEqual(graph(api.saved[1]));
 
   // «Переглянути» версію 3: канвас лише для читання, без палітри; «До поточної версії» повертає редагування.
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('history').click();
   await page.locator('[data-version="3"]').getByTestId('version-view').click();
   await expect(page).toHaveURL(/version=3/);
@@ -647,4 +650,47 @@ test('F3-62: ПКМ → «Додати нотатку», Markdown-текст, к
   await expect(reloaded.locator('p')).toHaveText('Готово');
   await waitSaved(page);
   expect(api.definition.notes![0].text).toBe('Готово');
+});
+
+/** F3-75: шапка в один рядок, «Виконати» й «Опублікувати» видимі та клікабельні на 1024, 1280 і 1920 px. */
+for (const width of [1024, 1280, 1920]) {
+  test(`шапка на ${width} px: один рядок, «Виконати» й «Опублікувати» у видимій частині`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const api = new FakeApi();
+    await api.install(page);
+    await page.goto(`/workflows/${WORKFLOW_ID}`);
+    await page.locator('[data-item="core.manualTrigger"]').click();
+    await expect(page.locator('[data-node-id]')).toHaveCount(1);
+
+    const bar = page.locator('app-editor-toolbar header');
+    const box = await bar.boundingBox();
+    expect(box!.height).toBeLessThanOrEqual(56);
+    for (const id of ['run', 'publish']) {
+      const button = page.getByTestId(id);
+      await expect(button).toBeVisible();
+      const rect = await button.boundingBox();
+      expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
+      expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+    await expect(page.getByTestId('run')).toBeEnabled();
+    await expect(page.getByTestId('publish')).toBeEnabled();
+  });
+}
+
+test('назва сценарію перейменовується в шапці: Enter зберігає, Esc скасовує', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.getByTestId('workflow-name')).toContainText('E2E');
+
+  await page.getByTestId('workflow-name-edit').click();
+  await page.getByTestId('workflow-name-input').fill('Інша назва');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('workflow-name')).toContainText('E2E');
+
+  await page.getByTestId('workflow-name-edit').click();
+  await page.getByTestId('workflow-name-input').fill('Заявки клієнтів');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('workflow-name')).toContainText('Заявки клієнтів');
+  await expect.poll(() => api.definition.name).toBe('Заявки клієнтів');
 });

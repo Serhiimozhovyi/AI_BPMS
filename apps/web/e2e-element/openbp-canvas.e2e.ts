@@ -155,6 +155,7 @@ test('Виконати → подія openbp-run і живий статус че
   await expect.poll(() => hostEvents(page)).toContainEqual({ type: 'openbp-run', detail: { executionId } });
   expect(sseAuthorization).toBe(`Bearer ${TOKEN}`);
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('settings').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

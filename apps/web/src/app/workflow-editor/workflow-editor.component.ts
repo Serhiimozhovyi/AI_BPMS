@@ -3,7 +3,6 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { RouterLink } from '@angular/router';
 import { Observable, Subscription, catchError, filter, forkJoin, map, of, switchMap, take, tap, throwError } from 'rxjs';
 import { BusinessNodeFieldsComponent } from '../business-view/business-node-fields.component';
 import { NodeEvaluationsComponent } from '../evaluations/node-evaluations.component';
@@ -11,6 +10,7 @@ import { BusinessViewComponent } from '../business-view/business-view.component'
 import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
 import { BusinessRun } from '../business-view/business-run';
 import { Autosave } from '../canvas/autosave';
+import { EditorToolbarComponent, ToolbarAction, ToolbarRun } from './editor-toolbar.component';
 import { CanvasSelection, EMPTY_SELECTION, NeighborDirection, copySelection, deleteSelection, neighborNode, pasteClipboard, renameNode, toggleDisabled } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
 import { addNote, randomNoteId, removeNotes, updateNote } from '../canvas/canvas-notes';
@@ -28,7 +28,6 @@ import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickA
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EmptyStartComponent } from '../canvas/empty-start.component';
 import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
-import { PublishBarComponent } from '../workflows/publish-bar.component';
 import { VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore } from '../workflows/version-history-dialog.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
@@ -112,86 +111,34 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, PublishBarComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
+  imports: [EditorToolbarComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
-      <header class="editor__bar">
-        @if (!embedded()) {
-          <a mat-button routerLink="/workflows" i18n="@@workfloweditor.back">← Сценарії</a>
-        }
-        <h1 class="mat-font-title-md m-0" data-testid="workflow-name">
-          {{ workflow()?.name ?? defaultTitle }}
-        </h1>
-        @if (groupName(); as group) {
-          @if (embedded()) {
-            <span class="editor__group" data-testid="workflow-group">{{ group }}</span>
-          } @else {
-            <a class="editor__group" data-testid="workflow-group" [routerLink]="['/workflows']" [queryParams]="{ group: workflow()?.groupId }" i18n-title="@@workfloweditor.group.hint" title="Сценарії цієї групи">{{ group }}</a>
-          }
-        }
-        @if (definition(); as def) {
-          <span class="editor__count" data-testid="counts" i18n="@@workfloweditor.counts">
-            вузлів: {{ def.nodes.length }} · ребер: {{ def.connections.length }}
-          </span>
-        }
-        @if (definition()) {
-          <span class="editor__views" role="radiogroup" i18n-aria-label="@@workfloweditor.view" aria-label="Вигляд сценарію">
-            <button type="button" role="radio" class="editor__view" data-testid="view-business" [class.editor__view--on]="view() === 'business'" [attr.aria-checked]="view() === 'business'" (click)="setView('business')" i18n-title="@@workfloweditor.view.business.hint" title="Хто що робить і в якому порядку — без технічних деталей" i18n="@@workfloweditor.view.business">Бізнес</button>
-            <button type="button" role="radio" class="editor__view" data-testid="view-technical" [class.editor__view--on]="view() === 'technical'" [attr.aria-checked]="view() === 'technical'" (click)="setView('technical')" i18n-title="@@workfloweditor.view.technical.hint" title="Вузли, порти й параметри" i18n="@@workfloweditor.view.technical">Технічний</button>
-          </span>
-        }
-        @if (readonly()) {
-          <span class="editor__readonly" data-testid="readonly" i18n="@@workfloweditor.readonly">Лише перегляд</span>
-          @if (version(); as v) {
-            <span class="editor__readonly" data-testid="version-banner" i18n="@@workfloweditor.versionBanner">Версія {{ v }}</span>
-            @if (!embedded()) {
-              <a mat-button data-testid="version-current" [routerLink]="['/workflows', workflowId()]" i18n="@@workfloweditor.versionCurrent">До поточної версії</a>
-            }
-          }
-        } @else if (definition(); as def) {
-          <span class="editor__tools">
-            <button mat-button type="button" data-testid="undo" [disabled]="!canUndo()" (click)="undo()" i18n-title="@@workfloweditor.undo.hint" title="Скасувати (Ctrl+Z)" i18n="@@workfloweditor.undo">Скасувати</button>
-            <button mat-button type="button" data-testid="redo" [disabled]="!canRedo()" (click)="redo()" i18n-title="@@workfloweditor.redo.hint" title="Повторити (Ctrl+Shift+Z)" i18n="@@workfloweditor.redo">Повторити</button>
-            <button mat-button type="button" data-testid="copy" [disabled]="!hasNodeSelection()" (click)="copy()" i18n-title="@@workfloweditor.copy.hint" title="Копіювати (Ctrl+C)" i18n="@@workfloweditor.copy">Копіювати</button>
-            <button mat-button type="button" data-testid="paste" [disabled]="!canPaste()" (click)="paste()" i18n-title="@@workfloweditor.paste.hint" title="Вставити (Ctrl+V)" i18n="@@workfloweditor.paste">Вставити</button>
-            <button mat-button type="button" data-testid="delete" [disabled]="!hasSelection()" (click)="deleteSelected()" i18n-title="@@workfloweditor.delete.hint" title="Видалити (Delete)" i18n="@@workfloweditor.delete">Видалити</button>
-            <button mat-button type="button" data-testid="assistant-toggle" [attr.aria-pressed]="assistantOpen()" (click)="toggleAssistant()" i18n-title="@@workfloweditor.assistant.hint" title="ШІ-помічник: описати процес, пояснити чи виправити вузол" i18n="@@workfloweditor.assistant">Помічник</button>
-            <button mat-button type="button" data-testid="history" (click)="openHistory()" i18n-title="@@workfloweditor.history.hint" title="Версії сценарію: переглянути або відновити" i18n="@@workfloweditor.history">Історія</button>
-            <button mat-button type="button" data-testid="settings" (click)="openSettings()" i18n-title="@@workfloweditor.settings.hint" title="Часовий пояс, таймаут, сценарій помилок" i18n="@@workfloweditor.settings">Налаштування</button>
-            @if (!embedded()) {
-              <a mat-button data-testid="executions-link" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" i18n="@@workfloweditor.executions">Журнал виконань</a>
-            }
-            <button mat-flat-button type="button" data-testid="run" [disabled]="running() || def.nodes.length === 0" (click)="runWorkflow()" i18n-title="@@workfloweditor.run.hint" title="Зберегти і виконати з тестовими даними (pinData)">
-              @if (running()) {
-                <ng-container i18n="@@workfloweditor.running">Виконується…</ng-container>
-              } @else {
-                <ng-container i18n="@@workfloweditor.run">Виконати</ng-container>
-              }
-            </button>
-          </span>
-        }
-        @if (testRun(); as r) {
-          <span class="editor__run editor__run--{{ r.state }}" data-testid="run-status" [attr.data-state]="r.state">{{ runStateLabel(r) }}</span>
-        }
-        @switch (saveStatus()) {
-          @case ('pending') {
-            <span class="editor__dirty" data-testid="dirty" data-status="pending" i18n="@@workfloweditor.dirty">Є незбережені зміни</span>
-          }
-          @case ('saving') {
-            <span class="editor__dirty" data-testid="dirty" data-status="saving" i18n="@@workfloweditor.saving">Збереження…</span>
-          }
-          @case ('error') {
-            <span class="editor__save-error" data-testid="dirty" data-status="error" i18n="@@workfloweditor.saveError">Не збережено</span>
-          }
-          @case ('saved') {
-            <span class="editor__saved" data-testid="saved" i18n="@@workfloweditor.saved">Збережено · версія {{ workflow()?.version }}</span>
-          }
-        }
-        @if (!version()) {
-          <app-publish-bar [workflow]="workflow()" [draft]="definition()" [saving]="saveStatus() === 'pending' || saveStatus() === 'saving'" [readonly]="readonly()" (published)="published($event)" (discarded)="draftDiscarded($event)" />
-        }
-      </header>
+      <app-editor-toolbar
+        [workflow]="workflow()"
+        [definition]="definition()"
+        [defaultTitle]="defaultTitle"
+        [groupName]="groupName()"
+        [embedded]="embedded()"
+        [readonly]="readonly()"
+        [version]="version()"
+        [view]="view()"
+        [canUndo]="canUndo()"
+        [canRedo]="canRedo()"
+        [canPaste]="canPaste()"
+        [hasSelection]="hasSelection()"
+        [hasNodeSelection]="hasNodeSelection()"
+        [assistantOpen]="assistantOpen()"
+        [running]="running()"
+        [run]="toolbarRun()"
+        [saveStatus]="saveStatus()"
+        (action)="toolbarAction($event)"
+        (viewChange)="setView($event)"
+        (renamed)="renameWorkflow($event)"
+        (published)="published($event)"
+        (discarded)="draftDiscarded($event)"
+      />
       @if (runError(); as message) {
         <p role="alert" class="editor__errors" data-testid="run-error">{{ message }}</p>
       }
@@ -434,36 +381,10 @@ export interface EditorErrorEvent {
       height: 100%;
     }
 
-    .editor__readonly {
-      margin-left: auto;
-      font-size: 13px;
-      opacity: 0.6;
-    }
 
-    .editor__bar {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 8px 16px;
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
-      background: var(--ac-white);
-    }
 
-    .editor__tools {
-      display: flex;
-      gap: 4px;
-      margin-left: auto;
-    }
 
-    .editor__saved {
-      font-size: 13px;
-      opacity: 0.6;
-    }
 
-    .editor__save-error {
-      font-size: 13px;
-      color: var(--mat-sys-error);
-    }
 
     .editor__errors {
       padding: 8px 16px;
@@ -482,71 +403,19 @@ export interface EditorErrorEvent {
       gap: 4px;
     }
 
-    .editor__run {
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 13px;
-      background: var(--mat-sys-surface-variant);
-    }
 
-    .editor__run--success {
-      color: #fff;
-      background: var(--ac-green);
-    }
 
-    .editor__run--error,
-    .editor__run--timed_out {
-      color: #fff;
-      background: var(--ac-red);
-    }
 
-    .editor__group {
-      padding: 2px 10px;
-      border-radius: 12px;
-      background: var(--ac-button);
-      font-size: 12px;
-      text-decoration: none;
-    }
 
-    .editor__views {
-      display: inline-flex;
-      flex-shrink: 0;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius-sm);
-      overflow: hidden;
-    }
 
-    .editor__view {
-      padding: 4px 12px;
-      white-space: nowrap;
-      border: 0;
-      font: inherit;
-      font-size: 13px;
-      color: var(--ac-vivid);
-      background: var(--ac-white);
-      cursor: pointer;
-    }
 
-    .editor__view--on {
-      color: var(--ac-kit);
-      background: var(--ac-button);
-      font-weight: 500;
-    }
 
     .editor__business {
       flex: 1;
       min-height: 0;
     }
 
-    .editor__count {
-      font-size: 13px;
-      opacity: 0.6;
-    }
 
-    .editor__dirty {
-      font-size: 13px;
-      color: var(--mat-sys-tertiary);
-    }
 
     .editor__body {
       display: flex;
@@ -1613,6 +1482,31 @@ export class WorkflowEditorComponent implements OnInit {
           else this.runError.set(message);
         },
       });
+  }
+
+  protected readonly toolbarRun = computed((): ToolbarRun | null => {
+    const run = this.testRun();
+    return run ? { state: run.state, label: this.runStateLabel(run) } : null;
+  });
+
+  protected toolbarAction(action: ToolbarAction): void {
+    switch (action) {
+      case 'undo': return this.undo();
+      case 'redo': return this.redo();
+      case 'copy': return this.copy();
+      case 'paste': return this.paste();
+      case 'delete': return this.deleteSelected();
+      case 'assistant': return this.toggleAssistant();
+      case 'history': return this.openHistory();
+      case 'settings': return this.openSettings();
+      case 'run': return this.runWorkflow();
+    }
+  }
+
+  /** Перейменування в шапці (F3-75): звичайна правка визначення, тож undo/redo й автозбереження працюють як завжди. */
+  protected renameWorkflow(name: string): void {
+    const def = this.definition();
+    if (def) this.changed({ ...def, name });
   }
 
   protected runStateLabel(run: TestRun): string {
