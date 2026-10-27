@@ -52,7 +52,9 @@ public sealed class PsySupportFixture : IAsyncLifetime
             },
         }));
 
-        // Перший запуск застосовує міграції; далі процеси конектора стартують на готовій базі.
+        // Міграції — окремим процесом до першого прогону: інакше холодний старт конектора з міграціями на завантаженому
+        // CI-раннері не вкладається в таймаут підключення MCP (10 с). Далі процеси конектора стартують на готовій базі.
+        await MigrateAsync(dll);
         var (code, stdout, stderr) = await RunAsync(Update.Message(1, "/start"));
         Assert.True(code == CliApp.Ok, stderr + stdout);
         PsychologistId = await ScalarAsync<long>(
@@ -121,6 +123,26 @@ public sealed class PsySupportFixture : IAsyncLifetime
 
     private static string DotNet =>
         Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host : "dotnet";
+
+    /// <summary><c>import --dir</c> з порожньою текою: конектор лише застосовує міграції й засіває координатора.</summary>
+    private async Task MigrateAsync(string dll)
+    {
+        var empty = System.IO.Directory.CreateDirectory(Path.Combine(Directory, "migrate")).FullName;
+        var start = new ProcessStartInfo(DotNet)
+        {
+            ArgumentList = { dll, "import", "--dir", empty },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.Environment["ConnectionStrings__PsySupport"] = ConnectionString;
+        start.Environment["Logging__LogLevel__Default"] = "Warning";
+
+        using var process = Process.Start(start)!;
+        var log = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        Assert.True(process.ExitCode == 0, $"Міграції psy-support: {await log}{await errors}");
+    }
 
     private async Task<string> BuildConnectorAsync()
     {
