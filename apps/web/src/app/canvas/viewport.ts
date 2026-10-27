@@ -56,6 +56,24 @@ export function fitViewport(bounds: Box, size: { width: number; height: number }
   };
 }
 
+/**
+ * Зсув полотна (масштаб лишається), після якого `box` повністю видно з відступом `padding`; `null` — вузол і так видно.
+ * Якщо `box` ширший чи вищий за видиму зону, до краю з відступом притискається його лівий/верхній бік.
+ */
+export function revealBox(view: Viewport, box: Box, size: { width: number; height: number }, padding = FIT_PADDING): Viewport | null {
+  const axis = (offset: number, start: number, length: number, available: number): number => {
+    const from = offset + start * view.zoom;
+    const to = from + length * view.zoom;
+    if (length * view.zoom + padding * 2 > available) return from < padding || to > available - padding ? offset + (padding - from) : offset;
+    if (from < padding) return offset + (padding - from);
+    if (to > available - padding) return offset + (available - padding - to);
+    return offset;
+  };
+  const x = axis(view.x, box.x, box.width, size.width);
+  const y = axis(view.y, box.y, box.height, size.height);
+  return x === view.x && y === view.y ? null : { ...view, x, y };
+}
+
 const STORAGE_PREFIX = 'openbp.viewport.';
 
 /** Збережене положення сценарію; пошкоджене чи відсутнє значення (або недоступний `localStorage`) → `null`. */

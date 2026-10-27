@@ -152,6 +152,11 @@ export class CanvasComponent {
     return this.vflow()?.viewportCenter() ?? [0, 0];
   }
 
+  /** Підсунути вузол у видиму частину полотна (панель вузла відкрилася поруч). */
+  revealNode(nodeId: string): void {
+    this.vflow()?.revealNode(nodeId);
+  }
+
   protected readonly nodeErrors = computed<NodeErrors>(() => {
     const byNode = new Map<string, string[]>();
     for (const e of this.errors()) {

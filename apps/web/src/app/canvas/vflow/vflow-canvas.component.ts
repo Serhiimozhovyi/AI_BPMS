@@ -6,7 +6,7 @@ import { DEFAULT_NOTE_SIZE, MIN_NOTE_SIZE, NOTE_COLORS, noteColorToken, noteSize
 import { groupLabel } from '../palette';
 import { QuickAddRequest, ScreenPoint } from '../quick-add';
 import { NodeRunStatus } from '../test-run';
-import { Box, MAX_ZOOM, MIN_ZOOM, Viewport, contentBounds, fitViewport, loadViewport, saveViewport, viewportShowsContent } from '../viewport';
+import { Box, MAX_ZOOM, MIN_ZOOM, Viewport, contentBounds, fitViewport, loadViewport, revealBox, saveViewport, viewportShowsContent } from '../viewport';
 import { debounceTime, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NoteColor, WorkflowNote } from '../../workflows/workflows-api.service';
@@ -129,6 +129,8 @@ const NO_RUN_TIMES: ReadonlyMap<string, string> = new Map();
 const MINIMAP_MAX = { width: 180, height: 110 };
 const MINIMAP_RATIO = 0.2;
 const MINIMAP_KEY = 'openbp.minimap';
+/** Відступ від краю полотна, коли вузол підсувається з-під панелі, px. */
+const REVEAL_PADDING = 32;
 
 export const NODE_WIDTH = 220;
 
@@ -1297,6 +1299,24 @@ export class VflowCanvasComponent {
     const boxes = this.model().nodes.filter((n) => added.has(n.id)).map((n): Box => ({ x: n.x, y: n.y, width: NODE_WIDTH, height: nodeHeight(n) }));
     const seen = boxes.some((b) => b.x < visible.x + visible.width && b.x + b.width > visible.x && b.y < visible.y + visible.height && b.y + b.height > visible.y);
     if (!seen) this.placeView(flow, null);
+  }
+
+  /**
+   * Вузол (виділений, а біля нього відкрилася панель) не має ховатися за краєм полотна (F3-88): зсуваємо полотно, масштаб лишається.
+   * Панель змінює розмір полотна за кадр-два, тому міряємо після них.
+   */
+  revealNode(nodeId: string): void {
+    const flow = this.flow();
+    if (!flow) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const node = this.model().nodes.find((n) => n.id === nodeId);
+        const rect = this.host.nativeElement.getBoundingClientRect();
+        if (!node || rect.width < 50 || rect.height < 50) return;
+        const view = revealBox(flow.viewport(), { x: node.x, y: node.y, width: NODE_WIDTH, height: nodeHeight(node) }, { width: rect.width, height: rect.height }, REVEAL_PADDING);
+        if (view) flow.viewportTo(view);
+      }),
+    );
   }
 
   private isAppliedView(v: Viewport): boolean {

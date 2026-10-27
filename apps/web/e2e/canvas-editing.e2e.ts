@@ -209,7 +209,38 @@ test('F3-78: подвійний клік по вузлу відкриває па
 
   await page.locator('[data-node-id]').click();
   await page.keyboard.press('F2');
-  await expect(page.getByTestId('node-rename')).toBeVisible();
+  // F2 перейменовує в шапці панелі (F3-88), не на картці.
+  await expect(page.getByTestId('node-panel-name-input')).toBeVisible();
+  await expect(page.getByTestId('node-rename')).toHaveCount(0);
+});
+
+test('F3-88: Esc і «×» закривають панель вузла; вузол біля правого краю лишається видимим поруч із панеллю', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  for (let i = 0; i < 6; i++) await page.locator('[data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(6);
+
+  const last = page.locator('[data-node-id]').last();
+  await last.click();
+  await expect(page.getByTestId('editor-panel')).toBeVisible();
+  const canvas = await page.locator('.editor__canvas').boundingBox();
+  await expect
+    .poll(async () => {
+      const box = await last.boundingBox();
+      return !!box && !!canvas && box.x >= canvas.x && box.x + box.width <= canvas.x + canvas.width && box.y >= canvas.y && box.y + box.height <= canvas.y + canvas.height;
+    })
+    .toBe(true);
+
+  await page.getByTestId('node-panel-header').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('editor-panel')).toHaveCount(0);
+
+  await last.click();
+  await expect(page.getByTestId('editor-panel')).toBeVisible();
+  await page.getByTestId('panel-close').click();
+  await expect(page.getByTestId('editor-panel')).toHaveCount(0);
 });
 
 test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {

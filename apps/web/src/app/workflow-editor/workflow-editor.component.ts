@@ -1,5 +1,5 @@
 import { RouterLink } from '@angular/router';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, effect, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, effect, inject, input, linkedSignal, output, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -13,12 +13,14 @@ import { BusinessRun } from '../business-view/business-run';
 import { Autosave } from '../canvas/autosave';
 import { LastRun, lastRunFromDetail, lastRunLabel, lastRunTimes } from '../canvas/last-run';
 import { EditorToolbarComponent, ToolbarAction, ToolbarRun } from './editor-toolbar.component';
+import { NodeHeaderAction, NodePanelHeaderComponent } from './node-panel-header.component';
 import { CanvasSelection, EMPTY_SELECTION, NeighborDirection, copySelection, deleteSelection, neighborNode, pasteClipboard, renameNode, toggleDisabled } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
 import { addNote, randomNoteId, removeNotes, updateNote } from '../canvas/canvas-notes';
 import { missingFieldsByNode } from '../canvas/missing-fields';
 import { CanvasContextMenuRequest, CanvasContextTarget, MissingFieldRequest, NodeActionRequest, NodeRenameRequest, NoteEditRequest } from '../canvas/vflow/vflow-canvas.component';
 import { CanvasComponent } from '../canvas/canvas.component';
+import { GROUP_COLORS } from '../canvas/vflow/vflow-canvas.component';
 import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
 import { PaletteItem, PaletteServer, actionKey, addNode, buildPalette, randomNodeId } from '../canvas/palette';
@@ -123,7 +125,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, EditorToolbarComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
+  imports: [RouterLink, EditorToolbarComponent, NodePanelHeaderComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -282,6 +284,19 @@ export interface EditorErrorEvent {
                 (pointerdown)="startResize($event)"
                 (keydown)="resizeKey($event)"
               ></div>
+              <app-node-panel-header
+                [node]="node"
+                [typeLabel]="selectedDescriptor()?.displayName ?? node.type"
+                [groupColor]="selectedGroupColor()"
+                [readonly]="readonly()"
+                [running]="running()"
+                [pinned]="selectedPinned()"
+                [canPin]="selectedStep()?.status === 'success'"
+                [hasError]="!!selectedStep()?.error"
+                [renameRequest]="headRenameRequest()"
+                (action)="headerAction($event, node.id)"
+                (renamed)="headerRenamed(node.id, $event)"
+              />
               @if (!wide()) {
                 <nav class="editor__tabs" role="tablist">
                   @for (t of panelTabs; track t.id) {
@@ -329,31 +344,7 @@ export interface EditorErrorEvent {
                   </app-node-data-view>
                 </div>
                 <div class="editor__col editor__col--params" data-testid="panel-params" [hidden]="!wide() && panelTab() !== 'params'">
-                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)" (renameRequest)="startRename(node.id)">
-                    @if (!readonly()) {
-                      <div panelActions class="editor__node-actions" data-testid="node-actions">
-                        <button mat-stroked-button type="button" data-testid="run-node" [disabled]="running()" [attr.aria-busy]="running() || null" (click)="runNode(node.id)" i18n-title="@@workfloweditor.runNode.hint" title="Виконати лише цей вузол на вхідних даних з останнього запуску">
-                          @if (running()) {
-                            <ng-container i18n="@@workfloweditor.runNode.running">Виконується…</ng-container>
-                          } @else {
-                            <ng-container i18n="@@workfloweditor.runNode">Тестувати крок</ng-container>
-                          }
-                        </button>
-                        <button mat-button type="button" data-testid="run-until" [disabled]="running()" (click)="runUntil(node.id)" i18n-title="@@workfloweditor.runUntil.hint" title="Виконати цей вузол і всі попередні; решта сценарію не виконується" i18n="@@workfloweditor.runUntil">До цього вузла</button>
-                        @if (selectedPinned()) {
-                          <button mat-button type="button" data-testid="unpin-output" (click)="unpin(node.id)" i18n-title="@@workfloweditor.unpin.hint" title="Відкріпити output (P)" i18n="@@workfloweditor.unpin">Відкріпити</button>
-                        } @else if (selectedStep()?.status === 'success') {
-                          <button mat-button type="button" data-testid="pin-output" (click)="pin(node.id)" i18n-title="@@workfloweditor.pin.hint" title="Тестові запуски віддаватимуть цей output, не виконуючи вузол (P)" i18n="@@workfloweditor.pin">Закріпити output</button>
-                        } @else {
-                          <button mat-button type="button" data-testid="pin-manual" (click)="pinManual(node.id)" i18n-title="@@workfloweditor.pinManual.hint" title="Закріпити output, введений вручну: тестові запуски не виконуватимуть вузол (P)" i18n="@@workfloweditor.pinManual">Ввести дані вручну</button>
-                        }
-                        <button mat-button type="button" data-testid="assistant-explain" (click)="assistantAction('explain', node)" i18n="@@workfloweditor.assistant.explain">Пояснити вузол</button>
-                        @if (selectedStep()?.error) {
-                          <button mat-button type="button" data-testid="assistant-fix" (click)="assistantAction('fix', node)" i18n="@@workfloweditor.assistant.fix">Виправити помилку</button>
-                        }
-                        <button mat-button type="button" data-testid="assistant-expression" (click)="assistantAction('expression', node)" i18n="@@workfloweditor.assistant.expression">Написати вираз</button>
-                      </div>
-                    }
+                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" [compactHeader]="true" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)">
                     @if (selectedPinItems(); as items) {
                       <app-pinned-data-editor panelPinned class="editor__pinned" [items]="items" [readonly]="readonly()" (save)="savePinned(node.id, $event)" />
                     }
@@ -426,11 +417,6 @@ export interface EditorErrorEvent {
       margin: 0 -16px 12px;
     }
 
-    .editor__node-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
 
 
 
@@ -950,6 +936,11 @@ export class WorkflowEditorComponent implements OnInit {
 
   constructor() {
     effect(() => (this.expressionEditor.workflowId = this.workflowId()));
+    // Панель вузла, що відкрилася, звужує канвас: вибраний вузол не має лишитися за його краєм (F3-88).
+    effect(() => {
+      const id = this.selectedNode()?.id;
+      if (id) untracked(() => this.canvas()?.revealNode(id));
+    });
     // Незбережені зміни не губляться при виході з редактора: відправляємо їх одразу.
     this.destroyRef.onDestroy(() => {
       this.autosave.flush();
@@ -1235,6 +1226,43 @@ export class WorkflowEditorComponent implements OnInit {
   protected startRename(nodeId: string): void {
     if (this.readonly() || !this.definition()?.nodes.some((n) => n.id === nodeId)) return;
     this.renaming.set(nodeId);
+  }
+
+  /** Кольор групи виділеного вузла — для мітки в шапці панелі. */
+  protected readonly selectedGroupColor = computed(() => GROUP_COLORS[this.selectedDescriptor()?.group ?? 'unknown']);
+  /** Лічильник запитів «перейменувати» з клавіші F2 — шапка панелі відкриває inline-поле назви (F3-88). */
+  protected readonly headRenameRequest = signal(0);
+
+  /** Дії шапки панелі вузла (F3-88). */
+  protected headerAction(action: NodeHeaderAction, nodeId: string): void {
+    const node = this.definition()?.nodes.find((n) => n.id === nodeId);
+    switch (action) {
+      case 'test': return this.runNode(nodeId);
+      case 'until': return this.runUntil(nodeId);
+      case 'pin': return this.pin(nodeId);
+      case 'unpin': return this.unpin(nodeId);
+      case 'pinManual': return this.pinManual(nodeId);
+      case 'explain': return this.assistantAction('explain', node);
+      case 'fix': return this.assistantAction('fix', node);
+      case 'expression': return this.assistantAction('expression', node);
+      case 'close': return this.closePanel();
+    }
+  }
+
+  /** Нова назва з поля в шапці панелі: ті самі правила, що й для inline-поля картки (зайнята чи порожня назва — повідомлення). */
+  protected headerRenamed(nodeId: string, name: string): void {
+    const def = this.definition();
+    if (!def) return;
+    const result = renameNode(def, nodeId, name);
+    if (result.error === 'taken') this.showNotice($localize`:@@workfloweditor.rename.taken:Вузол із такою назвою вже є. Оберіть іншу назву.`);
+    else if (result.error === 'empty') this.showNotice($localize`:@@workfloweditor.rename.empty:Назва не може бути порожньою.`);
+    else if (result.definition) this.changed(result.definition);
+  }
+
+  /** «×» і Esc: закрити панель — знімає виділення, фокус повертається на канвас. */
+  protected closePanel(): void {
+    this.selection.set(EMPTY_SELECTION);
+    this.canvasArea()?.nativeElement.querySelector<HTMLElement>('[tabindex="0"], [tabindex="-1"]')?.focus?.();
   }
 
   /** Inline-поле назви: нова назва (посилання `$node["…"]` переписуються) або скасування; зайнята назва — повідомлення. */
@@ -1737,6 +1765,7 @@ export class WorkflowEditorComponent implements OnInit {
 
   protected keydown(event: KeyboardEvent): void {
     // У Shadow DOM (`<openbp-canvas>`) `event.target` — сам елемент; справжня ціль — перша в composedPath.
+    if (event.key === 'Escape' && this.escapePressed(event)) return;
     if (!this.definition() || this.readonly() || isEditable(event.composedPath()[0] ?? event.target)) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
@@ -1757,7 +1786,7 @@ export class WorkflowEditorComponent implements OnInit {
     }
     else if (!mod && !event.altKey && event.key === 'F2') {
       const node = this.selectedNode();
-      action = node ? () => this.startRename(node.id) : null;
+      action = node ? () => this.headRenameRequest.update((n) => n + 1) : null;
     } else if (!mod && !event.altKey && !event.shiftKey && key === 'd') action = this.hasNodeSelection() ? () => this.toggleNodes(this.selection().nodes) : null;
     else if (mod && key === 'd') action = this.hasNodeSelection() ? () => this.duplicate(this.selection().nodes) : null;
     else if (mod && key === 'a') action = () => this.selectAll();
@@ -1770,6 +1799,25 @@ export class WorkflowEditorComponent implements OnInit {
     if (!action) return;
     event.preventDefault();
     action();
+  }
+
+  /**
+   * Escape (F3-88): у полі введення — лише знімає з нього фокус; поза ним закриває панель вузла. Відкрите меню, діалог, список
+   * чи редактор виразів обробляють Escape самі. `true` — подія оброблена.
+   */
+  private escapePressed(event: KeyboardEvent): boolean {
+    const target = event.composedPath()[0] ?? event.target;
+    if (event.defaultPrevented || !this.selectedNode() || this.view() === 'business' || this.quickAdd() || this.contextMenu() || this.renaming()) return false;
+    const element = target instanceof HTMLElement ? target : null;
+    if (element?.closest('.cdk-overlay-container, .monaco-editor, [role="menu"], [role="listbox"]')) return false;
+    if (element && (['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName) || element.isContentEditable)) {
+      element.blur();
+      event.preventDefault();
+      return true;
+    }
+    event.preventDefault();
+    this.closePanel();
+    return true;
   }
 
   /** Показує стан історії й ставить його на збереження; виділення лишається лише на наявних елементах. */

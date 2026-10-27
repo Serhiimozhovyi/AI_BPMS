@@ -1,4 +1,4 @@
-import { contentBounds, fitViewport, loadViewport, saveViewport, viewportShowsContent } from './viewport';
+import { contentBounds, fitViewport, loadViewport, revealBox, saveViewport, viewportShowsContent } from './viewport';
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -64,5 +64,35 @@ describe('viewport', () => {
     const size = { width: 1000, height: 600 };
     expect(viewportShowsContent({ x: 50, y: 50, zoom: 1 }, bounds, size)).toBe(true);
     expect(viewportShowsContent({ x: -5000, y: 50, zoom: 1 }, bounds, size)).toBe(false);
+  });
+
+  describe('revealBox (F3-88)', () => {
+    const size = { width: 600, height: 500 };
+    const view = { x: 0, y: 0, zoom: 1 };
+
+    it('вузол, що вже видно, не зсуває полотно', () => {
+      expect(revealBox(view, { x: 100, y: 100, width: 220, height: 80 }, size, 32)).toBeNull();
+    });
+
+    it('вузол за правим краєм (панель звузила полотно) підсувається ліворуч з відступом, масштаб не змінюється', () => {
+      const next = revealBox(view, { x: 700, y: 100, width: 220, height: 80 }, size, 32)!;
+      expect(next.zoom).toBe(1);
+      expect(next.y).toBe(0);
+      // Праву межу вузла (920) ставимо на 600 − 32.
+      expect(next.x).toBe(568 - 920);
+    });
+
+    it('вузол за лівим і нижнім краєм підсувається праворуч і вгору; масштаб враховується', () => {
+      const zoomed = { x: -300, y: 0, zoom: 0.5 };
+      const next = revealBox(zoomed, { x: 100, y: 1200, width: 220, height: 80 }, size, 32)!;
+      // Лівий край вузла стоїть на екрані в −250: підсуваємо на 282 до відступу 32.
+      expect(next.x).toBe(-300 + 282);
+      expect(next.y).toBe(500 - 32 - 1280 * 0.5);
+    });
+
+    it('вузол ширший за видиму зону притискається лівим краєм', () => {
+      const next = revealBox(view, { x: 400, y: 100, width: 800, height: 80 }, { width: 500, height: 500 }, 32)!;
+      expect(next.x).toBe(32 - 400);
+    });
   });
 });
