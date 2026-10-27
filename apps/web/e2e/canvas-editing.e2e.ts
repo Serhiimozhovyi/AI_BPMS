@@ -90,6 +90,8 @@ class FakeApi {
   /** Визначення кожної збереженої версії (індекс = номер − 1) — для «Історії» (F3-61). */
   saved: Definition[] = [];
   assistantRequests: unknown[] = [];
+  /** Останнє виконання сценарію (F3-76); `null` — запусків не було. */
+  lastExecution: { summary: Record<string, unknown>; steps: Record<string, unknown>[] } | null = null;
   definition: Definition = {
     formatVersion: 1,
     name: 'E2E',
@@ -135,6 +137,11 @@ class FakeApi {
         this.assistantRequests.push(request.postDataJSON());
         return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(TEMPLATES[0].definition) });
       }
+      if (path === '/api/v1/executions' && request.method() === 'GET') {
+        const items = this.lastExecution ? [this.lastExecution.summary] : [];
+        return route.fulfill({ json: { items, page: 1, pageSize: 1, total: items.length } });
+      }
+      if (path === '/api/v1/executions/e1' && this.lastExecution) return route.fulfill({ json: this.lastExecution });
       if (path === '/api/v1/workflows') {
         const items = [this.detail(), { id: ERROR_WORKFLOW_ID, name: 'Сповіщення про помилки', active: true, version: 2, updatedAt: '' }];
         return route.fulfill({ json: { items, page: 1, pageSize: 200, total: items.length } });
@@ -410,9 +417,11 @@ test('F3-50: з’єднання, відпущене в порожньому м�
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
   await waitSaved(page);
   expect(graph(api.definition).edges).toEqual(['Ручний запуск#0->Код (JavaScript)#0']);
-  // Вузол там, де відпустили, а не на типовому місці.
+  // Вузол там, де відпустили, а не на типовому місці (панель нового вузла звужує полотно, тож сценарій може зсунутись —
+  // міряємо відстань між картками, а не абсолютні координати).
+  const a2 = (await card(page, 'Ручний запуск').boundingBox())!;
   const b = (await card(page, 'Код (JavaScript)').boundingBox())!;
-  expect(b.x).toBeGreaterThan(a.x + a.width + 200);
+  expect(b.x).toBeGreaterThan(a2.x + a2.width + 200);
 });
 
 test('F3-50: «+» на виділеному ребрі вставляє крок між вузлами', async ({ page }) => {
@@ -488,6 +497,8 @@ test('F3-58: «Вирівняти» розставляє вузли зліва �
   await api.install(page);
   await page.goto(`/workflows/${WORKFLOW_ID}`);
   await expect(page.locator('[data-node-id]')).toHaveCount(3);
+  await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(0);
+  await page.getByTestId('canvas-minimap').click();
   await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(1);
 
   await page.getByTestId('canvas-arrange').click();
@@ -723,4 +734,122 @@ test('назва сценарію перейменовується в шапці
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('workflow-name')).toContainText('Заявки клієнтів');
   await expect.poll(() => api.definition.name).toBe('Заявки клієнтів');
+});
+
+/** Ряд із `count` вузлів «Задати поля» завдовжки більше за екран, з'єднаних ланцюжком. */
+function longChain(count: number): Pick<Definition, 'nodes' | 'connections'> {
+  const nodes: Node[] = Array.from({ length: count }, (_, i) => ({
+    id: i === 0 ? 'n0' : `n${i}`,
+    name: i === 0 ? 'Старт' : `Крок ${i}`,
+    type: i === 0 ? 'core.manualTrigger' : 'core.set',
+    typeVersion: 1,
+    position: [i * 280, 120],
+    parameters: {},
+  }));
+  const connections: Connection[] = nodes.slice(1).map((n, i) => ({ from: { node: nodes[i].id, output: 0 }, to: { node: n.id, input: 0 } }));
+  return { nodes, connections };
+}
+
+test('F3-76: довгий сценарій при відкритті видно повністю з відступом, а не притиснутим до краю', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(8));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id]')).toHaveCount(8);
+
+  const canvas = (await page.locator('.editor__canvas').boundingBox())!;
+  await expect.poll(async () => {
+    const first = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+    const last = (await page.locator('[data-node-id="n7"]').boundingBox())!;
+    return first.x >= canvas.x + 40 && last.x + last.width <= canvas.x + canvas.width - 40;
+  }).toBe(true);
+});
+
+test('F3-76: мінікарта згорнута за замовчуванням і розгортається кнопкою', async ({ page }) => {
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(3));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id]')).toHaveCount(3);
+  const minimap = page.locator('svg.root-svg > svg');
+  await expect(minimap).toHaveCount(0);
+
+  await page.getByTestId('canvas-minimap').click();
+  await expect(minimap).toHaveCount(1);
+  // Рамка мінікарти (її розмір задає ngx-vflow: 20 % полотна, далі стискається до 180×110).
+  const box = (await page.locator('svg rect[stroke="#b9b4cc"]').boundingBox())!;
+  expect(box.width).toBeLessThanOrEqual(181);
+  expect(box.height).toBeLessThanOrEqual(111);
+});
+
+test('F3-76: масштаб і положення сценарію запам\'ятовуються й відновлюються при наступному відкритті', async ({ page }) => {
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(3));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  await page.getByTestId('canvas-zoom-out').click();
+  await page.waitForTimeout(900);
+  const before = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+
+  await page.reload();
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  const after = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+  expect(Math.abs(after.x - before.x)).toBeLessThan(3);
+  expect(Math.abs(after.width - before.width)).toBeLessThan(2);
+});
+
+test('F3-76: останній запуск, що впав, видно на вузлі; після правки й вимкнення значки зникають', async ({ page }) => {
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(3));
+  const step = (nodeId: string, status: string, error?: string) => ({
+    id: `s-${nodeId}`,
+    nodeId,
+    runIndex: 0,
+    status,
+    input: [],
+    output: [],
+    error: error ? { message: error } : null,
+    startedAt: '2026-10-27T18:10:40',
+    finishedAt: '2026-10-27T18:10:41',
+  });
+  const summary = { id: 'e1', workflowId: WORKFLOW_ID, versionId: 'v1', mode: 'manual', state: 'error', startedAt: '2026-10-27T18:10:40', finishedAt: '2026-10-27T18:10:42', error: 'boom' };
+  api.lastExecution = { summary, steps: [step('n0', 'success'), step('n1', 'error', 'Крок 1: ділення на нуль'), step('n2', 'skipped')] };
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+
+  await expect(page.locator('[data-node-id="n1"]')).toHaveAttribute('data-run-status', 'error');
+  await expect(page.locator('[data-node-id="n0"]')).toHaveAttribute('data-run-status', 'success');
+  await expect(page.locator('[data-node-id="n0"] [data-testid="node-run-time"]')).toHaveText('18:10:41');
+  await expect(page.getByTestId('last-run-menu')).toHaveCount(0);
+
+  // Перемикач у керуванні канвасом.
+  await page.getByTestId('canvas-last-run').click();
+  await expect(page.locator('[data-node-id="n1"]')).not.toHaveAttribute('data-run-status', 'error');
+  await page.getByTestId('canvas-last-run').click();
+  await expect(page.locator('[data-node-id="n1"]')).toHaveAttribute('data-run-status', 'error');
+
+  // Будь-яка правка робить дані неактуальними.
+  await card(page, 'Крок 2').click({ position: { x: 12, y: 12 } });
+  await page.getByTestId('delete').click();
+  await expect(page.locator('[data-run-status]')).toHaveCount(0);
+  await page.getByTestId('toolbar-more').click();
+  await expect(page.getByTestId('last-run-menu')).toContainText('18:10, помилка');
+});
+
+test('F3-76: вузол, доданий з палітри за межі екрана, одразу видно', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(5));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  for (let i = 0; i < 3; i++) await page.getByTestId('canvas-zoom-in').click();
+
+  await page.locator('[data-item="core.code"]').click();
+  const added = card(page, 'Код (JavaScript)');
+  await expect(added).toHaveCount(1);
+  await expect(added).toBeInViewport({ ratio: 0.9 });
 });
