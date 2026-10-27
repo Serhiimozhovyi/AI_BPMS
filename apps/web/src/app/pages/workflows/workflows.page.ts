@@ -21,6 +21,7 @@ import { ImportWorkflowDialog, ImportWorkflowDialogData } from '../../workflows/
 import { TriggerInfo, triggerInfo } from '../../workflows/trigger-types';
 import { NO_GROUP, WorkflowSection, groupSections, readCollapsed, recount, reorder, writeCollapsed } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
+import { CardTableDirective } from '../../shared/card-table.directive';
 
 /**
  * `/workflows`: список сценаріїв, створення, перейменування, активація, видалення, перехід у канвас (F2-15); групи
@@ -33,6 +34,7 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
   selector: 'app-workflows-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    CardTableDirective,
     DatePipe,
     ReactiveFormsModule,
     RouterLink,
@@ -165,7 +167,7 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                     }
                   </header>
                 }
-                <table class="w-full text-left group__table" [hidden]="!open">
+                <table appCardTable class="w-full text-left group__table" [hidden]="!open">
                   <colgroup>
                     <col class="col--drag" />
                     <col />
@@ -176,24 +178,22 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                     <col class="col--updated" />
                     <col class="col--actions" />
                   </colgroup>
-                  @if ($first) {
-                    <thead>
+                  <thead [class.sr-only]="!$first">
                       <tr>
-                        <th class="p-2"><span class="sr-only" i18n="@@workflows.col.drag">Перетягнути</span></th>
-                        <th class="p-2" i18n="@@workflows.col.name">Назва</th>
+                        <th class="p-2" data-no-label><span class="sr-only" i18n="@@workflows.col.drag">Перетягнути</span></th>
+                        <th class="p-2" data-no-label i18n="@@workflows.col.name">Назва</th>
                         <th class="p-2" i18n="@@workflows.col.trigger">Тригер</th>
                         <th class="p-2" i18n="@@workflows.col.lastRun">Останній запуск</th>
                         <th class="p-2" i18n="@@workflows.col.active">Активний</th>
                         <th class="p-2" i18n="@@workflows.col.version">Версія</th>
                         <th class="p-2" i18n="@@workflows.col.updatedAt">Змінено</th>
-                        <th class="p-2"><span class="sr-only" i18n="@@workflows.col.actions">Дії</span></th>
+                        <th class="p-2" data-no-label><span class="sr-only" i18n="@@workflows.col.actions">Дії</span></th>
                       </tr>
                     </thead>
-                  }
                   <tbody cdkDropList [cdkDropListData]="s.id" [attr.data-drop]="s.id" (cdkDropListDropped)="workflowDropped($event)">
                     @for (w of s.workflows; track w.id) {
                       <tr cdkDrag [cdkDragData]="w" [attr.data-workflow]="w.id">
-                        <td class="p-2">
+                        <td class="card-hide-mobile p-2">
                           <span class="material-symbols-outlined row__handle" cdkDragHandle data-testid="row-handle" i18n-title="@@workflows.drag" title="Перетягніть в іншу групу" aria-hidden="true">drag_indicator</span>
                         </td>
                         <td class="p-2">

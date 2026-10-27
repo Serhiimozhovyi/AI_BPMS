@@ -115,6 +115,22 @@ interface Problem {
       height: 40px;
       margin-bottom: 8px;
     }
+
+    /* Телефон (F3-85): поля й кнопка відправки на всю ширину, без горизонтальної прокрутки. */
+    @media (max-width: 767.98px) {
+      .pform {
+        padding: 16px 12px;
+      }
+
+      .pform__card {
+        padding: 8px 0;
+      }
+
+      button[type='submit'] {
+        width: 100%;
+        height: 48px;
+      }
+    }
   `,
 })
 export class FormPage implements OnInit {
