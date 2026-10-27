@@ -79,6 +79,7 @@ public static class FakeServerApp
         if (tools.Contains(typeof(MockTelegramTools)))
         {
             builder.Services.PostConfigure<McpServerOptions>(MockTelegramTools.AnnotateChatIds);
+            builder.Services.PostConfigure<McpServerOptions>(MockTelegramTools.AddUpdatesResource);
         }
 
         await builder.Build().RunAsync();
@@ -309,6 +310,40 @@ public static class MockTelegramTools
                 protocol.InputSchema = JsonSerializer.SerializeToElement(schema);
             }
         }
+    }
+
+    /// <summary>URI стрічки оновлень, як у <c>connectors/telegram</c> (F6-22).</summary>
+    public const string UpdatesUri = "telegram://updates";
+
+    /// <summary>
+    /// Ресурс <see cref="UpdatesUri"/> для <c>mcp.subscribe</c>: одне вхідне оновлення-заявка з чату 42 (як <c>pinData</c>
+    /// вебхука в <c>examples/telegram-1c.json</c>); підписка приймається, сповіщень мок не шле — тригер читає буфер.
+    /// </summary>
+    public static void AddUpdatesResource(McpServerOptions options)
+    {
+        options.Capabilities ??= new ServerCapabilities();
+        options.Capabilities.Resources ??= new ResourcesCapability();
+        options.Capabilities.Resources.Subscribe = true;
+        options.Handlers.ListResourcesHandler = (_, _) => ValueTask.FromResult(new ListResourcesResult
+        {
+            Resources = [new Resource { Uri = UpdatesUri, Name = "updates", Title = "Оновлення бота", MimeType = "application/json" }],
+        });
+        options.Handlers.ReadResourceHandler = (context, _) => context.Params?.Uri == UpdatesUri
+            ? ValueTask.FromResult(new ReadResourceResult
+            {
+                Contents =
+                [
+                    new TextResourceContents
+                    {
+                        Uri = UpdatesUri,
+                        MimeType = "application/json",
+                        Text = new JsonObject { ["result"] = new JsonArray(Update(9001, 42, "Петренко", "2 мішки добрива Петренку")) }.ToJsonString(),
+                    },
+                ],
+            })
+            : throw new McpProtocolException($"Ресурс {context.Params?.Uri} не знайдено.", McpErrorCode.InvalidParams);
+        options.Handlers.SubscribeToResourcesHandler = (_, _) => ValueTask.FromResult(new EmptyResult());
+        options.Handlers.UnsubscribeFromResourcesHandler = (_, _) => ValueTask.FromResult(new EmptyResult());
     }
 
     private static JsonObject Update(long id, long chat, string name, string text) => new()

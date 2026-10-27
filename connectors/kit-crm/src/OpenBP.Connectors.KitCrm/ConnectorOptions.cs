@@ -20,4 +20,14 @@ public sealed class ConnectorOptions
     /// обов'язковий). Не секрет.
     /// </summary>
     public string? AuthorPersonId { get; set; }
+
+    /// <summary>Стрічки <c>kit://changes/{entity}</c> для <c>mcp.subscribe</c> (<see cref="Events.KitEvents"/>).</summary>
+    public EventsOptions Events { get; set; } = new();
+}
+
+/// <summary>Налаштування стрічок подій.</summary>
+public sealed class EventsOptions
+{
+    /// <summary>Як часто стрічка опитує Кіт, поки є підписники, с (<c>Connector:Events:IntervalSec</c>).</summary>
+    public int IntervalSec { get; set; } = 60;
 }

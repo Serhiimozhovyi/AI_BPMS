@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using OpenBP.Engine.Nodes;
 using OpenBP.Engine.Testing;
@@ -91,6 +92,41 @@ public sealed class CliRunTests : IDisposable
         Assert.Contains("/webhook/", stdout, StringComparison.Ordinal);
         Assert.Contains("pinData", stdout, StringComparison.Ordinal);
         Assert.Contains("Результат: Error", stdout, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Example_WithSubscribeTrigger_ReadsTelegramUpdatesInsteadOfWebhook()
+    {
+        // F6-22: той самий сценарій, але заявка приходить push-тригером mcp.subscribe на telegram://updates замість
+        // core.webhook — без pinData тригера: вузол читає буфер подій Telegram-моку.
+        var workflow = JsonNode.Parse(await File.ReadAllTextAsync(Example))!.AsObject();
+        var trigger = workflow["nodes"]!.AsArray().Single(n => n!["id"]!.GetValue<string>() == "n_webhook")!.AsObject();
+        trigger["type"] = "mcp.subscribe";
+        trigger["parameters"] = new JsonObject
+        {
+            ["serverId"] = "srv_telegram",
+            ["resourceUri"] = "telegram://updates",
+            ["itemsPath"] = "result",
+            ["keyField"] = "update_id",
+        };
+        workflow["pinData"]!.AsObject().Remove("n_webhook");
+        // Подія — оновлення Bot API як є (без обгортки body вебхука).
+        var json = workflow.ToJsonString().Replace("$json.body.message", "$json.message", StringComparison.Ordinal)
+            .Replace(".json.body.message", ".json.message", StringComparison.Ordinal);
+        var path = Path.Combine(_dir, "telegram-1c-subscribe.json");
+        await File.WriteAllTextAsync(path, json);
+        Assert.Empty(await new WorkflowValidator().ValidateAsync(json));
+
+        var (code, stdout, stderr) = await RunAsync("run", path, "--pin", "--servers", WriteServers());
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("▶ Нова заявка [mcp.subscribe] — Success", stdout, StringComparison.Ordinal);
+        Assert.DoesNotContain("▶ Нова заявка [mcp.subscribe] — Success · pinData", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"update_id\": 9001", stdout, StringComparison.Ordinal);
+        Assert.Contains("▶ 1С: створити замовлення [mcp.tool] — Success", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"chatId\": 42", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"text\": \"Замовлення №1001 створено\"", stdout, StringComparison.Ordinal);
+        Assert.Contains("Результат: Success", stdout, StringComparison.Ordinal);
     }
 
     [Fact]

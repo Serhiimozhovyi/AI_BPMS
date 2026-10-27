@@ -61,8 +61,24 @@ public sealed class FakeKit : IAsyncDisposable
     /// <summary>Чинний токен перестає прийматися.</summary>
     public void RevokeTokens() => _valid = null;
 
-    /// <summary>Додає рядок у таблицю.</summary>
-    public void Add(string set, object row) => Rows(set).Add(JsonSerializer.SerializeToNode(row)!.AsObject());
+    /// <summary>Додає рядок у таблицю (можна й під час запитів — тести стрічки подій).</summary>
+    public void Add(string set, object row)
+    {
+        var rows = Rows(set);
+        lock (rows)
+        {
+            rows.Add(JsonSerializer.SerializeToNode(row)!.AsObject());
+        }
+    }
+
+    private List<JsonObject> Snapshot(string set)
+    {
+        var rows = Rows(set);
+        lock (rows)
+        {
+            return [.. rows];
+        }
+    }
 
     /// <summary>Рядки таблиці.</summary>
     public List<JsonObject> Rows(string set) => Tables.GetOrAdd(set, _ => []);
@@ -133,7 +149,7 @@ public sealed class FakeKit : IAsyncDisposable
                 return;
             case "GET":
                 var filter = ctx.Request.Query["$filter"].FirstOrDefault();
-                var rows = Rows(set).Where(r => Matches(r, filter)).ToList();
+                var rows = Snapshot(set).Where(r => Matches(r, filter)).ToList();
                 if (int.TryParse(ctx.Request.Query["$top"].FirstOrDefault(), out var top))
                 {
                     rows = [.. rows.Take(top)];

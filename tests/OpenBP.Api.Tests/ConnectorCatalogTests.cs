@@ -138,11 +138,15 @@ public class ConnectorCatalogTests(ApiFactory api)
         var entries = await ListAsync(await LoginAsync(UserRole.Viewer));
 
         JsonElement Triggers(string id) => entries.Single(e => IdOf(e) == id).GetProperty("manifest").GetProperty("triggers");
-        var telegram = Assert.Single(Triggers("telegram").EnumerateArray());
-        Assert.Equal("new_update", telegram.GetProperty("id").GetString());
-        Assert.Equal("mcp.poll", telegram.GetProperty("node").GetProperty("type").GetString());
-        Assert.Equal("update_id", telegram.GetProperty("node").GetProperty("parameters").GetProperty("keyField").GetString());
-        Assert.Equal("list_messages", Assert.Single(Triggers("msgraph").EnumerateArray()).GetProperty("node").GetProperty("parameters").GetProperty("toolName").GetString());
+        // Push-пресети (F6-22) — mcp.subscribe на ресурс подій; у Telegram поруч лишається запасне опитування.
+        var telegram = Triggers("telegram").EnumerateArray().ToArray();
+        Assert.Equal(["new_update", "new_update_poll"], telegram.Select(t => t.GetProperty("id").GetString()));
+        Assert.Equal("mcp.subscribe", telegram[0].GetProperty("node").GetProperty("type").GetString());
+        Assert.Equal("telegram://updates", telegram[0].GetProperty("node").GetProperty("parameters").GetProperty("resourceUri").GetString());
+        Assert.Equal("update_id", telegram[0].GetProperty("node").GetProperty("parameters").GetProperty("keyField").GetString());
+        Assert.Equal("mcp.poll", telegram[1].GetProperty("node").GetProperty("type").GetString());
+        Assert.Equal("msgraph://mail/{mailbox}/inbox", Assert.Single(Triggers("msgraph").EnumerateArray()).GetProperty("node").GetProperty("parameters").GetProperty("resourceUri").GetString());
+        Assert.All(Triggers("kit-crm").EnumerateArray(), t => Assert.Equal("mcp.subscribe", t.GetProperty("node").GetProperty("type").GetString()));
         Assert.Single(Triggers("onec").EnumerateArray());
         Assert.Equal(2, Triggers("kit-crm").GetArrayLength());
         Assert.Equal(["new_rows", "changed_rows"], Triggers("sql").EnumerateArray().Select(t => t.GetProperty("id").GetString()));

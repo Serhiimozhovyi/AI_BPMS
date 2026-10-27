@@ -44,6 +44,45 @@ public sealed class FakeBotApi : IAsyncDisposable
     /// <summary>Відповіді-помилки для окремих чатів (<c>chat_id</c> → статус і тіло).</summary>
     public ConcurrentDictionary<long, (int Status, string Body)> FailForChat { get; } = new();
 
+    /// <summary>Webhook бота (<c>getWebhookInfo.url</c>); порожньо — не задано.</summary>
+    public string WebhookUrl { get; set; } = "";
+
+    private readonly List<JsonElement> _updates =
+    [
+        JsonSerializer.SerializeToElement(new { update_id = 9001, message = new { message_id = 1, date = 1761200000, chat = new { id = 42, type = "private" }, text = "Привіт" } }),
+        JsonSerializer.SerializeToElement(new { update_id = 9002, callback_query = new { id = "cb1", data = "ok" } }),
+    ];
+
+    /// <summary>Нове вхідне оновлення (віддається <c>getUpdates</c>, доки його не підтвердять <c>offset</c>).</summary>
+    public void PushUpdate(object update)
+    {
+        lock (_updates)
+        {
+            _updates.Add(JsonSerializer.SerializeToElement(update));
+        }
+    }
+
+    /// <summary><c>getUpdates</c>: непідтверджені оновлення від <c>offset</c>; <c>offset</c> підтверджує (прибирає) старіші.</summary>
+    private async Task<JsonElement[]> UpdatesAsync(JsonElement? body, CancellationToken ct)
+    {
+        var offset = body is { } b && b.TryGetProperty("offset", out var o) && o.ValueKind == JsonValueKind.Number ? o.GetInt64() : 0;
+        var timeout = body is { } t && t.TryGetProperty("timeout", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt32() : 0;
+        var until = DateTime.UtcNow.AddSeconds(Math.Min(timeout, 2));
+        while (true)
+        {
+            lock (_updates)
+            {
+                _updates.RemoveAll(u => u.GetProperty("update_id").GetInt64() < offset);
+                if (_updates.Count > 0 || DateTime.UtcNow >= until)
+                {
+                    return [.. _updates];
+                }
+            }
+
+            await Task.Delay(50, ct);
+        }
+    }
+
     /// <summary>Базова адреса з кінцевим «/».</summary>
     public Uri BaseUrl => new(_app.Urls.Single() + "/");
 
@@ -123,12 +162,9 @@ public sealed class FakeBotApi : IAsyncDisposable
                 json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
                 json?.TryGetProperty("caption", out var pc) == true ? pc.GetString() : form.GetValueOrDefault("caption")),
             "getUpdates" when !Updates.IsEmpty => Updates.ToArray(),
+            "getUpdates" => await UpdatesAsync(json, ctx.RequestAborted),
+            "getWebhookInfo" => new { url = WebhookUrl, has_custom_certificate = false, pending_update_count = 0 },
             "editMessageReplyMarkup" => Message(json!.Value.GetProperty("chat_id")),
-            "getUpdates" => new object[]
-            {
-                new { update_id = 9001, message = new { message_id = 1, date = 1761200000, chat = new { id = 42, type = "private" }, text = "Привіт" } },
-                new { update_id = 9002, callback_query = new { id = "cb1", data = "ok" } },
-            },
             "getChat" => new { id = 42, type = "private", first_name = "Олена", username = "olena" },
             "editMessageText" => Message(json!.Value.GetProperty("chat_id"), text: json.Value.GetProperty("text").GetString()),
             "answerCallbackQuery" or "setMyCommands" or "setWebhook" or "deleteWebhook" => true,

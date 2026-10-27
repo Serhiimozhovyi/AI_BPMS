@@ -29,7 +29,20 @@
     {
       "id": "new_update",
       "title": "Нове повідомлення Telegram",
-      "description": "Вхідні повідомлення й натискання кнопок бота; перевірка щохвилини (після F6-22 — миттєво, mcp.subscribe).",
+      "description": "Вхідні повідомлення й натискання кнопок бота — миттєво (ресурс telegram://updates). Якщо в бота задано webhook — приберіть його (delete_webhook) або використайте core.webhook.",
+      "node": {
+        "type": "mcp.subscribe",
+        "parameters": {
+          "resourceUri": "telegram://updates",
+          "itemsPath": "result",
+          "keyField": "update_id"
+        }
+      }
+    },
+    {
+      "id": "new_update_poll",
+      "title": "Нове повідомлення Telegram (опитування)",
+      "description": "Те саме опитуванням get_updates щохвилини — коли підписка недоступна.",
       "node": {
         "type": "mcp.poll",
         "parameters": {

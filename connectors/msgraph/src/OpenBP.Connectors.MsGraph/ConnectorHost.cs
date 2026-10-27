@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
+using OpenBP.Connectors.MsGraph.Events;
 using OpenBP.Connectors.MsGraph.Tools;
 
 namespace OpenBP.Connectors.MsGraph;
@@ -31,7 +33,10 @@ public static class ConnectorHost
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(url);
         AddConnector(builder.Services, builder.Configuration, environment);
-        builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<MailTools>().WithTools<ExcelTools>();
+        // Сесії для клієнтів з initialize: лише в сесії сервер може сам надіслати notifications/resources/updated (EventHub).
+        builder.Services.AddMcpServer(Configure)
+            .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
+            .WithTools<MailTools>().WithTools<ExcelTools>();
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;
@@ -63,6 +68,10 @@ public static class ConnectorHost
             var baseUrl = sp.GetRequiredService<IOptions<ConnectorOptions>>().Value.GraphUrl!;
             http.BaseAddress = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
         });
+
+        // Стрічки msgraph://mail/{mailbox}/inbox для mcp.subscribe (docs/connectors.md §9.2).
+        services.AddSingleton(MailEvents.Create);
+        EventHub.Register(services);
     }
 
     private static void Configure(ModelContextProtocol.Server.McpServerOptions options) =>

@@ -47,6 +47,9 @@ public sealed class ConnectorOptions
     /// <summary>Фільтр entity sets і особливості сервера OData.</summary>
     public ODataOptions OData { get; set; } = new();
 
+    /// <summary>Стрічки подій для <c>mcp.subscribe</c> (docs/connectors.md §9.2).</summary>
+    public EventsOptions Events { get; set; } = new();
+
     /// <summary>Розташування специфікації OpenAPI з <see cref="Source"/> або <c>null</c>, якщо джерело інше чи не задане.</summary>
     public string? OpenApiLocation => Location(OpenApiPrefix);
 
@@ -124,4 +127,11 @@ public sealed class ODataOptions
     /// <c>Accept: application/json</c>.
     /// </summary>
     public bool FormatParameter { get; set; }
+}
+
+/// <summary>Стрічки подій конектора (<see cref="Events.EventHub"/>).</summary>
+public sealed class EventsOptions
+{
+    /// <summary>Як часто джерело опитує REST API, поки є підписники (<c>Connector:Events:IntervalSec</c>).</summary>
+    public int IntervalSec { get; set; } = 30;
 }

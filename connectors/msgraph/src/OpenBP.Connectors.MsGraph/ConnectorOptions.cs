@@ -17,4 +17,14 @@ public sealed class ConnectorOptions
 
     /// <summary>Scope токена client credentials.</summary>
     public string Scope { get; set; } = "https://graph.microsoft.com/.default";
+
+    /// <summary>Стрічки <c>msgraph://mail/{mailbox}/inbox</c> для <c>mcp.subscribe</c> (<see cref="Events.MailEvents"/>).</summary>
+    public EventsOptions Events { get; set; } = new();
+}
+
+/// <summary>Налаштування стрічок подій.</summary>
+public sealed class EventsOptions
+{
+    /// <summary>Як часто стрічка опитує скриньку, поки є підписники, с (<c>Connector:Events:IntervalSec</c>).</summary>
+    public int IntervalSec { get; set; } = 60;
 }

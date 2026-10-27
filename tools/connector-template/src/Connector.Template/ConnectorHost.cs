@@ -1,6 +1,8 @@
+using Connector.Template.Events;
 using Connector.Template.Generated;
 using Connector.Template.Tools;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Protocol;
 
 namespace Connector.Template;
@@ -32,7 +34,10 @@ public static class ConnectorHost
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(url);
         AddConnector(builder.Services, builder.Configuration, environment);
-        builder.Services.AddMcpServer(Configure).WithHttpTransport(o => o.Stateless = true).WithTools<ItemTools>();
+        // Сесії для клієнтів з initialize: лише в сесії сервер може сам надіслати notifications/resources/updated (EventHub).
+        builder.Services.AddMcpServer(Configure)
+            .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)
+            .WithTools<ItemTools>();
         var app = builder.Build();
         app.MapMcp("/mcp");
         return app;
@@ -65,6 +70,10 @@ public static class ConnectorHost
         services.AddSingleton<GeneratedToolSource>();
         services.AddHostedService<GeneratedToolLoader>();
         services.AddSingleton<IPostConfigureOptions<ModelContextProtocol.Server.McpServerOptions>, GeneratedToolsSetup>();
+
+        // Події для push-тригера mcp.subscribe (docs/connectors.md §9.2): стрічки — EventFeed у DI.
+        services.AddSingleton(ItemEvents.Create);
+        EventHub.Register(services);
     }
 
     private static void Configure(ModelContextProtocol.Server.McpServerOptions options) =>

@@ -41,19 +41,13 @@
     {
       "id": "new_mail",
       "title": "Новий лист",
-      "description": "Нові листи вхідних поточної скриньки (mailbox вкажіть у вузлі); перевірка щохвилини.",
+      "description": "Нові листи у «Вхідних»: замініть {mailbox} у resourceUri адресою скриньки, напр. msgraph://mail/orders@contoso.com/inbox.",
       "node": {
-        "type": "mcp.poll",
+        "type": "mcp.subscribe",
         "parameters": {
-          "toolName": "list_messages",
-          "arguments": {
-            "mailbox": "",
-            "folder": "inbox",
-            "top": 50
-          },
+          "resourceUri": "msgraph://mail/{mailbox}/inbox",
           "itemsPath": "result",
-          "keyField": "id",
-          "cron": "*/1 * * * *"
+          "keyField": "id"
         }
       }
     }
