@@ -14,6 +14,8 @@ import { Autosave } from '../canvas/autosave';
 import { LastRun, lastRunFromDetail, lastRunLabel, lastRunTimes } from '../canvas/last-run';
 import { EditorToolbarComponent, ToolbarAction, ToolbarRun } from './editor-toolbar.component';
 import { NodeHeaderAction, NodePanelHeaderComponent } from './node-panel-header.component';
+import { ShortcutsDialogComponent } from './shortcuts-dialog.component';
+import { zoomKey } from './shortcuts';
 import { CanvasSelection, EMPTY_SELECTION, NeighborDirection, copySelection, deleteSelection, neighborNode, pasteClipboard, renameNode, toggleDisabled } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
 import { addNote, randomNoteId, removeNotes, updateNote } from '../canvas/canvas-notes';
@@ -1590,6 +1592,11 @@ export class WorkflowEditorComponent implements OnInit {
     this.showNotice($localize`:@@workfloweditor.discarded:Чернетку повернуто до опублікованої версії ${detail.publishedVersion}:version:.`);
   }
 
+  /** «Гарячі клавіші» (F3-90): довідка, `?`. */
+  protected openShortcuts(): void {
+    this.dialog.open(ShortcutsDialogComponent, { width: '720px', maxWidth: '95vw' });
+  }
+
   /** Діалог «Налаштування» (F4-05): нові `settings` — звичайна зміна з історією й автозбереженням. */
   protected openSettings(): void {
     const def = this.definition();
@@ -1745,6 +1752,7 @@ export class WorkflowEditorComponent implements OnInit {
       case 'assistant': return this.toggleAssistant();
       case 'history': return this.openHistory();
       case 'settings': return this.openSettings();
+      case 'shortcuts': return this.openShortcuts();
       case 'run': return this.runWorkflow();
     }
   }
@@ -1900,7 +1908,11 @@ export class WorkflowEditorComponent implements OnInit {
     else if (mod && key === 'd') action = this.hasNodeSelection() ? () => this.duplicate(this.selection().nodes) : null;
     else if (mod && key === 'a') action = () => this.selectAll();
     else if (!mod && !event.altKey && event.shiftKey && key === 's') action = () => this.addNoteAt(this.canvas()?.viewportCenter() ?? [0, 0]);
-    else if (mod && event.key === 'Enter') action = this.running() || !this.definition()?.nodes.length ? null : () => this.runWorkflow();
+    else if (event.key === '?' && !mod && !event.altKey) action = () => this.openShortcuts();
+    else if (zoomKey(event) && onCanvas(event.composedPath()[0] ?? event.target)) {
+      const zoom = zoomKey(event)!;
+      action = () => this.canvas()?.zoom(zoom);
+    } else if (mod && event.key === 'Enter') action = this.running() || !this.definition()?.nodes.length ? null : () => this.runWorkflow();
     else if (!mod && !event.altKey && !event.shiftKey && ARROWS[event.key]) {
       const direction = ARROWS[event.key];
       action = this.selectedNode() ? () => this.moveSelection(direction) : null;

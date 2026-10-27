@@ -647,6 +647,46 @@ describe('WorkflowEditorComponent', () => {
     });
   });
 
+  describe('керування канвасом (F3-90)', () => {
+    const press = (init: KeyboardEventInit) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, composed: true, ...init }));
+
+    it('клавіші 1, 0, +, − масштабують канвас; у полі введення й з Ctrl — ні', async () => {
+      const { fixture, host } = await loaded();
+      const zoom = vi.spyOn(canvasComponent(fixture), 'zoom');
+      press({ key: '1' });
+      press({ key: '0' });
+      press({ key: '+' });
+      press({ key: '=' });
+      press({ key: '-' });
+      expect(zoom.mock.calls.map((c) => c[0])).toEqual(['fit', 'reset', 'in', 'in', 'out']);
+
+      press({ key: '1', ctrlKey: true });
+      const search = host.querySelector<HTMLInputElement>('[data-testid="palette-search"]')!;
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, composed: true }));
+      expect(zoom).toHaveBeenCalledTimes(5);
+    });
+
+    it('«?» і пункт «Гарячі клавіші» в меню «⋯» відкривають довідку; у полі введення «?» — звичайний символ', async () => {
+      const { fixture, host } = await loaded();
+      const search = host.querySelector<HTMLInputElement>('[data-testid="palette-search"]')!;
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true, composed: true }));
+      await render(fixture);
+      expect(document.querySelector('[data-testid="shortcuts"]')).toBeNull();
+
+      press({ key: '?' });
+      await render(fixture);
+      expect(document.querySelector('[data-testid="shortcuts"]')).not.toBeNull();
+      (document.querySelector('[data-testid="shortcuts-close"]') as HTMLButtonElement).click();
+      await render(fixture);
+
+      click(host, '[data-testid="toolbar-more"]');
+      await render(fixture);
+      click(host, '[data-testid="shortcuts"]');
+      await render(fixture);
+      expect(document.querySelector('[data-testid="shortcuts"] [data-group="canvas"]')).not.toBeNull();
+    });
+  });
+
   describe('шапка панелі вузла (F3-88)', () => {
     it('назва, людська назва типу в підказці, головна дія, меню «⋯» і «×»', async () => {
       const { fixture, host } = await loaded();

@@ -270,6 +270,40 @@ test('F3-89: у сценарії з вузлами палітра — смуга
   await expect(page.locator('app-palette')).toBeVisible();
 });
 
+test('F3-90: масштаб у відсотках, клавіші 0/1/+/−, «?» відкриває довідку гарячих клавіш', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = new FakeApi();
+  Object.assign(api.definition, longChain(5));
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
+  const level = page.getByTestId('canvas-zoom-level');
+  await expect(level).toHaveText(/^\d+%$/);
+
+  // Клацаємо по порожньому полотну, щоб фокус був на канвасі.
+  await page.locator('.editor__canvas').click({ position: { x: 600, y: 30 } });
+  await page.keyboard.press('0');
+  await expect(level).toHaveText('100%');
+  await page.keyboard.press('+');
+  await expect(level).not.toHaveText('100%');
+  await page.keyboard.press('0');
+  await expect(level).toHaveText('100%');
+  await page.keyboard.press('-');
+  await expect.poll(async () => parseInt((await level.textContent()) ?? '100', 10)).toBeLessThan(100);
+  await page.keyboard.press('1');
+  for (const id of ['n0', 'n4']) await expect(page.locator(`[data-node-id="${id}"]`)).toBeInViewport();
+
+  await page.keyboard.press('Shift+Slash');
+  await expect(page.getByTestId('shortcuts')).toBeVisible();
+  await expect(page.getByTestId('shortcuts')).toContainText('Масштаб 100 %');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('shortcuts')).toHaveCount(0);
+
+  await page.getByTestId('toolbar-more').click();
+  await page.getByTestId('shortcuts').click();
+  await expect(page.getByTestId('shortcuts')).toBeVisible();
+});
+
 test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
   const api = new FakeApi();
   await api.install(page);

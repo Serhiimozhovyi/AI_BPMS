@@ -12,7 +12,7 @@ export interface ToolbarRun {
   readonly label: string;
 }
 
-export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'assistant' | 'history' | 'settings' | 'run';
+export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'assistant' | 'history' | 'settings' | 'shortcuts' | 'run';
 
 /**
  * Шапка редактора сценарію (F3-75): один рядок від 1024 px — «← Сценарії», назва з перейменуванням по кліку,
@@ -94,6 +94,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
               <div class="bar__menu" role="menu" data-testid="toolbar-menu">
                 <button type="button" role="menuitem" data-testid="assistant-toggle" [attr.aria-pressed]="assistantOpen()" (click)="pick('assistant')" i18n-title="@@workfloweditor.assistant.hint" title="ШІ-помічник: описати процес, пояснити чи виправити вузол" i18n="@@workfloweditor.assistant">Помічник</button>
                 <button type="button" role="menuitem" data-testid="history" (click)="pick('history')" i18n-title="@@workfloweditor.history.hint" title="Версії сценарію: переглянути або відновити" i18n="@@workfloweditor.history">Історія</button>
+                <button type="button" role="menuitem" data-testid="shortcuts" (click)="pick('shortcuts')" i18n-title="@@workfloweditor.shortcuts.hint" title="Клавіші редактора (?)" i18n="@@workfloweditor.shortcuts">Гарячі клавіші</button>
                 <button type="button" role="menuitem" data-testid="settings" (click)="pick('settings')" i18n-title="@@workfloweditor.settings.hint" title="Часовий пояс, таймаут, сценарій помилок" i18n="@@workfloweditor.settings">Налаштування</button>
                 @if (lastRun(); as last) {
                   @if (!embedded()) {

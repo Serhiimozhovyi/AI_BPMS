@@ -451,9 +451,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
         <button type="button" class="controls__btn controls__btn--wide" data-testid="canvas-last-run" [attr.aria-pressed]="lastRunToggle()" [class.controls__btn--on]="lastRunToggle()" i18n-title="@@canvas.lastRun.hint" title="Показувати на вузлах результат останнього запуску" (click)="lastRunToggled.emit(!lastRunToggle())" i18n="@@canvas.lastRun">Останній запуск</button>
       }
       <button type="button" class="controls__btn" data-testid="canvas-minimap" [attr.aria-pressed]="minimapOpen()" [class.controls__btn--on]="minimapOpen()" i18n-title="@@canvas.minimap" title="Мінікарта" (click)="toggleMinimap()">▣</button>
-      <button type="button" class="controls__btn" data-testid="canvas-fit" i18n-title="@@canvas.fit" title="Показати весь сценарій" (click)="fit()">⤢</button>
-      <button type="button" class="controls__btn" data-testid="canvas-zoom-in" i18n-title="@@canvas.zoomIn" title="Збільшити" (click)="zoomBy(ZOOM_STEP)">+</button>
-      <button type="button" class="controls__btn" data-testid="canvas-zoom-out" i18n-title="@@canvas.zoomOut" title="Зменшити" (click)="zoomBy(1 / ZOOM_STEP)">−</button>
+      <button type="button" class="controls__btn" data-testid="canvas-fit" i18n-title="@@canvas.fit" title="Показати весь сценарій (1)" i18n-aria-label="@@canvas.fit.label" aria-label="Показати весь сценарій" (click)="fit()">⤢</button>
+      <button type="button" class="controls__btn controls__btn--zoom" data-testid="canvas-zoom-level" i18n-title="@@canvas.zoomReset" title="Масштаб: клік — 100 % (0)" (click)="zoomReset()">{{ zoomPercent() }}%</button>
+      <button type="button" class="controls__btn" data-testid="canvas-zoom-in" i18n-title="@@canvas.zoomIn" title="Збільшити (+)" i18n-aria-label="@@canvas.zoomIn.label" aria-label="Збільшити" (click)="zoomBy(ZOOM_STEP)">+</button>
+      <button type="button" class="controls__btn" data-testid="canvas-zoom-out" i18n-title="@@canvas.zoomOut" title="Зменшити (−)" i18n-aria-label="@@canvas.zoomOut.label" aria-label="Зменшити" (click)="zoomBy(1 / ZOOM_STEP)">−</button>
     </div>
   `,
   styles: `
@@ -481,6 +482,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       bottom: 12px;
       display: flex;
       gap: 4px;
+    }
+
+    .controls__btn--zoom {
+      min-width: 52px;
+      font-variant-numeric: tabular-nums;
     }
 
     .controls__btn {
@@ -1239,6 +1245,8 @@ export class VflowCanvasComponent {
   private updateView(flow: VflowComponent, key: string | null, hasContent: boolean): void {
     if (!this.viewSubscribed) {
       this.viewSubscribed = true;
+      this.zoom.set(flow.viewport().zoom);
+      flow.viewportChange$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((v) => this.zoom.set(v.zoom));
       flow.viewportChange$
         .pipe(
           // Положення, яке ми самі щойно виставили (вписування), не вважаємо вибором користувача.
@@ -1345,14 +1353,30 @@ export class VflowCanvasComponent {
     }
   }
 
-  protected fit(): void {
+  /** Поточний масштаб, % — у групі керування (F3-90). */
+  protected readonly zoom = signal(1);
+  protected readonly zoomPercent = computed(() => Math.round(this.zoom() * 100));
+
+  /** «Показати весь сценарій»; з клавіші `1` теж. */
+  fit(): void {
     this.flow()?.fitView({ padding: 0.15, duration: 200 });
   }
 
-  protected zoomBy(factor: number): void {
+  /** Масштаб у `factor` разів (з клавіш `+`/`−` і кнопок), у межах `MIN_ZOOM…MAX_ZOOM`. */
+  zoomBy(factor: number): void {
     const flow = this.flow();
     if (!flow) return;
     flow.zoomTo(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, flow.viewport().zoom * factor)));
+  }
+
+  /** Масштаб 100 % (клавіша `0`, клік по відсотку). */
+  zoomReset(): void {
+    this.flow()?.zoomTo(1);
+  }
+
+  /** Крок масштабу для клавіш. */
+  zoomStep(direction: 'in' | 'out'): void {
+    this.zoomBy(direction === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP);
   }
 
   protected readonly disableLabel = $localize`:@@canvas.tool.disable:Вимкнути (D)`;
