@@ -5,6 +5,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, Router } from '@angular/router';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NotifyService } from '../../shared/notify.service';
 import { ConnectorCatalogComponent } from '../../connectors/connector-catalog.component';
 import { ConnectorFormComponent } from '../../connectors/connector-form.component';
 import { statusLabel } from '../../connectors/connector-input';
@@ -24,7 +26,7 @@ import {
 @Component({
   selector: 'app-connectors-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent],
+  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-4 flex items-center gap-4">
@@ -59,9 +61,16 @@ import {
       }
 
       @if (!loading() && connectors().length === 0 && !error()) {
-        <p class="opacity-70" data-testid="empty" i18n="@@connectors.empty">
-          Ще немає жодного MCP-сервера. Додайте перший, щоб використовувати його tools у сценаріях.
-        </p>
+        <app-empty-state
+          icon="hub"
+          i18n-title="@@connectors.empty.title"
+          title="Ще немає жодного MCP-сервера"
+          i18n-description="@@connectors.empty.text"
+          description="Конектор дає сценаріям tools зовнішніх систем: підключіть готовий із каталогу або додайте власний MCP-сервер."
+          i18n-actionLabel="@@connectors.empty.action"
+          actionLabel="Відкрити каталог"
+          (action)="showView('catalog')"
+        />
       }
 
       @if (connectors().length > 0) {
@@ -129,6 +138,7 @@ export class ConnectorsPage implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly notify = inject(NotifyService);
 
   /** Вкладка: встановлені конектори або каталог (F6-16). */
   readonly view = signal<'installed' | 'catalog'>('installed');
@@ -207,6 +217,7 @@ export class ConnectorsPage implements OnInit {
         next: (detail) => {
           this.refreshing.set(false);
           this.applyDetail(detail);
+          this.notify.success($localize`:@@connectors.refreshed:Tools оновлено.`);
         },
         error: (e: unknown) => {
           this.refreshing.set(false);
@@ -222,6 +233,7 @@ export class ConnectorsPage implements OnInit {
     this.adding.set(false);
     this.connectors.update((list) => [...list.filter((c) => c.id !== detail.summary.id), detail.summary]);
     this.selected.set(detail);
+    this.notify.success($localize`:@@connectors.created:Конектор «${detail.summary.name}:name:» додано.`);
   }
 
   statusClass(status: ConnectorStatus): string {
