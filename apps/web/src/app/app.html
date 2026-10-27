@@ -1,11 +1,12 @@
-@if (!bare()) {
-  <mat-toolbar class="shell-top">
-    <a class="shell-brand" routerLink="/" aria-label="OpenBP — на головну" i18n-aria-label="@@app.brand.home">
-      <span class="shell-brand__sign" aria-hidden="true">BP</span>
-      <span class="shell-brand__name" i18n="@@app.brand">Open<b>BP</b></span>
-    </a>
-    @if (user(); as u) {
-      <div class="shell-project">
+@if (connectivity.offline()) {
+  <div class="shell-offline" role="alert" data-testid="offline-banner">
+    <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+    <span class="shell-offline__text" i18n="@@app.offline">Немає зв’язку із сервером OpenBP</span>
+    <button type="button" class="shell-offline__retry" data-testid="offline-retry" [disabled]="connectivity.checking()" (click)="connectivity.retry()" i18n="@@app.offline.retry">Повторити</button>
+  </div>
+}
+<ng-template #projectBlock>
+<div class="shell-project">
         <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
         <select
           class="shell-project__select"
@@ -34,53 +35,90 @@
           </a>
         }
       </div>
+</ng-template>
+<ng-template #userBlock>
       <div class="shell-user">
         <span class="shell-icon-button shell-icon-button--static" aria-hidden="true">
           <span class="material-symbols-outlined">person</span>
         </span>
-        <span class="shell-user__email" data-testid="current-user">{{ u.email }}</span>
+        <span class="shell-user__email" data-testid="current-user">{{ user()?.email }}</span>
         <button type="button" class="shell-icon-button" data-testid="logout" title="Вийти" i18n-title="@@app.logout.title" (click)="logout()">
           <span class="material-symbols-outlined" aria-hidden="true">logout</span>
           <span class="sr-only" i18n="@@app.logout">Вийти</span>
         </button>
       </div>
-    }
-  </mat-toolbar>
-  @if (user()) {
-    <nav class="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+</ng-template>
+<ng-template #navLinks>
       <a class="shell-nav__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
         <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
         <span i18n="@@nav.overview">Огляд</span>
       </a>
-      <a class="shell-nav__link" routerLink="/workflows" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/workflows" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">account_tree</span>
         <span i18n="@@nav.workflows">Сценарії</span>
       </a>
-      <a class="shell-nav__link" routerLink="/executions" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/executions" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">history</span>
         <span i18n="@@nav.executions">Виконання</span>
       </a>
-      <a class="shell-nav__link" routerLink="/tasks" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/tasks" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
         <span i18n="@@nav.tasks">Задачі</span>
       </a>
-      <a class="shell-nav__link" routerLink="/tables" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/tables" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">table</span>
         <span i18n="@@nav.tables">Таблиці</span>
       </a>
-      <a class="shell-nav__link" routerLink="/connectors" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/connectors" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">hub</span>
         <span i18n="@@nav.connectors">Конектори</span>
       </a>
-      <a class="shell-nav__link" routerLink="/credentials" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/credentials" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">key</span>
         <span i18n="@@nav.credentials">Облікові дані</span>
       </a>
-      <a class="shell-nav__link" routerLink="/settings" routerLinkActive="active">
+<a class="shell-nav__link" routerLink="/settings" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         <span i18n="@@nav.settings">Налаштування</span>
       </a>
-    </nav>
+</ng-template>
+@if (!bare()) {
+  <mat-toolbar class="shell-top">
+    <a class="shell-brand" routerLink="/" aria-label="OpenBP — на головну" i18n-aria-label="@@app.brand.home">
+      <span class="shell-brand__sign" aria-hidden="true">BP</span>
+      <span class="shell-brand__name" i18n="@@app.brand">Open<b>BP</b></span>
+    </a>
+    @if (user()) {
+      @if (mobile()) {
+        <button type="button" class="shell-icon-button shell-burger" data-testid="nav-burger" aria-controls="shell-drawer" [attr.aria-expanded]="drawerOpen()" title="Меню" i18n-title="@@app.menu" (click)="toggleDrawer()">
+          <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+          <span class="sr-only" i18n="@@app.menu">Меню</span>
+        </button>
+      } @else {
+        <ng-container *ngTemplateOutlet="projectBlock" />
+        <ng-container *ngTemplateOutlet="userBlock" />
+      }
+    }
+  </mat-toolbar>
+  @if (user()) {
+    @if (mobile()) {
+      @if (drawerOpen()) {
+        <button type="button" class="shell-backdrop" data-testid="drawer-backdrop" tabindex="-1" aria-hidden="true" (click)="closeDrawer()"></button>
+        <aside id="shell-drawer" class="shell-drawer" data-testid="nav-drawer" role="dialog" aria-modal="true" aria-label="Меню" i18n-aria-label="@@app.menu">
+          <nav class="shell-drawer__nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+            <ng-container *ngTemplateOutlet="navLinks" />
+          </nav>
+          <div class="shell-drawer__foot">
+            <ng-container *ngTemplateOutlet="projectBlock" />
+            <ng-container *ngTemplateOutlet="userBlock" />
+          </div>
+        </aside>
+      }
+    } @else {
+      <nav class="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+        <ng-container *ngTemplateOutlet="navLinks" />
+      </nav>
+    }
   }
 }
 <main>

@@ -83,7 +83,12 @@ export const routes: Routes = [
         title: $localize`:@@settings.title:Налаштування`,
         loadComponent: () => import('./pages/settings/settings.page').then((m) => m.SettingsPage),
       },
+      {
+        // Невідома адреса (F3-84): сторінка «Не знайдено» замість мовчазного перекидання на «Огляд».
+        path: '**',
+        title: $localize`:@@notfound.pageTitle:Не знайдено`,
+        loadComponent: () => import('./pages/not-found/not-found.page').then((m) => m.NotFoundPage),
+      },
     ],
   },
-  { path: '**', redirectTo: '' },
 ];
