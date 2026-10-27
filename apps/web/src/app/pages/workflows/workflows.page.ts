@@ -230,7 +230,7 @@ import { CardTableDirective } from '../../shared/card-table.directive';
                             <a class="block hover:underline" data-testid="last-run-link" [routerLink]="['/executions', last.id]">
                               <span [class]="stateClass(last.status)" data-testid="last-run-state">{{ stateLabel(last.status) }}</span>
                               @if (last.startedAt) {
-                                <span class="block text-sm opacity-70" data-testid="last-run-at">{{ last.startedAt | date: 'dd.MM.yyyy HH:mm' }}</span>
+                                <span class="block text-sm" data-testid="last-run-at">{{ last.startedAt | date: 'dd.MM.yyyy HH:mm' }}</span>
                               }
                             </a>
                           } @else if (w.lastExecution === null) {
@@ -384,7 +384,7 @@ import { CardTableDirective } from '../../shared/card-table.directive';
     }
 
     .row__action {
-      color: var(--ac-kit, #7a6ff0);
+      color: var(--ac-kit, #5f53dc);
     }
 
     .row__action--danger:not([disabled]) {

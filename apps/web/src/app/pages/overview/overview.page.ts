@@ -57,7 +57,7 @@ import {
             <div class="text-sm opacity-70" i18n="@@overview.total">Виконань</div>
             <div class="text-2xl font-semibold">{{ d.total }}</div>
             <a
-              class="text-sm underline opacity-70"
+              class="text-sm underline"
               routerLink="/executions"
               [queryParams]="{ status: 'failed' }"
               data-testid="stat-failed"

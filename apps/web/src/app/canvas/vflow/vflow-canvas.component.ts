@@ -606,7 +606,8 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__group {
-      color: var(--node-color);
+      /* Яскравий колір групи на білому не проходить контраст AA — підмішуємо Vivid (F3-86). */
+      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #261f4b));
       font-weight: 600;
       text-transform: uppercase;
     }
