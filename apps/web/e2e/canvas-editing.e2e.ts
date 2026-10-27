@@ -294,14 +294,14 @@ test('F3-90: масштаб у відсотках, клавіші 0/1/+/−, «?
   for (const id of ['n0', 'n4']) await expect(page.locator(`[data-node-id="${id}"]`)).toBeInViewport();
 
   await page.keyboard.press('Shift+Slash');
-  await expect(page.getByTestId('shortcuts')).toBeVisible();
-  await expect(page.getByTestId('shortcuts')).toContainText('Масштаб 100 %');
+  await expect(page.locator('div[data-testid="shortcuts"]')).toBeVisible();
+  await expect(page.locator('div[data-testid="shortcuts"]')).toContainText('Масштаб 100 %');
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('shortcuts')).toHaveCount(0);
+  await expect(page.locator('div[data-testid="shortcuts"]')).toHaveCount(0);
 
   await page.getByTestId('toolbar-more').click();
-  await page.getByTestId('shortcuts').click();
-  await expect(page.getByTestId('shortcuts')).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Гарячі клавіші' }).click();
+  await expect(page.locator('div[data-testid="shortcuts"]')).toBeVisible();
 });
 
 test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
