@@ -45,7 +45,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     // Стани виконань у JSON — snake_case, як у БД (timed_out); перший підхожий конвертер має пріоритет.
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter<ExecutionState>(JsonNamingPolicy.SnakeCaseLower));
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-    o.SerializerOptions.Converters.Add(new WorkflowDefinitionJsonConverter());
+    o.SerializerOptions.Converters.Add(new WorkflowDefinitionJsonConverter(builder.Configuration[WorkflowDefinitionJsonConverter.DefaultTimezoneKey]));
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<OpenBpExceptionHandler>();

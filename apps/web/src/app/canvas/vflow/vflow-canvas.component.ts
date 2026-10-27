@@ -73,7 +73,7 @@ export interface NoteEditRequest {
 }
 
 /** Дія з тулбару над карткою вузла (F3-58). */
-export type NodeToolbarAction = 'run' | 'toggle' | 'duplicate' | 'delete' | 'rename';
+export type NodeToolbarAction = 'run' | 'toggle' | 'duplicate' | 'delete' | 'rename' | 'open';
 
 /** Дія над вузлом з тулбару. */
 export interface NodeActionRequest {
@@ -266,6 +266,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
           <div
             class="node"
             selectable
+            (dblclick)="act($event, ctx.node.id, 'open')"
             [class.selected]="ctx.selected()"
             [class.disabled]="d.node.disabled"
             [class.invalid]="d.errors.length > 0"
@@ -317,7 +318,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               }
             </div>
             @if (!readonly()) {
-              <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
+              <div class="node__toolbar" data-testid="node-toolbar" role="toolbar" (dblclick)="$event.stopPropagation()" (mousedown)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
                 <button type="button" class="node__tool" data-testid="node-tool-run" i18n-title="@@canvas.tool.run" title="Виконати вузол" (click)="act($event, ctx.node.id, 'run')">▶</button>
                 <button
                   type="button"
@@ -337,6 +338,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               <input
                 class="node__rename"
                 data-testid="node-rename"
+                (dblclick)="$event.stopPropagation()"
                 i18n-aria-label="@@canvas.rename.label"
                 aria-label="Нова назва вузла"
                 [value]="d.node.name"
@@ -347,7 +349,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
                 (blur)="commitRename(ctx.node.id, $any($event.target).value)"
               />
             } @else {
-              <div class="node__name" [title]="d.node.name" (dblclick)="act($event, ctx.node.id, 'rename')">{{ d.node.name }}</div>
+              <div class="node__name" [title]="d.node.name">{{ d.node.name }}</div>
             }
             @if (d.runError; as runError) {
               <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
@@ -1337,7 +1339,8 @@ export class VflowCanvasComponent {
 
   protected act(event: MouseEvent, nodeId: string, action: NodeToolbarAction): void {
     event.stopPropagation();
-    if (this.readonly()) return;
+    // «Відкрити» лише показує панель, тож доступне і в режимі перегляду.
+    if (this.readonly() && action !== 'open') return;
     this.nodeAction.emit({ nodeId, action });
   }
 

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { McpToolInfo } from '../connectors/connectors-api.service';
 import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
-import { NodePanelComponent } from './node-panel.component';
+import { NodePanelComponent, hasCustomCommon } from './node-panel.component';
 import { DECISION_TABLE_DESCRIPTOR, FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_DESCRIPTOR, SWITCH_DESCRIPTOR } from './test-schemas';
 
 describe('NodePanelComponent', () => {
@@ -442,5 +442,37 @@ describe('NodePanelComponent', () => {
       const { host } = await setup(mcpNode({}), MCP_TOOL_DESCRIPTOR, FAKE_ORDER_TOOL);
       expect(host.querySelector('[data-testid="action-select"]')).toBeNull();
     });
+  });
+
+  it('«Додатково» згорнуте за замовчуванням; позначка «змінено» лише коли є нестандартні значення (F3-78)', async () => {
+    const plain = await setup(setNode, SET_DESCRIPTOR);
+    expect(el<HTMLDetailsElement>(plain.host, 'node-extra').open).toBe(false);
+    expect(plain.host.querySelector('[data-testid="node-extra-changed"]')).toBeNull();
+
+    const tuned = await setup({ ...setNode, timeoutSec: 30 }, SET_DESCRIPTOR);
+    expect(el<HTMLDetailsElement>(tuned.host, 'node-extra').open).toBe(false);
+    expect(el(tuned.host, 'node-extra-changed').textContent?.trim()).toBe('змінено');
+
+    el<HTMLElement>(plain.host, 'node-extra-toggle').click();
+    await render(plain.fixture);
+    expect(el<HTMLDetailsElement>(plain.host, 'node-extra').open).toBe(true);
+  });
+
+  it('hasCustomCommon: усі загальні поля (F3-78)', () => {
+    const base: WorkflowNode = { id: 'a', name: 'a', type: 'core.set', typeVersion: 1, position: [0, 0], parameters: {} };
+    expect(hasCustomCommon(base)).toBe(false);
+    expect(hasCustomCommon({ ...base, continueOnFail: false, disabled: false, notes: '  ' })).toBe(false);
+    expect(hasCustomCommon({ ...base, retry: { maxTries: 3, waitMs: 0 } })).toBe(true);
+    expect(hasCustomCommon({ ...base, continueOnFail: true })).toBe(true);
+    expect(hasCustomCommon({ ...base, disabled: true })).toBe(true);
+    expect(hasCustomCommon({ ...base, notes: 'важливо' })).toBe(true);
+  });
+
+  it('клік по назві в панелі просить редактор перейменувати вузол (F3-78)', async () => {
+    const { fixture, host } = await setup(setNode, SET_DESCRIPTOR);
+    const requests: unknown[] = [];
+    fixture.componentInstance.renameRequest.subscribe(() => requests.push(1));
+    el<HTMLElement>(host, 'node-panel-name').click();
+    expect(requests).toHaveLength(1);
   });
 });
