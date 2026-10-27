@@ -74,9 +74,9 @@ describe('AuditSection', () => {
 
   it('фільтр за типом сутності перечитує першу сторінку', async () => {
     const { fixture, http, host } = await setup();
-    const select = host.querySelector<HTMLSelectElement>('[data-testid="audit-entity"]')!;
-    select.value = 'credential';
-    select.dispatchEvent(new Event('change'));
+    host.querySelector<HTMLElement>('[data-testid="audit-entity"] .mat-mdc-select-trigger')!.click();
+    fixture.detectChanges();
+    [...document.querySelectorAll<HTMLElement>('mat-option')].find((o) => o.textContent?.includes('Облікові дані'))!.click();
     const req = http.expectOne((r) => r.url === '/api/v1/audit');
     expect(req.request.params.get('entityType')).toBe('credential');
     expect(req.request.params.get('page')).toBe('1');

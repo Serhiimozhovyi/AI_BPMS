@@ -34,7 +34,7 @@ test('створення змінної показує сповіщення', as
     return route.fulfill({ json: { items: [], page: 1, pageSize: 50, total: 0 } });
   });
 
-  await page.goto('/settings');
+  await page.goto('/settings?section=variables');
   await page.getByTestId('var-key').fill('REGION');
   await page.getByTestId('var-value').fill('UA');
   await page.getByTestId('var-save').click();
