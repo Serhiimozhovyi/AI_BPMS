@@ -239,7 +239,7 @@ test('стилі хоста не ламають канвас, а стилі ка
   expect(button.font).toContain('Ubuntu');
   // Тема AC-Kit — на :host елемента.
   const kit = await page.locator('openbp-canvas').evaluate((el) => getComputedStyle(el).getPropertyValue('--ac-kit').trim());
-  expect(kit).toBe('#7a6ff0');
+  expect(kit).toBe('#5f53dc');
 });
 
 test('невідомий сценарій → подія openbp-error з кодом Api', async ({ page }) => {
