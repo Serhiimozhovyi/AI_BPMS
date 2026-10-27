@@ -10,6 +10,17 @@
   OpenAPI 3.x для генератора tools (F3-11). Ліцензія MIT, © Microsoft Corporation.
 - [SharpYaml](https://github.com/xoofx/SharpYaml) — транзитивна залежність YamlReader. Ліцензія MIT, © Alexandre Mutel.
 
+## Конектор «База даних» (`connectors/sql`, F6-31)
+
+Пакети NuGet конектора (код не копіюється, лише залежності):
+
+- [Npgsql](https://github.com/npgsql/npgsql) 10.0 — драйвер PostgreSQL (уже використовується в OpenBP). Ліцензія
+  PostgreSQL License, © The Npgsql Development Team.
+- [MySqlConnector](https://github.com/mysql-net/MySqlConnector) 2.6 — драйвер MySQL і MariaDB. Обрано замість
+  `MySql.Data` (GPL-2.0 з винятком FOSS) через ліцензію MIT і повністю асинхронний ввід-вивід. Ліцензія MIT, © Bradley Grainger.
+- Тести: [Testcontainers.MySql](https://github.com/testcontainers/testcontainers-dotnet) 4.16 (MIT) і образ `mysql:8.0`
+  (GPL-2.0) — лише контейнер тестів, у збірку не входить.
+
 ## Файлове сховище S3 і трейси воркера (F6-18)
 
 Пакети NuGet `OpenBP.Worker` (код не копіюється, лише залежності):
