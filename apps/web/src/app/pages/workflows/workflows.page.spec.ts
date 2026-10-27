@@ -94,7 +94,7 @@ describe('WorkflowsPage', () => {
     expect(row(host, 'w1').querySelector('[data-testid="trigger-cell"]')?.textContent).toContain('За розкладом');
     expect(row(host, 'w1').querySelector('[data-testid="last-run-state"]')?.textContent?.trim()).toBe('Помилка');
     expect(row(host, 'w1').querySelector('[data-testid="last-run-at"]')?.textContent).toMatch(/^\s*27\.10\.2026 \d{2}:\d{2}\s*$/);
-    expect(row(host, 'w1').querySelector('[data-testid="last-run-link"]')?.getAttribute('href')).toBe('/executions?workflowId=w1');
+    expect(row(host, 'w1').querySelector('[data-testid="last-run-link"]')?.getAttribute('href')).toBe('/executions/e1');
     expect(row(host, 'w2').querySelector('[data-testid="trigger-cell"]')?.textContent).toContain('Немає');
     expect(row(host, 'w2').querySelector('[data-testid="last-run-cell"]')?.textContent).toContain('Не запускався');
   });

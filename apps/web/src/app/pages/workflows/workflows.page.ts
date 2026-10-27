@@ -227,7 +227,7 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                         </td>
                         <td class="p-2" data-testid="last-run-cell">
                           @if (w.lastExecution; as last) {
-                            <a class="block hover:underline" data-testid="last-run-link" [routerLink]="['/executions']" [queryParams]="{ workflowId: w.id }">
+                            <a class="block hover:underline" data-testid="last-run-link" [routerLink]="['/executions', last.id]">
                               <span [class]="stateClass(last.status)" data-testid="last-run-state">{{ stateLabel(last.status) }}</span>
                               @if (last.startedAt) {
                                 <span class="block text-sm opacity-70" data-testid="last-run-at">{{ last.startedAt | date: 'dd.MM.yyyy HH:mm' }}</span>
