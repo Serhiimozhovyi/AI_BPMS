@@ -51,15 +51,17 @@ interface PanelState {
     @let s = state();
     <section class="panel" data-testid="node-panel" [attr.data-node]="s.node.id">
       <header class="panel__header">
-        <div class="panel__title-row">
-          @if (readonly()) {
-            <h2 class="mat-font-title-sm m-0 panel__name" data-testid="node-panel-name">{{ s.node.name }}</h2>
-          } @else {
-            <h2 class="mat-font-title-sm m-0 panel__name panel__name--editable" data-testid="node-panel-name" tabindex="0" role="button" i18n-title="@@nodeform.renameHint" title="Перейменувати (F2)" (click)="renameRequest.emit()" (keydown.enter)="renameRequest.emit()">{{ s.node.name }}</h2>
-          }
-          <ng-content select="[panelActions]" />
-        </div>
-        <span class="panel__type" [title]="s.node.type">{{ descriptor()?.displayName ?? s.node.type }}</span>
+        @if (!compactHeader()) {
+          <div class="panel__title-row">
+            @if (readonly()) {
+              <h2 class="mat-font-title-sm m-0 panel__name" data-testid="node-panel-name">{{ s.node.name }}</h2>
+            } @else {
+              <h2 class="mat-font-title-sm m-0 panel__name panel__name--editable" data-testid="node-panel-name" tabindex="0" role="button" i18n-title="@@nodeform.renameHint" title="Перейменувати (F2)" (click)="renameRequest.emit()" (keydown.enter)="renameRequest.emit()">{{ s.node.name }}</h2>
+            }
+            <ng-content select="[panelActions]" />
+          </div>
+          <span class="panel__type" [title]="s.node.type">{{ descriptor()?.displayName ?? s.node.type }}</span>
+        }
         @if (isMcp(s.node)) {
           <span class="panel__type" data-testid="node-panel-tool">{{ s.node.parameters['serverId'] }} · {{ s.node.parameters['toolName'] }}</span>
         }
@@ -260,6 +262,8 @@ export class NodePanelComponent {
 
   /** Дескриптор типу вузла; немає — тип невідомий, форма параметрів недоступна. */
   readonly descriptor = input<NodeTypeInfo | undefined>(undefined);
+  /** Шапку з назвою, типом і діями малює редактор (F3-88): тут лишається лише рядок tool'а конектора. */
+  readonly compactHeader = input(false);
 
   /** Для `mcp.tool`: tool із `tools_cache` (його `inputSchema` описує `arguments`). */
   readonly tool = input<McpToolInfo | null>(null);

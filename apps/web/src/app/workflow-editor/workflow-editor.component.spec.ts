@@ -141,6 +141,19 @@ describe('WorkflowEditorComponent', () => {
     (host.querySelector(selector) as HTMLButtonElement).click();
   }
 
+  /** Пункт меню «⋯» шапки панелі вузла (F3-88): відкриває меню, якщо воно закрите; пункту немає — `null`. */
+  async function menuItem(fixture: ReturnType<typeof setup>['fixture'], host: HTMLElement, testId: string): Promise<HTMLButtonElement | null> {
+    if (!host.querySelector('[data-testid="node-menu"]')) {
+      (host.querySelector('[data-testid="node-more"]') as HTMLButtonElement).click();
+      await render(fixture);
+    }
+    return host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+  }
+
+  async function menuClick(fixture: ReturnType<typeof setup>['fixture'], host: HTMLElement, testId: string): Promise<void> {
+    (await menuItem(fixture, host, testId))!.click();
+  }
+
   function button(host: HTMLElement, testId: string): HTMLButtonElement {
     return host.querySelector(`[data-testid="${testId}"]`) as HTMLButtonElement;
   }
@@ -315,17 +328,20 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvas().selection().nodes).toEqual(['n_set']);
 
-    // F2: inline-поле; зайнята назва — повідомлення, нова — перейменування.
-    key({ key: 'F2' });
-    await render(fixture);
-    expect(canvas().renaming()).toBe('n_set');
-    canvas().renamed.emit({ nodeId: 'n_set', name: 'Нова заявка' });
-    await render(fixture);
-    expect(canvas().renaming()).toBeNull();
+    // F2: inline-поле в шапці панелі (F3-88); зайнята назва — повідомлення, нова — перейменування.
+    const rename = async (name: string) => {
+      key({ key: 'F2' });
+      await render(fixture);
+      const input = host.querySelector<HTMLInputElement>('[data-testid="node-panel-name-input"]')!;
+      expect(input).not.toBeNull();
+      input.value = name;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await render(fixture);
+    };
+    await rename('Нова заявка');
+    expect(host.querySelector('[data-testid="node-panel-name-input"]')).toBeNull();
     expect(host.querySelector('[data-testid="editor-notice"]')?.textContent).toContain('вже є');
-    key({ key: 'F2' });
-    canvas().renamed.emit({ nodeId: 'n_set', name: 'Поля заявки' });
-    await render(fixture);
+    await rename('Поля заявки');
     expect(nodes().find((n) => n.id === 'n_set')?.name).toBe('Поля заявки');
 
     // ПКМ на вузлі → меню; «Дублювати» додає копію.
@@ -580,6 +596,75 @@ describe('WorkflowEditorComponent', () => {
     expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
   });
 
+  describe('шапка панелі вузла (F3-88)', () => {
+    it('назва, людська назва типу в підказці, головна дія, меню «⋯» і «×»', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      const header = host.querySelector('[data-testid="node-panel-header"]')!;
+      expect(header.querySelector('[data-testid="node-panel-name"]')?.textContent).toContain('Поля');
+      expect(header.querySelector('[data-testid="node-panel-type"]')?.getAttribute('title')).toBe('core.set');
+      expect(header.querySelector('[data-testid="run-node"]')?.textContent).toContain('Тестувати крок');
+      expect(host.querySelector('[data-testid="node-menu"]')).toBeNull();
+      for (const id of ['run-until', 'pin-manual', 'assistant-explain', 'assistant-expression']) expect(await menuItem(fixture, host, id)).not.toBeNull();
+      expect(await menuItem(fixture, host, 'assistant-fix')).toBeNull();
+    });
+
+    it('клік по назві в шапці — inline-перейменування, Enter зберігає, Esc скасовує без закриття панелі', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      click(host, 'button[data-testid="node-panel-name"]');
+      await render(fixture);
+      const input = host.querySelector<HTMLInputElement>('[data-testid="node-panel-name-input"]')!;
+      input.value = 'Інша назва';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await render(fixture);
+      expect(host.querySelector('[data-testid="node-panel-name-input"]')).toBeNull();
+      expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+      expect(canvasComponent(fixture).definition().nodes.find((n) => n.id === 'n_set')?.name).toBe('Поля');
+
+      click(host, 'button[data-testid="node-panel-name"]');
+      await render(fixture);
+      const again = host.querySelector<HTMLInputElement>('[data-testid="node-panel-name-input"]')!;
+      again.value = 'Інша назва';
+      again.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await render(fixture);
+      expect(canvasComponent(fixture).definition().nodes.find((n) => n.id === 'n_set')?.name).toBe('Інша назва');
+    });
+
+    it('«×» і Esc поза полем закривають панель і знімають виділення; Esc у полі лише знімає з нього фокус', async () => {
+      const { fixture, host } = await loaded();
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      click(host, '[data-testid="panel-close"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
+      expect(canvasComponent(fixture).selection()).toEqual({ nodes: [], edges: [] });
+
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      const field = host.querySelector<HTMLInputElement>('[data-testid="panel-params"] input:not([type="hidden"])')!;
+      field.focus();
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await render(fixture);
+      expect(document.activeElement).not.toBe(field);
+      expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();
+
+      key({ key: 'Escape' });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
+    });
+
+    it('виділений вузол підсувається з-під панелі: канвас просять показати його', async () => {
+      const { fixture } = await loaded();
+      const reveal = vi.spyOn(canvasComponent(fixture), 'revealNode');
+      canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+      await render(fixture);
+      expect(reveal).toHaveBeenCalledWith('n_set');
+    });
+  });
+
   describe('тестовий запуск (F2-20)', () => {
     function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success'): ExecutionStep {
       return {
@@ -744,11 +829,11 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, http, host } = await ran();
       canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
       await render(fixture);
-      expect(button(host, 'unpin-output')).toBeNull();
-      click(host, '[data-testid="pin-output"]');
+      expect(await menuItem(fixture, host, 'unpin-output')).toBeNull();
+      await menuClick(fixture, host, 'pin-output');
       await render(fixture);
       expect(Object.keys(canvasComponent(fixture).definition().pinData)).toEqual(['n_set']);
-      expect(button(host, 'pin-output')).toBeNull();
+      expect(await menuItem(fixture, host, 'pin-output')).toBeNull();
 
       // «Виконати» одразу зберігає відкладену зміну — у тілі вже є pinData.
       click(host, '[data-testid="run"]');
@@ -764,17 +849,17 @@ describe('WorkflowEditorComponent', () => {
       FakeEventSource.last!.emit('status', { executionId: 'e2', state: 'success', error: null });
       await render(fixture);
 
-      click(host, '[data-testid="unpin-output"]');
+      await menuClick(fixture, host, 'unpin-output');
       await render(fixture);
       expect(canvasComponent(fixture).definition().pinData).toEqual({});
-      expect(button(host, 'pin-output')).not.toBeNull();
+      expect(await menuItem(fixture, host, 'pin-output')).not.toBeNull();
     });
 
     it('«До цього вузла» (F3-51): лише вузол-призначення, попередники виконуються заново', async () => {
       const { fixture, http, host } = await ran();
       canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
       await render(fixture);
-      click(host, '[data-testid="run-until"]');
+      await menuClick(fixture, host, 'run-until');
       await render(fixture);
       expect(http.expectOne({ method: 'POST', url: '/api/v1/workflows/w1/executions' }).request.body).toEqual({ destinationNodeId: 'n_set' });
     });
@@ -783,9 +868,9 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, host } = await loaded();
       canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
       await render(fixture);
-      expect(host.querySelector('[data-testid="node-panel"] [data-testid="node-actions"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="node-panel-header"] [data-testid="node-actions"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="pinned-editor"]')).toBeNull();
-      click(host, '[data-testid="pin-manual"]');
+      await menuClick(fixture, host, 'pin-manual');
       await render(fixture);
       expect(canvasComponent(fixture).definition().pinData).toEqual({ n_set: [{ json: {} }] });
 
@@ -1241,7 +1326,7 @@ describe('WorkflowEditorComponent', () => {
     const { fixture, http, host } = await loaded();
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
     await render(fixture);
-    click(host, '[data-testid="assistant-explain"]');
+    await menuClick(fixture, host, 'assistant-explain');
     await render(fixture);
 
     expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
