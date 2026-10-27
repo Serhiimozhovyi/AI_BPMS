@@ -14,8 +14,11 @@ import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-to
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, forkJoin } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ExecutionState, executionStateLabel } from '../../executions/executions-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
+import { CreateWorkflowDialog, CreateWorkflowDialogData, CreateWorkflowResult } from '../../workflows/create-workflow-dialog.component';
 import { ImportWorkflowDialog, ImportWorkflowDialogData } from '../../workflows/import-workflow-dialog.component';
+import { TriggerInfo, triggerInfo } from '../../workflows/trigger-types';
 import { NO_GROUP, WorkflowSection, groupSections, readCollapsed, recount, reorder, writeCollapsed } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
 
@@ -49,11 +52,9 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
     <section class="p-6">
       <div class="mb-4 flex flex-wrap items-center gap-4">
         <h1 class="mat-font-headline-sm" i18n="@@workflows.title">Сценарії</h1>
-        @if (!creating()) {
-          <button mat-flat-button type="button" data-testid="create-button" (click)="startCreate()" i18n="@@workflows.create">
-            Створити сценарій
-          </button>
-        }
+        <button mat-flat-button type="button" data-testid="create-button" (click)="startCreate()" i18n="@@workflows.create">
+          Створити сценарій
+        </button>
         @if (!creatingGroup()) {
           <button mat-stroked-button type="button" data-testid="new-group-button" (click)="startCreateGroup()" i18n="@@workflows.groups.new">
             Нова група
@@ -61,23 +62,6 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
         }
         <button mat-stroked-button type="button" data-testid="import-button" (click)="openImport()" i18n="@@workflows.import">Імпорт</button>
       </div>
-
-      @if (creating()) {
-        <form class="mb-6 flex max-w-2xl items-start gap-2" data-testid="create-form" [formGroup]="createForm" (ngSubmit)="create()">
-          <mat-form-field appearance="outline" class="flex-1">
-            <mat-label i18n="@@workflows.form.name">Назва сценарію</mat-label>
-            <input matInput [formControl]="newName" name="name" data-testid="create-name" />
-            @if (createGroupName(); as group) {
-              <mat-hint data-testid="create-group-hint" i18n="@@workflows.form.inGroup">У групі «{{ group }}»</mat-hint>
-            }
-            @if (newName.hasError('required')) {
-              <mat-error i18n="@@workflows.form.name.required">Вкажіть назву</mat-error>
-            }
-          </mat-form-field>
-          <button mat-flat-button type="submit" class="mt-2" [disabled]="busy()" i18n="@@workflows.form.submit">Створити</button>
-          <button mat-button type="button" class="mt-2" (click)="cancelCreate()" i18n="@@workflows.form.cancel">Скасувати</button>
-        </form>
-      }
 
       @if (creatingGroup()) {
         <form class="mb-6 flex max-w-2xl items-start gap-2" data-testid="group-form" [formGroup]="groupForm" (ngSubmit)="createGroup()">
@@ -185,6 +169,8 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                   <colgroup>
                     <col class="col--drag" />
                     <col />
+                    <col class="col--trigger" />
+                    <col class="col--last" />
                     <col class="col--active" />
                     <col class="col--version" />
                     <col class="col--updated" />
@@ -195,6 +181,8 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                       <tr>
                         <th class="p-2"><span class="sr-only" i18n="@@workflows.col.drag">Перетягнути</span></th>
                         <th class="p-2" i18n="@@workflows.col.name">Назва</th>
+                        <th class="p-2" i18n="@@workflows.col.trigger">Тригер</th>
+                        <th class="p-2" i18n="@@workflows.col.lastRun">Останній запуск</th>
                         <th class="p-2" i18n="@@workflows.col.active">Активний</th>
                         <th class="p-2" i18n="@@workflows.col.version">Версія</th>
                         <th class="p-2" i18n="@@workflows.col.updatedAt">Змінено</th>
@@ -227,14 +215,38 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                             <a class="font-medium hover:underline" [routerLink]="['/workflows', w.id]" data-testid="open-link">{{ w.name }}</a>
                           }
                         </td>
+                        <td class="p-2" data-testid="trigger-cell">
+                          @if (w.triggerType) {
+                            @let t = trigger(w.triggerType);
+                            <span class="inline-flex items-center gap-1" [attr.data-trigger]="w.triggerType">
+                              <span class="material-symbols-outlined row__trigger-icon" aria-hidden="true">{{ t.icon }}</span>{{ t.label }}
+                            </span>
+                          } @else if (w.triggerType === null) {
+                            <span class="opacity-60" i18n="@@workflows.trigger.none">Немає</span>
+                          }
+                        </td>
+                        <td class="p-2" data-testid="last-run-cell">
+                          @if (w.lastExecution; as last) {
+                            <a class="block hover:underline" data-testid="last-run-link" [routerLink]="['/executions']" [queryParams]="{ workflowId: w.id }">
+                              <span [class]="stateClass(last.status)" data-testid="last-run-state">{{ stateLabel(last.status) }}</span>
+                              @if (last.startedAt) {
+                                <span class="block text-sm opacity-70" data-testid="last-run-at">{{ last.startedAt | date: 'dd.MM.yyyy HH:mm' }}</span>
+                              }
+                            </a>
+                          } @else if (w.lastExecution === null) {
+                            <span class="opacity-60" i18n="@@workflows.lastRun.never">Не запускався</span>
+                          }
+                        </td>
                         <td class="p-2">
-                          <mat-slide-toggle
-                            data-testid="active-toggle"
-                            [checked]="w.active"
-                            [disabled]="busy()"
-                            (change)="toggleActive(w, $event.checked, $event.source)"
-                            [attr.aria-label]="w.active ? deactivateLabel : activateLabel"
-                          />
+                          <span data-testid="active-toggle-hint" [attr.title]="toggleHint(w)">
+                            <mat-slide-toggle
+                              data-testid="active-toggle"
+                              [checked]="w.active"
+                              [disabled]="busy() || noTrigger(w)"
+                              (change)="toggleActive(w, $event.checked, $event.source)"
+                              [attr.aria-label]="w.active ? deactivateLabel : activateLabel"
+                            />
+                          </span>
                         </td>
                         <td class="p-2">{{ w.version }}</td>
                         <td class="p-2">{{ w.updatedAt | date: 'short' }}</td>
@@ -255,14 +267,27 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                                 <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
                                 <span class="sr-only" i18n="@@workflows.open">Відкрити</span>
                               </a>
-                              <button mat-icon-button class="row__action" type="button" data-testid="rename-button" [attr.title]="renameLabel" (click)="startRename(w)">
-                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                                <span class="sr-only" i18n="@@workflows.rename">Перейменувати</span>
+                              <button mat-icon-button class="row__action" type="button" data-testid="row-menu" [attr.title]="moreLabel" [attr.aria-label]="moreLabel" [matMenuTriggerFor]="rowMenu">
+                                <span class="material-symbols-outlined" aria-hidden="true">more_horiz</span>
                               </button>
-                              <button mat-icon-button class="row__action" type="button" data-testid="move-button" [attr.title]="moveLabel" [matMenuTriggerFor]="moveMenu">
-                                <span class="material-symbols-outlined" aria-hidden="true">drive_file_move</span>
-                                <span class="sr-only" i18n="@@workflows.move">Перемістити</span>
-                              </button>
+                              <mat-menu #rowMenu="matMenu">
+                                <a mat-menu-item data-testid="open-new-tab" [routerLink]="['/workflows', w.id]" target="_blank" i18n="@@workflows.openNewTab">Відкрити в новій вкладці</a>
+                                <button mat-menu-item type="button" data-testid="rename-button" (click)="startRename(w)" i18n="@@workflows.rename">Перейменувати</button>
+                                <button mat-menu-item type="button" data-testid="move-button" [matMenuTriggerFor]="moveMenu" i18n="@@workflows.moveToGroup">Перенести в групу</button>
+                                <button mat-menu-item type="button" data-testid="export-button" [disabled]="busy()" (click)="exportWorkflow(w)" i18n="@@workflows.export">Експортувати</button>
+                                <button
+                                  mat-menu-item
+                                  type="button"
+                                  class="row__action--danger"
+                                  data-testid="delete-button"
+                                  [disabled]="w.active"
+                                  [attr.title]="w.active ? deleteActiveHint : deleteLabel"
+                                  (click)="startDelete(w.id)"
+                                  i18n="@@workflows.delete"
+                                >
+                                  Видалити
+                                </button>
+                              </mat-menu>
                               <mat-menu #moveMenu="matMenu">
                                 @for (g of orderedGroups(); track g.id) {
                                   <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="g.id" [disabled]="w.groupId === g.id" (click)="move(w, g.id)">{{ g.name }}</button>
@@ -270,29 +295,13 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
                                 <button mat-menu-item type="button" data-testid="move-to" [attr.data-target]="noGroup" [disabled]="!w.groupId" (click)="move(w, null)" i18n="@@workflows.groups.none">Без групи</button>
                                 <button mat-menu-item type="button" data-testid="move-to-new" (click)="startCreateGroup(w.id)" i18n="@@workflows.groups.newEllipsis">Нова група…</button>
                               </mat-menu>
-                              <button mat-icon-button class="row__action" type="button" data-testid="export-button" [attr.title]="exportLabel" [disabled]="busy()" (click)="exportWorkflow(w)">
-                                <span class="material-symbols-outlined" aria-hidden="true">download</span>
-                                <span class="sr-only" i18n="@@workflows.export">Експортувати</span>
-                              </button>
-                              <button
-                                mat-icon-button
-                                class="row__action row__action--danger"
-                                type="button"
-                                data-testid="delete-button"
-                                [disabled]="w.active"
-                                [attr.title]="w.active ? deleteActiveHint : deleteLabel"
-                                (click)="startDelete(w.id)"
-                              >
-                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                                <span class="sr-only" i18n="@@workflows.delete">Видалити</span>
-                              </button>
                             </div>
                           }
                         </td>
                       </tr>
                     } @empty {
                       <tr class="group__empty">
-                        <td class="p-2 opacity-60" colspan="6" data-testid="section-empty" i18n="@@workflows.groups.empty">Порожньо — перетягніть сюди сценарій.</td>
+                        <td class="p-2 opacity-60" colspan="8" data-testid="section-empty" i18n="@@workflows.groups.empty">Порожньо — перетягніть сюди сценарій.</td>
                       </tr>
                     }
                   </tbody>
@@ -339,6 +348,14 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
       width: 40px;
     }
 
+    .col--trigger {
+      width: 170px;
+    }
+
+    .col--last {
+      width: 170px;
+    }
+
     .col--active {
       width: 110px;
     }
@@ -352,7 +369,12 @@ import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, W
     }
 
     .col--actions {
-      width: 232px;
+      width: 104px;
+    }
+
+    .row__trigger-icon {
+      font-size: 18px;
+      color: var(--ac-cool-grey-4);
     }
 
     .row__actions {
@@ -457,9 +479,6 @@ export class WorkflowsPage implements OnInit {
   readonly groups = signal<WorkflowGroup[]>([]);
   readonly loading = signal(false);
   readonly busy = signal(false);
-  readonly creating = signal(false);
-  /** Група, у якій створюється новий сценарій (з кнопки секції); `null` — без групи. */
-  readonly createIn = signal<string | null>(null);
   readonly creatingGroup = signal(false);
   /** Сценарій, який після створення групи переноситься в неї («Перемістити → Нова група…»). */
   private readonly moveAfterCreate = signal<string | null>(null);
@@ -473,11 +492,9 @@ export class WorkflowsPage implements OnInit {
   readonly chips = signal<ReadonlySet<string>>(new Set());
   private readonly collapsed = signal<Record<string, boolean>>(readCollapsed());
 
-  readonly newName = new FormControl('', { nonNullable: true, validators: [Validators.required] });
   readonly renameName = new FormControl('', { nonNullable: true, validators: [Validators.required] });
   readonly groupName = new FormControl('', { nonNullable: true, validators: [Validators.required] });
   readonly groupRenameName = new FormControl('', { nonNullable: true, validators: [Validators.required] });
-  readonly createForm = new FormGroup({ name: this.newName });
   readonly renameForm = new FormGroup({ name: this.renameName });
   readonly groupForm = new FormGroup({ name: this.groupName });
   readonly groupRenameForm = new FormGroup({ name: this.groupRenameName });
@@ -486,9 +503,7 @@ export class WorkflowsPage implements OnInit {
   readonly deactivateLabel = $localize`:@@workflows.deactivate:Деактивувати`;
   readonly deleteActiveHint = $localize`:@@workflows.delete.activeHint:Спершу деактивуйте сценарій`;
   readonly openLabel = $localize`:@@workflows.open:Відкрити`;
-  readonly renameLabel = $localize`:@@workflows.rename:Перейменувати`;
-  readonly moveLabel = $localize`:@@workflows.move:Перемістити`;
-  readonly exportLabel = $localize`:@@workflows.export:Експортувати`;
+  readonly moreLabel = $localize`:@@workflows.more:Інші дії`;
   readonly deleteLabel = $localize`:@@workflows.delete:Видалити`;
   readonly noGroupLabel = $localize`:@@workflows.groups.none:Без групи`;
   readonly noGroup = NO_GROUP;
@@ -499,7 +514,6 @@ export class WorkflowsPage implements OnInit {
   readonly showHeaders = computed(() => this.groups().length > 0);
   /** Порядок груп змінюється лише тоді, коли видно всі групи (без фільтрів): інакше індекси секцій не збігаються з групами. */
   readonly canReorder = computed(() => this.chips().size === 0 && this.search().trim() === '');
-  readonly createGroupName = computed(() => this.groups().find((g) => g.id === this.createIn())?.name ?? null);
 
   constructor() {
     // Проєкт у шапці (F6-14) — фільтр списку; `?group=` при відкритті сторінки має пріоритет над збереженим вибором.
@@ -556,27 +570,25 @@ export class WorkflowsPage implements OnInit {
     this.chips.set(next);
   }
 
-  /** Без аргументу — у проєкті, вибраному в шапці (F6-14); `null` — без групи. */
+  /**
+   * Діалог «Створити сценарій» (F3-80): назва і група. Без аргументу група — проєкт, вибраний у шапці (F6-14);
+   * `null` — без групи. Після підтвердження: `POST /workflows` з порожнім визначенням → перехід у канвас нового сценарію.
+   */
   startCreate(groupId?: string | null): void {
-    this.newName.reset('');
-    this.createIn.set(groupId === undefined ? this.context.defaultProjectId() : groupId);
-    this.creating.set(true);
+    this.dialog
+      .open<CreateWorkflowDialog, CreateWorkflowDialogData, CreateWorkflowResult>(CreateWorkflowDialog, {
+        data: { groups: this.orderedGroups(), groupId: groupId === undefined ? this.context.defaultProjectId() : groupId },
+        width: '480px',
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => {
+        if (result) this.create(result);
+      });
   }
 
-  cancelCreate(): void {
-    this.creating.set(false);
-  }
-
-  /** `POST /workflows` з порожнім визначенням (у групі секції, з якої натиснули) → перехід у канвас нового сценарію. */
-  create(): void {
-    const name = this.newName.value.trim();
-    if (!name) {
-      this.newName.setValue('');
-      this.newName.markAsTouched();
-      return;
-    }
-    this.run(this.api.create(name, this.createIn()), (detail) => {
-      this.creating.set(false);
+  private create(result: CreateWorkflowResult): void {
+    this.run(this.api.create(result.name, result.groupId), (detail) => {
       this.upsert(detail);
       void this.router.navigate(['/workflows', detail.id]);
     });
@@ -710,6 +722,40 @@ export class WorkflowsPage implements OnInit {
     );
   }
 
+  trigger(type: string): TriggerInfo {
+    return triggerInfo(type);
+  }
+
+  stateLabel(state: ExecutionState): string {
+    return executionStateLabel(state);
+  }
+
+  stateClass(state: ExecutionState): string {
+    switch (state) {
+      case 'success':
+        return 'text-green-700';
+      case 'error':
+      case 'timed_out':
+        return 'text-red-700';
+      case 'waiting':
+        return 'text-blue-700';
+      default:
+        return 'opacity-70';
+    }
+  }
+
+  /** Сценарій без тригера не активується (сервер відхилить): перемикач вимкнено, поки тригер не додано. */
+  noTrigger(w: WorkflowSummary): boolean {
+    return !w.active && w.triggerType === null;
+  }
+
+  /** Підказка до перемикача «Активний»: чому вимкнений або що станеться при вмиканні. */
+  toggleHint(w: WorkflowSummary): string | null {
+    if (this.noTrigger(w)) return $localize`:@@workflows.activate.noTrigger:Спочатку додайте тригер у редакторі — без нього сценарій не активується`;
+    if (!w.active && w.publishedVersion == null) return $localize`:@@workflows.activate.publishes:Активація опублікує поточну версію сценарію`;
+    return null;
+  }
+
   /** Діалог імпорту; новий сценарій з'являється у списку (у групі вибраного фільтра, якщо вибрано одну групу). */
   openImport(): void {
     const chips = [...this.chips()];
@@ -777,7 +823,8 @@ export class WorkflowsPage implements OnInit {
   private upsert(detail: WorkflowDetail): void {
     const summary = toSummary(detail);
     const list = this.workflows();
-    this.setWorkflows(list.some((w) => w.id === summary.id) ? list.map((w) => (w.id === summary.id ? summary : w)) : [summary, ...list]);
+    // Відповідь про сценарій не містить тригера й останнього запуску — вони лишаються з рядка списку.
+    this.setWorkflows(list.some((w) => w.id === summary.id) ? list.map((w) => (w.id === summary.id ? { ...w, ...summary } : w)) : [summary, ...list]);
   }
 }
 

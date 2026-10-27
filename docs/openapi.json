@@ -10069,6 +10069,30 @@
           }
         }
       },
+      "WorkflowLastExecution": {
+        "required": [
+          "id",
+          "status",
+          "startedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "WorkflowManifest": {
         "required": [
           "connectors",
@@ -10153,6 +10177,22 @@
               "string"
             ],
             "format": "int32"
+          },
+          "triggerType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastExecution": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowLastExecution"
+              }
+            ]
           }
         }
       },
