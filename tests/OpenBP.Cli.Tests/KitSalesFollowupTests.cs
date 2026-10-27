@@ -19,7 +19,15 @@ public sealed class KitCrmFixture : IDisposable
     {
         Directory = System.IO.Directory.CreateTempSubdirectory("openbp-kit-").FullName;
         Dll = Build();
+        WarmUpJint();
     }
+
+    /// <summary>
+    /// Перший запуск Jint у процесі (JIT парсера й інтерпретатора) на навантаженому раннері може не вкластися в ліміт
+    /// вузла <c>core.code</c> (5 с) — тест «Протерміновані задачі» падав так у CI. Прогріваємо рушій до тестів;
+    /// сам ліміт не змінюємо.
+    /// </summary>
+    private static void WarmUpJint() => new Jint.Engine().Execute("1 + 1");
 
     /// <summary>Тимчасова тека.</summary>
     public string Directory { get; }
