@@ -1,5 +1,5 @@
 import { emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, TRIGGER_PRESETS_SECTION, PaletteServer, addNode, buildPalette, createNode, filterPalette, itemHint, nextNodePosition } from './palette';
+import { CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, TRIGGER_PRESETS_SECTION, PaletteServer, addNode, buildPalette, createNode, filterPalette, itemHint, itemTitle, nextNodePosition } from './palette';
 import { SAMPLE_DESCRIPTORS } from './sample-workflows';
 
 const servers: PaletteServer[] = [
@@ -147,5 +147,18 @@ describe('palette', () => {
 
     const two = addNode({ ...one, nodes: [...one.nodes, { ...one.nodes[0], id: 'x', name: 'x', position: [500, 40] }] }, item);
     expect(two.nodes[2].position).toEqual([760, 40]);
+  });
+
+  it('тригери йдуть за популярністю, а не за алфавітом (F3-77)', () => {
+    const triggers = buildPalette(SAMPLE_DESCRIPTORS, []).find((x) => x.id === 'group:trigger')!.items.map((i) => i.type);
+    const expected = ['core.manualTrigger', 'core.schedule', 'core.webhook', 'mcp.poll'].filter((t) => triggers.includes(t));
+    expect(triggers.filter((t) => expected.includes(t))).toEqual(expected);
+  });
+
+  it('технічний тип не показується в підказці елемента, але лишається в title і пошуку (F3-77)', () => {
+    const item = buildPalette(SAMPLE_DESCRIPTORS, []).flatMap((x) => x.items).find((i) => i.type === 'core.webhook')!;
+    expect(itemHint(item)).toBe('');
+    expect(itemTitle(item)).toContain('core.webhook');
+    expect(filterPalette(buildPalette(SAMPLE_DESCRIPTORS, []), 'core.webhook').flatMap((x) => x.items.map((i) => i.key))).toContain('core.webhook');
   });
 });

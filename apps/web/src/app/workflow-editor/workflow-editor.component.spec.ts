@@ -536,6 +536,32 @@ describe('WorkflowEditorComponent', () => {
     expect(canvasNodes(fixture)).toHaveLength(2);
   });
 
+  it('без конекторів у палітрі нейтральна підказка, а не помилка (F3-77)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
+    expect(host.querySelector('[data-testid="no-connectors"]')?.textContent).toContain('Конекторів ще немає');
+    expect(host.querySelector('[data-testid="no-connectors"] a')?.getAttribute('href')).toBe('/connectors');
+  });
+
+  it('збій конекторів показує причину і «Повторити» перезавантажує список (F3-77)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ title: 'x', detail: 'База недоступна' }, { status: 500, statusText: 'Server Error' });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="tools-error"]')?.textContent).toContain('База недоступна');
+
+    (host.querySelector('[data-testid="tools-retry"]') as HTMLButtonElement).click();
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
+  });
+
   describe('тестовий запуск (F2-20)', () => {
     function step(nodeId: string, id: string, status: ExecutionStep['status'] = 'success'): ExecutionStep {
       return {
