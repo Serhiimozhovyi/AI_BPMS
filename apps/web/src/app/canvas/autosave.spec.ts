@@ -25,6 +25,17 @@ describe('Autosave', () => {
     return { autosave, requests, saved, respond };
   }
 
+  it('вдале збереження без помилок не замінює validationErrors новим масивом (інакше канвас перебудовує всі вузли)', () => {
+    const { autosave, respond } = setup();
+    const before = autosave.validationErrors();
+
+    autosave.schedule('a');
+    vi.advanceTimersByTime(500);
+    respond(0);
+
+    expect(autosave.validationErrors()).toBe(before);
+  });
+
   it('debounce: серія змін — одне збереження останнього значення після паузи', () => {
     const { autosave, requests, saved, respond } = setup();
     expect(autosave.status()).toBe('idle');
