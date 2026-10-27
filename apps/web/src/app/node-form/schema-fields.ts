@@ -1,4 +1,5 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
+import { ENUM_LABELS_ANNOTATION } from './core-labels';
 import { isAssignmentSchema, isCombineSchema, isConditionSchema, isRuleSchema, operatorLabel } from './conditions';
 import { isDecisionRulesSchema } from './decision-table';
 import { OPTIONS_ANNOTATION, OptionsSource, parseOptionsSource } from './dynamic-options';
@@ -119,7 +120,10 @@ function typedField(key: string | undefined, raw: JsonSchema, required: boolean,
     return { key, type: COMBINE_FIELD, props: { ...props, label, rules: { kind: 'enum', options: enumValues } } };
   }
   if (enumValues) {
-    return valueField(key, props, { kind: 'enum', options: enumValues });
+    const labels = schema[ENUM_LABELS_ANNOTATION];
+    const rules: ValueRules = { kind: 'enum', options: enumValues };
+    if (Array.isArray(labels) && labels.length === enumValues.length) rules.labels = labels.map(String);
+    return valueField(key, props, rules);
   }
 
   const types = typesOf(schema);

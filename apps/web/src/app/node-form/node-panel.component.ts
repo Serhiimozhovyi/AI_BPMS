@@ -59,7 +59,7 @@ interface PanelState {
           }
           <ng-content select="[panelActions]" />
         </div>
-        <span class="panel__type">{{ s.node.type }}</span>
+        <span class="panel__type" [title]="s.node.type">{{ descriptor()?.displayName ?? s.node.type }}</span>
         @if (isMcp(s.node)) {
           <span class="panel__type" data-testid="node-panel-tool">{{ s.node.parameters['serverId'] }} · {{ s.node.parameters['toolName'] }}</span>
         }
