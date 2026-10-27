@@ -343,7 +343,8 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
   Вбудовані: `telegram` — «Нове повідомлення Telegram» (`mcp.poll` на `get_updates`, `keyField = update_id`; після F6-22
   стане `mcp.subscribe`), `msgraph` — «Новий лист» (`list_messages`, `keyField = id`, `mailbox` вкажіть у вузлі), `onec` —
   «Новий документ 1С» (`list_document_orders`; назву tool'а звірте зі своїм `Connector:Source`), `kit-crm` — «Нова угода» і
-  «Нова чи змінена задача» (`changes_since`).
+  «Нова чи змінена задача» (`changes_since`), `sql` — «Нові рядки в таблиці» і «Нові або змінені рядки» (`changes_since`,
+  `keyField = _changeKey`; таблицю оберіть у вузлі).
 - Типовий шлях stdio — `/opt/openbp/connectors/<id>/<збірка>.dll`: туди адміністратор кладе `dotnet publish` конектора
   (docs/admin/README.md). Інший шлях чи URL змінюється після встановлення так само, як у доданого вручну конектора.
 
@@ -374,6 +375,14 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
   не 2xx — `isError`, якщо не `fail_on_status_error: false`). Захист від SSRF: приватні адреси й метадані хмари заборонені
   на підключенні й у редіректах, окрім хостів з `HTTP_ALLOW_PRIVATE`; `HTTP_ALLOWED_HOSTS` обмежує цілі; ліміт розміру
   відповіді; параметри адреси не потрапляють у відповіді й журнали.
+- `connectors/sql` — база даних Postgres або MySQL/MariaDB (F6-31): `list_tables`, `describe_table`, `query` (одна
+  інструкція `SELECT`/`WITH`/`SHOW`/`EXPLAIN` з параметрами `@назва` у транзакції `READ ONLY` → `{ result, columns, rowCount,
+  truncated }`), `changes_since` (§8; `entity` — таблиця, `column` — курсор `updated_at` чи числовий ключ, кожен рядок має
+  `_changeKey` = ключ + `@` + значення курсора), запис лише з `SQL_ALLOW_WRITE=true`: `insert_rows`, `upsert_rows { keyColumns }`
+  (Postgres `ON CONFLICT`, MySQL `ON DUPLICATE KEY`), `update_rows`/`delete_rows` (умова `where` обов'язкова), `execute`
+  (одна інструкція). Таблиці й колонки звіряються з каталогом бази, значення — лише параметрами; `table`/`entity` мають
+  `x-openbp-options` на `list_tables`; пресети тригерів «Нові рядки в таблиці» і «Нові або змінені рядки». Провайдер і
+  рядок підключення — `SQL_PROVIDER`, `SQL_CONNECTION_STRING` (секрет); пароль у тексти помилок не потрапляє.
 - `connectors/msgraph` — Microsoft Graph, пошта (F3-15): `list_messages` (`{ result }`, для `mcp.poll` —
   `keyField = id`), `get_message`, `list_attachments`, `get_attachment` (вміст — `resource`-блок → binary item),
   `send_mail`; client credentials з `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, токен кешується, на 401 — одне повторне

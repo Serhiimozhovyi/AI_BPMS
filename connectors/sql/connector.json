@@ -1,0 +1,92 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "sql",
+  "name": "База даних (Postgres, MySQL)",
+  "description": "Таблиці, запити з параметрами, запис рядків і нові чи змінені рядки в Postgres або MySQL. Одна база — один конектор.",
+  "icon": "🗄️",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/sql/OpenBP.Connectors.Sql.dll"
+    ]
+  },
+  "http": {
+    "url": "http://sql:8080/mcp"
+  },
+  "credential": {
+    "env": [
+      {
+        "name": "SQL_PROVIDER",
+        "title": "Тип бази: postgres або mysql",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "SQL_CONNECTION_STRING",
+        "title": "Рядок підключення, напр. Host=db;Port=5432;Database=crm;Username=openbp_reader;Password=…",
+        "required": true,
+        "secret": true
+      },
+      {
+        "name": "SQL_ALLOW_WRITE",
+        "title": "true — дозволити запис (insert, update, upsert, delete, execute); порожньо — лише читання",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "SQL_MAX_ROWS",
+        "title": "Найбільше рядків у відповіді (типово 1000)",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "SQL_TIMEOUT_SEC",
+        "title": "Таймаут запиту, секунд (типово 30)",
+        "required": false,
+        "secret": false
+      }
+    ],
+    "headers": []
+  },
+  "triggers": [
+    {
+      "id": "new_rows",
+      "title": "Нові рядки в таблиці",
+      "description": "Нові рядки за зростанням id; перевірка щохвилини. Оберіть таблицю у вузлі.",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "changes_since",
+          "arguments": {
+            "entity": "",
+            "column": "id",
+            "limit": 100
+          },
+          "itemsPath": "result",
+          "keyField": "_changeKey",
+          "cron": "*/1 * * * *"
+        }
+      }
+    },
+    {
+      "id": "changed_rows",
+      "title": "Нові або змінені рядки",
+      "description": "Рядки, у яких змінився updated_at за останні 10 хвилин; перевірка раз на 5 хвилин. Оберіть таблицю у вузлі.",
+      "node": {
+        "type": "mcp.poll",
+        "parameters": {
+          "toolName": "changes_since",
+          "arguments": {
+            "entity": "",
+            "column": "updated_at",
+            "withinMinutes": 10
+          },
+          "itemsPath": "result",
+          "keyField": "_changeKey",
+          "cron": "*/5 * * * *"
+        }
+      }
+    }
+  ]
+}

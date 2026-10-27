@@ -42,7 +42,7 @@ src/
 tests/                  # по проєкту на кожен src/*
 apps/web/               # Angular SPA
 tools/connector-template/ # Connector Kit (MIT)
-connectors/             # наші конектори на шаблоні: telegram, onec, msgraph, gsheets, http, kit-crm, psy-support
+connectors/             # наші конектори на шаблоні: telegram, onec, msgraph, gsheets, http, sql, kit-crm, psy-support
 examples/
 docs/
 ```

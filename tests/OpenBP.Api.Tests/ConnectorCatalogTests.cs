@@ -145,6 +145,8 @@ public class ConnectorCatalogTests(ApiFactory api)
         Assert.Equal("list_messages", Assert.Single(Triggers("msgraph").EnumerateArray()).GetProperty("node").GetProperty("parameters").GetProperty("toolName").GetString());
         Assert.Single(Triggers("onec").EnumerateArray());
         Assert.Equal(2, Triggers("kit-crm").GetArrayLength());
+        Assert.Equal(["new_rows", "changed_rows"], Triggers("sql").EnumerateArray().Select(t => t.GetProperty("id").GetString()));
+        Assert.All(Triggers("sql").EnumerateArray(), t => Assert.Equal("_changeKey", t.GetProperty("node").GetProperty("parameters").GetProperty("keyField").GetString()));
         Assert.All(entries.SelectMany(e => e.GetProperty("manifest").GetProperty("triggers").EnumerateArray()),
             t => Assert.False(t.GetProperty("node").GetProperty("parameters").TryGetProperty("serverId", out _)));
     }
