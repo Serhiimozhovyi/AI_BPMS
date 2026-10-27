@@ -10,7 +10,7 @@
 @theme {
   --font-sans: "Ubuntu", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ac-kit: #7a6ff0;
+  --color-ac-kit: #5f53dc;
   --color-ac-vivid: #261f4b;
   --color-ac-mid: #372f6c;
   --color-ac-button: #ebe9fd;
@@ -20,7 +20,7 @@
   --color-ac-cool-grey: #f4f3f8;
   --color-ac-cool-grey-2: #f2f1fd;
   --color-ac-cool-grey-3: #bdbbd2;
-  --color-ac-cool-grey-4: #8d86a3;
+  --color-ac-cool-grey-4: #6b6580;
 
   --color-ac-teal: #27c7be;
   --color-ac-blue: #20aaea;

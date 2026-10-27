@@ -304,7 +304,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
     }
 
     .bar__icon:disabled {
-      color: var(--ac-cool-grey-4, #8d86a3);
+      color: var(--ac-cool-grey-4, #6b6580);
       cursor: default;
     }
 
@@ -357,7 +357,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
     .bar__save {
       font-size: 13px;
       white-space: nowrap;
-      color: var(--ac-cool-grey-4, #8d86a3);
+      color: var(--ac-cool-grey-4, #6b6580);
     }
 
     .bar__save--error {
@@ -369,7 +369,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       display: none;
       font-size: 13px;
       white-space: nowrap;
-      color: var(--ac-cool-grey-4, #8d86a3);
+      color: var(--ac-cool-grey-4, #6b6580);
       text-decoration: none;
     }
 
