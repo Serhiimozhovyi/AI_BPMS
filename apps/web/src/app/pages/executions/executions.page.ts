@@ -439,6 +439,8 @@ export class ExecutionsPage implements OnInit {
     if (this.view() === 'business') this.loadBusiness();
     this.workflowId.set(this.route.snapshot.queryParamMap.get('workflowId') || null);
     this.onlyViolations.set(this.route.snapshot.queryParamMap.get('hasOpenViolations') === 'true');
+    const status = this.route.snapshot.queryParamMap.get('status');
+    if (status) this.status.set(status as ExecutionState);
     this.workflowsApi
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))

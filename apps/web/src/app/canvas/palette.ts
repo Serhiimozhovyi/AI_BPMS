@@ -71,6 +71,38 @@ export function groupLabel(group: NodeGroup | 'unknown'): string {
   }
 }
 
+/**
+ * Порядок типів у групах палітри — від найуживаніших (F3-77). Типи поза списком йдуть після нього за назвою.
+ * Тригери: Ручний запуск, Розклад, Webhook, Форма, Подія конектора, MCP: опитування, Помилка сценарію, Виклик з іншого сценарію.
+ */
+export const PALETTE_TYPE_ORDER: readonly string[] = [
+  'core.manualTrigger',
+  'core.schedule',
+  'core.webhook',
+  'core.formTrigger',
+  'mcp.subscribe',
+  'mcp.poll',
+  'core.errorTrigger',
+  'core.workflowTrigger',
+  'core.if',
+  'core.switch',
+  'core.loop',
+  'core.merge',
+  'core.wait',
+  'core.approval',
+  'core.set',
+  'core.code',
+  'core.dataTable',
+  'core.decisionTable',
+  'ai.agent',
+  'ai.llm',
+];
+
+function typeRank(type: string): number {
+  const i = PALETTE_TYPE_ORDER.indexOf(type);
+  return i < 0 ? PALETTE_TYPE_ORDER.length : i;
+}
+
 /** Id секцій конекторів і часто вживаних дій. */
 export const CONNECTORS_SECTION = 'connectors';
 export const FREQUENT_SECTION = 'frequent';
@@ -102,7 +134,7 @@ export function buildPalette(descriptors: readonly NodeTypeInfo[], servers: read
   for (const group of GROUP_ORDER) {
     const items = latest
       .filter((d) => d.group === group)
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'uk'))
+      .sort((a, b) => typeRank(a.type) - typeRank(b.type) || a.displayName.localeCompare(b.displayName, 'uk'))
       .map(
         (d): PaletteItem => ({
           key: d.type,
@@ -221,10 +253,16 @@ export function filterPalette(sections: readonly PaletteSection[], query: string
   return result;
 }
 
-/** Підказка праворуч від назви елемента: кількість дій конектора, ім'я tool'а або тип вузла. */
+/** Підказка праворуч від назви елемента: кількість дій конектора або ім'я tool'а. Технічний тип не показується (F3-77): він лише в `title` і в пошуку. */
 export function itemHint(item: PaletteItem): string {
   if (item.actions) return $localize`:@@canvas.palette.actionsCount:${item.actions.length}:count: дій`;
-  return item.toolName ?? item.type;
+  return item.toolName ?? '';
+}
+
+/** Підказка при наведенні: опис, а за його відсутності — технічний тип. */
+export function itemTitle(item: PaletteItem): string {
+  const description = item.description?.trim();
+  return description ? `${description}\n(${item.type})` : item.type;
 }
 
 /** Відступ нового вузла праворуч від крайнього (ширина картки + проміжок). */

@@ -7,6 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { NotifyService } from '../../shared/notify.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClientConfig } from '../../settings/api-keys-api.service';
@@ -151,6 +152,7 @@ import { VariablesSection } from '../../settings/variables-section.component';
 export class SettingsPage implements OnInit {
   private readonly api = inject(ApiKeysApiService);
   private readonly clipboard = inject(Clipboard);
+  private readonly notify = inject(NotifyService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   protected readonly projects = inject(ProjectContextService);
@@ -219,6 +221,7 @@ export class SettingsPage implements OnInit {
           this.created.set(created);
           this.name.reset();
           this.load();
+          this.notify.success($localize`:@@settings.keys.created:Ключ створено — скопіюйте його зараз, пізніше він не показується.`);
         },
         error: (e: unknown) => {
           this.creating.set(false);
@@ -236,12 +239,16 @@ export class SettingsPage implements OnInit {
         next: () => {
           this.keys.update((list) => list.filter((k) => k.id !== key.id));
           if (this.created()?.id === key.id) this.created.set(null);
+          this.notify.success($localize`:@@settings.keys.revoked:Ключ «${key.name}:name:» відкликано.`);
         },
         error: (e: unknown) => this.error.set(apiErrorMessage(e)),
       });
   }
 
   copy(text: string): void {
-    this.copied.set(this.clipboard.copy(text));
+    const ok = this.clipboard.copy(text);
+    this.copied.set(ok);
+    if (ok) this.notify.success($localize`:@@settings.copied:Скопійовано в буфер обміну.`);
+    else this.notify.error($localize`:@@settings.copyFailed:Не вдалося скопіювати — виділіть текст і скопіюйте вручну.`);
   }
 }

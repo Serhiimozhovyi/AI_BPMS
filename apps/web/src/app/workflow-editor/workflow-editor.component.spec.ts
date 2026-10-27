@@ -180,7 +180,9 @@ describe('WorkflowEditorComponent', () => {
   });
 
   it('посилання «Журнал виконань» веде на журнал цього сценарію', async () => {
-    const { host } = await loaded();
+    const { fixture, host } = await loaded();
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
     const link = host.querySelector<HTMLAnchorElement>('[data-testid="executions-link"]')!;
     expect(link.getAttribute('href')).toBe('/executions?workflowId=w1');
   });
@@ -236,7 +238,7 @@ describe('WorkflowEditorComponent', () => {
     put.flush(saved(4, body));
     await render(fixture);
     expect(host.querySelector('[data-testid="dirty"]')).toBeNull();
-    expect(host.querySelector('[data-testid="saved"]')?.textContent).toContain('4');
+    expect(host.querySelector('[data-testid="saved"]')?.getAttribute('title')).toContain('4');
     expect(canvasNodes(fixture)).toBe(body.nodes);
   });
 
@@ -532,6 +534,32 @@ describe('WorkflowEditorComponent', () => {
     expect(host.querySelector('[data-testid="tools-error"]')).not.toBeNull();
     expect(host.querySelector('[data-item="core.if"]')).not.toBeNull();
     expect(canvasNodes(fixture)).toHaveLength(2);
+  });
+
+  it('без конекторів у палітрі нейтральна підказка, а не помилка (F3-77)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
+    expect(host.querySelector('[data-testid="no-connectors"]')?.textContent).toContain('Конекторів ще немає');
+    expect(host.querySelector('[data-testid="no-connectors"] a')?.getAttribute('href')).toBe('/connectors');
+  });
+
+  it('збій конекторів показує причину і «Повторити» перезавантажує список (F3-77)', async () => {
+    const { fixture, http, host } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ title: 'x', detail: 'База недоступна' }, { status: 500, statusText: 'Server Error' });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="tools-error"]')?.textContent).toContain('База недоступна');
+
+    (host.querySelector('[data-testid="tools-retry"]') as HTMLButtonElement).click();
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
   });
 
   describe('тестовий запуск (F2-20)', () => {
@@ -964,6 +992,8 @@ describe('WorkflowEditorComponent', () => {
       const { fixture, host } = await loaded();
       fixture.componentRef.setInput('embedded', true);
       await render(fixture);
+      click(host, '[data-testid="toolbar-more"]');
+      await render(fixture);
       expect(host.querySelector('[data-testid="executions-link"]')).toBeNull();
       expect(host.querySelector('a[href="/workflows"]')).toBeNull();
     });
@@ -1155,6 +1185,8 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
 
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
     click(host, '[data-testid="assistant-toggle"]');
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
     await render(fixture);

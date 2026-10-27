@@ -50,9 +50,9 @@ describe('CanvasComponent', () => {
     const cards = (fixture.nativeElement as HTMLElement).querySelectorAll('[data-node-id]');
     expect(Array.from(cards).map((c) => c.getAttribute('data-node-id'))).toEqual(['n_webhook', 'n_if', 'n_1c']);
     expect(cards[0].textContent).toContain('Нова заявка');
-    expect(cards[0].textContent).toContain('core.webhook');
+    expect(cards[0].textContent).not.toContain('core.webhook');
     expect(cards[0].textContent).toContain('Тригери');
-    expect(cards[2].textContent).toContain('mcp.tool · create_order');
+    expect(cards[2].textContent).toContain('create_order');
   });
 
   it('F3-62: нотатки — картки з Markdown-текстом і кольором; зміна кольору чи розміру з канвасу — нове визначення', async () => {

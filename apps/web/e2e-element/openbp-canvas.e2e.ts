@@ -117,6 +117,8 @@ test('завантажити сценарій, змінити, зберегти 
 
   // Backspace у полі панелі вузла (усередині Shadow DOM) редагує текст, а не видаляє вузол.
   await card(page, 'Старт').click();
+  // «Додатково» (F3-78) згорнуте за замовчуванням.
+  await page.getByTestId('node-extra-toggle').click();
   const name = page.getByTestId('node-common').locator('input').first();
   await name.click();
   await name.press('End');
@@ -155,6 +157,7 @@ test('Виконати → подія openbp-run і живий статус че
   await expect.poll(() => hostEvents(page)).toContainEqual({ type: 'openbp-run', detail: { executionId } });
   expect(sseAuthorization).toBe(`Bearer ${TOKEN}`);
 
+  await page.getByTestId('toolbar-more').click();
   await page.getByTestId('settings').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

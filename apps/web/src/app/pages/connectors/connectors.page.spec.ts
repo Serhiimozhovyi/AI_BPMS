@@ -47,6 +47,13 @@ describe('ConnectorsPage', () => {
     expect(host.querySelector('[data-testid="empty"]')).not.toBeNull();
   });
 
+  it('порожній список: «Відкрити каталог» перемикає на каталог', async () => {
+    const { fixture, host } = await setup([]);
+    (host.querySelector('[data-testid="empty-action"]') as HTMLButtonElement).click();
+    await render(fixture);
+    expect(host.querySelector('app-connector-catalog')).not.toBeNull();
+  });
+
   it('помилка завантаження показується', async () => {
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
     const fixture = TestBed.createComponent(ConnectorsPage);

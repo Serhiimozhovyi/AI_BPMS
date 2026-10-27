@@ -1,15 +1,19 @@
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, HostListener, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { AuthService } from './auth/auth.service';
+import { ConnectivityService } from './connectivity/connectivity.service';
+import { MOBILE_QUERY } from './layout/breakpoints';
 import { ProjectContextService } from './projects/project-context.service';
 import { NO_GROUP } from './workflows/workflow-groups';
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatToolbarModule, MatButtonModule],
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './app.scss',
@@ -20,7 +24,13 @@ export class App {
   private readonly auth = inject(AuthService);
   protected readonly user = this.auth.user;
   protected readonly projects = inject(ProjectContextService);
+  protected readonly connectivity = inject(ConnectivityService);
   protected readonly sharedSpace = NO_GROUP;
+  /** Телефон (< 768 px): навігація, проєкт і користувач — у drawer за кнопкою-бургером (F3-84). */
+  protected readonly mobile = toSignal(inject(BreakpointObserver).observe(MOBILE_QUERY).pipe(map((s) => s.matches)), {
+    initialValue: false,
+  });
+  protected readonly drawerOpen = signal(false);
   /** Публічна форма (`/form/…`, F6-03) — без шапки й меню застосунку. */
   protected readonly bare = toSignal(
     this.router.events.pipe(
@@ -31,11 +41,29 @@ export class App {
   );
 
   constructor() {
+    // Перехід за пунктом drawer закриває його; на планшеті активний пункт прокрутної навігації лишається видимим.
+    this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd), takeUntilDestroyed()).subscribe(() => {
+      this.drawerOpen.set(false);
+      setTimeout(() => document.querySelector('.shell-nav__link.active')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' }));
+    });
+    // Розширили вікно до десктопа — drawer не лишається відкритим «позаду».
+    effect(() => {
+      if (!this.mobile()) this.drawerOpen.set(false);
+    });
     // Проєкти (F6-14) залежать від користувача: після входу — перечитати, після виходу — забути.
     effect(() => {
       if (this.user()) this.projects.reload();
       else this.projects.projects.set([]);
     });
+  }
+
+  protected toggleDrawer(): void {
+    this.drawerOpen.update((open) => !open);
+  }
+
+  @HostListener('document:keydown.escape')
+  protected closeDrawer(): void {
+    this.drawerOpen.set(false);
   }
 
   /** Вибір у шапці: порожнє значення — усі проєкти. */

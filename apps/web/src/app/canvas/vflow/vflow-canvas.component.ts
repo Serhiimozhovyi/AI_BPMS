@@ -330,7 +330,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
             }
             @if (d.runError; as runError) {
               <div class="node__run-error" data-testid="node-run-error" [title]="runError">{{ firstLine(runError) }}</div>
-            } @else {
+            } @else if (d.node.subtitle) {
               <div class="node__type" [title]="d.node.subtitle">{{ d.node.subtitle }}</div>
             }
             @if (d.missing.length > 0) {
