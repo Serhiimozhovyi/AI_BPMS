@@ -73,7 +73,12 @@ describe('WorkflowEditorComponent', () => {
     return (canvas.componentInstance as CanvasComponent).definition().nodes;
   }
 
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => {
+    const http = TestBed.inject(HttpTestingController);
+    // Запит останнього виконання при відкритті (F3-76) більшість тестів не цікавить — окремий блок нижче.
+    http.match((r) => r.method === 'GET' && r.url === '/api/v1/executions');
+    http.verify();
+  });
 
   it('«не заповнено: N» (F3-57): обов’язкові аргументи tool’а; клік відкриває вузол і ставить фокус на перше поле', async () => {
     const { fixture, http, host } = setup();
@@ -998,6 +1003,68 @@ describe('WorkflowEditorComponent', () => {
       expect(host.querySelector('a[href="/workflows"]')).toBeNull();
     });
   });
+  describe('останній запуск (F3-76)', () => {
+    const summary = { id: 'e1', workflowId: 'w1', versionId: 'v1', mode: 'manual', state: 'error', startedAt: '2026-10-27T18:10:40', finishedAt: '2026-10-27T18:10:42', error: 'boom' };
+    const step = (nodeId: string, status: string, error?: string) => ({ id: `s-${nodeId}`, nodeId, runIndex: 0, status, input: [], output: [], error: error ? { message: error } : null, startedAt: '2026-10-27T18:10:40', finishedAt: '2026-10-27T18:10:41' });
+
+    afterEach(() => localStorage.removeItem('openbp.editor.showLastRun'));
+
+    async function loadedWithLastRun() {
+      const ctx = setup();
+      ctx.http.expectOne('/api/v1/workflows/w1').flush(workflow);
+      ctx.http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+      flushConnectors(ctx.http);
+      const list = ctx.http.expectOne((r) => r.method === 'GET' && r.url === '/api/v1/executions');
+      expect(list.request.params.get('workflowId')).toBe('w1');
+      expect(list.request.params.get('pageSize')).toBe('1');
+      list.flush({ items: [summary], page: 1, pageSize: 1, total: 1 });
+      ctx.http.expectOne('/api/v1/executions/e1').flush({ summary, steps: [step('n_hook', 'success'), step('n_set', 'error', 'Порахувати: ділення на нуль')] });
+      await render(ctx.fixture);
+      return ctx;
+    }
+
+    it('при відкритті статуси й помилка останнього запуску видно на вузлах, у шапці — підпис', async () => {
+      const { fixture, host } = await loadedWithLastRun();
+      expect(Object.fromEntries(canvasComponent(fixture).runStatuses())).toEqual({ n_hook: 'success', n_set: 'error' });
+      expect(canvasComponent(fixture).runErrors().get('n_set')).toBe('Порахувати: ділення на нуль');
+      expect(canvasComponent(fixture).runTimes().get('n_hook')).toBe('18:10:41');
+      expect(canvasComponent(fixture).viewportKey()).toBe('w1');
+      expect(host.querySelector('[data-testid="last-run"]')?.textContent).toContain('18:10, помилка');
+    });
+
+    it('після правки вузла значки зникають, підпис у шапці лишається', async () => {
+      const { fixture, host } = await loadedWithLastRun();
+      const def = canvasComponent(fixture).definition();
+      canvasComponent(fixture).definitionChange.emit({ ...def, nodes: def.nodes.map((n) => (n.id === 'n_set' ? { ...n, name: 'Інша назва' } : n)) });
+      await render(fixture);
+      expect(canvasComponent(fixture).runStatuses().size).toBe(0);
+      expect(canvasComponent(fixture).lastRunToggle()).toBeNull();
+      expect(host.querySelector('[data-testid="last-run"]')).not.toBeNull();
+    });
+
+    it('перемикач «Останній запуск» ховає значки й запам’ятовує вибір', async () => {
+      const { fixture } = await loadedWithLastRun();
+      expect(canvasComponent(fixture).lastRunToggle()).toBe(true);
+      canvasComponent(fixture).lastRunToggled.emit(false);
+      await render(fixture);
+      expect(canvasComponent(fixture).runStatuses().size).toBe(0);
+      expect(canvasComponent(fixture).lastRunToggle()).toBe(false);
+      expect(localStorage.getItem('openbp.editor.showLastRun')).toBe('0');
+    });
+
+    it('сценарій без запусків: ні значків, ні підпису, ні перемикача', async () => {
+      const { fixture, http, host } = setup();
+      http.expectOne('/api/v1/workflows/w1').flush(workflow);
+      http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+      flushConnectors(http);
+      http.expectOne((r) => r.method === 'GET' && r.url === '/api/v1/executions').flush({ items: [], page: 1, pageSize: 1, total: 0 });
+      await render(fixture);
+      expect(canvasComponent(fixture).runStatuses().size).toBe(0);
+      expect(canvasComponent(fixture).lastRunToggle()).toBeNull();
+      expect(host.querySelector('[data-testid="last-run"]')).toBeNull();
+    });
+  });
+
   describe('«Бізнес | Технічний» (F3-66)', () => {
     afterEach(() => {
       localStorage.removeItem('openbp.editor.view');

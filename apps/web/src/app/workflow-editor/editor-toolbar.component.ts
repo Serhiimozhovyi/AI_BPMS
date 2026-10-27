@@ -95,6 +95,11 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
                 <button type="button" role="menuitem" data-testid="assistant-toggle" [attr.aria-pressed]="assistantOpen()" (click)="pick('assistant')" i18n-title="@@workfloweditor.assistant.hint" title="ШІ-помічник: описати процес, пояснити чи виправити вузол" i18n="@@workfloweditor.assistant">Помічник</button>
                 <button type="button" role="menuitem" data-testid="history" (click)="pick('history')" i18n-title="@@workfloweditor.history.hint" title="Версії сценарію: переглянути або відновити" i18n="@@workfloweditor.history">Історія</button>
                 <button type="button" role="menuitem" data-testid="settings" (click)="pick('settings')" i18n-title="@@workfloweditor.settings.hint" title="Часовий пояс, таймаут, сценарій помилок" i18n="@@workfloweditor.settings">Налаштування</button>
+                @if (lastRun(); as last) {
+                  @if (!embedded()) {
+                    <a role="menuitem" data-testid="last-run-menu" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" (click)="moreOpen.set(false)">{{ lastRunTitle() }}</a>
+                  }
+                }
                 @if (!embedded()) {
                   <a role="menuitem" data-testid="executions-link" (click)="moreOpen.set(false)" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" i18n="@@workfloweditor.executions">Журнал виконань</a>
                 }
@@ -104,6 +109,11 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
         </span>
       }
       <span class="bar__end">
+        @if (lastRun(); as last) {
+          @if (!embedded()) {
+            <a class="bar__last bar__last--{{ last.state }}" data-testid="last-run" [routerLink]="['/executions']" [queryParams]="{ workflowId: workflow()?.id }" [title]="lastRunTitle()">{{ lastRunTitle() }}</a>
+          }
+        }
         @if (run(); as r) {
           <span class="bar__run bar__run--{{ r.state }}" data-testid="run-status" [attr.data-state]="r.state" [title]="r.label">{{ r.label }}</span>
         }
@@ -354,6 +364,30 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       color: var(--mat-sys-error);
     }
 
+    /* Підпис останнього запуску — лише на широких екранах; на вужчих він у меню «⋯». */
+    .bar__last {
+      display: none;
+      font-size: 13px;
+      white-space: nowrap;
+      color: var(--ac-cool-grey-4, #8d86a3);
+      text-decoration: none;
+    }
+
+    .bar__last:hover {
+      text-decoration: underline;
+    }
+
+    .bar__last--error,
+    .bar__last--timed_out {
+      color: var(--ac-red);
+    }
+
+    @media (min-width: 1500px) {
+      .bar__last {
+        display: inline;
+      }
+    }
+
     .bar__run {
       max-width: 160px;
       padding: 2px 10px;
@@ -431,6 +465,8 @@ export class EditorToolbarComponent {
   readonly assistantOpen = input(false);
   readonly running = input(false);
   readonly run = input<ToolbarRun | null>(null);
+  /** Останнє виконання при відкритті редактора (F3-76): підпис у шапці та в меню «⋯». */
+  readonly lastRun = input<ToolbarRun | null>(null);
   readonly saveStatus = input<AutosaveStatus>('idle');
 
   readonly action = output<ToolbarAction>();
@@ -451,6 +487,7 @@ export class EditorToolbarComponent {
     const counts = def ? ` — ${$localize`:@@workfloweditor.counts.hint:вузлів: ${def.nodes.length}:nodes: · ребер: ${def.connections.length}:edges:`}` : '';
     return `${this.title()}${counts}`;
   });
+  protected readonly lastRunTitle = computed(() => $localize`:@@workfloweditor.lastRun:Останній запуск: ${this.lastRun()?.label ?? ''}:label:`);
   protected readonly savedHint = computed(() => $localize`:@@workfloweditor.saved.hint:Версія ${this.workflow()?.version ?? ''}:version:`);
 
   constructor() {

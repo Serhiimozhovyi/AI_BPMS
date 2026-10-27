@@ -10,6 +10,7 @@ import { BusinessViewComponent } from '../business-view/business-view.component'
 import { EditorView, readEditorView, writeEditorView } from '../business-view/editor-view';
 import { BusinessRun } from '../business-view/business-run';
 import { Autosave } from '../canvas/autosave';
+import { LastRun, lastRunFromDetail, lastRunLabel, lastRunTimes } from '../canvas/last-run';
 import { EditorToolbarComponent, ToolbarAction, ToolbarRun } from './editor-toolbar.component';
 import { CanvasSelection, EMPTY_SELECTION, NeighborDirection, copySelection, deleteSelection, neighborNode, pasteClipboard, renameNode, toggleDisabled } from '../canvas/canvas-edit';
 import { DescriptorIndex } from '../canvas/canvas-model';
@@ -80,6 +81,16 @@ const MIN_PANEL_WIDTH = 360;
 const WIDE_PANEL_WIDTH = 1100;
 const DEFAULT_PANEL_WIDTH = 480;
 const PANEL_WIDTH_KEY = 'openbp.editor.panelWidth';
+const SHOW_LAST_RUN_KEY = 'openbp.editor.showLastRun';
+
+/** «Показувати останній запуск» на вузлах: за замовчуванням увімкнено. */
+function readShowLastRun(): boolean {
+  try {
+    return localStorage.getItem(SHOW_LAST_RUN_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
 /** Скільки місця лишається канвасу, коли панель розтягнуто; ширина палітри ліворуч. */
 const CANVAS_RESERVE = 240;
 const PALETTE_WIDTH = 260;
@@ -132,6 +143,7 @@ export interface EditorErrorEvent {
         [assistantOpen]="assistantOpen()"
         [running]="running()"
         [run]="toolbarRun()"
+        [lastRun]="lastRunChip()"
         [saveStatus]="saveStatus()"
         (action)="toolbarAction($event)"
         (viewChange)="setView($event)"
@@ -193,6 +205,10 @@ export interface EditorErrorEvent {
               [runStatuses]="runStatuses()"
               [itemCounts]="itemCounts()"
               [runErrors]="runErrors()"
+              [runTimes]="runTimes()"
+              [viewportKey]="viewportKey()"
+              [lastRunToggle]="lastRunToggle()"
+              (lastRunToggled)="setShowLastRun($event)"
               [missingFields]="missingFields()"
               [selection]="selection()"
               [readonly]="readonly()"
@@ -855,11 +871,43 @@ export class WorkflowEditorComponent implements OnInit {
   });
 
   /** Підписи «N items» на ребрах після запуску. */
-  protected readonly itemCounts = computed(() => itemCounts(this.testRun()));
+  /** Останнє виконання сценарію, завантажене при відкритті (F3-76); `null` — ще не запускався чи не вдалося завантажити. */
+  protected readonly lastRun = signal<LastRun | null>(null);
 
-  protected readonly runStatuses = computed(() => nodeStatuses(this.testRun()));
+  /** Після будь-якої правки вузла останній запуск уже не відповідає графу — значки на вузлах зникають. */
+  private readonly lastRunStale = signal(false);
+
+  /** Перемикач «Показувати останній запуск» у керуванні канвасу; вибір запам'ятовується. */
+  protected readonly showLastRun = signal(readShowLastRun());
+
+  /** Що малювати на вузлах: поточний тестовий запуск, а за його відсутності — свіжий останній запуск. */
+  private readonly shownRun = computed(() => this.testRun() ?? (this.showLastRun() && !this.lastRunStale() ? (this.lastRun()?.run ?? null) : null));
+
+  /** Кнопка «Останній запуск» на канвасі є, коли є що показувати. */
+  protected readonly lastRunToggle = computed(() => (this.lastRun() && !this.lastRunStale() && !this.testRun() ? this.showLastRun() : null));
+
+  protected readonly runTimes = computed(() => lastRunTimes(this.shownRun()));
+
+  /** «Останній запуск: 18:10, помилка» у шапці. */
+  protected readonly lastRunChip = computed((): ToolbarRun | null => {
+    const last = this.lastRun();
+    return last && !this.testRun() ? { state: last.summary.state, label: lastRunLabel(last.summary) } : null;
+  });
+
+  protected setShowLastRun(show: boolean): void {
+    this.showLastRun.set(show);
+    try {
+      localStorage.setItem(SHOW_LAST_RUN_KEY, show ? '1' : '0');
+    } catch {
+      // Сховище недоступне — вибір діє до перезавантаження.
+    }
+  }
+
+  protected readonly itemCounts = computed(() => itemCounts(this.shownRun()));
+
+  protected readonly runStatuses = computed(() => nodeStatuses(this.shownRun()));
   /** Повідомлення помилок вузлів останнього запуску — перший рядок на картці (F3-57). */
-  protected readonly runErrors = computed(() => nodeRunErrors(this.testRun()));
+  protected readonly runErrors = computed(() => nodeRunErrors(this.shownRun()));
   /** Незаповнені обов'язкові параметри вузлів — «не заповнено: N» на картці до збереження (F3-57). */
   protected readonly missingFields = computed(() => {
     const def = this.definition();
@@ -928,6 +976,8 @@ export class WorkflowEditorComponent implements OnInit {
           this.stopRun();
           this.testRun.set(null);
           this.runError.set(null);
+          this.lastRun.set(null);
+          this.lastRunStale.set(false);
         }),
         switchMap(({ id, version }) =>
           forkJoin({
@@ -951,6 +1001,7 @@ export class WorkflowEditorComponent implements OnInit {
           this.history.reset(loaded.version ?? loaded.workflow.definition);
           this.descriptors.set(loaded.descriptors);
           this.loadGroupName(loaded.workflow);
+          if (!loaded.version) this.loadLastRun(loaded.workflow.id);
         }
         this.loading.set(false);
       });
@@ -1695,6 +1746,7 @@ export class WorkflowEditorComponent implements OnInit {
   /** Показує стан історії й ставить його на збереження; виділення лишається лише на наявних елементах. */
   private apply(definition: WorkflowDefinition): void {
     this.definition.set(definition);
+    this.lastRunStale.set(true);
     const ids = new Set(definition.nodes.map((n) => n.id));
     const noteIds = new Set((definition.notes ?? []).map((n) => n.id));
     const selection = this.selection();
@@ -1711,6 +1763,23 @@ export class WorkflowEditorComponent implements OnInit {
   }
 
   /** Назва групи — з `GET /workflow-groups`; помилка не заважає редактору (назва просто не показується). */
+  /** Останнє виконання сценарію (F3-76): значки на вузлах і підпис у шапці; помилка завантаження не заважає редактору. */
+  private loadLastRun(workflowId: string): void {
+    this.executions
+      .list({ workflowId }, 1, 1)
+      .pipe(
+        switchMap((page) => (page.items[0] ? this.executions.get(page.items[0].id) : of(null))),
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((detail) => {
+        if (detail && this.workflow()?.id === workflowId && !this.lastRunStale()) this.lastRun.set(lastRunFromDetail(detail));
+      });
+  }
+
+  /** Ключ збереження положення полотна: id сценарію; старі версії (`?version=N`) і вбудований режим не запам'ятовуються. */
+  protected readonly viewportKey = computed(() => (this.version() || this.embedded() ? null : (this.workflow()?.id ?? null)));
+
   private loadGroupName(workflow: WorkflowDetail): void {
     const groupId = workflow.groupId;
     if (!groupId) return;
