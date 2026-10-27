@@ -5,6 +5,15 @@ import { authGuard } from './auth/auth.guard';
 export const formMatcher: UrlMatcher = (segments: UrlSegment[]) =>
   segments.length > 1 && segments[0].path === 'form' ? { consumed: segments } : null;
 
+/**
+ * `/executions` і `/executions/:id` (F3-81) — одна сторінка: матчер, а не два маршрути, щоб відкриття виконання не
+ * перестворювало її (фільтри, прокрутка і запити лишаються).
+ */
+export const executionsMatcher: UrlMatcher = (segments: UrlSegment[]) =>
+  segments.length >= 1 && segments.length <= 2 && segments[0].path === 'executions'
+    ? { consumed: segments, posParams: segments[1] ? { id: segments[1] } : undefined }
+    : null;
+
 export const routes: Routes = [
   {
     // Публічна форма (F6-03): без входу (доступ перевіряє Api за налаштуванням вузла) і без меню застосунку.
@@ -47,7 +56,7 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/project/project.page').then((m) => m.ProjectPage),
       },
       {
-        path: 'executions',
+        matcher: executionsMatcher,
         title: $localize`:@@executions.title:Виконання`,
         loadComponent: () => import('./pages/executions/executions.page').then((m) => m.ExecutionsPage),
       },
