@@ -1,3 +1,4 @@
+import { RouterLink } from '@angular/router';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, booleanAttribute, computed, effect, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -111,7 +112,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [EditorToolbarComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
+  imports: [RouterLink, EditorToolbarComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -647,6 +648,9 @@ export class WorkflowEditorComponent implements OnInit {
   /** Переглянути стару версію (F3-61, `?version=N`): канвас лише для читання з визначенням цієї версії. */
   readonly version = input<number | null>(null);
 
+  /** Вузол, який виділити після завантаження (`?node=`, F3-81): напр. упалий у виконанні; невідомий id ігнорується. */
+  readonly focusNode = input<string | null>(null);
+
   /** Вбудований режим (`<openbp-canvas>`): без посилань на інші сторінки SPA. */
   readonly embedded = input(false, { transform: booleanAttribute });
 
@@ -951,6 +955,10 @@ export class WorkflowEditorComponent implements OnInit {
           this.history.reset(loaded.version ?? loaded.workflow.definition);
           this.descriptors.set(loaded.descriptors);
           this.loadGroupName(loaded.workflow);
+          const focus = this.focusNode();
+          if (focus && (loaded.version ?? loaded.workflow.definition).nodes.some((n) => n.id === focus)) {
+            this.selection.set({ nodes: [focus], edges: [] });
+          }
         }
         this.loading.set(false);
       });
