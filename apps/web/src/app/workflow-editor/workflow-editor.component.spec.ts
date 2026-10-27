@@ -73,7 +73,11 @@ describe('WorkflowEditorComponent', () => {
     return (canvas.componentInstance as CanvasComponent).definition().nodes;
   }
 
+  // Палітра за замовчуванням згорнута, коли у сценарії є вузли (F3-89): більшість тестів користується палітрою — вона розгорнута вибором.
+  beforeEach(() => localStorage.setItem('openbp.editor.palette', '1'));
+
   afterEach(() => {
+    localStorage.removeItem('openbp.editor.palette');
     const http = TestBed.inject(HttpTestingController);
     // Запит останнього виконання при відкритті (F3-76) більшість тестів не цікавить — окремий блок нижче.
     http.match((r) => r.method === 'GET' && r.url === '/api/v1/executions');
@@ -124,9 +128,9 @@ describe('WorkflowEditorComponent', () => {
     expect(palette.find((s) => s.id === 'trigger-presets')?.items.map((i) => i.key)).toEqual(['trigger:c1/new_update']);
   });
 
-  async function loaded() {
+  async function loaded(detail: WorkflowDetail = workflow) {
     const ctx = setup();
-    ctx.http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    ctx.http.expectOne('/api/v1/workflows/w1').flush(detail);
     ctx.http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
     flushConnectors(ctx.http);
     await render(ctx.fixture);
@@ -594,6 +598,53 @@ describe('WorkflowEditorComponent', () => {
     http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [], page: 1, pageSize: 200, total: 0 });
     await render(fixture);
     expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
+  });
+
+  describe('палітра: смуга й розгорнутий вигляд (F3-89)', () => {
+    beforeEach(() => localStorage.removeItem('openbp.editor.palette'));
+
+    it('у сценарії з вузлами палітра згорнута в смугу з «+ Додати крок»; «Розгорнути» показує палітру й запам’ятовує вибір', async () => {
+      const { fixture, host } = await loaded();
+      expect(host.querySelector('[data-testid="palette-rail"]')).not.toBeNull();
+      expect(host.querySelector('app-palette')).toBeNull();
+
+      click(host, '[data-testid="palette-expand"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="palette-rail"]')).toBeNull();
+      expect(host.querySelector('app-palette')).not.toBeNull();
+      expect(localStorage.getItem('openbp.editor.palette')).toBe('1');
+
+      click(host, '[data-testid="palette-collapse"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="palette-rail"]')).not.toBeNull();
+      expect(localStorage.getItem('openbp.editor.palette')).toBe('0');
+    });
+
+    it('порожній сценарій відкривається з розгорнутою палітрою, і вона не згортається, коли додано перший вузол', async () => {
+      const { fixture, host } = await loaded({ ...workflow, definition: emptyWorkflowDefinition('Порожній') });
+      expect(host.querySelector('app-palette')).not.toBeNull();
+      (host.querySelector('[data-item="core.manualTrigger"]') as HTMLButtonElement).click();
+      await render(fixture);
+      expect(canvasNodes(fixture)).toHaveLength(1);
+      expect(host.querySelector('app-palette')).not.toBeNull();
+    });
+
+    it('збережений вибір «згорнуто» діє і в порожньому сценарії', async () => {
+      localStorage.setItem('openbp.editor.palette', '0');
+      const { host } = await loaded({ ...workflow, definition: emptyWorkflowDefinition('Порожній') });
+      expect(host.querySelector('[data-testid="palette-rail"]')).not.toBeNull();
+    });
+
+    it('«+ Додати крок» зі смуги відкриває спливаючу палітру, вибір додає вузол', async () => {
+      const { fixture, host } = await loaded();
+      click(host, '[data-testid="rail-add"]');
+      await render(fixture);
+      expect(host.querySelector('[data-testid="quick-add"]')).not.toBeNull();
+      const before = canvasNodes(fixture).length;
+      (host.querySelector('[data-testid="quick-add"] [data-item]') as HTMLButtonElement).click();
+      await render(fixture);
+      expect(canvasNodes(fixture)).toHaveLength(before + 1);
+    });
   });
 
   describe('шапка панелі вузла (F3-88)', () => {
