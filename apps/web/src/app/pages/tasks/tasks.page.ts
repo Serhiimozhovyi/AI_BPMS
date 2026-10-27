@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
+import { CardTableDirective } from '../../shared/card-table.directive';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
@@ -22,7 +23,7 @@ import {
 @Component({
   selector: 'app-tasks-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatProgressBarModule, EmptyStateComponent],
+  imports: [DatePipe, RouterLink, MatProgressBarModule, EmptyStateComponent, CardTableDirective],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@tasks.title">Задачі</h1>
@@ -68,10 +69,10 @@ import {
       }
 
       @if (tasks().length > 0) {
-        <table class="mb-2 w-full text-left" data-testid="tasks-table">
+        <table appCardTable class="mb-2 w-full text-left" data-testid="tasks-table">
           <thead>
             <tr>
-              <th class="p-2" i18n="@@tasks.col.title">Задача</th>
+              <th class="p-2" data-no-label i18n="@@tasks.col.title">Задача</th>
               <th class="p-2" i18n="@@tasks.col.workflow">Сценарій</th>
               <th class="p-2" i18n="@@tasks.col.assignee">Виконавець</th>
               <th class="p-2" i18n="@@tasks.col.status">Статус</th>

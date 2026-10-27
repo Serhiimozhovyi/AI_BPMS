@@ -25,6 +25,7 @@ import {
   sameExecutionsQuery,
   toIsoDay,
 } from '../../executions/executions-query';
+import { CardTableDirective } from '../../shared/card-table.directive';
 import { UkDateAdapter } from '../../shared/uk-date-adapter';
 import { ConnectorsApiService, apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
@@ -82,6 +83,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
   selector: 'app-executions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    CardTableDirective,
     DatePipe,
     RouterLink,
     MatButtonModule,
@@ -168,10 +170,10 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
 
       @if (executions().length > 0) {
         <div class="overflow-x-auto">
-        <table class="mb-2 w-full text-left" data-testid="executions-table">
+        <table appCardTable class="mb-2 w-full text-left" data-testid="executions-table">
           <thead>
             <tr>
-              <th class="p-2" i18n="@@executions.col.startedAt">Початок</th>
+              <th class="p-2" data-no-label i18n="@@executions.col.startedAt">Початок</th>
               <th class="p-2" i18n="@@executions.col.workflow">Сценарій</th>
               <th class="p-2" i18n="@@executions.col.mode">Режим</th>
               <th class="p-2" i18n="@@executions.col.state">Стан</th>

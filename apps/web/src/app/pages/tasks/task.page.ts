@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, JsonPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
@@ -28,7 +28,7 @@ interface Problem {
 @Component({
   selector: 'app-task-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, ReactiveFormsModule, MatButtonModule, MatCardModule, MatProgressBarModule, FormlyForm],
+  imports: [DatePipe, JsonPipe, RouterLink, ReactiveFormsModule, MatButtonModule, MatCardModule, MatProgressBarModule, FormlyForm],
   providers: [providePublicForm()],
   template: `
     <section class="p-6">
@@ -54,6 +54,13 @@ interface Problem {
               <p class="task-card__description mb-4" data-testid="task-description">{{ d.description }}</p>
             }
 
+            @if (d.data) {
+              <details class="task-card__data mb-4" data-testid="task-data">
+                <summary class="cursor-pointer text-sm" i18n="@@task.data">Дані процесу</summary>
+                <pre class="mt-2 overflow-x-auto text-xs">{{ d.data | json }}</pre>
+              </details>
+            }
+
             @if (d.task.canComplete) {
               <form [formGroup]="form" novalidate data-testid="task-form" (ngSubmit)="$event.preventDefault()">
                 <formly-form [form]="form" [fields]="fields()" [model]="model" />
@@ -63,7 +70,7 @@ interface Problem {
                 @if (submitting()) {
                   <mat-progress-bar class="mb-4" mode="indeterminate" />
                 }
-                <div class="flex flex-wrap gap-2">
+                <div class="task-card__decisions flex flex-wrap gap-2">
                   @for (decision of d.decisions; track decision.key; let first = $first) {
                     @if (first) {
                       <button mat-flat-button type="button" [disabled]="submitting()" [attr.data-testid]="'decision-' + decision.key" (click)="decide(decision)">
@@ -101,6 +108,28 @@ interface Problem {
 
     .task-card__description {
       white-space: pre-line;
+    }
+
+    /* Телефон (F3-85): рішення — кнопки на всю ширину внизу екрана, щоб не тягнутись угору. */
+    @media (max-width: 767.98px) {
+      .task-card {
+        padding: 0;
+      }
+
+      .task-card__decisions {
+        position: sticky;
+        bottom: 0;
+        flex-direction: column;
+        margin: 16px -16px -16px;
+        padding: 12px 16px;
+        background: var(--ac-white);
+        box-shadow: 0 -2px 8px rgb(38 31 75 / 0.12);
+      }
+
+      .task-card__decisions button {
+        width: 100%;
+        min-height: 48px;
+      }
     }
   `,
 })
