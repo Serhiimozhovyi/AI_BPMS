@@ -6,7 +6,8 @@ import { DEFAULT_NOTE_SIZE, MIN_NOTE_SIZE, NOTE_COLORS, noteColorToken, noteSize
 import { groupLabel } from '../palette';
 import { QuickAddRequest, ScreenPoint } from '../quick-add';
 import { NodeRunStatus } from '../test-run';
-import { Box, MAX_ZOOM, MIN_ZOOM, Viewport, contentBounds, fitViewport, loadViewport, revealBox, saveViewport, viewportShowsContent } from '../viewport';
+import { nodeIcon } from '../node-icon';
+import { Box, MAX_ZOOM, MIN_ZOOM, Viewport, contentBounds, fitViewport, loadViewport, openViewport, revealBox, saveViewport, viewportShowsContent } from '../viewport';
 import { debounceTime, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NoteColor, WorkflowNote } from '../../workflows/workflows-api.service';
@@ -186,6 +187,8 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
   template: `
     <vflow
       view="auto"
+      [minZoom]="MIN_ZOOM"
+      [maxZoom]="MAX_ZOOM"
       [nodes]="nodes()"
       [edges]="edges()"
       [optimization]="{ virtualization: virtualization(), virtualizationZoomThreshold: MIN_ZOOM }"
@@ -299,7 +302,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
               }
             }
             <div class="node__head">
-              <span class="node__group">{{ d.groupLabel }}</span>
+              <span class="node__lead">
+                <span class="material-symbols-outlined node__icon" aria-hidden="true" data-testid="node-icon">{{ icon(d.node) }}</span>
+                <span class="node__group">{{ d.groupLabel }}</span>
+              </span>
               @if (d.pinned) {
                 <span class="node__pin" data-testid="node-pinned" role="img" title="Output закріплено" i18n-title="@@canvas.pinned">📌</span>
               }
@@ -630,7 +636,20 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__name {
       margin-top: 4px;
+      font-size: 14px;
       font-weight: 500;
+    }
+
+    .node__lead {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .node__icon {
+      font-size: 16px;
+      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #261f4b));
     }
 
     .node__type {
@@ -1232,7 +1251,9 @@ export class VflowCanvasComponent {
 
   protected readonly ZOOM_STEP = ZOOM_STEP;
   /** Нижня межа масштабу: ngx-vflow малює вузли сірими заглушками при масштабі менше за 0.5, а вписаний довгий сценарій має лишатись читабельним. */
+  protected readonly icon = (node: CanvasNode): string => nodeIcon(node.type, node.group);
   protected readonly MIN_ZOOM = MIN_ZOOM;
+  protected readonly MAX_ZOOM = MAX_ZOOM;
 
   protected arrangeClicked(): void {
     if (this.readonly()) return;
@@ -1277,7 +1298,17 @@ export class VflowCanvasComponent {
     this.placeView(flow, firstOpen && key ? loadViewport(key) : null);
   }
 
-  private placeView(flow: VflowComponent, saved: Viewport | null): void {
+  /** Тригер (вузол без входів, лівіший) або найлівіший вузол — з нього починається показ довгого сценарію. */
+  private startBox(): Box | null {
+    const nodes = this.model().nodes;
+    const triggers = nodes.filter((n) => n.inputs.length === 0);
+    const pool = triggers.length > 0 ? triggers : nodes;
+    const first = pool.reduce<(typeof nodes)[number] | null>((best, n) => (!best || n.x < best.x ? n : best), null);
+    return first ? { x: first.x, y: first.y, width: NODE_WIDTH, height: nodeHeight(first) } : null;
+  }
+
+  /** `open` — при відкритті: не дрібніше за `OPEN_MIN_ZOOM`; `all` — вписати все (новий вузол за межами екрана). */
+  private placeView(flow: VflowComponent, saved: Viewport | null, mode: 'open' | 'all' = 'open'): void {
     let tries = 0;
     const apply = () => {
       const rect = this.host.nativeElement.getBoundingClientRect();
@@ -1289,7 +1320,9 @@ export class VflowCanvasComponent {
       const bounds = contentBounds(this.contentBoxes());
       if (!bounds) return;
       const size = { width: rect.width, height: rect.height };
-      const view = saved && viewportShowsContent(saved, bounds, size) ? saved : fitViewport(bounds, size);
+      const start = this.startBox();
+      const fitted = mode === 'open' && start ? openViewport(bounds, start, size) : fitViewport(bounds, size);
+      const view = saved && viewportShowsContent(saved, bounds, size) ? saved : fitted;
       this.appliedView = view;
       flow.viewportTo(view);
     };
@@ -1306,7 +1339,7 @@ export class VflowCanvasComponent {
     const added = new Set(addedIds);
     const boxes = this.model().nodes.filter((n) => added.has(n.id)).map((n): Box => ({ x: n.x, y: n.y, width: NODE_WIDTH, height: nodeHeight(n) }));
     const seen = boxes.some((b) => b.x < visible.x + visible.width && b.x + b.width > visible.x && b.y < visible.y + visible.height && b.y + b.height > visible.y);
-    if (!seen) this.placeView(flow, null);
+    if (!seen) this.placeView(flow, null, 'all');
   }
 
   /**

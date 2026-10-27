@@ -294,14 +294,14 @@ test('F3-90: масштаб у відсотках, клавіші 0/1/+/−, «?
   for (const id of ['n0', 'n4']) await expect(page.locator(`[data-node-id="${id}"]`)).toBeInViewport();
 
   await page.keyboard.press('Shift+Slash');
-  await expect(page.getByTestId('shortcuts')).toBeVisible();
-  await expect(page.getByTestId('shortcuts')).toContainText('Масштаб 100 %');
+  await expect(page.locator('div[data-testid="shortcuts"]')).toBeVisible();
+  await expect(page.locator('div[data-testid="shortcuts"]')).toContainText('Масштаб 100 %');
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('shortcuts')).toHaveCount(0);
+  await expect(page.locator('div[data-testid="shortcuts"]')).toHaveCount(0);
 
   await page.getByTestId('toolbar-more').click();
-  await page.getByTestId('shortcuts').click();
-  await expect(page.getByTestId('shortcuts')).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Гарячі клавіші' }).click();
+  await expect(page.locator('div[data-testid="shortcuts"]')).toBeVisible();
 });
 
 test('новий інстанс без конекторів: у палітрі немає помилки, лише підказка (F3-77)', async ({ page }) => {
@@ -842,19 +842,29 @@ function longChain(count: number): Pick<Definition, 'nodes' | 'connections'> {
   return { nodes, connections };
 }
 
-test('F3-76: довгий сценарій при відкритті видно повністю з відступом, а не притиснутим до краю', async ({ page }) => {
+test('F3-91: довгий сценарій відкривається читабельно, а клавіша 1 вписує його повністю', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const api = new FakeApi();
   Object.assign(api.definition, longChain(8));
   await api.install(page);
   await page.goto(`/workflows/${WORKFLOW_ID}`);
-  await expect(page.locator('[data-node-id]')).toHaveCount(8);
+  await expect(page.locator('[data-node-id="n0"]')).toBeVisible();
 
   const canvas = (await page.locator('.editor__canvas').boundingBox())!;
+  const zoomOf = async () => Number.parseInt((await page.getByTestId('canvas-zoom-level').innerText()).replace(/\D/g, ''), 10);
+  // Відкриття: не дрібніше за 70 %, початок сценарію видно з відступом.
+  await expect.poll(zoomOf).toBeGreaterThanOrEqual(70);
+  const first = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+  expect(first.x).toBeGreaterThanOrEqual(canvas.x + 20);
+  expect(first.x + first.width).toBeLessThanOrEqual(canvas.x + canvas.width);
+
+  // Клавіша 1 вписує весь сценарій у вікно.
+  await page.locator('.editor__canvas').click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press('1');
   await expect.poll(async () => {
-    const first = (await page.locator('[data-node-id="n0"]').boundingBox())!;
-    const last = (await page.locator('[data-node-id="n7"]').boundingBox())!;
-    return first.x >= canvas.x + 40 && last.x + last.width <= canvas.x + canvas.width - 40;
+    const f = (await page.locator('[data-node-id="n0"]').boundingBox())!;
+    const l = (await page.locator('[data-node-id="n7"]').boundingBox())!;
+    return f.x >= canvas.x + 20 && l.x + l.width <= canvas.x + canvas.width - 20;
   }).toBe(true);
 });
 

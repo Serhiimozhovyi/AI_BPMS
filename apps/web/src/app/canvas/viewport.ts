@@ -74,6 +74,19 @@ export function revealBox(view: Viewport, box: Box, size: { width: number; heigh
   return x === view.x && y === view.y ? null : { ...view, x, y };
 }
 
+/** Найменший масштаб при відкритті сценарію (F3-91): менший робить текст на вузлах нечитабельним (~8 px). */
+export const OPEN_MIN_ZOOM = 0.7;
+
+/**
+ * Положення при відкритті: сценарій, що вміщується з масштабом ≥ `OPEN_MIN_ZOOM`, вписується повністю; довгий —
+ * показується з початку (`start` — тригер) на `OPEN_MIN_ZOOM`, тригер зліва по центру висоти. «Вписати» й клавіша `1` вписують усе.
+ */
+export function openViewport(bounds: Box, start: Box, size: { width: number; height: number }, minZoom = OPEN_MIN_ZOOM): Viewport {
+  const full = fitViewport(bounds, size);
+  if (full.zoom >= minZoom) return full;
+  return { zoom: minZoom, x: FIT_PADDING - start.x * minZoom, y: size.height / 2 - (start.y + start.height / 2) * minZoom };
+}
+
 const STORAGE_PREFIX = 'openbp.viewport.';
 
 /** Збережене положення сценарію; пошкоджене чи відсутнє значення (або недоступний `localStorage`) → `null`. */
