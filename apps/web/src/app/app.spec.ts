@@ -96,7 +96,7 @@ describe('routes', () => {
       'workflows',
       'workflows/:id',
       'projects/:id',
-      'executions',
+      undefined, // /executions[/:id] — matcher (F3-81)
       'tasks',
       'tasks/:id',
       'tables',

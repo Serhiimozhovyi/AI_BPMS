@@ -664,6 +664,9 @@ export class WorkflowEditorComponent implements OnInit {
   /** Переглянути стару версію (F3-61, `?version=N`): канвас лише для читання з визначенням цієї версії. */
   readonly version = input<number | null>(null);
 
+  /** Вузол, який виділити після завантаження (`?node=`, F3-81): напр. упалий у виконанні; невідомий id ігнорується. */
+  readonly focusNode = input<string | null>(null);
+
   /** Вбудований режим (`<openbp-canvas>`): без посилань на інші сторінки SPA. */
   readonly embedded = input(false, { transform: booleanAttribute });
 
@@ -1003,6 +1006,10 @@ export class WorkflowEditorComponent implements OnInit {
           this.descriptors.set(loaded.descriptors);
           this.loadGroupName(loaded.workflow);
           if (!loaded.version) this.loadLastRun(loaded.workflow.id);
+          const focus = this.focusNode();
+          if (focus && (loaded.version ?? loaded.workflow.definition).nodes.some((n) => n.id === focus)) {
+            this.selection.set({ nodes: [focus], edges: [] });
+          }
         }
         this.loading.set(false);
       });

@@ -1,7 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { executionsMatcher } from '../../app.routes';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { EVENT_SOURCE_FACTORY, ExecutionDetail, ExecutionStep, ExecutionSummary } from '../../executions/executions-api.service';
 import { FakeEventSource } from '../../executions/fake-event-source';
@@ -64,7 +65,7 @@ describe('ExecutionsPage', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([{ path: 'executions', component: ExecutionsPage }]),
+        provideRouter([{ matcher: executionsMatcher, component: ExecutionsPage }]),
         { provide: EVENT_SOURCE_FACTORY, useValue: (u: string) => new FakeEventSource(u) },
       ],
     });
@@ -91,6 +92,7 @@ describe('ExecutionsPage', () => {
   async function openDetail(setupResult: Awaited<ReturnType<typeof setup>>, detail: ExecutionDetail) {
     const { harness, http, host } = setupResult;
     host.querySelector<HTMLButtonElement>(`[data-execution="${detail.summary.id}"] button`)!.click();
+    await harness.fixture.whenStable();
     http.expectOne(`/api/v1/executions/${detail.summary.id}`).flush(detail);
     http.expectOne('/api/v1/workflows/w1').flush(workflow);
     await render(harness);
@@ -111,7 +113,7 @@ describe('ExecutionsPage', () => {
   it('?workflowId= з канвасу — журнал одного сценарію', async () => {
     const { list, host } = await setup('/executions?workflowId=w1');
     expect(list.request.params.get('workflowId')).toBe('w1');
-    expect(host.querySelector<HTMLSelectElement>('[data-testid="filter-workflow"]')!.value).toBe('w1');
+    expect(host.querySelector('[data-testid="filter-workflow"]')!.textContent).toContain('Telegram → 1С');
   });
 
   it('порушення (F7-04): ?hasOpenViolations=true з «Огляду» і прапорець фільтра запитують лише виконання з відкритими порушеннями', async () => {
@@ -136,9 +138,8 @@ describe('ExecutionsPage', () => {
 
   it('фільтри стану й періоду перезавантажують список з першої сторінки', async () => {
     const { harness, http, host, page } = await setup();
-    const status = host.querySelector<HTMLSelectElement>('[data-testid="filter-status"]')!;
-    status.value = 'error';
-    status.dispatchEvent(new Event('change'));
+    page.setStatus('error');
+    await harness.fixture.whenStable();
     let req = expectList(http);
     expect(req.request.params.get('status')).toBe('error');
     req.flush({ items: [failed], page: 1, pageSize: 50, total: 1 });
@@ -206,7 +207,7 @@ describe('ExecutionsPage', () => {
 
   it('помилка завантаження показується', async () => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([{ path: 'executions', component: ExecutionsPage }])],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([{ matcher: executionsMatcher, component: ExecutionsPage }])],
     });
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/executions', ExecutionsPage);
@@ -331,6 +332,38 @@ describe('ExecutionsPage', () => {
     expect(s.host.querySelector('[data-testid="override-panel"]')).toBeNull();
   });
 
+  it('URL — джерело виділення й фільтрів (F3-81): відкриття виконання, пряме посилання, фільтр у query', async () => {
+    const s = await setup('/executions?status=error');
+    await openDetail(s, failedDetail);
+    expect(TestBed.inject(Router).url).toBe('/executions/e1?status=error');
+
+    s.page.setStatus('success');
+    await s.harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/executions/e1?status=success');
+    s.http.expectOne((r) => r.url === '/api/v1/executions').flush({ items: [], page: 1, pageSize: 50, total: 0 });
+  });
+
+  it('пряме посилання /executions/:id відкриває виконання без кліку в списку', async () => {
+    FakeEventSource.last = null;
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([{ matcher: executionsMatcher, component: ExecutionsPage }]),
+        { provide: EVENT_SOURCE_FACTORY, useValue: (u: string) => new FakeEventSource(u) },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/executions/e1', ExecutionsPage);
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne((r) => r.url === '/api/v1/workflows').flush({ items: [workflow], page: 1, pageSize: 200, total: 1 });
+    expectList(http).flush({ items: [failed, running], page: 1, pageSize: 50, total: 2 });
+    http.expectOne('/api/v1/executions/e1').flush(failedDetail);
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    await render(harness);
+    expect(harness.routeNativeElement!.querySelector('[data-testid="execution-detail"]')).not.toBeNull();
+  });
+
   it('«Повторити» запускає повтор, оновлює журнал і відкриває нове виконання', async () => {
     const s = await setup();
     await openDetail(s, failedDetail);
@@ -338,6 +371,7 @@ describe('ExecutionsPage', () => {
     const retried: ExecutionSummary = { ...failed, id: 'e3', mode: 'retry', state: 'queued', startedAt: null, finishedAt: null, error: null };
     s.http.expectOne({ method: 'POST', url: '/api/v1/executions/e1/retry' }).flush(retried);
     expectList(s.http).flush({ items: [retried, failed, running], page: 1, pageSize: 50, total: 3 });
+    await s.harness.fixture.whenStable();
     s.http.expectOne('/api/v1/executions/e3').flush({ summary: retried, steps: [] });
     s.http.expectOne('/api/v1/workflows/w1').flush(workflow);
     await render(s.harness);
@@ -375,6 +409,7 @@ describe('ExecutionsPage', () => {
     const resumed: ExecutionSummary = { ...failed, id: 'e4', mode: 'resume', state: 'queued', startedAt: null, finishedAt: null, error: null, resumedFromExecutionId: 'e1' };
     request.flush(resumed);
     expectList(s.http).flush({ items: [resumed, failed, running], page: 1, pageSize: 50, total: 3 });
+    await s.harness.fixture.whenStable();
     s.http.expectOne('/api/v1/executions/e4').flush({ summary: resumed, steps: [failedDetail.steps[0]] });
     s.http.expectOne('/api/v1/workflows/w1').flush(workflow);
     await render(s.harness);
@@ -398,6 +433,7 @@ describe('ExecutionsPage', () => {
     expect(detail.querySelector('[data-testid="parent-execution"]')).toBeNull();
 
     children[0].querySelector('button')!.click();
+    await s.harness.fixture.whenStable();
     s.http.expectOne('/api/v1/executions/e9').flush({ summary: child, steps: [], children: [] });
     s.http.expectOne('/api/v1/workflows/w2').flush({ ...workflow, id: 'w2', name: 'Перевірка складу' });
     await render(s.harness);
@@ -420,6 +456,9 @@ describe('ExecutionsPage', () => {
     await render(s.harness);
     expect(s.host.querySelector('[data-testid="action-error"]')).not.toBeNull();
 
+    s.host.querySelector<HTMLButtonElement>('[data-testid="detail-back"]')!.click();
+    await s.harness.fixture.whenStable();
+    await render(s.harness);
     await openDetail(s, { summary: { ...failed, state: 'success', error: null }, steps: [] });
     expect(s.host.querySelector('[data-testid="resume-button"]')).toBeNull();
   });
