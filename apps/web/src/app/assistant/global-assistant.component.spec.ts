@@ -109,4 +109,28 @@ describe('GlobalAssistantComponent', () => {
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="global-assistant-not-configured"]')?.textContent).toContain('не вибрано модель');
   });
+
+  it('пропозиція змін у відповіді — картка; «Застосувати» шле рішення й оновлює картку', () => {
+    const { fixture, host, http, service } = create('editor');
+    service.show();
+    service.currentId.set('c1');
+    service.draft.set('Створи сценарій Звіт');
+    fixture.detectChanges();
+    service.send();
+    const proposal = { id: 'p1', tool: 'create_workflow', arguments: { name: 'Звіт' }, plan: null, status: 'pending', result: null, createdAt: '', decidedAt: null };
+    http
+      .expectOne(`${BASE}/c1/messages`)
+      .flush(`event: proposal\ndata: ${JSON.stringify({ type: 'proposal', proposal })}\n\nevent: done\ndata: {"type":"done"}\n\n`);
+    http.expectOne({ method: 'GET', url: BASE }).flush([]);
+    fixture.detectChanges();
+    expect(host.querySelector('app-proposal-card h3')?.textContent).toBe('Створити сценарій «Звіт»');
+
+    (host.querySelector('[data-testid="proposal-apply"]') as HTMLButtonElement).click();
+    http
+      .expectOne({ method: 'POST', url: `${BASE}/c1/proposals/p1` })
+      .flush({ ...proposal, status: 'applied', result: '{"id":"11111111-2222-3333-4444-555555555555"}' });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="proposal-apply"]')).toBeNull();
+    expect(host.querySelector('[data-testid="proposal-link"]')?.getAttribute('href')).toBe('/workflows/11111111-2222-3333-4444-555555555555');
+  });
 });

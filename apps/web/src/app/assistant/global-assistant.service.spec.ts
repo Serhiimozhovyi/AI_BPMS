@@ -8,6 +8,17 @@ const ID = '11111111-2222-3333-4444-555555555555';
 const OTHER = '99999999-2222-3333-4444-555555555555';
 const BASE = '/api/v1/assistant/conversations';
 
+const PROPOSAL = {
+  id: 'p1',
+  tool: 'create_table',
+  arguments: { name: 'Заявки' },
+  plan: null,
+  status: 'pending' as const,
+  result: null,
+  createdAt: '',
+  decidedAt: null,
+};
+
 const sse = (...events: object[]) =>
   events.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
 
@@ -68,15 +79,73 @@ describe('GlobalAssistantService', () => {
     ]);
   });
 
-  it('друге повідомлення йде в ту саму розмову; пропозиція зберігається для карток', async () => {
+  it('друге повідомлення йде в ту саму розмову; пропозиція — картка в розмові й у сховищі', async () => {
     const { service, http } = await setup();
     service.currentId.set('c1');
     service.draft.set('Створи таблицю');
     service.send();
-    const proposal = { id: 'p1', tool: 'create_table', arguments: {}, plan: null, status: 'pending', result: null, createdAt: '', decidedAt: null };
-    http.expectOne(`${BASE}/c1/messages`).flush(sse({ type: 'proposal', proposal }, { type: 'done' }));
+    http.expectOne(`${BASE}/c1/messages`).flush(sse({ type: 'proposal', proposal: PROPOSAL }, { type: 'done' }));
     http.expectOne({ method: 'GET', url: BASE }).flush([]);
-    expect(service.proposals()).toEqual([proposal]);
+    expect(service.proposals()).toEqual([PROPOSAL]);
+    expect(service.lines().at(-1)).toEqual({ kind: 'proposal', text: 'create_table', proposalId: 'p1' });
+  });
+
+  it('рішення: «Застосувати» оновлює стан картки відповіддю Api; кнопки блокуються, поки йде запит', async () => {
+    const { service, http } = await setup();
+    service.currentId.set('c1');
+    service.proposals.set([PROPOSAL]);
+    service.decide('p1', true);
+    service.decide('p1', true);
+    expect(service.deciding()).toEqual(['p1']);
+    const request = http.expectOne({ method: 'POST', url: `${BASE}/c1/proposals/p1` });
+    expect(request.request.body).toEqual({ apply: true });
+    request.flush({ ...PROPOSAL, status: 'applied', result: '{"applied":true}' });
+    expect(service.proposals()[0].status).toBe('applied');
+    expect(service.deciding()).toEqual([]);
+  });
+
+  it('«Скасувати» шле apply=false', async () => {
+    const { service, http } = await setup();
+    service.currentId.set('c1');
+    service.proposals.set([PROPOSAL]);
+    service.decide('p1', false);
+    const request = http.expectOne({ method: 'POST', url: `${BASE}/c1/proposals/p1` });
+    expect(request.request.body).toEqual({ apply: false });
+    request.flush({ ...PROPOSAL, status: 'rejected' });
+    expect(service.proposals()[0].status).toBe('rejected');
+  });
+
+  it('пропозицію вже вирішено (409) — розмова перечитується замість червоного рядка', async () => {
+    const { service, http } = await setup();
+    service.currentId.set('c1');
+    service.proposals.set([PROPOSAL]);
+    service.decide('p1', true);
+    http
+      .expectOne(`${BASE}/c1/proposals/p1`)
+      .flush({ code: 'ASSISTANT_PROPOSAL_DECIDED', detail: 'Цю пропозицію вже вирішено.' }, { status: 409, statusText: 'Conflict' });
+    http.expectOne({ method: 'GET', url: `${BASE}/c1` }).flush({
+      id: 'c1',
+      title: 'Т',
+      userId: 'u',
+      createdAt: '',
+      updatedAt: '',
+      messages: [],
+      proposals: [{ ...PROPOSAL, status: 'applied' }],
+    });
+    expect(service.proposals()[0].status).toBe('applied');
+    expect(service.lines().some((l) => l.kind === 'error')).toBe(false);
+  });
+
+  it('інша помилка рішення — червоний рядок', async () => {
+    const { service, http } = await setup();
+    service.currentId.set('c1');
+    service.proposals.set([PROPOSAL]);
+    service.decide('p1', true);
+    http
+      .expectOne(`${BASE}/c1/proposals/p1`)
+      .flush({ code: 'FORBIDDEN', detail: 'Писати в розмову може лише її автор.' }, { status: 403, statusText: 'Forbidden' });
+    expect(service.lines().find((l) => l.kind === 'error')?.text).toContain('лише її автор');
+    expect(service.deciding()).toEqual([]);
   });
 
   it('модель не вибрана (409) — прапорець замість червоного рядка', async () => {
@@ -120,18 +189,20 @@ describe('GlobalAssistantService', () => {
       updatedAt: '',
       messages: [
         { role: 'user', text: 'Зроби таблицю', tool: null, ok: null, at: '' },
-        { role: 'tool', text: 'план змін — чекає рішення', tool: 'create_table', ok: true, at: '' },
+        { role: 'tool', text: 'план змін — чекає рішення', tool: 'create_table', ok: true, at: '', proposalId: 'p1' },
         { role: 'note', text: 'Користувач скасував пропозицію', tool: null, ok: null, at: '' },
       ],
-      proposals: [],
+      proposals: [PROPOSAL],
     });
     expect(service.currentId()).toBe('c1');
     expect(service.historyOpen()).toBe(false);
-    expect(service.lines().map((l) => [l.kind, l.text])).toEqual([
-      ['user', 'Зроби таблицю'],
-      ['step', 'Створення таблиці: план змін — чекає рішення'],
-      ['note', 'Користувач скасував пропозицію'],
+    // Крок з пропозицією дає картку на цьому місці; примітка про рішення призначена моделі й не показується.
+    expect(service.lines().map((l) => [l.kind, l.text, l.proposalId])).toEqual([
+      ['user', 'Зроби таблицю', undefined],
+      ['step', 'Створення таблиці: план змін — чекає рішення', undefined],
+      ['proposal', 'create_table', 'p1'],
     ]);
+    expect(service.proposals()).toEqual([PROPOSAL]);
 
     service.remove('c1');
     http.expectOne({ method: 'DELETE', url: `${BASE}/c1` }).flush(null);

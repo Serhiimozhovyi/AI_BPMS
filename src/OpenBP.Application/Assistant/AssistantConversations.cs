@@ -56,7 +56,8 @@ public sealed record AssistantConversationSummary(Guid Id, string Title, Guid Us
 /// <param name="Tool">Інструмент кроку.</param>
 /// <param name="Ok">Крок без помилки.</param>
 /// <param name="At">Коли.</param>
-public sealed record AssistantMessageView(string Role, string? Text, string? Tool, bool? Ok, DateTimeOffset At);
+/// <param name="ProposalId">Для кроку <c>tool</c>, що завершився пропозицією змін, — її id (картка в чаті, F3-111).</param>
+public sealed record AssistantMessageView(string Role, string? Text, string? Tool, bool? Ok, DateTimeOffset At, Guid? ProposalId = null);
 
 /// <summary>
 /// Пропозиція змін (F3-108): інструмент, що змінює дані, помічник не виконує — людина застосовує чи скасовує її.
@@ -410,7 +411,13 @@ public sealed class AssistantSessionService(
         var stored = Parse(entity.Data);
         var messages = stored.Turns
             .Where(t => t.Role is "tool" or "note" || !string.IsNullOrWhiteSpace(t.Text))
-            .Select(t => new AssistantMessageView(t.Role, t.Role == "tool" ? t.Summary : t.Text, t.Tool, t.Ok, t.At))
+            .Select(t => new AssistantMessageView(
+                t.Role,
+                t.Role == "tool" ? t.Summary : t.Text,
+                t.Tool,
+                t.Ok,
+                t.At,
+                t.Role == "tool" && t.CallId is not null ? stored.Proposals.FirstOrDefault(p => p.CallId == t.CallId)?.Id : null))
             .ToList();
         return new AssistantConversation(entity.Id, entity.Title, entity.UserId, messages, [.. stored.Proposals.Select(ToView)], entity.CreatedAt, entity.UpdatedAt);
     }

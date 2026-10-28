@@ -21,6 +21,8 @@ export interface AssistantMessageView {
   tool: string | null;
   ok: boolean | null;
   at: string;
+  /** Для кроку, що завершився пропозицією змін, — її id: на цьому місці картка. */
+  proposalId?: string | null;
 }
 
 /** Пропозиція змін: інструмент, який людина застосовує чи скасовує (картки — F3-111). */
