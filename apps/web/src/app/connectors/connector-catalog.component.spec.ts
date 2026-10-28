@@ -29,14 +29,14 @@ const telegram: ConnectorCatalogEntry = {
 /** Кіт: облікові дані загального типу + налаштування з обов'язковою адресою. */
 const kit: ConnectorCatalogEntry = {
   manifest: {
-    id: 'kit-crm',
+    id: 'crm-sample',
     name: 'Кіт CRM',
     description: 'Угоди й задачі.',
     transport: 'stdio',
     stdio: { command: 'dotnet', arguments: ['kit.dll'] },
     credential: { type: 'oauth2.clientCredentials', map: { clientSecret: 'KIT_CLIENT_SECRET' }, env: [{ name: 'KIT_CLIENT_ID', required: true, secret: false }] },
     settings: [
-      { name: 'baseUrl', title: 'Адреса OData', description: 'Адреса сервісу.', placeholder: 'https://crm.example.ua/odata/', required: true, env: 'Connector__BaseUrl' },
+      { name: 'baseUrl', title: 'Адреса OData', description: 'Адреса сервісу.', placeholder: 'https://crm.example.ua/api/', required: true, env: 'Connector__BaseUrl' },
       { name: 'authorPersonId', title: 'Id автора нотаток', env: 'Connector__AuthorPersonId' },
     ],
     triggers: [],
@@ -109,7 +109,7 @@ describe('ConnectorCatalogComponent', () => {
   it('показує записи з іконкою, джерелом і підсвіченим записом', () => {
     const { host } = setup();
 
-    expect(Array.from(host.querySelectorAll('[data-catalog]')).map((e) => e.getAttribute('data-catalog'))).toEqual(['telegram', 'fake', 'kit-crm', 'psy']);
+    expect(Array.from(host.querySelectorAll('[data-catalog]')).map((e) => e.getAttribute('data-catalog'))).toEqual(['telegram', 'fake', 'crm-sample', 'psy']);
     expect(card(host, 'telegram').textContent).toContain('Telegram Bot API');
     expect(card(host, 'telegram').classList).toContain('border-ac-kit');
     expect(card(host, 'fake').textContent).toContain('зовнішній');
@@ -161,7 +161,7 @@ describe('ConnectorCatalogComponent', () => {
   it('наявні облікові дані обираються одразу, налаштування з маніфесту: обов\'язкове блокує «Підключити», значення йдуть у settings', () => {
     const { fixture, http, host, installed } = setup();
 
-    (card(host, 'kit-crm').querySelector('[data-testid="catalog-install"]') as HTMLButtonElement).click();
+    (card(host, 'crm-sample').querySelector('[data-testid="catalog-install"]') as HTMLButtonElement).click();
     http
       .expectOne('/api/v1/credentials/options?type=oauth2.clientCredentials')
       .flush([{ id: 'svc1', name: 'Keycloak сервіс', type: 'oauth2.clientCredentials' }]);
@@ -178,17 +178,17 @@ describe('ConnectorCatalogComponent', () => {
     const submit = panel.querySelector('[data-testid="connect-submit"]') as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
-    type(panel.querySelector('[data-testid="setting-baseUrl"]'), ' https://crm.example.ua/odata/ ');
+    type(panel.querySelector('[data-testid="setting-baseUrl"]'), ' https://crm.example.ua/api/ ');
     fixture.detectChanges();
     expect(submit.disabled).toBe(false);
     submit.click();
 
-    const install = http.expectOne({ method: 'POST', url: '/api/v1/connectors/catalog/kit-crm/install' });
+    const install = http.expectOne({ method: 'POST', url: '/api/v1/connectors/catalog/crm-sample/install' });
     expect(install.request.body).toEqual({
       name: 'Кіт CRM',
       transport: 'stdio',
       credentialId: 'svc1',
-      settings: { baseUrl: 'https://crm.example.ua/odata/' },
+      settings: { baseUrl: 'https://crm.example.ua/api/' },
     });
     install.flush({ ...detail('k1', 'Кіт CRM', 'stdio'), credentialId: 'svc1' });
     expect(installed.map((d) => d.summary.id)).toEqual(['k1']);
