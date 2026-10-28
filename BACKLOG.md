@@ -913,7 +913,7 @@
 - Стан (2026-10-28): набір, команда `draft-eval` і тести готові; таблиця замірів чекає живого прогону на Mac (потрібна згода власника) — після нього `done`.
 
 ### F3-106 · Провайдер Gemini
-- model: `sonnet` · status: `review` · depends: F3-103
+- model: `sonnet` · status: `done` · depends: F3-103
 - Що: окремий тип облікових даних і провайдер `gemini` (Google Gemini через OpenAI-сумісний ендпоінт, лише `apiKey`, адреса вшита) для `ai.llm`, `ai.agent` і помічника в Налаштуваннях.
 - DoD: тести провайдера на фейковому HTTP (адреса, ключ у заголовку, `response_format`, помилка без ключа); `docs/connectors.md` оновлено; build/test/format, lint/test/build зелені.
 
@@ -957,6 +957,10 @@
 - model: `sonnet` · status: `ready` · depends: F3-111, F3-112
 - Що: `docs/guide/users.md`, приклади розмов, наскрізний Playwright з фейковим провайдером.
 - DoD: документація і e2e зелені.
+### F3-107 · Помічник: список моделей з основною
+- model: `sonnet` · status: `review` · depends: F3-106
+- Що: у «Налаштування → Помічник» замість одного поля «облікові дані + модель» — список підключених моделей (Ollama, Gemini, Anthropic…) із позначкою «Основна». `PUT /settings/assistant` приймає `profiles[]` і `primaryIndex` (старе тіло `{ credentialId, model }` працює як одна модель); `credentialId`/`model` у відповіді та в сховищі — дзеркало основної, тож побудова з опису, чат і пояснення сценаріїв не змінюються.
+- DoD: тести Api (кілька моделей, основна, помилки), Vitest на форму списку; `architecture.md` §10 і `docs/guide/ai-connectors.md` оновлено; build/test/format, lint/test/build/e2e зелені.
 
 ## Фаза 4 — Продуктова готовність
 

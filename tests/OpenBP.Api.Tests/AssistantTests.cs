@@ -120,6 +120,40 @@ public class AssistantTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Settings_keep_several_models_and_the_primary_one_is_used()
+    {
+        var admin = await LoginAsync(api, ApiFactory.AdminEmail, ApiFactory.AdminPassword);
+        var local = await api.CreateCredentialAsync("ollama", new JsonObject());
+        var cloud = await api.CreateCredentialAsync("gemini", new JsonObject { ["apiKey"] = ProviderKey });
+
+        var response = await admin.PutAsJsonAsync(Settings, new
+        {
+            profiles = new[] { new { credentialId = local, model = "qwen3:8b" }, new { credentialId = cloud, model = "gemini-flash" } },
+            primaryIndex = 1,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var settings = JsonDocument.Parse(await admin.GetStringAsync(Settings)).RootElement;
+        Assert.True(settings.GetProperty("configured").GetBoolean());
+        Assert.Equal("gemini", settings.GetProperty("provider").GetString());
+        Assert.Equal("gemini-flash", settings.GetProperty("model").GetString());
+        Assert.Equal(1, settings.GetProperty("primaryIndex").GetInt32());
+        var profiles = settings.GetProperty("profiles").EnumerateArray().ToList();
+        Assert.Equal(["ollama", "gemini"], profiles.Select(p => p.GetProperty("provider").GetString()));
+        Assert.DoesNotContain(ProviderKey, settings.GetRawText(), StringComparison.Ordinal);
+
+        // Основна має бути зі списку; кожна модель — з credential'ом потрібного типу й назвою моделі.
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync(Settings, new { profiles = new[] { new { credentialId = local, model = "m" } }, primaryIndex = 3 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync(Settings, new { profiles = new[] { new { credentialId = local, model = " " } } })).StatusCode);
+
+        // Старе тіло {credentialId, model} лишається однією моделлю.
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync(Settings, new { credentialId = local, model = "qwen3:14b" })).StatusCode);
+        var single = JsonDocument.Parse(await admin.GetStringAsync(Settings)).RootElement;
+        Assert.Equal("qwen3:14b", single.GetProperty("model").GetString());
+        Assert.Single(single.GetProperty("profiles").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Settings_roles_validation_and_not_configured()
     {
         var factory = api;
