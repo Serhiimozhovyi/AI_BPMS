@@ -71,15 +71,19 @@ public static class ProjectPageEndpoints
             .WithDescription("Значення лише полів форми; фіксовані поля (`value`) ставить сервер. Помилки — 422 PAGE_FORM_INVALID з `errors: [{ field, message }]` " +
                              "(обов'язкові, тип, унікальність).");
 
-        pages.MapPost("/{key}/rows/{rowKey}/actions/{action:int}", async (Guid projectId, string key, string rowKey, int action,
+        pages.MapGet("/{key}/metrics", (Guid projectId, string key, IProjectPageService service, CancellationToken ct) =>
+            service.MetricsAsync(projectId, key, ct))
+            .WithSummary("Показники сторінки metrics")
+            .WithDescription("Плитки (`count`/`sum`/`avg`/`min`/`max` з `where`, вирази над `$tiles`) і діаграми по групах (`day|week|month(колонка)` чи колонка). " +
+                             "Чутливі колонки в такій сторінці зберегти не можна, тому показники однакові для всіх, хто бачить сторінку.");
+
+        pages.MapPost("/{key}/rows/{rowKey}/actions/{action:int}", (Guid projectId, string key, string rowKey, int action,
             IProjectPageService service, CancellationToken ct) =>
-        {
-            await service.RunActionAsync(projectId, key, rowKey, action, ct);
-            return Results.NoContent();
-        })
+            service.RunActionAsync(projectId, key, rowKey, action, ct))
             .WithSummary("Виконати дію над рядком")
-            .WithDescription("Серверні дії: `operation: delete` (editor проєкту таблиці). `action` — індекс у `actions` сторінки.")
-            .Produces(StatusCodes.Status204NoContent);
+            .WithDescription("`action` — індекс у `actions` сторінки. `operation: delete` — видалення (editor проєкту таблиці); `workflow` — запуск сценарію проєкту " +
+                             "з item `{ row, rowKey, user }` і очікування результату до 30 с. Відповідь: `state` (`success` | `rejected` — сценарій відмовив через `ok: false` | " +
+                             "`error` | `running`), `message`, `data`, `executionId`.");
 
         return api;
     }

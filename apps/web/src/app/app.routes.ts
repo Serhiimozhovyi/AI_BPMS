@@ -86,6 +86,15 @@ export const routes: Routes = [
             // Сторінки застосунку (F8-04): список/картка/форма за ключем сторінки.
             children: [
               {
+                // Конструктор сторінок (F8-05); ключ сторінки не починається з «_», тож з `:key` не плутається.
+                path: '_builder',
+                loadComponent: () => import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
+              },
+              {
+                path: '_builder/:key',
+                loadComponent: () => import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
+              },
+              {
                 path: ':key',
                 loadComponent: () => import('./pages/project/app-page.page').then((m) => m.AppPagePage),
               },

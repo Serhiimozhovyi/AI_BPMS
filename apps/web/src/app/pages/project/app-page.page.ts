@@ -6,13 +6,15 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormlyFieldConfig, FormlyForm } from '@ngx-formly/core';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { providePublicForm } from '../../forms/form-field-types';
 import { formFields, toPayload } from '../../forms/form-fields';
 import {
   PageAction,
+  PageActionResult,
+  PageMetrics,
   PageRecord,
   PageRow,
   PageRows,
@@ -35,7 +37,7 @@ interface FieldError {
 @Component({
   selector: 'app-app-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, FormlyForm],
+  imports: [ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, FormlyForm],
   providers: [providePublicForm()],
   template: `
     <section class="px-6 pb-6">
@@ -45,9 +47,15 @@ interface FieldError {
       @if (error()) {
         <p role="alert" class="mb-2 text-red-700" data-testid="page-error">{{ error() }}</p>
       }
+      @if (notice(); as n) {
+        <p role="status" class="mb-2" [class.text-red-700]="n.state !== 'success'" data-testid="action-result" [attr.data-state]="n.state">{{ n.text }}</p>
+      }
       @if (view(); as v) {
         <div class="mb-3 flex flex-wrap items-center gap-3">
           <h2 class="text-lg font-semibold" data-testid="app-page-title">{{ v.page.name }}</h2>
+          @if (v.canEdit) {
+            <a mat-button data-testid="app-edit-page" [routerLink]="['/projects', projectId, 'app', '_builder', v.page.key]" i18n="@@app.page.edit">Налаштувати</a>
+          }
           @if (v.page.kind === 'list' && v.page.definition.create; as create) {
             <button mat-flat-button type="button" data-testid="app-create" (click)="open(create.page)" i18n="@@app.page.create">Створити</button>
           }
@@ -162,6 +170,36 @@ interface FieldError {
               }
             }
           }
+          @case ('metrics') {
+            @if (metrics(); as m) {
+              @if (m.tiles.length) {
+                <div class="mb-6 grid max-w-5xl grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" data-testid="app-tiles">
+                  @for (t of m.tiles; track $index) {
+                    <div class="rounded border border-ac-line p-3" [attr.data-tile]="t.key ?? $index">
+                      <div class="opacity-70">{{ t.label }}</div>
+                      <div class="text-2xl font-semibold" data-testid="tile-value">{{ number(t.value) }}</div>
+                    </div>
+                  }
+                </div>
+              }
+              @for (chart of m.charts; track $index; let ci = $index) {
+                <h3 class="mb-2 mt-4 font-semibold">{{ chart.label || chart.groupBy }}</h3>
+                @if (chart.points.length === 0) {
+                  <p class="opacity-70" i18n="@@app.page.empty">Записів немає.</p>
+                } @else {
+                  <ul class="mb-4 max-w-3xl" [attr.data-chart]="ci">
+                    @for (p of chart.points; track p.label) {
+                      <li class="grid grid-cols-[10rem_1fr_5rem] items-center gap-2 py-0.5" [attr.data-point]="p.label">
+                        <span class="truncate">{{ p.label }}</span>
+                        <span class="block h-3 rounded bg-ac-kit" [style.width.%]="barWidth(chart.points, p.value)"></span>
+                        <span class="text-right">{{ number(p.value) }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+            }
+          }
           @case ('form') {
             <form class="max-w-xl" [formGroup]="form" (submit)="$event.preventDefault(); submit()" novalidate data-testid="app-form">
               <formly-form [form]="form" [fields]="fields()" [model]="model" />
@@ -190,6 +228,9 @@ export class AppPagePage implements OnInit {
   readonly view = signal<ProjectPageView | null>(null);
   readonly rows = signal<PageRows | null>(null);
   readonly record = signal<PageRecord | null>(null);
+  readonly metrics = signal<PageMetrics | null>(null);
+  /** Підсумок останньої дії чи форми зі сценарієм: повідомлення сценарію або помилка. */
+  readonly notice = signal<{ state: PageActionResult['state']; text: string } | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly search = signal('');
@@ -218,6 +259,16 @@ export class AppPagePage implements OnInit {
 
   cell(row: PageRow, column: PageViewColumn): string {
     return cellText(row, column.column, column.type, column.format);
+  }
+
+  number(value: number | null): string {
+    return value === null ? '—' : new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(value);
+  }
+
+  /** Ширина стовпчика діаграми у відсотках від найбільшого значення. */
+  barWidth(points: { value: number | null }[], value: number | null): number {
+    const max = Math.max(0, ...points.map((p) => p.value ?? 0));
+    return max > 0 && value !== null && value > 0 ? Math.max(2, (value / max) * 100) : 0;
   }
 
   pages(rows: PageRows): number {
@@ -257,8 +308,18 @@ export class AppPagePage implements OnInit {
     }
     if (action.confirm && !window.confirm(action.confirm)) return;
     this.error.set(null);
+    this.notice.set(null);
     this.api.runAction(this.projectId, this.key, row.key, index).subscribe({
-      next: () => (this.view()?.page.kind === 'detail' ? this.open(this.view()!.page.definition.create?.page ?? this.key) : this.loadRows()),
+      next: (result) => {
+        this.showResult(result, action.workflow ? $localize`:@@app.page.done:Готово.` : '');
+        if (this.view()?.page.kind === 'detail') {
+          // Видалений рядок на картці вже не відкрити; сценарій міг змінити дані — читаємо знову.
+          if (action.workflow) this.loadRecord();
+          else this.open(this.view()!.page.definition.create?.page ?? this.key);
+        } else {
+          this.loadRows();
+        }
+      },
       error: (e: unknown) => this.error.set(apiErrorMessage(e)),
     });
   }
@@ -277,8 +338,9 @@ export class AppPagePage implements OnInit {
     this.api.submit(this.projectId, this.key, toPayload(view.schema, this.model).fields, this.rowKey).subscribe({
       next: (result) => {
         this.submitting.set(false);
+        if (result.result) this.showResult(result.result, '');
         if (result.then) this.open(result.then);
-        else this.saved.set(true);
+        else if (!result.result?.message) this.saved.set(true);
       },
       error: (e: unknown) => {
         this.submitting.set(false);
@@ -297,6 +359,8 @@ export class AppPagePage implements OnInit {
     this.error.set(null);
     this.rows.set(null);
     this.record.set(null);
+    this.metrics.set(null);
+    this.notice.set(null);
     this.saved.set(false);
     this.submitError.set('');
     this.api.get(this.projectId, this.key).subscribe({
@@ -309,6 +373,7 @@ export class AppPagePage implements OnInit {
         this.page.set(1);
         if (view.page.kind === 'list') this.loadRows();
         else if (view.page.kind === 'detail') this.loadRecord();
+        else if (view.page.kind === 'metrics') this.loadMetrics();
         else this.prepareForm(view);
       },
       error: (e: unknown) => this.fail(e),
@@ -331,6 +396,28 @@ export class AppPagePage implements OnInit {
         },
         error: (e: unknown) => this.fail(e),
       });
+  }
+
+  private loadMetrics(): void {
+    this.api.metrics(this.projectId, this.key).subscribe({
+      next: (metrics) => {
+        this.metrics.set(metrics);
+        this.loading.set(false);
+      },
+      error: (e: unknown) => this.fail(e),
+    });
+  }
+
+  /** Повідомлення сценарію (`message`) або запасний текст; відмова й помилка — червоним. */
+  private showResult(result: PageActionResult, fallback: string): void {
+    const text =
+      result.message ||
+      (result.state === 'running'
+        ? $localize`:@@app.page.running:Сценарій ще виконується, результат буде у виконаннях проєкту.`
+        : result.state === 'success'
+          ? fallback
+          : $localize`:@@app.page.failed:Дію не виконано.`);
+    this.notice.set(text ? { state: result.state, text } : null);
   }
 
   private loadRecord(): void {

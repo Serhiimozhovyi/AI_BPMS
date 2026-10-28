@@ -49,7 +49,7 @@ describe('ProjectAppPage (F8-04)', () => {
   });
 
   it('вибрана сторінка не перекидається на першу', async () => {
-    const { http, navigate } = await setup('viewer', {});
+    const { http, navigate } = await setup('viewer', { snapshot: { url: [{ path: 'slots' }] } });
     http.expectOne('/api/v1/projects/p1/pages').flush([page('slots', 'Слоти')]);
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -65,5 +65,24 @@ describe('ProjectAppPage (F8-04)', () => {
     viewer.http.expectOne('/api/v1/projects/p1/pages').flush([]);
     await render(viewer.fixture);
     expect(viewer.host.querySelector('[data-testid="app-empty"]')?.textContent).toContain('Для вашої ролі');
+  });
+
+  it('editor бачить «Нова сторінка», а в конструкторі посилання ховається', async () => {
+    const editor = await setup('editor', { snapshot: { url: [{ path: 'slots' }] } });
+    editor.http.expectOne('/api/v1/projects/p1/pages').flush([page('slots', 'Слоти')]);
+    await render(editor.fixture);
+    expect(editor.host.querySelector('[data-testid="app-new-page"]')).not.toBeNull();
+
+    TestBed.resetTestingModule();
+    const builder = await setup('editor', { snapshot: { url: [{ path: '_builder' }] } });
+    builder.http.expectOne('/api/v1/projects/p1/pages').flush([page('slots', 'Слоти')]);
+    await render(builder.fixture);
+    expect(builder.host.querySelector('[data-testid="app-new-page"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const viewer = await setup('viewer', { snapshot: { url: [{ path: 'slots' }] } });
+    viewer.http.expectOne('/api/v1/projects/p1/pages').flush([page('slots', 'Слоти')]);
+    await render(viewer.fixture);
+    expect(viewer.host.querySelector('[data-testid="app-new-page"]')).toBeNull();
   });
 });

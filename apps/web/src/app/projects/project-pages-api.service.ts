@@ -5,7 +5,10 @@ import { API_BASE } from '../connectors/connectors-api.service';
 import { JsonSchema } from '../forms/form-fields';
 
 /** Тип сторінки застосунку (docs/projects.md §3). */
-export type PageKind = 'list' | 'detail' | 'form';
+export type PageKind = 'list' | 'detail' | 'form' | 'metrics';
+
+/** Типи сторінок для вибору в конструкторі. */
+export const PAGE_KINDS: readonly PageKind[] = ['list', 'detail', 'form', 'metrics'];
 
 /** Колонка списку. */
 export interface PageColumn {
@@ -15,7 +18,7 @@ export interface PageColumn {
   display?: string;
 }
 
-/** Дія над рядком: перехід (`page`), видалення (`operation`) або сценарій (з F8-05). */
+/** Дія над рядком: перехід (`page`), видалення (`operation`) або запуск сценарію проєкту (`workflow`, F8-05). */
 export interface PageAction {
   label: string;
   page?: string;
@@ -23,6 +26,41 @@ export interface PageAction {
   operation?: 'delete';
   confirm?: string;
   when?: string;
+  /** Ролі застосунку, яким дію показано; порожньо — усім, хто бачить сторінку (F8-05). */
+  roles?: string[];
+}
+
+/** Умова відбору рядків сторінки. */
+export interface PageFilter {
+  column: string;
+  operator: string;
+  value?: unknown;
+}
+
+/** Агрегат плитки чи діаграми. */
+export type PageAggregate = 'count' | 'sum' | 'avg' | 'min' | 'max';
+
+export const PAGE_AGGREGATES: readonly PageAggregate[] = ['count', 'sum', 'avg', 'min', 'max'];
+
+/** Плитка `metrics`: агрегат по таблиці або вираз над іншими плитками (`{{ $tiles.key }}`). */
+export interface PageTile {
+  label: string;
+  key?: string;
+  table?: string;
+  aggregate?: PageAggregate;
+  column?: string;
+  where?: PageFilter[];
+  expression?: string;
+}
+
+/** Діаграма `metrics`: агрегат по групах (`колонка` чи `day|week|month(колонка)`). */
+export interface PageChart {
+  label?: string;
+  table?: string;
+  groupBy: string;
+  aggregate?: PageAggregate;
+  column?: string;
+  where?: PageFilter[];
 }
 
 /** Поле картки чи форми. */
@@ -45,7 +83,7 @@ export interface PageRelated {
 export interface PageDefinition {
   table: string;
   columns?: PageColumn[];
-  filter?: { column: string; operator: string; value?: unknown }[];
+  filter?: PageFilter[];
   search?: string[];
   sort?: { column: string; direction?: 'asc' | 'desc' };
   pageSize?: number;
@@ -55,6 +93,8 @@ export interface PageDefinition {
   related?: PageRelated[];
   onSubmit?: { operation?: 'insert' | 'upsert' | 'update'; workflow?: string };
   then?: { page: string };
+  tiles?: PageTile[];
+  charts?: PageChart[];
 }
 
 /** `ProjectPageDto`. */
@@ -80,6 +120,7 @@ export interface PageViewColumn {
 /** `GET /projects/{id}/pages/{key}`. */
 export interface ProjectPageView {
   page: ProjectPage;
+  /** Для `metrics` без таблиці за замовчуванням — нульовий guid. */
   tableId: string;
   columns: PageViewColumn[];
   /** JSON Schema форми (лише `form`). */
@@ -109,10 +150,36 @@ export interface PageRecord {
   related: { label: string; columns: PageViewColumn[]; rows: PageRow[] }[];
 }
 
-/** `POST …/submit`. */
+/** Результат дії чи форми, що запускала сценарій (F8-05). */
+export interface PageActionResult {
+  /** `success` | `rejected` (сценарій відмовив: `ok: false`) | `error` | `running` (ще виконується). */
+  state: 'success' | 'rejected' | 'error' | 'running';
+  message?: string | null;
+  field?: string | null;
+  data?: Record<string, unknown> | null;
+  executionId?: string | null;
+}
+
+/** `POST …/submit`; для форми зі сценарієм `row` порожній, а `result` — відповідь сценарію. */
 export interface PageSubmitResult {
-  row: PageRow;
+  row: PageRow | null;
   then: string | null;
+  result?: PageActionResult | null;
+}
+
+/** `GET …/metrics`. */
+export interface PageMetrics {
+  tiles: { key?: string | null; label: string; value: number | null }[];
+  charts: { label?: string | null; groupBy: string; points: { label: string; value: number | null }[] }[];
+}
+
+/** Тіло збереження сторінки (`PUT …/pages/{key}`). */
+export interface ProjectPageInput {
+  name: string;
+  kind: PageKind;
+  definition: PageDefinition;
+  roles: string[];
+  sortOrder?: number | null;
 }
 
 /** Параметри списку. */
@@ -158,8 +225,21 @@ export class ProjectPagesApiService {
     return this.http.post<PageSubmitResult>(`${this.base(projectId, key)}/submit`, { values, rowKey: rowKey ?? null });
   }
 
-  runAction(projectId: string, key: string, rowKey: string, action: number): Observable<void> {
-    return this.http.post<void>(`${this.base(projectId, key)}/rows/${encodeURIComponent(rowKey)}/actions/${action}`, null);
+  metrics(projectId: string, key: string): Observable<PageMetrics> {
+    return this.http.get<PageMetrics>(`${this.base(projectId, key)}/metrics`);
+  }
+
+  runAction(projectId: string, key: string, rowKey: string, action: number): Observable<PageActionResult> {
+    return this.http.post<PageActionResult>(`${this.base(projectId, key)}/rows/${encodeURIComponent(rowKey)}/actions/${action}`, null);
+  }
+
+  /** Створює чи замінює сторінку (editor проєкту). */
+  save(projectId: string, key: string, page: ProjectPageInput): Observable<ProjectPage> {
+    return this.http.put<ProjectPage>(this.base(projectId, key), page);
+  }
+
+  remove(projectId: string, key: string): Observable<void> {
+    return this.http.delete<void>(this.base(projectId, key));
   }
 }
 

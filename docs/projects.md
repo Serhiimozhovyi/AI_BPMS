@@ -67,9 +67,7 @@ JSON Schema форми, `canEdit`), `PUT /{key}` (створити/заміни�
 `POST /{key}/rows/{rowKey}/actions/{index}` (дія). MCP: `list_project_pages`, `upsert_project_page`. UI — вкладка
 «Застосунок» (`/projects/:id/app/<key>[/<rowKey>]`). Уточнення й відхилення від цього розділу:
 
-- Типи сторінок — `list`, `detail`, `form`; `metrics` (§3.4) і запуск сценаріїв з дій та `onSubmit.workflow` — F8-05.
-  Посилання на сценарій валідується вже зараз (сценарій має бути в цьому проєкті), але така дія не показується, а
-  виклик повертає 422 `PAGE_WORKFLOW_NOT_AVAILABLE`.
+- Типи сторінок — `list`, `detail`, `form`, `metrics` (§3.4); запуск сценаріїв з дій та `onSubmit.workflow` — F8-05 (нижче).
 - `filter` діє також на `detail` і `form` (зміна запису): рядок поза фільтром — 404, як і недоступна сторінка.
 - Поле форми може мати фіксоване `value` (вираз з `$user`), яке ставить сервер, — напр. автор запису.
 - Дії в `related` — лише переходи `page`.
@@ -80,6 +78,26 @@ JSON Schema форми, `canEdit`), `PUT /{key}` (створити/заміни�
   `operation: "delete"` — лише editor проєкту таблиці.
 - Пошук — підрядок без урахування регістру по колонках `search`; сортування — за будь-якою колонкою сторінки,
   `null` в кінці.
+
+**Реалізовано (F8-05).** `IPageWorkflowRunner` (`OpenBP.Application/Projects`), `GET /{key}/metrics`, конструктор.
+Відхилення й уточнення:
+
+- Дія/форма викликає сценарій проєкту (за id або назвою) через `IExecutionLauncher` у режимі `Trigger` з
+  `AllowInactive` і `KeepSuccessfulData`: сценарій-підпроцес не потрібно активувати, а вихід кроків зберігається.
+  Береться опублікована версія, інакше поточна. Старт — перший увімкнений `core.workflowTrigger`, інакше
+  `core.manualTrigger`; без жодного — 422 `PAGE_WORKFLOW_NO_TRIGGER`.
+- Вхідний item: дії — `{ row (маскований за правами), rowKey, user }`, форми — `{ values, rowKey, user }`.
+- Результат — перший item виходу останнього успішного кроку: `message`, `field`, `ok`. `ok: false` → стан
+  `rejected` (у формі — помилка поля, якщо `field` є полем форми, інакше загальна). Стани результату:
+  `success | rejected | error | running` (очікування 30 с, далі `running`). Збій виконання → 422 `PAGE_WORKFLOW_FAILED`.
+  Старий код `PAGE_WORKFLOW_NOT_AVAILABLE` прибрано.
+- `POST …/actions/{index}` повертає 200 з `PageActionResult { state, message, field, data, executionId }` (раніше 204).
+- `actions[].roles` — ключі ролей застосунку; порожньо — усім, editor і admin бачать завжди; прихована дія → 404.
+- `metrics`: плитка має `key`, `label`, `table`, `aggregate`, `column`, `where` або `expression` над `$tiles`;
+  діаграма — `groupBy` (`col` або `day|week|month(col)`), `aggregate`, `column`, `where`. Ділення на нуль — `null`.
+  Чутлива колонка → 422 `PAGE_METRICS_SENSITIVE`. Груп у діаграмі до 500.
+- Конструктор: `/projects/:id/app/_builder[/<key>]` (editor), форма з усіма розділами та запасний JSON-редактор;
+  частини визначення, яких форма не знає (`related`, `display`, `value`), зберігаються.
 
 ### 3.1. `list`
 

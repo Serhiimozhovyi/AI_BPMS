@@ -17,8 +17,11 @@ public static class ProjectPageKinds
     /// <summary>Форма створення чи зміни рядка.</summary>
     public const string Form = "form";
 
+    /// <summary>Плитки з агрегатами і прості діаграми (F8-05).</summary>
+    public const string Metrics = "metrics";
+
     /// <summary>Підтримувані типи.</summary>
-    public static readonly IReadOnlyList<string> All = [List, Detail, Form];
+    public static readonly IReadOnlyList<string> All = [List, Detail, Form, Metrics];
 }
 
 /// <summary>Колонка списку чи поле картки.</summary>
@@ -46,7 +49,10 @@ public sealed record PageSort(string Column, string? Direction = "asc");
 /// <param name="Label">Підпис кнопки.</param>
 public sealed record PageAction(string Label)
 {
-    /// <summary>Ключ (назва) або id сценарію проєкту; запуск — з F8-05.</summary>
+    /// <summary>
+    /// Ключ (назва) або id сценарію проєкту: сервер запускає його з item <c>{ row, user }</c>, чекає результат до
+    /// 30 с і віддає <c>message</c>/помилку (F8-05).
+    /// </summary>
     public string? Workflow { get; init; }
 
     /// <summary>Ключ сторінки, яку відкрити з ключем рядка.</summary>
@@ -60,6 +66,11 @@ public sealed record PageAction(string Label)
 
     /// <summary>Вираз з <c>$row</c> і <c>$user</c>: дію показано, лише якщо він істинний.</summary>
     public string? When { get; init; }
+
+    /// <summary>
+    /// Ролі застосунку, яким дію показано; порожньо — усім, хто бачить сторінку. Editor проєкту й admin бачать усі дії.
+    /// </summary>
+    public IReadOnlyList<string>? Roles { get; init; }
 }
 
 /// <summary>Посилання на іншу сторінку застосунку.</summary>
@@ -106,14 +117,68 @@ public sealed record PageField(string Column)
     public string? Display { get; init; }
 }
 
-/// <summary>Що робить форма: рівно одне з <see cref="Operation"/> чи <see cref="Workflow"/> (F8-05).</summary>
+/// <summary>Що робить форма: рівно одне з <see cref="Operation"/> чи <see cref="Workflow"/>.</summary>
 public sealed record PageSubmit
 {
     /// <summary><c>insert</c>, <c>upsert</c> або <c>update</c> (рядок з адреси форми).</summary>
     public string? Operation { get; init; }
 
-    /// <summary>Сценарій, якому передати значення (F8-05).</summary>
+    /// <summary>
+    /// Сценарій, якому передати значення: item <c>{ values, user }</c> (F8-05). Відмова сценарію (<c>ok: false</c> з
+    /// <c>message</c> і, за потреби, <c>field</c>) повертається як помилка форми.
+    /// </summary>
     public string? Workflow { get; init; }
+}
+
+/// <summary>
+/// Плитка сторінки <c>metrics</c>: агрегат <see cref="Aggregate"/> по таблиці або вираз над іншими плитками
+/// (<c>{{ $tiles.booked / $tiles.slots }}</c>, де <c>booked</c>, <c>slots</c> — <see cref="Key"/> плиток).
+/// </summary>
+/// <param name="Label">Підпис.</param>
+public sealed record PageTile(string Label)
+{
+    /// <summary>Ключ для виразів інших плиток: латиниця, цифри, _.</summary>
+    public string? Key { get; init; }
+
+    /// <summary>Таблиця; без неї береться <see cref="PageDefinition.Table"/> сторінки.</summary>
+    public string? Table { get; init; }
+
+    /// <summary><c>count</c>, <c>sum</c>, <c>avg</c>, <c>min</c> або <c>max</c>.</summary>
+    public string? Aggregate { get; init; }
+
+    /// <summary>Числова колонка для <c>sum</c>/<c>avg</c>/<c>min</c>/<c>max</c>.</summary>
+    public string? Column { get; init; }
+
+    /// <summary>Умови; значення можуть бути виразами з <c>$user</c>.</summary>
+    public IReadOnlyList<PageFilter>? Where { get; init; }
+
+    /// <summary>Вираз над <c>$tiles</c> замість агрегату; плитки без ключів у ньому недоступні.</summary>
+    public string? Expression { get; init; }
+}
+
+/// <summary>Стовпчаста діаграма сторінки <c>metrics</c>: агрегат по групах.</summary>
+public sealed record PageChart
+{
+    /// <summary>Підпис.</summary>
+    public string? Label { get; init; }
+
+    /// <summary>Таблиця; без неї — таблиця сторінки.</summary>
+    public string? Table { get; init; }
+
+    /// <summary>
+    /// Групування: колонка (<c>enum</c>, текст, логічна, <c>ref</c>) або <c>day(колонка)</c>, <c>week(колонка)</c>,
+    /// <c>month(колонка)</c> для <c>date</c>/<c>datetime</c>.
+    /// </summary>
+    public string GroupBy { get; init; } = "";
+
+    /// <summary>Агрегат, типово <c>count</c>.</summary>
+    public string? Aggregate { get; init; }
+
+    /// <summary>Числова колонка для агрегатів, крім <c>count</c>.</summary>
+    public string? Column { get; init; }
+
+    /// <summary>Умови.</summary>
+    public IReadOnlyList<PageFilter>? Where { get; init; }
 }
 
 /// <summary>
@@ -157,6 +222,12 @@ public sealed record PageDefinition
 
     /// <summary>Куди перейти після форми.</summary>
     public PageLink? Then { get; init; }
+
+    /// <summary>Плитки (<c>metrics</c>).</summary>
+    public IReadOnlyList<PageTile>? Tiles { get; init; }
+
+    /// <summary>Діаграми (<c>metrics</c>).</summary>
+    public IReadOnlyList<PageChart>? Charts { get; init; }
 }
 
 /// <summary>Сторінка застосунку.</summary>
@@ -188,7 +259,7 @@ public sealed record PageViewColumn(string Column, string Label, string Type, st
 
 /// <summary>Сторінка для показу (<c>GET /projects/{id}/pages/{key}</c>).</summary>
 /// <param name="Page">Сторінка.</param>
-/// <param name="TableId">Таблиця сторінки.</param>
+/// <param name="TableId">Таблиця сторінки; для <c>metrics</c> без таблиці за замовчуванням — порожній <see cref="Guid"/>.</param>
 /// <param name="Columns">Колонки списку чи поля картки з типами.</param>
 /// <param name="Schema">JSON Schema форми (<c>form</c>) для рушія форм F6-03; для інших типів <c>null</c>.</param>
 /// <param name="CanEdit">Чи може користувач змінювати сторінки проєкту (editor).</param>
@@ -228,9 +299,32 @@ public sealed record PageRecord(PageRow Row, IReadOnlyList<PageRelatedRows> Rela
 public sealed record PageRowsQuery(string? Search = null, string? Sort = null, bool? Descending = null, int Page = 1, int? PageSize = null);
 
 /// <summary>Результат форми.</summary>
-/// <param name="Row">Збережений рядок.</param>
+/// <param name="Row">Збережений рядок; для форми зі сценарієм (<c>onSubmit.workflow</c>) — <c>null</c>.</param>
 /// <param name="Then">Сторінка, куди перейти; <c>null</c> — лишитися.</param>
-public sealed record PageSubmitResult(PageRow Row, string? Then);
+/// <param name="Result">Результат сценарію форми (F8-05).</param>
+public sealed record PageSubmitResult(PageRow? Row, string? Then, PageActionResult? Result = null);
+
+/// <summary>Значення плитки сторінки <c>metrics</c>.</summary>
+/// <param name="Key">Ключ плитки.</param>
+/// <param name="Label">Підпис.</param>
+/// <param name="Value">Число; <c>null</c> — немає значення (порожня вибірка, ділення на нуль).</param>
+public sealed record PageMetricTile(string? Key, string Label, decimal? Value);
+
+/// <summary>Точка діаграми.</summary>
+/// <param name="Label">Значення групи (дата початку періоду, значення <c>enum</c>…); порожня група — «—».</param>
+/// <param name="Value">Агрегат групи.</param>
+public sealed record PageMetricPoint(string Label, decimal? Value);
+
+/// <summary>Діаграма сторінки <c>metrics</c>.</summary>
+/// <param name="Label">Підпис.</param>
+/// <param name="GroupBy">Групування з визначення.</param>
+/// <param name="Points">Групи за зростанням.</param>
+public sealed record PageMetricChart(string? Label, string GroupBy, IReadOnlyList<PageMetricPoint> Points);
+
+/// <summary>Показники сторінки <c>metrics</c> (<c>GET /projects/{id}/pages/{key}/metrics</c>).</summary>
+/// <param name="Tiles">Плитки в порядку визначення.</param>
+/// <param name="Charts">Діаграми в порядку визначення.</param>
+public sealed record PageMetrics(IReadOnlyList<PageMetricTile> Tiles, IReadOnlyList<PageMetricChart> Charts);
 
 /// <summary>422 <c>PAGE_FORM_INVALID</c>: значення форми не пройшли перевірку; <see cref="Errors"/> — за полями.</summary>
 public sealed class PageFormInvalidException : OpenBpException

@@ -133,7 +133,7 @@ describe('AppPagePage (F8-04)', () => {
 
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     host.querySelector<HTMLButtonElement>('[data-row="r1"] [data-action="1"]')!.click();
-    http.expectOne({ method: 'POST', url: `${base}/bookings/rows/r1/actions/1` }).flush(null, { status: 204, statusText: 'No Content' });
+    http.expectOne({ method: 'POST', url: `${base}/bookings/rows/r1/actions/1` }).flush({ state: 'success' });
     http.expectOne((r) => r.url === `${base}/bookings/rows`).flush({ items: [], page: 1, pageSize: 20, total: 0 });
 
     host.querySelector<HTMLButtonElement>('[data-testid="app-create"]')!.click();
@@ -195,5 +195,75 @@ describe('AppPagePage (F8-04)', () => {
       .expectOne({ method: 'POST', url: `${base}/new-booking/submit` })
       .flush({ row: { key: 'r2', data: {}, display: {}, actions: [] }, then: 'bookings' });
     expect(navigate).toHaveBeenCalledWith(['/projects', 'p1', 'app', 'bookings']);
+  });
+
+  it('дія-сценарій показує повідомлення сценарію, відмову — червоним, і перечитує список', async () => {
+    const view: ProjectPageView = {
+      ...listView,
+      page: {
+        ...listView.page,
+        definition: { ...listView.page.definition, actions: [{ label: 'Скасувати', workflow: 'cancel-booking' }], create: undefined },
+      },
+    };
+    const { fixture, http, host } = await setup({ key: 'bookings' });
+    http.expectOne(`${base}/bookings`).flush(view);
+    http.expectOne((r) => r.url === `${base}/bookings/rows`).flush({ items: [{ key: 'r1', data: { client: 'Олена' }, display: {}, actions: [0] }], page: 1, pageSize: 20, total: 1 });
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-row="r1"] [data-action="0"]')!.click();
+    http.expectOne({ method: 'POST', url: `${base}/bookings/rows/r1/actions/0` }).flush({ state: 'success', message: 'Запис скасовано.' });
+    http.expectOne((r) => r.url === `${base}/bookings/rows`).flush({ items: [], page: 1, pageSize: 20, total: 0 });
+    await render(fixture);
+    const done = host.querySelector('[data-testid="action-result"]')!;
+    expect(done.textContent).toContain('Запис скасовано.');
+    expect(done.classList.contains('text-red-700')).toBe(false);
+
+    fixture.componentInstance.act(view.page.definition.actions![0], 0, { key: 'r1', data: {}, display: {}, actions: [0] });
+    http.expectOne({ method: 'POST', url: `${base}/bookings/rows/r1/actions/0` }).flush({ state: 'rejected', message: 'Слот уже зайнятий.' });
+    http.expectOne((r) => r.url === `${base}/bookings/rows`).flush({ items: [], page: 1, pageSize: 20, total: 0 });
+    await render(fixture);
+    const refused = host.querySelector('[data-testid="action-result"]')!;
+    expect(refused.getAttribute('data-state')).toBe('rejected');
+    expect(refused.textContent).toContain('Слот уже зайнятий.');
+    expect(refused.classList.contains('text-red-700')).toBe(true);
+  });
+
+  it('метрики: плитки з числами, діаграма зі стовпчиками і посилання «Налаштувати» для editor', async () => {
+    const metricsView: ProjectPageView = {
+      ...listView,
+      page: { ...listView.page, key: 'stats', name: 'Статистика', kind: 'metrics', definition: { table: 'bookings', tiles: [{ label: 'Усього', key: 'all' }], charts: [] } },
+      columns: [],
+    };
+    const { fixture, http, host } = await setup({ key: 'stats' });
+    http.expectOne(`${base}/stats`).flush(metricsView);
+    http.expectOne(`${base}/stats/metrics`).flush({
+      tiles: [{ key: 'all', label: 'Усього', value: 1234.5 }, { key: null, label: 'Частка', value: null }],
+      charts: [{ label: 'За місяцями', groupBy: 'month(day)', points: [{ label: '2026-09-01', value: 2 }, { label: '2026-10-01', value: 4 }] }],
+    });
+    await render(fixture);
+
+    const values = [...host.querySelectorAll('[data-testid="tile-value"]')].map((e) => e.textContent?.replace(/\s/g, ' ').trim());
+    expect(values).toHaveLength(2);
+    expect(values[0]).toContain('1');
+    expect(values[1]).toBe('—');
+    expect(host.querySelector('[data-point="2026-10-01"] span.bg-ac-kit')?.getAttribute('style')).toContain('width: 100%');
+    expect(host.querySelector('[data-point="2026-09-01"] span.bg-ac-kit')?.getAttribute('style')).toContain('width: 50%');
+    expect(host.querySelector('[data-testid="app-edit-page"]')?.getAttribute('href')).toBe('/projects/p1/app/_builder/stats');
+  });
+
+  it('форма зі сценарієм: повідомлення сценарію показується, якщо переходу немає', async () => {
+    const { fixture, http, host } = await setup({ key: 'new-booking' });
+    http.expectOne(`${base}/new-booking`).flush({ ...formView, page: { ...formView.page, definition: { ...formView.page.definition, then: undefined } } });
+    await render(fixture);
+    const client = host.querySelector<HTMLInputElement>('[data-testid="form-field-client"]')!;
+    client.value = 'Олена';
+    client.dispatchEvent(new Event('input'));
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="app-submit"]')!.click();
+    http.expectOne({ method: 'POST', url: `${base}/new-booking/submit` }).flush({ row: null, then: null, result: { state: 'success', message: 'Запис створено.' } });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="action-result"]')?.textContent).toContain('Запис створено.');
+    expect(host.querySelector('[data-testid="app-form-saved"]')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage, ProjectPagesApiService } from '../../projects/project-pages-api.service';
@@ -22,13 +22,16 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
         <p class="max-w-3xl opacity-70" data-testid="app-empty">
           @if (canEdit()) {
             <ng-container i18n="@@project.app.emptyEditor"
-              >Сторінок застосунку ще немає. Додати сторінку можна через MCP-інструмент upsert_project_page (наприклад, з Claude);
-              конструктор сторінок з'явиться згодом.</ng-container
+              >Сторінок застосунку ще немає. Додайте першу конструктором («Нова сторінка») або через MCP-інструмент upsert_project_page
+              (наприклад, з Claude).</ng-container
             >
           } @else {
             <ng-container i18n="@@project.app.empty">Для вашої ролі сторінок застосунку немає.</ng-container>
           }
         </p>
+      }
+      @if (canEdit() && !building()) {
+        <a class="shell-nav__link mb-2 inline-block" data-testid="app-new-page" routerLink="_builder" i18n="@@project.app.newPage">+ Нова сторінка</a>
       }
       @if (pages().length > 1) {
         <nav class="mb-2 flex flex-wrap gap-1" aria-label="Сторінки застосунку" i18n-aria-label="@@project.app.nav" data-testid="app-nav">
@@ -52,12 +55,19 @@ export class ProjectAppPage implements OnInit {
   readonly pages = signal<ProjectPage[]>([]);
   readonly loaded = signal(false);
   readonly error = signal<string | null>(null);
+  /** Відкрито конструктор: меню сторінок і посилання на нього зайві. */
+  readonly building = signal(false);
   readonly canEdit = computed(() => {
     const role = this.context.projects().find((p) => p.id === this.projectId)?.role;
     return role === 'editor' || role === 'admin';
   });
 
   ngOnInit(): void {
+    const sync = () => this.building.set(this.route.firstChild?.snapshot.url[0]?.path === '_builder');
+    sync();
+    this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((e) => {
+      if (e instanceof NavigationEnd) sync();
+    });
     this.api
       .list(this.projectId)
       .pipe(takeUntilDestroyed(this.destroyRef))
