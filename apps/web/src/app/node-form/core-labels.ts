@@ -64,9 +64,12 @@ const BY_TYPE: Readonly<Record<string, () => Labels>> = {
       values: {
         get: $localize`:@@enum.dataTable.get:Отримати рядок`,
         list: $localize`:@@enum.dataTable.list:Отримати список`,
+        count: $localize`:@@enum.dataTable.count:Порахувати рядки`,
         insert: $localize`:@@enum.dataTable.insert:Додати рядок`,
+        insertIf: $localize`:@@enum.dataTable.insertIf:Додати, якщо є місце`,
         upsert: $localize`:@@enum.dataTable.upsert:Додати або оновити`,
         update: $localize`:@@enum.dataTable.update:Оновити рядки`,
+        increment: $localize`:@@enum.dataTable.increment:Збільшити число`,
         delete: $localize`:@@enum.dataTable.delete:Видалити рядки`,
       },
     },
@@ -90,6 +93,9 @@ const BY_TYPE: Readonly<Record<string, () => Labels>> = {
     'where.value': { label: $localize`:@@field.dataTable.value:Значення` },
     values: { label: $localize`:@@field.dataTable.values:Значення колонок` },
     limit: { label: $localize`:@@field.dataTable.limit:Не більше рядків` },
+    maxCount: { label: $localize`:@@field.dataTable.maxCount:Місткість (рядків за умовою)` },
+    column: { label: $localize`:@@field.dataTable.incrementColumn:Числова колонка` },
+    by: { label: $localize`:@@field.dataTable.by:На скільки` },
   }),
   'core.decisionTable': () => ({
     hitPolicy: {

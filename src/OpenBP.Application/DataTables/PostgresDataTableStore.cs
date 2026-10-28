@@ -9,9 +9,9 @@ using OpenBP.Engine.Data;
 namespace OpenBP.Application.DataTables;
 
 /// <summary>
-/// <see cref="IDataTableStore"/> над таблицями <c>data_tables</c>/<c>data_rows</c> (F6-11). Запис нових рядків іде під
-/// advisory-lock таблиці: ліміт рядків не перевищується паралельними записами, а паралельні <c>upsert</c> одного ключа
-/// дають один рядок (<c>ON CONFLICT</c>). Умови відбору — SQL з тією самою семантикою, що <see cref="DataTableRules.Matches"/>.
+/// <see cref="IDataTableStore"/> над таблицями <c>data_tables</c>/<c>data_rows</c> (F6-11, F8-02). Кожен запис
+/// (insert, insertIf, upsert, update, increment) іде в транзакції під advisory-lock таблиці: ліміт рядків, обов'язкові
+/// колонки, унікальність і <c>maxCount</c> перевіряються й записуються атомарно щодо інших записів у таблицю. Умови відбору — SQL з тією самою семантикою, що <see cref="DataTableRules.Matches"/>.
 /// Потокобезпечне: кожна операція бере свій контекст із фабрики.
 /// </summary>
 public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> contexts, DataTableLimits limits, TimeProvider time) : IDataTableStore
@@ -27,7 +27,29 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
         var entity = Guid.TryParse(reference, out var id)
             ? await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct).ConfigureAwait(false)
             : null;
-        entity ??= await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.NormalizedName == normalized, ct).ConfigureAwait(false);
+        entity ??= await db.DataTables.AsNoTracking().Where(t => t.NormalizedName == normalized)
+            .OrderBy(t => t.ProjectId == null ? 0 : 1).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        return entity is null ? null : ToInfo(entity);
+    }
+
+    /// <inheritdoc />
+    public async Task<DataTableInfo?> FindTableAsync(string reference, Guid executionId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        var projectId = await (
+                from e in db.Executions
+                where e.Id == executionId
+                join w in db.Workflows on e.WorkflowId equals w.Id
+                select w.GroupId)
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        var visible = db.DataTables.AsNoTracking().Where(t => t.ProjectId == null || t.ProjectId == projectId);
+        var normalized = reference.Trim().ToUpperInvariant();
+        var entity = Guid.TryParse(reference, out var id)
+            ? await visible.SingleOrDefaultAsync(t => t.Id == id, ct).ConfigureAwait(false)
+            : null;
+        entity ??= await visible.Where(t => t.NormalizedName == normalized)
+            .OrderBy(t => t.ProjectId == null ? 1 : 0).FirstOrDefaultAsync(ct).ConfigureAwait(false);
         return entity is null ? null : ToInfo(entity);
     }
 
@@ -45,39 +67,189 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
     {
         ArgumentNullException.ThrowIfNull(table);
         var filters = DataTableRules.NormalizeFilters(table, where);
-        var columns = table.Columns.ToDictionary(c => c.Name, StringComparer.Ordinal);
-        var sql = new StringBuilder("SELECT * FROM data_rows WHERE table_id = @table");
-        var parameters = new List<NpgsqlParameter> { new("table", table.Id) };
-        for (var i = 0; i < filters.Count; i++)
-        {
-            sql.Append(" AND ").Append(Condition(filters[i], columns[filters[i].Column], i, parameters));
-        }
-
-        sql.Append(" ORDER BY created_at, key LIMIT @limit OFFSET @offset");
-        parameters.Add(new("limit", Math.Max(limit, 0)));
-        parameters.Add(new("offset", Math.Max(offset, 0)));
-
         await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
-        var rows = await db.DataRows.FromSqlRaw(sql.ToString(), [.. parameters]).AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
-        return [.. rows.Select(ToRow)];
+        return await QueryAsync(db, table, filters, limit, offset, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountRowsAsync(DataTableInfo table, IReadOnlyList<DataFilter> where, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await CountAsync(db, table, filters, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public async Task<DataRow> InsertRowAsync(DataTableInfo table, JsonObject values, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(table);
-        var data = DataTableRules.Normalize(table, values, requireKey: true);
-        DataTableRules.CheckSize(table, data, limits);
-        var key = DataTableRules.KeyOf(table, data) ?? Guid.CreateVersion7(time.GetUtcNow()).ToString();
-
+        var (data, key) = Prepare(table, values);
         await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
         await LockAsync(db, table, ct).ConfigureAwait(false);
+        var row = await InsertLockedAsync(db, table, data, key, ct).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return row;
+    }
+
+    /// <inheritdoc />
+    public async Task<DataInsertResult> InsertIfAsync(DataTableInfo table, JsonObject values, IReadOnlyList<DataFilter> where, int maxCount, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        var (data, key) = Prepare(table, values);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await LockAsync(db, table, ct).ConfigureAwait(false);
+        if (await CountAsync(db, table, filters, ct).ConfigureAwait(false) >= maxCount)
+        {
+            return new DataInsertResult(false, DataInsertReasons.Capacity, null);
+        }
+
+        DataRow row;
+        try
+        {
+            row = await InsertLockedAsync(db, table, data, key, ct).ConfigureAwait(false);
+        }
+        catch (DataTableException ex) when (ex.Code is DataTableRules.Codes.Unique or DataTableRules.Codes.KeyDuplicate)
+        {
+            return new DataInsertResult(false, DataInsertReasons.Unique, null);
+        }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return new DataInsertResult(true, null, row);
+    }
+
+    /// <inheritdoc />
+    public async Task<DataRow> UpsertRowAsync(DataTableInfo table, JsonObject values, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (table.KeyColumn is null)
+        {
+            throw DataTableRules.KeyColumnRequired(table);
+        }
+
+        var (data, key) = Prepare(table, values);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await LockAsync(db, table, ct).ConfigureAwait(false);
+        var existing = await db.DataRows.SingleOrDefaultAsync(r => r.TableId == table.Id && r.Key == key, ct).ConfigureAwait(false);
+        var row = existing is null
+            ? await InsertLockedAsync(db, table, data, key, ct).ConfigureAwait(false)
+            : await ReplaceLockedAsync(db, table, existing, Merge(existing.Data, data), ct).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return row;
+    }
+
+    /// <inheritdoc />
+    public async Task<DataRow?> UpdateRowAsync(DataTableInfo table, string key, JsonObject values, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var data = DataTableRules.Normalize(table, values, requireKey: false);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await LockAsync(db, table, ct).ConfigureAwait(false);
+        var existing = await db.DataRows.SingleOrDefaultAsync(r => r.TableId == table.Id && r.Key == key, ct).ConfigureAwait(false);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var merged = Merge(existing.Data, data);
+        if (table.KeyColumn is { } keyColumn && DataTableRules.KeyText(merged[keyColumn.Name]) != key)
+        {
+            throw new DataTableException(DataTableRules.Codes.KeyMissing, $"Ключову колонку «{keyColumn.Name}» змінити не можна — видаліть рядок і створіть новий.");
+        }
+
+        var row = await ReplaceLockedAsync(db, table, existing, merged, ct).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return row;
+    }
+
+    /// <inheritdoc />
+    public async Task<DataRow?> IncrementAsync(DataTableInfo table, string key, string column, decimal by, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await LockAsync(db, table, ct).ConfigureAwait(false);
+        var existing = await db.DataRows.SingleOrDefaultAsync(r => r.TableId == table.Id && r.Key == key, ct).ConfigureAwait(false);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var current = JsonNode.Parse(existing.Data)!.AsObject();
+        var (name, value) = DataTableRules.Increment(table, current, column, by);
+        var row = await ReplaceLockedAsync(db, table, existing, Merge(existing.Data, new JsonObject { [name] = value }), ct).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return row;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteRowAsync(DataTableInfo table, string key, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await db.DataRows.Where(r => r.TableId == table.Id && r.Key == key).ExecuteDeleteAsync(ct).ConfigureAwait(false) > 0;
+    }
+
+    /// <summary>Обмеження з JSON <c>data_tables.constraints</c>.</summary>
+    public static DataTableConstraints ParseConstraints(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? DataTableConstraints.None
+        : JsonSerializer.Deserialize<DataTableConstraints>(json, ColumnJson.Options) ?? DataTableConstraints.None;
+
+    /// <summary>JSON для <c>data_tables.constraints</c>.</summary>
+    public static string SerializeConstraints(DataTableConstraints constraints) => JsonSerializer.Serialize(constraints, ColumnJson.Options);
+
+    /// <summary>Колонки з JSON <c>data_tables.columns</c>.</summary>
+    public static IReadOnlyList<DataColumn> ParseColumns(string json) =>
+        JsonSerializer.Deserialize<List<DataColumn>>(json, ColumnJson.Options) ?? [];
+
+    /// <summary>JSON для <c>data_tables.columns</c>.</summary>
+    public static string SerializeColumns(IReadOnlyList<DataColumn> columns) => JsonSerializer.Serialize(columns, ColumnJson.Options);
+
+    /// <summary>Таблиця з рядка <c>data_tables</c>: колонки, обмеження, проєкт.</summary>
+    public static DataTableInfo ToInfo(DataTableEntity entity) => new(entity.Id, entity.Name, ParseColumns(entity.Columns))
+    {
+        ProjectId = entity.ProjectId,
+        Constraints = ParseConstraints(entity.Constraints),
+    };
+
+    internal static DataRow ToRow(DataRowEntity row) => new(row.Key, JsonNode.Parse(row.Data)!.AsObject(), row.CreatedAt, row.UpdatedAt);
+
+    private static Task LockAsync(OpenBpDbContext db, DataTableInfo table, CancellationToken ct) =>
+        db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended(@table::text, 0))", [new NpgsqlParameter("table", table.Id)], ct);
+
+    private static JsonObject Merge(string current, JsonObject changes)
+    {
+        var merged = JsonNode.Parse(current)!.AsObject();
+        foreach (var (name, value) in changes)
+        {
+            merged[name] = value?.DeepClone();
+        }
+
+        return merged;
+    }
+
+    private (JsonObject Data, string Key) Prepare(DataTableInfo table, JsonObject values)
+    {
+        var data = DataTableRules.Normalize(table, values, requireKey: true);
+        DataTableRules.CheckSize(table, data, limits);
+        return (data, DataTableRules.KeyOf(table, data) ?? Guid.CreateVersion7(time.GetUtcNow()).ToString());
+    }
+
+    /// <summary>Вставка під блокуванням таблиці: дубль ключа, обов'язкові колонки, унікальність, ліміт рядків.</summary>
+    private async Task<DataRow> InsertLockedAsync(OpenBpDbContext db, DataTableInfo table, JsonObject data, string key, CancellationToken ct)
+    {
         if (await db.DataRows.AnyAsync(r => r.TableId == table.Id && r.Key == key, ct).ConfigureAwait(false))
         {
             throw DataTableRules.Duplicate(table, key);
         }
 
+        DataTableRules.CheckRequired(table, data);
+        await CheckUniqueAsync(db, table, key, data, ct).ConfigureAwait(false);
         await EnsureRoomAsync(db, table, ct).ConfigureAwait(false);
         var now = time.GetUtcNow();
         var row = new DataRowEntity { TableId = table.Id, Key = key, Data = data.ToJsonString(), CreatedAt = now, UpdatedAt = now };
@@ -91,101 +263,69 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
             throw DataTableRules.Duplicate(table, key);
         }
 
-        await tx.CommitAsync(ct).ConfigureAwait(false);
         return ToRow(row);
     }
 
-    /// <inheritdoc />
-    public async Task<DataRow> UpsertRowAsync(DataTableInfo table, JsonObject values, CancellationToken ct)
+    /// <summary>Нові значення наявного рядка під блокуванням таблиці.</summary>
+    private async Task<DataRow> ReplaceLockedAsync(OpenBpDbContext db, DataTableInfo table, DataRowEntity row, JsonObject merged, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(table);
-        if (table.KeyColumn is null)
-        {
-            throw DataTableRules.KeyColumnRequired(table);
-        }
-
-        var data = DataTableRules.Normalize(table, values, requireKey: true);
-        DataTableRules.CheckSize(table, data, limits);
-        var key = DataTableRules.KeyOf(table, data)!;
-
-        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
-        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
-        await LockAsync(db, table, ct).ConfigureAwait(false);
-        if (!await db.DataRows.AnyAsync(r => r.TableId == table.Id && r.Key == key, ct).ConfigureAwait(false))
-        {
-            await EnsureRoomAsync(db, table, ct).ConfigureAwait(false);
-        }
-
-        var now = time.GetUtcNow();
-        await db.Database.ExecuteSqlRawAsync(
-            """
-            INSERT INTO data_rows (table_id, key, data, created_at, updated_at) VALUES (@table, @key, @data::jsonb, @now, @now)
-            ON CONFLICT (table_id, key) DO UPDATE SET data = data_rows.data || EXCLUDED.data, updated_at = EXCLUDED.updated_at
-            """,
-            [new NpgsqlParameter("table", table.Id), new NpgsqlParameter("key", key), new NpgsqlParameter("data", data.ToJsonString()), new NpgsqlParameter("now", now)],
-            ct).ConfigureAwait(false);
-        var row = await db.DataRows.AsNoTracking().SingleAsync(r => r.TableId == table.Id && r.Key == key, ct).ConfigureAwait(false);
-        var result = ToRow(row);
-        DataTableRules.CheckSize(table, result.Data, limits);
-        await tx.CommitAsync(ct).ConfigureAwait(false);
-        return result;
-    }
-
-    /// <inheritdoc />
-    public async Task<DataRow?> UpdateRowAsync(DataTableInfo table, string key, JsonObject values, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(table);
-        var data = DataTableRules.Normalize(table, values, requireKey: false);
-        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
-        await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var row = await db.DataRows
-            .FromSqlRaw("SELECT * FROM data_rows WHERE table_id = @table AND key = @key FOR UPDATE", new NpgsqlParameter("table", table.Id), new NpgsqlParameter("key", key))
-            .SingleOrDefaultAsync(ct).ConfigureAwait(false);
-        if (row is null)
-        {
-            return null;
-        }
-
-        var merged = JsonNode.Parse(row.Data)!.AsObject();
-        foreach (var (name, value) in data)
-        {
-            merged[name] = value?.DeepClone();
-        }
-
-        if (table.KeyColumn is { } keyColumn && DataTableRules.KeyText(merged[keyColumn.Name]) != key)
-        {
-            throw new DataTableException(DataTableRules.Codes.KeyMissing, $"Ключову колонку «{keyColumn.Name}» змінити не можна — видаліть рядок і створіть новий.");
-        }
-
         DataTableRules.CheckSize(table, merged, limits);
+        DataTableRules.CheckRequired(table, merged);
+        await CheckUniqueAsync(db, table, row.Key, merged, ct).ConfigureAwait(false);
         row.Data = merged.ToJsonString();
         row.UpdatedAt = time.GetUtcNow();
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        await tx.CommitAsync(ct).ConfigureAwait(false);
         return ToRow(row);
     }
 
-    /// <inheritdoc />
-    public async Task<bool> DeleteRowAsync(DataTableInfo table, string key, CancellationToken ct)
+    private static async Task CheckUniqueAsync(OpenBpDbContext db, DataTableInfo table, string key, JsonObject data, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(table);
-        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
-        return await db.DataRows.Where(r => r.TableId == table.Id && r.Key == key).ExecuteDeleteAsync(ct).ConfigureAwait(false) > 0;
+        foreach (var unique in table.Constraints.Unique)
+        {
+            if (DataTableRules.UniqueFilters(table, unique, data) is not { } filters)
+            {
+                continue;
+            }
+
+            var clashes = await QueryAsync(db, table, filters, 2, 0, ct).ConfigureAwait(false);
+            if (clashes.Any(r => r.Key != key))
+            {
+                throw DataTableRules.UniqueViolation(table, unique);
+            }
+        }
     }
 
-    /// <summary>Колонки з JSON <c>data_tables.columns</c>.</summary>
-    public static IReadOnlyList<DataColumn> ParseColumns(string json) =>
-        JsonSerializer.Deserialize<List<DataColumn>>(json, ColumnJson.Options) ?? [];
+    private static async Task<IReadOnlyList<DataRow>> QueryAsync(OpenBpDbContext db, DataTableInfo table, IReadOnlyList<DataFilter> filters, int limit, int offset, CancellationToken ct)
+    {
+        var (condition, parameters) = Where(table, filters);
+        parameters.Add(new("limit", Math.Max(limit, 0)));
+        parameters.Add(new("offset", Math.Max(offset, 0)));
+        var sql = $"SELECT * FROM data_rows WHERE {condition} ORDER BY created_at, key LIMIT @limit OFFSET @offset";
+        var rows = await db.DataRows.FromSqlRaw(sql, [.. parameters]).AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        return [.. rows.Select(ToRow)];
+    }
 
-    /// <summary>JSON для <c>data_tables.columns</c>.</summary>
-    public static string SerializeColumns(IReadOnlyList<DataColumn> columns) => JsonSerializer.Serialize(columns, ColumnJson.Options);
+    private static Task<int> CountAsync(OpenBpDbContext db, DataTableInfo table, IReadOnlyList<DataFilter> filters, CancellationToken ct)
+    {
+        var (condition, parameters) = Where(table, filters);
+        // condition — лише назви параметрів і фіксовані фрагменти SQL (Condition), значення йдуть параметрами.
+        var sql = $"SELECT count(*)::int AS \"Value\" FROM data_rows WHERE {condition}";
+        return db.Database.SqlQueryRaw<int>(sql, [.. parameters]).SingleAsync(ct);
+    }
 
-    internal static DataTableInfo ToInfo(DataTableEntity entity) => new(entity.Id, entity.Name, ParseColumns(entity.Columns));
+    /// <summary>SQL-умова по таблиці й нормалізованих фільтрах.</summary>
+    private static (string Condition, List<NpgsqlParameter> Parameters) Where(DataTableInfo table, IReadOnlyList<DataFilter> filters)
+    {
+        var columns = table.Columns.ToDictionary(c => c.Name, StringComparer.Ordinal);
+        var sql = new StringBuilder("table_id = @table");
+        var parameters = new List<NpgsqlParameter> { new("table", table.Id) };
+        for (var i = 0; i < filters.Count; i++)
+        {
+            sql.Append(" AND ").Append(Condition(filters[i], columns[filters[i].Column], i, parameters));
+        }
 
-    internal static DataRow ToRow(DataRowEntity row) => new(row.Key, JsonNode.Parse(row.Data)!.AsObject(), row.CreatedAt, row.UpdatedAt);
-
-    private static Task LockAsync(OpenBpDbContext db, DataTableInfo table, CancellationToken ct) =>
-        db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended(@table::text, 0))", [new NpgsqlParameter("table", table.Id)], ct);
+        return (sql.ToString(), parameters);
+    }
 
     private async Task EnsureRoomAsync(OpenBpDbContext db, DataTableInfo table, CancellationToken ct)
     {
@@ -244,6 +384,7 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
         public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
         {
             Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         };
     }
 }

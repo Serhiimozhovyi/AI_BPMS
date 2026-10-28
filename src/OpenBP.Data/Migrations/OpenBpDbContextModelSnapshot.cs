@@ -292,6 +292,13 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("columns");
 
+                    b.Property<string>("Constraints")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("constraints")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -306,14 +313,20 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("normalized_name");
 
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NormalizedName")
+                    b.HasIndex("ProjectId", "NormalizedName")
                         .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("ProjectId", "NormalizedName"), false);
 
                     b.ToTable("data_tables", (string)null);
                 });
@@ -1664,6 +1677,14 @@ namespace OpenBP.Data.Migrations
                         .HasForeignKey("TableId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBP.Data.DataTableEntity", b =>
+                {
+                    b.HasOne("OpenBP.Data.WorkflowGroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBP.Data.EvaluationCaseEntity", b =>

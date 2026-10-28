@@ -125,7 +125,10 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("data_tables");
             e.Property(x => x.Columns).HasColumnType("jsonb");
-            e.HasIndex(x => x.NormalizedName).IsUnique();
+            e.Property(x => x.Constraints).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+            // Назва унікальна в межах проєкту; спільні таблиці (project_id = null) — один простір назв.
+            e.HasIndex(x => new { x.ProjectId, x.NormalizedName }).IsUnique().AreNullsDistinct(false);
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<DataRowEntity>(e =>
         {

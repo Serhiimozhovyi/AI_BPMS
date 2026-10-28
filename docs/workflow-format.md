@@ -450,8 +450,11 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 ### Таблиці даних (`core.dataTable`)
 
 Вузол «Таблиця даних» читає й пише таблиці зі сторінки «Таблиці» (`/tables`, F6-11): довідники, черги, стан між
-запусками. Таблиця має колонки `{ name, type: string|number|boolean|date|json, key? }`; ключова — не більше однієї
-(рядок або число), за нею працюють `get`, `upsert`, `update`, `delete`. Без ключової колонки ключ рядка — згенерований id.
+запусками. Таблиця має колонки `{ name, type, key?, values?, table?, sensitive? }` з типами `string`, `number`, `boolean`,
+`date`, `datetime`, `enum` (значення з `values`), `ref` (ключ рядка таблиці `table`), `user` (id користувача), `json`;
+ключова — не більше однієї (рядок або число), за нею працюють `get`, `upsert`, `update`, `increment`, `delete`. Без
+ключової колонки ключ рядка — згенерований id. Таблиця може мати обмеження `required` і `unique` (з умовою) і належати
+проєкту — контракт у `docs/projects.md` §2 (F8-02).
 
 ```json
 {
@@ -464,13 +467,25 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 }
 ```
 
-- `table` — назва (без урахування регістру) або id; `operation` — `get` | `list` | `insert` | `upsert` | `update` | `delete`.
-- `key` — значення ключа для `get`, `update`, `delete`; для `insert`/`upsert` ключ береться з `values`.
+- `table` — назва (без урахування регістру) або id; сценарій проєкту шукає назву спершу серед таблиць свого проєкту,
+  потім серед спільних; таблиць інших проєктів для нього немає (id такої таблиці — `PROJECT_REFERENCE_FORBIDDEN` при
+  збереженні). `operation` — `get` | `list` | `count` | `insert` | `insertIf` | `upsert` | `update` | `increment` | `delete`.
+- `key` — значення ключа для `get`, `update`, `increment`, `delete`; для `insert`/`upsert` ключ береться з `values`.
 - `values` — значення колонок; змінюються лише передані (`update`, `upsert` по наявному рядку). Типи приводяться:
   число з рядка `"3"`, булеве з `"true"`, дата — в ISO UTC; невідома колонка чи невідповідний тип — помилка вузла.
+  Службові поля `_key`, `_inserted`, `_reason` з виходу попереднього вузла в `values` ігноруються.
 - `where` — для `list`: `[{ column, operator, value }]` через AND; оператори `eq`, `ne`, `gt`, `gte`, `lt`, `lte`,
   `contains` (підрядок без урахування регістру; для json — у будь-якому значенні всередині), `isEmpty`, `isNotEmpty`.
-  Колонки json — лише `contains`/`isEmpty`/`isNotEmpty`. `limit` — 1…1000, типово 100.
+  Колонки json — лише `contains`/`isEmpty`/`isNotEmpty`. `limit` — 1…1000, типово 100. Ті самі умови — у `count`
+  (вихід `{ count }`) і `insertIf`.
+- `insertIf` (F8-02) — вставка рядка з `values`, лише якщо рядків за `where` менше ніж `maxCount` (місткість події,
+  ліміт активних записів): успіх — рядок з `_inserted: true`, брак місця — item `{ _inserted: false, _reason: "capacity" }`.
+  Перевірка й вставка атомарні: 20 одночасних запусків з `maxCount: 8` дають рівно 8 рядків.
+- Порушення правила `unique` таблиці в `insert`, `upsert`, `insertIf` — не помилка, а item
+  `{ _inserted: false, _reason: "unique" }` (наступний вузол `core.if` відповідає людині «слот уже зайнятий»); в
+  `update`/`increment` — помилка вузла `DATA_TABLE_UNIQUE`. Незаповнена обов'язкова колонка — помилка `DATA_TABLE_REQUIRED`.
+- `increment` — атомарно додає `by` (типово 1, може бути від'ємним) до числової колонки `column` рядка `key`;
+  порожнє значення — 0; вихід — рядок.
 - Вузол виконується для кожного вхідного item; вихід — item на кожен рядок результату: значення колонок плюс `_key`.
   `get` без такого рядка — нуль items; `update` неіснуючого — помилка; `delete` — `{ _key, deleted }`.
 - `upsert` ідемпотентний: паралельні запуски з одним ключем дають один рядок.

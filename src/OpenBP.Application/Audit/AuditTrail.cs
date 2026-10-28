@@ -42,6 +42,8 @@ public static class AuditActions
     public const string DataTableCreated = "dataTable.created";
     public const string DataTableUpdated = "dataTable.updated";
     public const string DataTableDeleted = "dataTable.deleted";
+    /// <summary>Прочитано значення чутливих колонок (F8-02).</summary>
+    public const string DataTableSensitiveRead = "dataTable.sensitiveRead";
     public const string NotificationChannelCreated = "notificationChannel.created";
     public const string NotificationChannelUpdated = "notificationChannel.updated";
     public const string NotificationChannelDeleted = "notificationChannel.deleted";

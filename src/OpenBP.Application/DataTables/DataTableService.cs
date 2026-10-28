@@ -20,35 +20,50 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
     /// <summary>Код конфлікту: зміна ключової колонки таблиці з рядками.</summary>
     public const string KeyChangeCode = "DATA_TABLE_KEY_CHANGE";
 
+    /// <summary>Код помилки: колонка <c>ref</c> посилається на таблицю, якої немає в проєкті чи серед спільних (F8-02).</summary>
+    public const string RefInvalidCode = "DATA_TABLE_REF_INVALID";
+
     /// <summary>Найдовша назва таблиці.</summary>
     public const int MaxNameLength = 100;
 
     private const string Entity = "data-table";
     private const string RowEntity = "data-row";
 
+    private readonly ProjectAccess _access = new(db, currentUser);
+
     /// <inheritdoc />
-    public async Task<IReadOnlyList<DataTableSummary>> ListAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<DataTableSummary>> ListAsync(Guid? projectId, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Viewer);
-        var tables = await db.DataTables.AsNoTracking().OrderBy(t => t.Name).ToListAsync(ct);
-        var counts = await db.DataRows.GroupBy(r => r.TableId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count, ct);
-        return [.. tables.Select(t => ToSummary(t, counts.GetValueOrDefault(t.Id)))];
+        var scope = await _access.ScopeAsync(ct);
+        var query = Visible(db.DataTables.AsNoTracking(), scope);
+        if (projectId is { } only)
+        {
+            query = query.Where(t => t.ProjectId == null || t.ProjectId == only);
+        }
+
+        var tables = await query.OrderBy(t => t.Name).ToListAsync(ct);
+        var ids = tables.Select(t => t.Id).ToList();
+        var counts = await db.DataRows.Where(r => ids.Contains(r.TableId)).GroupBy(r => r.TableId)
+            .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+        return [.. tables.Select(t => ToSummary(t, counts.GetValueOrDefault(t.Id), scope))];
     }
 
     /// <inheritdoc />
-    public async Task<DataTableSummary> GetAsync(string reference, CancellationToken ct)
+    public async Task<DataTableSummary> GetAsync(string reference, CancellationToken ct, Guid? projectId = null)
     {
-        currentUser.Require(UserRole.Viewer);
-        var table = await FindAsync(reference, ct);
-        return ToSummary(table, await db.DataRows.CountAsync(r => r.TableId == table.Id, ct));
+        var table = await FindAsync(reference, projectId, ct);
+        return ToSummary(table, await db.DataRows.CountAsync(r => r.TableId == table.Id, ct), await _access.ScopeAsync(ct));
     }
 
     /// <inheritdoc />
-    public async Task<DataTableSummary> CreateAsync(string name, IReadOnlyList<DataColumn> columns, CancellationToken ct)
+    public async Task<DataTableSummary> CreateAsync(DataTableDefinition definition, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var trimmed = ValidName(name);
-        Validate(columns);
+        ArgumentNullException.ThrowIfNull(definition);
+        await _access.RequireAsync(definition.ProjectId, UserRole.Editor, "project", definition.ProjectId ?? Guid.Empty, ct);
+        var trimmed = ValidName(definition.Name);
+        var columns = definition.Columns ?? [];
+        var constraints = Validate(columns, definition.Constraints);
+        await ValidateRefsAsync(trimmed, columns, definition.ProjectId, ct);
         var now = time.GetUtcNow();
         var table = new DataTableEntity
         {
@@ -56,22 +71,27 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
             Name = trimmed,
             NormalizedName = trimmed.ToUpperInvariant(),
             Columns = PostgresDataTableStore.SerializeColumns(columns),
+            Constraints = PostgresDataTableStore.SerializeConstraints(constraints),
+            ProjectId = definition.ProjectId,
             CreatedAt = now,
             UpdatedAt = now,
         };
         db.DataTables.Add(table);
-        db.Audit(currentUser, now, AuditActions.DataTableCreated, AuditEntities.DataTable, table.Id.ToString(), AuditDetails(trimmed, columns));
+        db.Audit(currentUser, now, AuditActions.DataTableCreated, AuditEntities.DataTable, table.Id.ToString(), AuditDetails(table, columns));
         await SaveAsync(trimmed, ct);
-        return ToSummary(table, 0);
+        return ToSummary(table, 0, await _access.ScopeAsync(ct));
     }
 
     /// <inheritdoc />
-    public async Task<DataTableSummary> UpdateAsync(Guid id, string name, IReadOnlyList<DataColumn> columns, CancellationToken ct)
+    public async Task<DataTableSummary> UpdateAsync(Guid id, DataTableDefinition definition, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var trimmed = ValidName(name);
-        Validate(columns);
+        ArgumentNullException.ThrowIfNull(definition);
+        var trimmed = ValidName(definition.Name);
+        var columns = definition.Columns ?? [];
+        var constraints = Validate(columns, definition.Constraints);
         var table = await db.DataTables.SingleOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await _access.RequireAsync(table.ProjectId, UserRole.Editor, Entity, id, ct);
+        await ValidateRefsAsync(trimmed, columns, table.ProjectId, ct);
         var before = PostgresDataTableStore.ParseColumns(table.Columns);
         var rows = await db.DataRows.CountAsync(r => r.TableId == id, ct);
         var oldKey = before.FirstOrDefault(c => c.Key);
@@ -81,81 +101,107 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
             throw new ConflictException(KeyChangeCode, "Ключову колонку таблиці з рядками змінити не можна — створіть нову таблицю й імпортуйте дані.");
         }
 
+        var removed = before.Where(b => !columns.Any(c => string.Equals(c.Name, b.Name, StringComparison.OrdinalIgnoreCase))).ToList();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        foreach (var removed in before.Where(b => !columns.Any(c => string.Equals(c.Name, b.Name, StringComparison.OrdinalIgnoreCase))))
+        if (rows > 0 && !constraints.IsEmpty)
+        {
+            await CheckExistingRowsAsync(new DataTableInfo(id, trimmed, columns) { Constraints = constraints }, removed, ct);
+        }
+
+        foreach (var column in removed)
         {
             await db.Database.ExecuteSqlRawAsync(
                 "UPDATE data_rows SET data = data - @column WHERE table_id = @table",
-                [new NpgsqlParameter("column", removed.Name), new NpgsqlParameter("table", id)],
+                [new NpgsqlParameter("column", column.Name), new NpgsqlParameter("table", id)],
                 ct);
         }
 
         table.Name = trimmed;
         table.NormalizedName = trimmed.ToUpperInvariant();
         table.Columns = PostgresDataTableStore.SerializeColumns(columns);
+        table.Constraints = PostgresDataTableStore.SerializeConstraints(constraints);
         table.UpdatedAt = time.GetUtcNow();
-        db.Audit(currentUser, table.UpdatedAt, AuditActions.DataTableUpdated, AuditEntities.DataTable, id.ToString(), AuditDetails(trimmed, columns));
+        db.Audit(currentUser, table.UpdatedAt, AuditActions.DataTableUpdated, AuditEntities.DataTable, id.ToString(), AuditDetails(table, columns));
         await SaveAsync(trimmed, ct);
         await tx.CommitAsync(ct);
-        return ToSummary(table, rows);
+        return ToSummary(table, rows, await _access.ScopeAsync(ct));
     }
 
     /// <inheritdoc />
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var name = await db.DataTables.Where(t => t.Id == id).Select(t => t.Name).SingleOrDefaultAsync(ct)
-                   ?? throw new NotFoundException(Entity, id);
+        var table = await db.DataTables.AsNoTracking().Where(t => t.Id == id).Select(t => new { t.Name, t.ProjectId }).SingleOrDefaultAsync(ct)
+                    ?? throw new NotFoundException(Entity, id);
+        await _access.RequireAsync(table.ProjectId, UserRole.Editor, Entity, id, ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.DataTables.Where(t => t.Id == id).ExecuteDeleteAsync(ct);
-        db.Audit(currentUser, time.GetUtcNow(), AuditActions.DataTableDeleted, AuditEntities.DataTable, id.ToString(), new JsonObject { ["name"] = name });
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.DataTableDeleted, AuditEntities.DataTable, id.ToString(), new JsonObject { ["name"] = table.Name });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
 
-    /// <summary>Подробиці для журналу аудиту: назва і колонки (рядки не пишуться).</summary>
-    private static JsonObject AuditDetails(string name, IReadOnlyList<DataColumn> columns) => new()
+    /// <summary>Подробиці для журналу аудиту: назва, проєкт, колонки й обмеження (рядки не пишуться).</summary>
+    private static JsonObject AuditDetails(DataTableEntity table, IReadOnlyList<DataColumn> columns) => new()
     {
-        ["name"] = name,
+        ["name"] = table.Name,
+        ["projectId"] = table.ProjectId?.ToString(),
         ["columns"] = new JsonArray([.. columns.Select(c => (JsonNode?)JsonValue.Create(c.Name))]),
+        ["sensitive"] = new JsonArray([.. columns.Where(c => c.Sensitive).Select(c => (JsonNode?)JsonValue.Create(c.Name))]),
     };
 
     /// <inheritdoc />
     public async Task<PageResult<DataRowDto>> ListRowsAsync(Guid id, string? search, PageRequest page, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Viewer);
-        var table = await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        var (entity, table) = await InfoAsync(id, UserRole.Viewer, ct);
         var normalized = page.Normalized();
+        // Пошук не має знаходити рядки за значеннями чутливих колонок, яких користувач не бачить.
+        string[] hidden = await CanReadSensitiveAsync(table, ct) ? [] : [.. table.Columns.Where(c => c.Sensitive).Select(c => c.Name)];
         var query = string.IsNullOrWhiteSpace(search)
             ? db.DataRows.Where(r => r.TableId == table.Id)
-            : db.DataRows.FromSqlInterpolated($"SELECT * FROM data_rows WHERE table_id = {table.Id} AND strpos(lower(data::text), lower({search.Trim()})) > 0");
+            : db.DataRows.FromSqlInterpolated(
+                $"SELECT * FROM data_rows WHERE table_id = {table.Id} AND strpos(lower((data - {hidden})::text), lower({search.Trim()})) > 0");
         var total = await query.CountAsync(ct);
         var rows = await query.AsNoTracking().OrderBy(r => r.CreatedAt).ThenBy(r => r.Key).Skip(normalized.Skip).Take(normalized.PageSize).ToListAsync(ct);
-        return new PageResult<DataRowDto>([.. rows.Select(r => ToDto(PostgresDataTableStore.ToRow(r)))], normalized.Page, normalized.PageSize, total);
+        var dtos = await ShowAsync(entity, table, [.. rows.Select(PostgresDataTableStore.ToRow)], ct);
+        return new PageResult<DataRowDto>(dtos, normalized.Page, normalized.PageSize, total);
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<DataRowDto>> QueryRowsAsync(string reference, IReadOnlyList<DataFilter> where, int limit, CancellationToken ct)
+    public async Task<IReadOnlyList<DataRowDto>> QueryRowsAsync(
+        string reference, IReadOnlyList<DataFilter> where, int limit, CancellationToken ct, Guid? projectId = null, bool includeSensitive = true)
     {
-        currentUser.Require(UserRole.Viewer);
-        var table = PostgresDataTableStore.ToInfo(await FindAsync(reference, ct));
+        ArgumentNullException.ThrowIfNull(where);
+        var entity = await FindAsync(reference, projectId, ct);
+        var table = PostgresDataTableStore.ToInfo(entity);
+        var canRead = await CanReadSensitiveAsync(table, ct);
+        if (!canRead || !includeSensitive)
+        {
+            // Без права на чутливі колонки не можна і відбирати за ними — інакше значення вгадується умовами.
+            var hidden = where.FirstOrDefault(w => table.Columns.Any(c => c.Sensitive && string.Equals(c.Name, w.Column, StringComparison.OrdinalIgnoreCase)));
+            if (hidden is not null)
+            {
+                throw new DataTableValidationException(new DataTableException(DataTableRules.Codes.FilterInvalid,
+                    $"Колонка «{hidden.Column}» чутлива: відбирати за нею може лише editor проєкту."));
+            }
+        }
+
         var rows = await Wrap(() => store.QueryRowsAsync(table, where, Math.Clamp(limit, 1, 1000), 0, ct));
-        return [.. rows.Select(ToDto)];
+        return includeSensitive
+            ? await ShowAsync(entity, table, rows, ct)
+            : [.. rows.Select(r => ToDto(r with { Data = DataTableRules.MaskSensitive(table, r.Data) }))];
     }
 
     /// <inheritdoc />
     public async Task<DataRowDto> InsertRowAsync(Guid id, JsonObject values, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var table = await InfoAsync(id, ct);
+        var (_, table) = await InfoAsync(id, UserRole.Editor, ct);
         return ToDto(await Wrap(() => store.InsertRowAsync(table, values, ct)));
     }
 
     /// <inheritdoc />
     public async Task<DataRowDto> UpdateRowAsync(Guid id, string key, JsonObject values, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var table = await InfoAsync(id, ct);
+        var (_, table) = await InfoAsync(id, UserRole.Editor, ct);
         var row = await Wrap(() => store.UpdateRowAsync(table, key, values, ct)) ?? throw new NotFoundException(RowEntity, key);
         return ToDto(row);
     }
@@ -163,8 +209,7 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
     /// <inheritdoc />
     public async Task DeleteRowAsync(Guid id, string key, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
-        var table = await InfoAsync(id, ct);
+        var (_, table) = await InfoAsync(id, UserRole.Editor, ct);
         if (!await store.DeleteRowAsync(table, key, ct))
         {
             throw new NotFoundException(RowEntity, key);
@@ -174,9 +219,8 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
     /// <inheritdoc />
     public async Task<DataImportResult> ImportCsvAsync(Guid id, string csv, CancellationToken ct)
     {
-        currentUser.Require(UserRole.Editor);
         ArgumentNullException.ThrowIfNull(csv);
-        var table = await InfoAsync(id, ct);
+        var (_, table) = await InfoAsync(id, UserRole.Editor, ct);
         var records = CsvReader.Parse(csv);
         if (records.Count == 0)
         {
@@ -254,15 +298,71 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
             : throw new ArgumentException($"Назва таблиці: від 1 до {MaxNameLength} символів.", nameof(name));
     }
 
-    private static void Validate(IReadOnlyList<DataColumn> columns)
+    private static DataTableConstraints Validate(IReadOnlyList<DataColumn> columns, DataTableConstraints? constraints)
     {
         try
         {
-            DataTableRules.ValidateColumns(columns ?? []);
+            DataTableRules.ValidateColumns(columns);
+            return DataTableRules.ValidateConstraints(columns, constraints);
         }
         catch (DataTableException ex)
         {
             throw new DataTableValidationException(ex);
+        }
+    }
+
+    /// <summary>Колонки <c>ref</c> посилаються на таблицю того самого проєкту або спільну (або на саму себе).</summary>
+    private async Task ValidateRefsAsync(string name, IReadOnlyList<DataColumn> columns, Guid? projectId, CancellationToken ct)
+    {
+        foreach (var column in columns.Where(c => c.Type == DataColumnType.Ref))
+        {
+            var target = column.Table!.Trim();
+            if (string.Equals(target, name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var normalized = target.ToUpperInvariant();
+            if (!await db.DataTables.AnyAsync(t => t.NormalizedName == normalized && (t.ProjectId == null || t.ProjectId == projectId), ct))
+            {
+                var where = projectId is null ? "серед спільних таблиць" : "у проєкті чи серед спільних таблиць";
+                throw new DataTableValidationException(new DataTableException(RefInvalidCode,
+                    $"Колонка «{column.Name}» посилається на таблицю «{target}», якої немає {where}. Таблиці інших проєктів недоступні."));
+            }
+        }
+    }
+
+    /// <summary>Нові обмеження мають виконуватися для наявних рядків (без значень видалених колонок).</summary>
+    private async Task CheckExistingRowsAsync(DataTableInfo table, IReadOnlyList<DataColumn> removed, CancellationToken ct)
+    {
+        var rows = await db.DataRows.AsNoTracking().Where(r => r.TableId == table.Id).OrderBy(r => r.CreatedAt).ThenBy(r => r.Key)
+            .Select(r => new { r.Key, r.Data }).ToListAsync(ct);
+        var seen = table.Constraints.Unique.Select(_ => new HashSet<string>(StringComparer.Ordinal)).ToList();
+        foreach (var row in rows)
+        {
+            var data = JsonNode.Parse(row.Data)!.AsObject();
+            foreach (var column in removed)
+            {
+                data.Remove(column.Name);
+            }
+
+            try
+            {
+                DataTableRules.CheckRequired(table, data);
+                for (var i = 0; i < table.Constraints.Unique.Count; i++)
+                {
+                    var unique = table.Constraints.Unique[i];
+                    if (DataTableRules.UniqueFilters(table, unique, data) is { } filters
+                        && !seen[i].Add(string.Join('\u001f', filters.Skip(filters.Count - unique.Columns.Count).Select(f => f.Value!.ToJsonString()))))
+                    {
+                        throw DataTableRules.UniqueViolation(table, unique);
+                    }
+                }
+            }
+            catch (DataTableException ex)
+            {
+                throw new DataTableValidationException(ex, $"Наявний рядок «{row.Key}» не відповідає новим обмеженням");
+            }
         }
     }
 
@@ -290,22 +390,79 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
         }
     }
 
-    private async Task<DataTableEntity> FindAsync(string reference, CancellationToken ct)
+    private static IQueryable<DataTableEntity> Visible(IQueryable<DataTableEntity> query, ProjectScope scope)
     {
-        var normalized = reference.Trim().ToUpperInvariant();
-        var table = Guid.TryParse(reference, out var id)
-            ? await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct)
-            : null;
-        return table
-            ?? await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.NormalizedName == normalized, ct)
-            ?? throw new NotFoundException(Entity, reference);
+        if (scope.All)
+        {
+            return query;
+        }
+
+        var ids = scope.Projects.Keys.ToList();
+        var shared = scope.SharedRole is not null;
+        return query.Where(t => (shared && t.ProjectId == null) || (t.ProjectId != null && ids.Contains(t.ProjectId.Value)));
     }
 
-    private async Task<DataTableInfo> InfoAsync(Guid id, CancellationToken ct) =>
-        PostgresDataTableStore.ToInfo(await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException(Entity, id));
+    /// <summary>Таблиця за id чи назвою серед видимих; за назвою — спершу проєкт <paramref name="projectId"/>, потім спільна.</summary>
+    private async Task<DataTableEntity> FindAsync(string reference, Guid? projectId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        var visible = Visible(db.DataTables.AsNoTracking(), await _access.ScopeAsync(ct));
+        var table = Guid.TryParse(reference, out var id) ? await visible.SingleOrDefaultAsync(t => t.Id == id, ct) : null;
+        if (table is null)
+        {
+            var normalized = reference.Trim().ToUpperInvariant();
+            var candidates = await visible.Where(t => t.NormalizedName == normalized).ToListAsync(ct);
+            table = candidates.FirstOrDefault(t => projectId is not null && t.ProjectId == projectId)
+                    ?? candidates.FirstOrDefault(t => t.ProjectId is null)
+                    ?? (projectId is null ? candidates.OrderBy(t => t.Name, StringComparer.Ordinal).FirstOrDefault() : null);
+        }
 
-    private static DataTableSummary ToSummary(DataTableEntity t, int rows) =>
-        new(t.Id, t.Name, PostgresDataTableStore.ParseColumns(t.Columns), rows, t.UpdatedAt);
+        return table ?? throw new NotFoundException(Entity, reference);
+    }
+
+    private async Task<(DataTableEntity Entity, DataTableInfo Table)> InfoAsync(Guid id, UserRole minimum, CancellationToken ct)
+    {
+        var entity = await db.DataTables.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+        await _access.RequireAsync(entity.ProjectId, minimum, Entity, id, ct);
+        return (entity, PostgresDataTableStore.ToInfo(entity));
+    }
+
+    private async Task<bool> CanReadSensitiveAsync(DataTableInfo table, CancellationToken ct) =>
+        await _access.RoleInAsync(table.ProjectId, ct) >= UserRole.Editor;
+
+    /// <summary>
+    /// Рядки для відповіді: без права на чутливі колонки їхні значення <c>null</c>, інакше читання пишеться в audit log.
+    /// </summary>
+    private async Task<IReadOnlyList<DataRowDto>> ShowAsync(DataTableEntity entity, DataTableInfo table, IReadOnlyList<DataRow> rows, CancellationToken ct)
+    {
+        var sensitive = table.Columns.Where(c => c.Sensitive).Select(c => c.Name).ToList();
+        if (sensitive.Count == 0 || rows.Count == 0)
+        {
+            return [.. rows.Select(ToDto)];
+        }
+
+        if (!await CanReadSensitiveAsync(table, ct))
+        {
+            return [.. rows.Select(r => ToDto(r with { Data = DataTableRules.MaskSensitive(table, r.Data) }))];
+        }
+
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.DataTableSensitiveRead, AuditEntities.DataTable, entity.Id.ToString(), new JsonObject
+        {
+            ["name"] = entity.Name,
+            ["columns"] = new JsonArray([.. sensitive.Select(c => (JsonNode?)JsonValue.Create(c))]),
+            ["rows"] = rows.Count,
+        });
+        await db.SaveChangesAsync(ct);
+        return [.. rows.Select(ToDto)];
+    }
+
+    private static DataTableSummary ToSummary(DataTableEntity t, int rows, ProjectScope scope) =>
+        new(t.Id, t.Name, PostgresDataTableStore.ParseColumns(t.Columns), rows, t.UpdatedAt)
+        {
+            ProjectId = t.ProjectId,
+            Constraints = PostgresDataTableStore.ParseConstraints(t.Constraints),
+            CanReadSensitive = scope.RoleIn(t.ProjectId) >= UserRole.Editor,
+        };
 
     private static DataRowDto ToDto(DataRow row) => new(row.Key, row.Data, row.CreatedAt, row.UpdatedAt);
 

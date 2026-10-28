@@ -2,7 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { AuthService, UserInfo } from '../../auth/auth.service';
+import { ProjectContextService } from '../../projects/project-context.service';
 import { DataRow, DataTableSummary } from '../../tables/data-tables-api.service';
+import { WorkflowGroup } from '../../workflows/workflows-api.service';
 import { TablesPage } from './tables.page';
 
 const clients: DataTableSummary = {
@@ -20,18 +22,43 @@ const rows: DataRow[] = [
   { key: 'a@x.ua', data: { email: 'a@x.ua', visits: 3, tags: ['Київ'] }, createdAt: '', updatedAt: '' },
   { key: 'b@x.ua', data: { email: 'b@x.ua', visits: 1 }, createdAt: '', updatedAt: '' },
 ];
+const booking: DataRow = { key: 'r1', data: { slot_id: 's1', status: 'active', phone: null }, createdAt: '', updatedAt: '' };
 const page = (items: DataRow[], total = items.length) => ({ items, page: 1, pageSize: 50, total });
 
+const psy: WorkflowGroup = { id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 0, role: 'editor' };
+const other: WorkflowGroup = { id: 'p2', name: 'Продажі', sortOrder: 1, workflowCount: 0, role: 'viewer' };
+const bookings: DataTableSummary = {
+  id: 't3',
+  name: 'Записи',
+  projectId: 'p2',
+  canReadSensitive: false,
+  columns: [
+    { name: 'slot_id', type: 'string' },
+    { name: 'status', type: 'enum', values: ['active', 'cancelled'] },
+    { name: 'phone', type: 'string', sensitive: true },
+  ],
+  constraints: {
+    required: ['slot_id'],
+    unique: [{ columns: ['slot_id'], where: [{ column: 'status', operator: 'eq', value: 'active' }] }],
+  },
+  rowCount: 1,
+  updatedAt: '2026-10-28T10:00:00Z',
+};
+
 describe('TablesPage', () => {
-  async function setup(role: UserInfo['role'], list: DataTableSummary[] = [clients]) {
+  async function setup(role: UserInfo['role'], list: DataTableSummary[] = [clients], projects: WorkflowGroup[] = [], current: string | null = null) {
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     TestBed.inject(AuthService).user.set({ id: 'u1', email: 'u@openbp.test', role });
+    const context = TestBed.inject(ProjectContextService);
+    context.projects.set(projects);
+    context.select(current);
     const fixture = TestBed.createComponent(TablesPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http.expectOne({ method: 'GET', url: '/api/v1/tables' }).flush(list);
-    if (list.length > 0) {
-      http.expectOne((r) => r.url === `/api/v1/tables/${list[0].id}/rows`).flush(page(rows));
+    const first = fixture.componentInstance.visibleTables()[0];
+    if (first) {
+      http.expectOne((r) => r.url === `/api/v1/tables/${first.id}/rows`).flush(page(first === bookings ? [booking] : rows));
     }
     await render(fixture);
     return { fixture, http, host: fixture.nativeElement as HTMLElement };
@@ -52,7 +79,10 @@ describe('TablesPage', () => {
     host.querySelector<HTMLButtonElement>(`[data-testid="${testid}"]`)!.click();
   }
 
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+    TestBed.inject(ProjectContextService).select(null);
+  });
 
   it('viewer бачить таблиці й рядки без форм', async () => {
     const { host } = await setup('viewer');
@@ -171,5 +201,74 @@ describe('TablesPage', () => {
     await render(fixture);
     expect(host.querySelector('[data-testid="table-view"]')).toBeNull();
     expect(host.querySelector('[data-testid="empty"]')).not.toBeNull();
+  });
+
+  it('проєкт у шапці: його таблиці й спільні, назва проєкту в списку', async () => {
+    const { fixture } = await setup('editor', [clients, bookings, { ...clients, id: 't4', name: 'Психологи', projectId: 'p1' }], [psy, other], 'p1');
+    const host = fixture.nativeElement as HTMLElement;
+    const names = [...host.querySelectorAll('[data-table]')].map((b) => b.getAttribute('data-table'));
+    expect(names).toEqual(['Клієнти', 'Психологи']);
+    expect(host.querySelector('[data-table="Психологи"] [data-project]')?.textContent).toContain('Психологічна підтримка');
+    expect(host.querySelector('[data-table="Клієнти"] [data-project]')?.textContent).toContain('спільна');
+  });
+
+  it('viewer проєкту: чутливі колонки приховані, правила показані, форм немає навіть з глобальною роллю editor', async () => {
+    const { host } = await setup('editor', [bookings], [psy, other]);
+    const cells = host.querySelectorAll('[data-row="r1"] td');
+    expect(cells[1].textContent?.trim()).toBe('active');
+    expect(cells[2].textContent?.trim()).toBe('приховано');
+    expect(host.querySelector('[data-testid="table-rules"]')?.textContent).toContain('slot_id серед рядків, де status = active');
+    expect(host.querySelector('[data-testid="row-form"]')).toBeNull();
+    expect(host.querySelector('[data-testid="table-edit"]')).toBeNull();
+  });
+
+  it('editor створює таблицю в проєкті з переліком, чутливою колонкою й правилами', async () => {
+    const { fixture, http, host } = await setup('viewer', [], [psy, other], 'p1');
+    click(host, 'table-add');
+    await render(fixture);
+    const project = host.querySelector<HTMLSelectElement>('[data-testid="table-project"]')!;
+    expect([...project.options].map((o) => o.textContent?.trim())).toEqual(['Психологічна підтримка']);
+    type(host, '[data-testid="table-name"]', 'Записи');
+    type(host, '[data-testid="column-row"]:nth-child(1) [data-testid="column-name"]', 'slot_id');
+    host.querySelector<HTMLInputElement>('[data-testid="column-row"]:nth-child(1) [data-testid="column-key"]')!.click();
+    host.querySelector<HTMLInputElement>('[data-testid="column-row"]:nth-child(1) [data-testid="column-required"]')!.click();
+    click(host, 'column-add');
+    click(host, 'column-add');
+    await render(fixture);
+    type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-name"]', 'status');
+    type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-type"]', 'enum', 'change');
+    type(host, '[data-testid="column-row"]:nth-child(3) [data-testid="column-name"]', 'phone');
+    await render(fixture);
+    click(host, 'table-save');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="table-form-error"]')?.textContent).toContain('status');
+
+    type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-values"]', 'active, cancelled');
+    host.querySelector<HTMLInputElement>('[data-testid="column-row"]:nth-child(3) [data-testid="column-sensitive"]')!.click();
+    click(host, 'unique-add');
+    await render(fixture);
+    type(host, '[data-testid="unique-columns"]', 'slot_id');
+    type(host, '[data-testid="unique-where-column"]', 'status');
+    type(host, '[data-testid="unique-where-value"]', 'active');
+    click(host, 'table-save');
+
+    const req = http.expectOne({ method: 'POST', url: '/api/v1/tables' });
+    expect(req.request.body).toEqual({
+      name: 'Записи',
+      projectId: 'p1',
+      columns: [
+        { name: 'slot_id', type: 'string' },
+        { name: 'status', type: 'enum', values: ['active', 'cancelled'] },
+        { name: 'phone', type: 'string', sensitive: true },
+      ],
+      constraints: {
+        required: ['slot_id'],
+        unique: [{ columns: ['slot_id'], where: [{ column: 'status', operator: 'eq', value: 'active' }] }],
+      },
+    });
+    req.flush({ ...bookings, projectId: 'p1', canReadSensitive: true, rowCount: 0 });
+    http.expectOne((r) => r.url === '/api/v1/tables/t3/rows').flush(page([]));
+    await render(fixture);
+    expect(host.querySelector('[data-testid="table-form"]')).toBeNull();
   });
 });

@@ -27,20 +27,21 @@ REST (`architecture.md` §10.3): `GET /workflow-groups` повертає ще `d
 
 ## 2. Таблиці проєкту
 
-Зміни відносно F6-11:
+Зміни відносно F6-11 (реалізовано в F8-02):
 
 | Що | Контракт |
 |---|---|
-| Проєкт | `data_tables.project_id` (`null` — спільна); назва унікальна в межах проєкту; `POST /tables { projectId? }`; вузол шукає таблицю за назвою спершу в проєкті сценарію, потім серед спільних; `id` — однозначно |
-| Права | viewer проєкту читає, editor проєкту створює, змінює й пише; спільні таблиці — як зараз; валідатор сценарію відхиляє таблицю іншого проєкту (`PROJECT_REFERENCE_FORBIDDEN`) |
-| Типи колонок | `string`, `number`, `boolean`, `date` (як зараз) + `datetime` (ISO з поясом → UTC), `enum { values: [] }`, `ref { table }` (ключ рядка таблиці того самого проєкту або спільної; зберігається як рядок, перевіряється при записі), `user` (id користувача; у відповідях — `{ id, email }`) |
-| Обмеження | `constraints: { required: ["col"], unique: [{ columns: ["col"], where?: [...] }] }`; `where` — як у `list`; перевіряються при `insert`, `upsert`, `update`, імпорті CSV |
-| Чутливі колонки | `sensitive: true` у колонці: значення бачать admin, editor проєкту і учасники з роллю застосунку; viewer без ролі бачить `null`; у `metrics`, експорт шаблону і `openbp://tables/{id}` не потрапляють; читання через REST/MCP логується `table.sensitive_read` |
-| Операції вузла v2 | `insertIf { values, where, maxCount }` → `{ inserted, reason?: "unique" \| "capacity", row? }`; `increment { key, column, by }` → рядок; `count { where }` → `{ count }`; `insert`/`upsert` при порушенні `unique` → `{ inserted: false, reason: "unique" }` |
-| Атомарність | запис у таблицю серіалізується `SELECT … FOR UPDATE` рядка `data_tables` в одній транзакції; два одночасні `insertIf` на один слот → один рядок і один `capacity`/`unique` |
+| Проєкт | `data_tables.project_id` (`null` — спільна; FK на `workflow_groups`, restrict — проєкт з таблицями не видаляється, `PROJECT_NOT_EMPTY`); назва унікальна в межах проєкту (індекс `(project_id, normalized_name)` з `NULLS NOT DISTINCT`); `POST /tables { projectId? }`, проєкт після створення не змінюється; вузол шукає таблицю за назвою спершу в проєкті сценарію, потім серед спільних; за `id` — лише таблицю свого проєкту чи спільну. `GET /tables?projectId=` і `list_tables { projectId }` — таблиці, доступні сценаріям проєкту: його й спільні |
+| Права | права проєкту (`ProjectAccess`): viewer проєкту читає, editor проєкту створює, змінює й пише; спільні таблиці — глобальна роль, як у F6-11; таблиця чужого проєкту — 404; валідатор сценарію відхиляє id таблиці іншого проєкту в параметрі `table` (`PROJECT_REFERENCE_FORBIDDEN`) |
+| Типи колонок | `string`, `number`, `boolean`, `date`, `json` (як були) + `datetime` (ISO з поясом → UTC), `enum` з `values: []` (значення без урахування регістру приводиться до написання з переліку), `ref` з `table` (назва таблиці того самого проєкту або спільної, перевіряється при збереженні структури — `DATA_TABLE_REF_INVALID`; значення — ключ рядка рядком, наявність рядка не перевіряється, зовнішніх ключів немає), `user` (id користувача OpenBP, GUID) |
+| Обмеження | `constraints: { required: ["col"], unique: [{ columns: ["col"], where?: [...] }] }`; `where` — як у `list`; рядок з порожньою колонкою правила `unique` не перевіряється; перевіряються при `insert`, `insertIf`, `upsert`, `update`, `increment`, імпорті CSV; нові обмеження при зміні структури перевіряються на наявних рядках. Помилки: `DATA_TABLE_REQUIRED` (422), `DATA_TABLE_UNIQUE` (409) |
+| Чутливі колонки | `sensitive: true` у колонці (не ключова): значення бачать admin і editor проєкту (учасники з роллю застосунку — з F8-04); решта бачить `null`, не може відбирати за ними (`DATA_TABLE_FILTER_INVALID`) і не знаходить рядки пошуком за ними; у `openbp://tables/{id}` вони `null` для всіх; читання значень через REST/MCP пишеться в audit log дією `dataTable.sensitiveRead`; у `metrics` і експорт шаблону не потрапляють (F8-05, F8-06) |
+| Нові операції вузла | `insertIf { values, where, maxCount }` → рядок з `_inserted: true` або `{ _inserted: false, _reason: "capacity" \| "unique" }`; `increment { key, column, by = 1 }` → рядок; `count { where }` → `{ count }`; `insert`/`upsert` при порушенні `unique` → `{ _inserted: false, _reason: "unique" }` замість помилки; службові поля `_key`, `_inserted`, `_reason` у `values` ігноруються |
+| Атомарність | кожен запис у таблицю (`insert`, `insertIf`, `upsert`, `update`, `increment`) — одна транзакція під `pg_advisory_xact_lock` таблиці (як ліміт рядків у F6-11), перевірки `required`/`unique`/`maxCount` — усередині неї; 20 одночасних `insertIf` з `maxCount: 8` дають рівно 8 рядків |
 | MCP | `list_tables` і `query_table` приймають `projectId`; resource `openbp://projects/{id}/tables` |
 
-`core.dataTable` typeVersion 1 продовжує працювати; `describe_nodes` віддає v2.
+Операції додано до `core.dataTable` typeVersion 1 без нової версії вузла: старі параметри й виходи не змінилися (вихід
+`insert`/`upsert` відрізняється лише для таблиць з `unique`, яких до F8-02 не було), тож міграція сценаріїв не потрібна.
 
 ## 3. Сторінки застосунку
 

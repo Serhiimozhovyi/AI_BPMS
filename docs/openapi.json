@@ -2928,6 +2928,17 @@
           "Таблиці даних"
         ],
         "summary": "Таблиці даних",
+        "description": "Видимі таблиці. `projectId` — лише ті, якими користуються сценарії проєкту: його таблиці й спільні.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2967,7 +2978,7 @@
           "Таблиці даних"
         ],
         "summary": "Створити таблицю",
-        "description": "Колонки `{ name, type: string|number|boolean|date|json, key? }`, ключова — не більше однієї (рядок або число). Повтор назви — 409 DATA_TABLE_NAME_TAKEN.",
+        "description": "Колонки `{ name, type: string|number|boolean|date|datetime|enum|ref|user|json, key?, values? (enum), table? (ref), sensitive? }`, ключова — не більше однієї (рядок або число). Обмеження `{ required: [column], unique: [{ columns, where? }] }`. `projectId` — проєкт (потрібна роль editor у ньому), без нього — спільна таблиця. Повтор назви в проєкті — 409 DATA_TABLE_NAME_TAKEN; ref на таблицю іншого проєкту — 422 DATA_TABLE_REF_INVALID.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3016,6 +3027,7 @@
           "Таблиці даних"
         ],
         "summary": "Таблиця за id або назвою",
+        "description": "За назвою — спершу в проєкті `projectId`, потім спільна.",
         "parameters": [
           {
             "name": "reference",
@@ -3023,6 +3035,14 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3063,8 +3083,8 @@
         "tags": [
           "Таблиці даних"
         ],
-        "summary": "Перейменувати таблицю або змінити колонки",
-        "description": "Значення видалених колонок прибираються з рядків. Ключову колонку таблиці з рядками змінити не можна — 409 DATA_TABLE_KEY_CHANGE.",
+        "summary": "Перейменувати таблицю, змінити колонки чи обмеження",
+        "description": "Значення видалених колонок прибираються з рядків. Ключову колонку таблиці з рядками змінити не можна — 409 DATA_TABLE_KEY_CHANGE. Нові обмеження мають виконуватися для наявних рядків, інакше 422/409 з ключем рядка. Проєкт таблиці не змінюється.",
         "parameters": [
           {
             "name": "id",
@@ -3164,7 +3184,7 @@
           "Таблиці даних"
         ],
         "summary": "Рядки таблиці",
-        "description": "У порядку створення; `search` — підрядок будь-якого значення.",
+        "description": "У порядку створення; `search` — підрядок будь-якого значення. Чутливі колонки — `null`, якщо ви не editor проєкту таблиці; інакше читання пишеться в журнал аудиту.",
         "parameters": [
           {
             "name": "id",
@@ -3243,7 +3263,7 @@
           "Таблиці даних"
         ],
         "summary": "Додати рядок",
-        "description": "Невідома колонка, тип чи порожній ключ — 422 DATA_TABLE_*; дубль ключа — 409 DATA_TABLE_KEY_DUPLICATE; ліміт рядків — 422 DATA_TABLE_ROW_LIMIT.",
+        "description": "Невідома колонка, тип, порожній ключ чи обов'язкова колонка — 422 DATA_TABLE_*; дубль ключа — 409 DATA_TABLE_KEY_DUPLICATE; порушення унікальності — 409 DATA_TABLE_UNIQUE; ліміт рядків — 422 DATA_TABLE_ROW_LIMIT.",
         "parameters": [
           {
             "name": "id",
@@ -7180,6 +7200,27 @@
             "type": "boolean",
             "description": "Ключова колонка: її значення — ключ рядка, унікальний у таблиці (не більше однієї на таблицю).",
             "default": false
+          },
+          "values": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Допустимі значення колонки DataColumnType.Enum."
+          },
+          "table": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Назва таблиці, на рядки якої посилається колонка DataColumnType.Ref."
+          },
+          "sensitive": {
+            "type": "boolean",
+            "description": "Чутливі дані (телефон, `telegram_id`): значення бачать лише editor проєкту й admin, читання пишеться в\naudit log (F8-02)."
           }
         },
         "description": "Колонка таблиці даних."
@@ -7190,9 +7231,34 @@
           "number",
           "boolean",
           "date",
-          "json"
+          "json",
+          "datetime",
+          "enum",
+          "ref",
+          "user"
         ],
         "description": "Тип колонки таблиці даних (F6-11)."
+      },
+      "DataFilter": {
+        "required": [
+          "column",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "column": {
+            "type": "string",
+            "description": "Колонка."
+          },
+          "operator": {
+            "type": "string",
+            "description": "Оператор."
+          },
+          "value": {
+            "description": "Значення для порівняння; для `isEmpty`/`isNotEmpty` не потрібне."
+          }
+        },
+        "description": "Умова відбору рядків: колонка, оператор (DataFilterOperators), значення."
       },
       "DataImportRequest": {
         "required": [
@@ -7276,6 +7342,30 @@
           }
         }
       },
+      "DataTableConstraints": {
+        "type": "object",
+        "properties": {
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Колонки, значення яких обов'язкові в кожному рядку."
+          },
+          "unique": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DataUniqueConstraint"
+            },
+            "description": "Правила унікальності."
+          },
+          "isEmpty": {
+            "type": "boolean",
+            "description": "Чи немає жодного обмеження."
+          }
+        },
+        "description": "Обмеження цілісності таблиці (F8-02, `data_tables.constraints`)."
+      },
       "DataTableRequest": {
         "required": [
           "name",
@@ -7297,6 +7387,23 @@
             "items": {
               "$ref": "#/components/schemas/DataColumn"
             }
+          },
+          "constraints": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DataTableConstraints"
+              }
+            ]
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -7334,8 +7441,47 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "constraints": {
+            "$ref": "#/components/schemas/DataTableConstraints"
+          },
+          "canReadSensitive": {
+            "type": "boolean"
           }
         }
+      },
+      "DataUniqueConstraint": {
+        "required": [
+          "columns"
+        ],
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Колонки, сукупність значень яких унікальна. Рядок з порожнім значенням будь-якої з них не перевіряється."
+          },
+          "where": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DataFilter"
+            },
+            "description": "Умова в синтаксисі `where` вузла; `null` — усі рядки."
+          }
+        },
+        "description": "Часткова унікальність: значення IReadOnlyList&lt;string&gt; DataUniqueConstraint.Columns не повторюються серед рядків, що задовольняють IReadOnlyList&lt;DataFilter&gt;? DataUniqueConstraint.Where."
       },
       "EvaluateExpressionRequest": {
         "required": [
