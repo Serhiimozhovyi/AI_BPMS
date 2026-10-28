@@ -924,7 +924,7 @@
 Рішення власника (§5 концепту): лише editor/admin; розмову бачить автор і admin.
 
 ### F3-108 · Application: розмови загального помічника
-- model: `opus` · status: `ready` · depends: F3-107, F3-109
+- model: `opus` · status: `review` · depends: F3-107, F3-109
 - Що: `IAssistantSessionService` і таблиця `assistant_conversations` (історія по користувачу, ліміт довжини; бачать лише автор і admin, viewer — 403), контекст сторінки в запиті, загальний цикл інструментів поверх інструментів MCP; REST `/assistant/conversations` (SSE).
 - DoD: тести на фейковому провайдері (кілька кроків, права за роллю, контекст); `architecture.md` §10 оновлено.
 

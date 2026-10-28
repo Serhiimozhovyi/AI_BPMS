@@ -16,7 +16,8 @@ namespace OpenBP.Application.Assistant;
 public static class AssistantServiceCollectionExtensions
 {
     /// <summary>
-    /// Додає <see cref="IAssistantSettingsService"/>, <see cref="IAssistantService"/>, <see cref="IWorkflowExplanationService"/>
+    /// Додає <see cref="IAssistantSettingsService"/>, <see cref="IAssistantService"/>, <see cref="IAssistantSessionService"/>
+    /// (інструменти — <see cref="IAssistantToolbox"/> хоста), <see cref="IWorkflowExplanationService"/>
     /// і <see cref="WorkflowExplainer"/> (scoped), а також, якщо хост не зареєстрував свій,
     /// <see cref="LlmChat"/> з власним <see cref="HttpClient"/>. Хост реєструє сервіси сценаріїв, вузлів, конекторів і виконань,
     /// фабрику контекстів і <see cref="CredentialEncryptionKey"/>.
@@ -50,6 +51,16 @@ public static class AssistantServiceCollectionExtensions
             sp.GetRequiredService<CredentialEncryptionKey>(),
             sp.GetRequiredService<LlmChat>(),
             sp.GetService<AssistantLimits>()));
+        services.AddScoped<IAssistantSessionService>(sp => new AssistantSessionService(
+            sp.GetRequiredService<ICurrentUser>(),
+            sp.GetRequiredService<IAssistantSettingsService>(),
+            sp.GetRequiredService<IAssistantToolbox>(),
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<CredentialEncryptionKey>(),
+            sp.GetRequiredService<LlmChat>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<AssistantLimits>(),
+            sp.GetService<AssistantConversationLimits>()));
         services.AddScoped<IWorkflowDrafter>(sp => new WorkflowDrafter(
             sp.GetRequiredService<ICurrentUser>(),
             sp.GetRequiredService<IAssistantSettingsService>(),

@@ -10,6 +10,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<WorkflowVersionEntity> WorkflowVersions => Set<WorkflowVersionEntity>();
     public DbSet<WorkflowExplanationEntity> WorkflowExplanations => Set<WorkflowExplanationEntity>();
+    public DbSet<AssistantConversationEntity> AssistantConversations => Set<AssistantConversationEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<ProjectMemberEntity> ProjectMembers => Set<ProjectMemberEntity>();
     public DbSet<ProjectPageEntity> ProjectPages => Set<ProjectPageEntity>();
@@ -98,6 +99,13 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("workflow_versions");
             e.Property(x => x.Definition).HasColumnType("jsonb");
             e.HasIndex(x => new { x.WorkflowId, x.Version }).IsUnique();
+        });
+        b.Entity<AssistantConversationEntity>(e =>
+        {
+            e.ToTable("assistant_conversations");
+            e.HasIndex(x => new { x.UserId, x.UpdatedAt });
+            e.Property(x => x.Data).HasColumnType("jsonb");
+            e.HasOne<UserEntity>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<WorkflowExplanationEntity>(e =>
         {

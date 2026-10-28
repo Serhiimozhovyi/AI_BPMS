@@ -321,6 +321,21 @@ public sealed class WorkflowVersionEntity
 /// (job <c>explain</c>) після збереження; <see cref="DefinitionHash"/> — відбиток визначення без координат, щоб
 /// пересування вузлів не генерувало пояснення заново.
 /// </summary>
+/// <summary>
+/// Розмова загального помічника (F3-108): належить одному користувачу; <see cref="Data"/> — репліки й пропозиції змін
+/// (<c>{ turns, proposals }</c>), формат веде application-шар.
+/// </summary>
+public sealed class AssistantConversationEntity
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string Title { get; set; } = "";
+    /// <summary>jsonb: <c>{ turns: [...], proposals: [...] }</c>.</summary>
+    public string Data { get; set; } = "{}";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class WorkflowExplanationEntity
 {
     public Guid WorkflowId { get; set; }

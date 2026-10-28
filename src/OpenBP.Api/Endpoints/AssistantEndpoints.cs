@@ -10,7 +10,7 @@ namespace OpenBP.Api.Endpoints;
 /// <summary>
 /// Маршрути помічника (F3-60): <c>/settings/assistant</c> і <c>POST /workflows/{id}/assistant</c>; побудова з опису
 /// <c>POST /workflows/{id}/draft</c> (F3-103); пояснення сценарію
-/// <c>/workflows/{id}/explanation</c> (F3-72).
+/// <c>/workflows/{id}/explanation</c> (F3-72); розмови загального помічника <c>/assistant/conversations</c> (F3-108).
 /// </summary>
 public static class AssistantEndpoints
 {
@@ -83,7 +83,74 @@ public static class AssistantEndpoints
                 "Пояснення поточної версії, написане ззовні — ШІ-агентом через `/mcp` (`save_workflow_explanation`) або людиною; " +
                 "модель помічника не потрібна. `text` — до 50 000 символів. Лише editor.");
 
+        var conversations = api.MapGroup("/assistant/conversations").WithTags(OpenApiSetup.Tags.Assistant);
+
+        conversations.MapGet("/", (IAssistantSessionService service, CancellationToken ct, Guid? userId) => service.ListAsync(userId, ct))
+            .WithSummary("Розмови загального помічника")
+            .WithDescription("Мої розмови, новіші першими. Admin з `userId` бачить розмови іншого користувача. Лише editor і admin.");
+
+        conversations.MapPost("/", async (AssistantConversationInput body, IAssistantSessionService service, CancellationToken ct) =>
+        {
+            var created = await service.CreateAsync(body, ct);
+            return Results.Created($"/api/v1/assistant/conversations/{created.Id}", created);
+        })
+            .WithSummary("Нова розмова")
+            .WithDescription("Порожня розмова; `title` необов'язковий — без нього назвою стане перше повідомлення.")
+            .Produces<AssistantConversation>(StatusCodes.Status201Created);
+
+        conversations.MapGet("/{id:guid}", (Guid id, IAssistantSessionService service, CancellationToken ct) => service.GetAsync(id, ct))
+            .WithSummary("Розмова")
+            .WithDescription("Репліки (`user`, `assistant`, `tool` — крок інструмента з підсумком, `note` — рішення щодо пропозиції) і пропозиції змін. " +
+                             "Бачать автор і admin; для інших — 404.");
+
+        conversations.MapDelete("/{id:guid}", async (Guid id, IAssistantSessionService service, CancellationToken ct) =>
+        {
+            await service.DeleteAsync(id, ct);
+            return Results.NoContent();
+        })
+            .WithSummary("Видалити розмову")
+            .WithDescription("Автор або admin.")
+            .Produces(StatusCodes.Status204NoContent);
+
+        conversations.MapPost("/{id:guid}/messages", SendAsync)
+            .WithSummary("Повідомлення помічнику (SSE)")
+            .WithDescription(
+                "Тіло: `message` (до 8000 символів) і `context` — де користувач (`page`, `workflowId`, `nodeId`, `executionId`, " +
+                "`projectId`, `table`). Інструменти — tools `/mcp` з правами користувача: читання виконується одразу, зміни стають " +
+                "пропозиціями (`create_table`/`alter_table` — з планом) і чекають рішення. Відповідь — `text/event-stream`: `step`, " +
+                "`proposal`, `message`, `error`, `done`; розмова зберігається. Ліміт — 20 кроків інструментів і 120 с. Пише лише автор. " +
+                "Не налаштовано — 409 ASSISTANT_NOT_CONFIGURED.")
+            .Accepts<AssistantChatRequest>("application/json")
+            .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
+
+        conversations.MapPost("/{id:guid}/proposals/{proposalId:guid}", (Guid id, Guid proposalId, AssistantDecision body, IAssistantSessionService service, CancellationToken ct) =>
+            service.DecideAsync(id, proposalId, body, ct))
+            .WithSummary("Застосувати чи скасувати пропозицію")
+            .WithDescription(
+                "`apply: true` викликає інструмент з аргументами пропозиції (для плану — з його `planId`) від імені користувача; " +
+                "`false` — скасовує. Рішення стає приміткою для наступного повідомлення моделі. Вже вирішена — 409 " +
+                "ASSISTANT_PROPOSAL_DECIDED. Лише автор розмови.");
+
         return api;
+    }
+
+    /// <summary>Повідомлення загальному помічнику: перевірки до заголовків SSE, далі — події.</summary>
+    private static async Task SendAsync(Guid id, AssistantChatRequest body, HttpContext http, IAssistantSessionService service, IOptions<HttpJsonOptions> json)
+    {
+        var ct = http.RequestAborted;
+        var chat = await service.SendAsync(id, body, ct);
+        var options = json.Value.SerializerOptions;
+
+        http.Response.ContentType = "text/event-stream";
+        http.Response.Headers.CacheControl = "no-cache";
+        http.Response.Headers["X-Accel-Buffering"] = "no";
+        await foreach (var e in chat.RunAsync(ct))
+        {
+            var text = new StringBuilder("event: ").Append(e.Type).Append("\ndata: ")
+                .Append(JsonSerializer.Serialize(e, options)).Append("\n\n").ToString();
+            await http.Response.WriteAsync(text, ct);
+            await http.Response.Body.FlushAsync(ct);
+        }
     }
 
     /// <summary>Побудова з опису: перевірки до заголовків SSE, далі — події побудови.</summary>
