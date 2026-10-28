@@ -10,6 +10,7 @@ public static class NodeServiceCollectionExtensions
     public static IServiceCollection AddOpenBpNodeServices(this IServiceCollection services)
     {
         services.AddScoped<INodeService, NodeService>();
+        services.AddScoped<ICatalogDigest, CatalogDigestBuilder>();
         return services;
     }
 }

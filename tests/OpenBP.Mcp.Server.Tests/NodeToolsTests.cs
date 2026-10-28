@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
 using OpenBP.Application.Auth;
+using OpenBP.Application.Nodes;
 
 namespace OpenBP.Mcp.Server.Tests;
 
@@ -74,5 +75,42 @@ public class NodeToolsTests(McpServerFactory mcp)
         Assert.True(tool.Annotations?.ReadOnlyHint);
         Assert.NotNull(tool.OutputSchema);
         Assert.Contains(OpenBpResources.NodesUri, (await client.ListResourcesAsync()).Select(r => r.Uri));
+    }
+
+    [Fact]
+    public async Task Compact_describe_nodes_is_a_short_catalogue_and_describe_node_gives_one_full_schema()
+    {
+        await using var client = await mcp.ConnectAsync(UserRole.Viewer);
+
+        var compact = await client.CallToolAsync("describe_nodes", new Dictionary<string, object?> { ["compact"] = true });
+        Assert.NotEqual(true, compact.IsError);
+        var body = JsonNode.Parse(compact.StructuredContent!.Value.GetRawText())!;
+        Assert.Empty(body["nodes"]!.AsArray());
+        var digest = body["compact"]!;
+        Assert.True(digest.ToJsonString().Length <= ICatalogDigest.MaxChars);
+        var nodes = digest["nodes"]!.AsArray();
+        Assert.DoesNotContain("parametersSchema", digest.ToJsonString(), StringComparison.Ordinal);
+        Assert.Equal(nodes.Count, nodes.Select(n => (string?)n!["type"]).Distinct().Count());
+        var condition = nodes.Single(n => (string?)n!["type"] == "core.if")!;
+        Assert.Equal("condition", (string?)condition["kind"]);
+        Assert.Equal(2, condition["outputs"]!.AsArray().Count);
+        Assert.Equal("trigger", (string?)nodes.Single(n => (string?)n!["type"] == "mcp.poll")!["kind"]);
+
+        // Без compact — повний каталог, як і раніше.
+        var full = JsonNode.Parse((await client.CallToolAsync("describe_nodes")).StructuredContent!.Value.GetRawText())!;
+        Assert.NotEmpty(full["nodes"]!.AsArray());
+        Assert.Null(full["compact"]);
+
+        var one = await client.CallToolAsync("describe_node", new Dictionary<string, object?> { ["type"] = "core.merge" });
+        var merge = JsonNode.Parse(one.StructuredContent!.Value.GetRawText())!;
+        Assert.Equal(2, (int)merge["version"]!);
+        Assert.Contains("mode", merge["parametersSchema"]!["properties"]!.AsObject().Select(p => p.Key));
+
+        var old = await client.CallToolAsync("describe_node", new Dictionary<string, object?> { ["type"] = "core.merge", ["version"] = 1 });
+        Assert.Equal(1, (int)JsonNode.Parse(old.StructuredContent!.Value.GetRawText())!["version"]!);
+
+        var missing = await client.CallToolAsync("describe_node", new Dictionary<string, object?> { ["type"] = "no.such" });
+        Assert.True(missing.IsError);
+        Assert.Contains("NOT_FOUND", missing.StructuredContent!.Value.GetRawText(), StringComparison.Ordinal);
     }
 }
