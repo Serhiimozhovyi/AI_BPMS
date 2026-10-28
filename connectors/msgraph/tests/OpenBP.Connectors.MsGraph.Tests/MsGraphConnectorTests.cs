@@ -59,6 +59,13 @@ public sealed class MsGraphConnectorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("msgraph", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_returns_mail_tools_with_schemas()
     {
         var client = await ConnectAsync();

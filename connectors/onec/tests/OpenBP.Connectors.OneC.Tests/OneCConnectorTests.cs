@@ -50,6 +50,13 @@ public sealed class OneCConnectorTests : IAsyncLifetime
     };
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("onec", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_has_create_order_and_sales_report_with_schemas()
     {
         var client = await ConnectAsync();

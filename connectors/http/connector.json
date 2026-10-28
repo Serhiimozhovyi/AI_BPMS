@@ -31,5 +31,17 @@
     ],
     "headers": []
   },
+  "actions": [
+    {
+      "name": "http_request",
+      "title": "HTTP-запит",
+      "description": "Довільний запит до HTTP API."
+    },
+    {
+      "name": "rss_read",
+      "title": "Прочитати RSS/Atom",
+      "description": "Записи стрічки новин."
+    }
+  ],
   "triggers": []
 }

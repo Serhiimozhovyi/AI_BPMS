@@ -55,6 +55,77 @@
     ],
     "headers": []
   },
+  "actions": [
+    {
+      "name": "add_sale_note",
+      "title": "Додати нотатку до угоди"
+    },
+    {
+      "name": "changes_since",
+      "title": "Нові чи змінені записи",
+      "description": "Для тригерів-опитувань: що змінилось від вказаного моменту."
+    },
+    {
+      "name": "create_task",
+      "title": "Створити задачу CRM"
+    },
+    {
+      "name": "find_contractors",
+      "title": "Знайти контрагентів"
+    },
+    {
+      "name": "find_persons",
+      "title": "Знайти осіб"
+    },
+    {
+      "name": "find_sales",
+      "title": "Знайти угоди"
+    },
+    {
+      "name": "get_contractor",
+      "title": "Отримати контрагента"
+    },
+    {
+      "name": "get_person",
+      "title": "Отримати особу"
+    },
+    {
+      "name": "get_person_user",
+      "title": "Отримати користувача особи"
+    },
+    {
+      "name": "get_sale",
+      "title": "Отримати угоду"
+    },
+    {
+      "name": "get_task",
+      "title": "Отримати задачу CRM"
+    },
+    {
+      "name": "get_user_manager",
+      "title": "Отримати керівника працівника"
+    },
+    {
+      "name": "list_sale_stages",
+      "title": "Список етапів угоди"
+    },
+    {
+      "name": "list_tasks",
+      "title": "Список задач CRM"
+    },
+    {
+      "name": "set_sale_stage",
+      "title": "Змінити етап угоди"
+    },
+    {
+      "name": "set_task_status",
+      "title": "Змінити статус задачі CRM"
+    },
+    {
+      "name": "update_sale",
+      "title": "Змінити поля угоди"
+    }
+  ],
   "triggers": [
     {
       "id": "new_sale",

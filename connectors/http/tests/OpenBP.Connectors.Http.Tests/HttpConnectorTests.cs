@@ -48,6 +48,13 @@ public sealed class HttpConnectorTests : IAsyncLifetime
         client.CallToolAsync(tool, args).AsTask();
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("http", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_returns_both_tools_with_schemas()
     {
         var client = await ConnectAsync();

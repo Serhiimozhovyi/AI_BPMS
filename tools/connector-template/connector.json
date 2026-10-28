@@ -31,5 +31,20 @@
     ],
     "headers": []
   },
+  "actions": [
+    {
+      "name": "changes_since",
+      "title": "Нові чи змінені записи",
+      "description": "Для тригерів-опитувань: що змінилось від вказаного моменту."
+    },
+    {
+      "name": "get_item",
+      "title": "Отримати запис"
+    },
+    {
+      "name": "list_items",
+      "title": "Список записів"
+    }
+  ],
   "triggers": []
 }

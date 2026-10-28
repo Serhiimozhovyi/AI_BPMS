@@ -37,6 +37,16 @@
     ],
     "headers": []
   },
+  "actions": [
+    {
+      "name": "create_order",
+      "title": "Створити замовлення клієнта"
+    },
+    {
+      "name": "sales_report",
+      "title": "Звіт про продажі"
+    }
+  ],
   "triggers": [
     {
       "id": "new_document",

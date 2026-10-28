@@ -53,6 +53,15 @@ export interface ConnectorManifest {
   http?: { url: string; headers?: Record<string, string> | null } | null;
   credential?: { env?: ConnectorManifestKey[] | null; headers?: ConnectorManifestKey[] | null } | null;
   triggers: ConnectorTriggerPreset[];
+  /** Дії конектора (F3-92): з маніфесту, а за його відсутності — з кешу tools підключення. */
+  actions?: ConnectorManifestAction[] | null;
+}
+
+/** Дія конектора в маніфесті: tool без схеми аргументів (її дає discovery підключення). */
+export interface ConnectorManifestAction {
+  name: string;
+  title: string;
+  description?: string | null;
 }
 
 /** Пресет тригера в `connector.json` (docs/connectors.md §9.2): готовий вузол без `serverId`. */

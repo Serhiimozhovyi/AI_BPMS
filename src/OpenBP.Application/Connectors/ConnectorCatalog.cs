@@ -50,6 +50,7 @@ public sealed record ConnectorManifestHttp(Uri Url, IReadOnlyDictionary<string, 
 /// <param name="Http">Налаштування для http.</param>
 /// <param name="Credential">Ключі credential'а.</param>
 /// <param name="Triggers">Пресети тригерів (F6-13); поки порожні.</param>
+/// <param name="Actions">Дії (tools) конектора для палітри ще до підключення (F3-92); <c>null</c> — маніфест їх не описує.</param>
 public sealed record ConnectorManifest(
     string Id,
     string Name,
@@ -59,7 +60,8 @@ public sealed record ConnectorManifest(
     ConnectorManifestStdio? Stdio,
     ConnectorManifestHttp? Http,
     ConnectorManifestCredential? Credential,
-    JsonArray? Triggers)
+    JsonArray? Triggers,
+    IReadOnlyList<ConnectorManifestAction>? Actions = null)
 {
     /// <summary>Чи є налаштування для транспорту.</summary>
     /// <param name="transport">Транспорт.</param>
@@ -83,6 +85,12 @@ public sealed record ConnectorManifest(
             Catalog = Id,
         };
 }
+
+/// <summary>Дія конектора в маніфесті (F3-92): tool без схеми аргументів — її дає discovery підключення.</summary>
+/// <param name="Name">Ім'я tool'а в <c>tools/list</c> (<c>toolName</c> вузла).</param>
+/// <param name="Title">Назва дії для людини.</param>
+/// <param name="Description">Що робить дія.</param>
+public sealed record ConnectorManifestAction(string Name, string Title, string? Description = null);
 
 /// <summary>Запис <c>GET /connectors/catalog</c>.</summary>
 /// <param name="Manifest">Маніфест.</param>
@@ -266,6 +274,26 @@ public sealed partial class ConnectorCatalog
             ValidateTrigger(triggers[i] as JsonObject, i, seen, Fail);
         }
 
+        if (manifest.Actions is { } actions)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < actions.Count; i++)
+            {
+                if (actions[i] is not { } action || string.IsNullOrWhiteSpace(action.Name))
+                {
+                    Fail($"actions[{i}]: потрібне ім'я tool'а (name).");
+                }
+                else if (string.IsNullOrWhiteSpace(action.Title))
+                {
+                    Fail($"дія «{action.Name}»: потрібна назва (title).");
+                }
+                else if (!names.Add(action.Name))
+                {
+                    Fail($"дія «{action.Name}»: name повторюється.");
+                }
+            }
+        }
+
         return manifest with { Description = manifest.Description ?? "", Triggers = triggers };
     }
 
@@ -378,10 +406,24 @@ public sealed class ConnectorCatalogService(ConnectorCatalog catalog, IConnector
             .OrderBy(s => s.Name)
             .ToListAsync(ct);
         var installed = rows
-            .Select(r => (Catalog: ConnectorRegistration.ReadConfig(r).Catalog, Summary: ConnectorService.Summary(r, ConnectorRegistration.ReadTools(r))))
+            .Select(r => (Catalog: ConnectorRegistration.ReadConfig(r).Catalog, Tools: ConnectorRegistration.ReadTools(r), Summary: ConnectorService.Summary(r, ConnectorRegistration.ReadTools(r))))
             .Where(r => r.Catalog is not null)
-            .ToLookup(r => r.Catalog!, r => r.Summary, StringComparer.Ordinal);
-        return [.. entries.Select(e => new ConnectorCatalogEntry(e.Manifest, e.Source, [.. installed[e.Manifest.Id]]))];
+            .ToLookup(r => r.Catalog!, StringComparer.Ordinal);
+        return [.. entries.Select(e => new ConnectorCatalogEntry(WithActions(e.Manifest, installed[e.Manifest.Id].Select(r => r.Tools)), e.Source, [.. installed[e.Manifest.Id].Select(r => r.Summary)]))];
+    }
+
+    /// <summary>Маніфест без <c>actions</c> бере дії з кешу tools першого підключення, у якого він непорожній.</summary>
+    private static ConnectorManifest WithActions(ConnectorManifest manifest, IEnumerable<IReadOnlyList<McpToolInfo>> installedTools)
+    {
+        if (manifest.Actions is not null)
+        {
+            return manifest;
+        }
+
+        var tools = installedTools.FirstOrDefault(t => t.Count > 0);
+        return tools is null
+            ? manifest
+            : manifest with { Actions = [.. tools.Select(t => new ConnectorManifestAction(t.Name, string.IsNullOrWhiteSpace(t.Title) ? t.Name : t.Title, t.Description))] };
     }
 
     /// <inheritdoc />
