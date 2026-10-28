@@ -28,12 +28,42 @@ public sealed class MinioFixture : IAsyncLifetime
         .WithEnvironment("MINIO_ROOT_USER", AccessKey)
         .WithEnvironment("MINIO_ROOT_PASSWORD", SecretKey)
         .WithPortBinding(9000, assignRandomHostPort: true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/minio/health/live")))
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/minio/health/ready")))
         .Build();
 
     public string Endpoint => $"http://{_container.Hostname}:{_container.GetMappedPublicPort(9000)}";
 
-    public Task InitializeAsync() => _container.StartAsync();
+    /// <summary>
+    /// Старт контейнера і проба справжніми запитами: «health/ready» MinIO відповідає ще до того, як сервер стабільно
+    /// приймає API-запити (перший запит тесту отримував «Client disconnected before response was ready»).
+    /// Готово — коли кілька запитів поспіль пройшли без помилки.
+    /// </summary>
+    public async Task InitializeAsync()
+    {
+        await _container.StartAsync();
+        using var client = new AmazonS3Client(AccessKey, SecretKey, new AmazonS3Config { ServiceURL = Endpoint, ForcePathStyle = true, AuthenticationRegion = "us-east-1" });
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        var probe = "probe-" + Guid.NewGuid().ToString("N")[..12];
+        var bucket = false;
+        for (var ok = 0; ok < 5; await Task.Delay(200))
+        {
+            try
+            {
+                if (!bucket)
+                {
+                    await client.PutBucketAsync(probe);
+                    bucket = true;
+                }
+
+                await client.PutObjectAsync(new Amazon.S3.Model.PutObjectRequest { BucketName = probe, Key = $"k{ok}", ContentBody = "x" });
+                ok++;
+            }
+            catch (Exception ex) when (ex is Amazon.Runtime.AmazonServiceException or HttpRequestException && DateTime.UtcNow < deadline)
+            {
+                ok = 0;
+            }
+        }
+    }
 
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 
