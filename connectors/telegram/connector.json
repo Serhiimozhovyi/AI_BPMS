@@ -15,6 +15,10 @@
     "url": "http://telegram:8080/mcp"
   },
   "credential": {
+    "type": "telegram.bot",
+    "map": {
+      "token": "TELEGRAM_BOT_TOKEN"
+    },
     "env": [
       {
         "name": "TELEGRAM_BOT_TOKEN",

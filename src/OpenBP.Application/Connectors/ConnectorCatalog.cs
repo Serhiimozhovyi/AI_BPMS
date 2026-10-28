@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenBP.Application.Auth;
+using OpenBP.Application.Credentials;
 using OpenBP.Application.Errors;
 using OpenBP.Data;
 using OpenBP.Mcp.Client;
@@ -20,10 +21,43 @@ namespace OpenBP.Application.Connectors;
 /// <param name="Secret">Значення секретне.</param>
 public sealed record ConnectorManifestKey(string Name, string? Title = null, bool Required = false, bool Secret = false);
 
-/// <summary>Що покласти в credential конектора (<c>mcp.stdio</c> → <c>env</c>, <c>mcp.http</c> → <c>headers</c>).</summary>
-/// <param name="Env">Змінні середовища для stdio.</param>
-/// <param name="Headers">Заголовки для http.</param>
-public sealed record ConnectorManifestCredential(IReadOnlyList<ConnectorManifestKey>? Env = null, IReadOnlyList<ConnectorManifestKey>? Headers = null);
+/// <summary>
+/// Облікові дані конектора. Загальний тип (F3-93): <paramref name="Type"/> з <c>GET /credentials/types</c> і відображення його
+/// полів на змінні середовища (<paramref name="Map"/>, stdio) та заголовки (<paramref name="HeaderMap"/>, http) — див.
+/// <see cref="ConnectorCredentialMap"/>. Старий спосіб — ключі для credential'а <c>mcp.stdio</c> (<paramref name="Env"/>) чи
+/// <c>mcp.http</c> (<paramref name="Headers"/>); такі credentials працюють і з маніфестом загального типу.
+/// </summary>
+/// <param name="Env">Змінні середовища для stdio (credential <c>mcp.stdio</c>).</param>
+/// <param name="Headers">Заголовки для http (credential <c>mcp.http</c>).</param>
+/// <param name="Type">Загальний тип credential'а; <c>null</c> — лише старий спосіб.</param>
+/// <param name="Map">Поле типу → змінна середовища (stdio).</param>
+/// <param name="HeaderMap">Поле типу → заголовок, <c>Назва</c> або <c>Назва: префікс</c> (http).</param>
+public sealed record ConnectorManifestCredential(
+    IReadOnlyList<ConnectorManifestKey>? Env = null,
+    IReadOnlyList<ConnectorManifestKey>? Headers = null,
+    string? Type = null,
+    IReadOnlyDictionary<string, string>? Map = null,
+    IReadOnlyDictionary<string, string>? HeaderMap = null);
+
+/// <summary>
+/// Несекретне налаштування підключення (F3-93): адреса сервісу, Id автора тощо. Зберігається в <c>config</c> конектора як
+/// змінна середовища (<paramref name="Env"/>, stdio) або заголовок (<paramref name="Header"/>, http), не серед секретів.
+/// </summary>
+/// <param name="Name">Ключ у <c>settings</c> запиту встановлення.</param>
+/// <param name="Title">Підпис для форми.</param>
+/// <param name="Description">Підказка під полем.</param>
+/// <param name="Placeholder">Приклад значення.</param>
+/// <param name="Required">Без нього конектор не запрацює.</param>
+/// <param name="Env">Змінна середовища для stdio.</param>
+/// <param name="Header">Заголовок для http.</param>
+public sealed record ConnectorManifestSetting(
+    string Name,
+    string Title,
+    string? Description = null,
+    string? Placeholder = null,
+    bool Required = false,
+    string? Env = null,
+    string? Header = null);
 
 /// <summary>stdio-налаштування маніфесту.</summary>
 /// <param name="Command">Виконуваний файл.</param>
@@ -51,6 +85,7 @@ public sealed record ConnectorManifestHttp(Uri Url, IReadOnlyDictionary<string, 
 /// <param name="Credential">Ключі credential'а.</param>
 /// <param name="Triggers">Пресети тригерів (F6-13); поки порожні.</param>
 /// <param name="Actions">Дії (tools) конектора для палітри ще до підключення (F3-92); <c>null</c> — маніфест їх не описує.</param>
+/// <param name="Settings">Несекретні налаштування підключення (F3-93).</param>
 public sealed record ConnectorManifest(
     string Id,
     string Name,
@@ -61,7 +96,8 @@ public sealed record ConnectorManifest(
     ConnectorManifestHttp? Http,
     ConnectorManifestCredential? Credential,
     JsonArray? Triggers,
-    IReadOnlyList<ConnectorManifestAction>? Actions = null)
+    IReadOnlyList<ConnectorManifestAction>? Actions = null,
+    IReadOnlyList<ConnectorManifestSetting>? Settings = null)
 {
     /// <summary>Чи є налаштування для транспорту.</summary>
     /// <param name="transport">Транспорт.</param>
@@ -72,18 +108,61 @@ public sealed record ConnectorManifest(
         _ => false,
     };
 
-    /// <summary>Типові налаштування конектора для транспорту з прив'язкою до запису каталогу.</summary>
+    /// <summary>
+    /// Типові налаштування конектора для транспорту з прив'язкою до запису каталогу, відображенням полів credential'а
+    /// і значеннями <see cref="Settings"/> (порожні пропускаються).
+    /// </summary>
     /// <param name="transport">Транспорт.</param>
-    public ConnectorConfig ConfigFor(McpTransportKind transport) => transport == McpTransportKind.Http
-        ? new ConnectorConfig { Url = Http!.Url, Headers = Http.Headers, Catalog = Id }
-        : new ConnectorConfig
+    /// <param name="settings">Значення налаштувань за <see cref="ConnectorManifestSetting.Name"/>.</param>
+    /// <exception cref="ArgumentException">Налаштування, якого немає в маніфесті.</exception>
+    public ConnectorConfig ConfigFor(McpTransportKind transport, IReadOnlyDictionary<string, string>? settings = null)
+    {
+        var http = transport == McpTransportKind.Http;
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, value) in settings ?? new Dictionary<string, string>())
+        {
+            var setting = Settings?.FirstOrDefault(s => s.Name == name)
+                          ?? throw new ArgumentException($"Конектор «{Name}» не має налаштування «{name}».", nameof(settings));
+            var target = http ? setting.Header : setting.Env;
+            if (target is not null && !string.IsNullOrWhiteSpace(value))
+            {
+                values[target] = value.Trim();
+            }
+        }
+
+        var map = http ? Credential?.HeaderMap : Credential?.Map;
+        map = map is { Count: > 0 } ? map : null;
+        if (http)
+        {
+            return new ConnectorConfig { Url = Http!.Url, Headers = Merge(Http.Headers, values), Catalog = Id, CredentialMap = map };
+        }
+
+        return new ConnectorConfig
         {
             Command = Stdio!.Command,
             Arguments = Stdio.Arguments ?? [],
-            Environment = Stdio.Environment,
+            Environment = Merge(Stdio.Environment, values),
             WorkingDirectory = Stdio.WorkingDirectory,
             Catalog = Id,
+            CredentialMap = map,
         };
+    }
+
+    private static IReadOnlyDictionary<string, string>? Merge(IReadOnlyDictionary<string, string>? defaults, Dictionary<string, string> values)
+    {
+        if (values.Count == 0)
+        {
+            return defaults;
+        }
+
+        var result = new Dictionary<string, string>(defaults ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+        foreach (var (key, value) in values)
+        {
+            result[key] = value;
+        }
+
+        return result;
+    }
 }
 
 /// <summary>Дія конектора в маніфесті (F3-92): tool без схеми аргументів — її дає discovery підключення.</summary>
@@ -102,7 +181,17 @@ public sealed record ConnectorCatalogEntry(ConnectorManifest Manifest, string So
 /// <param name="Name">Назва конектора; без неї — з маніфесту.</param>
 /// <param name="Transport">Транспорт; без нього — типовий з маніфесту.</param>
 /// <param name="ProjectId">Проєкт (F6-14); <c>null</c> — спільний (лише admin).</param>
-public sealed record ConnectorInstallRequest(string? Name = null, McpTransportKind? Transport = null, Guid? ProjectId = null);
+/// <param name="CredentialId">
+/// Облікові дані (F3-93): типу <see cref="ConnectorManifestCredential.Type"/> маніфесту або старого <c>mcp.stdio</c>/<c>mcp.http</c>/<c>generic</c>.
+/// Один credential можна вибрати в кількох підключеннях.
+/// </param>
+/// <param name="Settings">Значення <see cref="ConnectorManifest.Settings"/> за назвою.</param>
+public sealed record ConnectorInstallRequest(
+    string? Name = null,
+    McpTransportKind? Transport = null,
+    Guid? ProjectId = null,
+    Guid? CredentialId = null,
+    IReadOnlyDictionary<string, string>? Settings = null);
 
 /// <summary>
 /// Каталог маніфестів: вбудовані (<c>connectors/*/connector.json</c>, ресурси збірки Api) і зовнішній JSON
@@ -274,6 +363,9 @@ public sealed partial class ConnectorCatalog
             ValidateTrigger(triggers[i] as JsonObject, i, seen, Fail);
         }
 
+        ValidateCredential(manifest, Fail);
+        ValidateSettings(manifest, Fail);
+
         if (manifest.Actions is { } actions)
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
@@ -295,6 +387,91 @@ public sealed partial class ConnectorCatalog
         }
 
         return manifest with { Description = manifest.Description ?? "", Triggers = triggers };
+    }
+
+    /// <summary>Загальний тип credential'а (F3-93): відомий тип, поля відображення з цього типу, коректні цілі.</summary>
+    private static void ValidateCredential(ConnectorManifest manifest, Func<string, string> fail)
+    {
+        if (manifest.Credential is not { } credential)
+        {
+            return;
+        }
+
+        if (credential.Type is null)
+        {
+            if (credential.Map is { Count: > 0 } || credential.HeaderMap is { Count: > 0 })
+            {
+                fail("credential.map і credential.headerMap потребують credential.type.");
+            }
+
+            return;
+        }
+
+        var type = CredentialTypes.Find(credential.Type);
+        if (type is null || credential.Type is CredentialTypes.McpStdio or CredentialTypes.McpHttp or CredentialTypes.Generic)
+        {
+            fail($"credential.type «{credential.Type}» — не загальний тип облікових даних (див. GET /api/v1/credentials/types).");
+            return;
+        }
+
+        if (manifest.Stdio is not null && credential.Map is not { Count: > 0 } && credential.HeaderMap is not { Count: > 0 })
+        {
+            fail("credential.map порожній: як поля облікових даних потраплять до stdio-сервера?");
+        }
+
+        foreach (var (section, map, http) in new[] { ("map", credential.Map, false), ("headerMap", credential.HeaderMap, true) })
+        {
+            foreach (var (source, target) in map ?? new Dictionary<string, string>())
+            {
+                if (!ConnectorCredentialMap.IsSource(type, source))
+                {
+                    fail($"credential.{section}: «{source}» — не поле типу «{type.Type}».");
+                }
+
+                if (ConnectorCredentialMap.TargetError(target, http) is { } error)
+                {
+                    fail($"credential.{section}.{source}: {error}");
+                }
+            }
+        }
+    }
+
+    private static void ValidateSettings(ConnectorManifest manifest, Func<string, string> fail)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (setting, i) in (manifest.Settings ?? []).Select((s, i) => (s, i)))
+        {
+            if (setting is null || string.IsNullOrWhiteSpace(setting.Name) || !SettingName().IsMatch(setting.Name))
+            {
+                fail($"settings[{i}]: name — латинські літери й цифри, з літери.");
+                return;
+            }
+
+            if (!names.Add(setting.Name))
+            {
+                fail($"налаштування «{setting.Name}»: name повторюється.");
+            }
+
+            if (string.IsNullOrWhiteSpace(setting.Title))
+            {
+                fail($"налаштування «{setting.Name}»: потрібна назва (title).");
+            }
+
+            if (setting.Env is null && setting.Header is null)
+            {
+                fail($"налаштування «{setting.Name}»: потрібна ціль env (stdio) або header (http).");
+            }
+
+            if (setting.Env is not null && ConnectorCredentialMap.TargetError(setting.Env, http: false) is { } envError)
+            {
+                fail($"налаштування «{setting.Name}»: {envError}");
+            }
+
+            if (setting.Header is not null && (setting.Header.Contains(':', StringComparison.Ordinal) || ConnectorCredentialMap.TargetError(setting.Header, http: true) is not null))
+            {
+                fail($"налаштування «{setting.Name}»: «{setting.Header}» — не назва заголовка HTTP.");
+            }
+        }
     }
 
     /// <summary>
@@ -367,6 +544,9 @@ public sealed partial class ConnectorCatalog
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{0,63}$")]
     private static partial Regex IdPattern();
 
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9]{0,63}$")]
+    private static partial Regex SettingName();
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "Зовнішній каталог конекторів недоступний: {Reason}")]
     private static partial void LogExternalFailed(ILogger logger, string reason);
 }
@@ -394,6 +574,9 @@ public interface IConnectorCatalogService
 public sealed class ConnectorCatalogService(ConnectorCatalog catalog, IConnectorService connectors, OpenBpDbContext db, ICurrentUser currentUser) : IConnectorCatalogService
 {
     private const string Entity = "connector-catalog";
+
+    /// <summary>Типи, з якими конектор працює за старими секціями <c>env</c>/<c>headers</c>, хоч би який тип у маніфесті.</summary>
+    private static readonly string[] LegacyCredentialTypes = [CredentialTypes.McpStdio, CredentialTypes.McpHttp, CredentialTypes.Generic];
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<ConnectorCatalogEntry>> ListAsync(CancellationToken ct)
@@ -440,7 +623,18 @@ public sealed class ConnectorCatalogService(ConnectorCatalog catalog, IConnector
                 $"Конектор «{manifest.Name}» не має налаштувань для транспорту «{ConnectorRegistration.TransportValue(transport)}».", nameof(request));
         }
 
+        if (request.CredentialId is { } credentialId && manifest.Credential?.Type is { } expected)
+        {
+            var type = await db.Credentials.AsNoTracking().Where(c => c.Id == credentialId).Select(c => c.Type).SingleOrDefaultAsync(ct);
+            if (type is not null && type != expected && !LegacyCredentialTypes.Contains(type))
+            {
+                throw new ArgumentException(
+                    $"Конектор «{manifest.Name}» очікує облікові дані типу «{CredentialTypes.Find(expected)?.DisplayName ?? expected}».", nameof(request));
+            }
+        }
+
         var name = string.IsNullOrWhiteSpace(request.Name) ? manifest.Name : request.Name.Trim();
-        return await connectors.CreateAsync(new ConnectorInput(name, transport, manifest.ConfigFor(transport), null, request.ProjectId), ct);
+        // Немає credential'а — CreateAsync поверне 404, як для звичайного конектора.
+        return await connectors.CreateAsync(new ConnectorInput(name, transport, manifest.ConfigFor(transport, request.Settings), request.CredentialId, request.ProjectId), ct);
     }
 }

@@ -39,13 +39,33 @@
       }
     },
     "credential": {
-      "description": "Що покласти в credential конектора: змінні середовища (stdio, тип mcp.stdio) і заголовки (http, тип mcp.http).",
+      "description": "Облікові дані конектора (docs/connectors.md §5.2). Загальний тип (F3-93): type + map (поле → змінна середовища, stdio) і headerMap (поле → заголовок «Назва» або «Назва: префікс», http); обчислювані поля $accessToken, $authorization, $connectionString. Старий спосіб — env/headers для credential'а mcp.stdio/mcp.http.",
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": { "map": ["type"], "headerMap": ["type"] },
       "properties": {
+        "type": {
+          "description": "Загальний тип облікових даних (GET /api/v1/credentials/types).",
+          "enum": ["telegram.bot", "apiKey", "bearer", "basic", "oauth2.clientCredentials", "oauth2", "database", "google.serviceAccount"]
+        },
+        "map": {
+          "description": "Поле типу або $accessToken/$authorization/$connectionString → назва змінної середовища stdio-сервера.",
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+        },
+        "headerMap": {
+          "description": "Поле типу → заголовок http-сервера: «Назва» або «Назва: префікс» (напр. «Authorization: Bearer»).",
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
         "env": { "type": "array", "items": { "$ref": "#/$defs/key" } },
         "headers": { "type": "array", "items": { "$ref": "#/$defs/key" } }
       }
+    },
+    "settings": {
+      "description": "Несекретні налаштування підключення (адреса сервісу, Id автора; F3-93): зберігаються в config конектора як змінна середовища (env, stdio) чи заголовок (header, http), не серед секретів.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/setting" }
     },
     "actions": {
       "description": "Дії (tools) конектора для палітри ще до підключення (F3-92): назви й описи; схему аргументів дає discovery підключення. Імена мають збігатися з tools/list сервера (перевіряє контрактний тест конектора).",
@@ -86,6 +106,21 @@
             "parameters": { "type": "object", "description": "Параметри вузла без serverId (підставляє палітра)." }
           }
         }
+      }
+    },
+    "setting": {
+      "type": "object",
+      "required": ["name", "title"],
+      "anyOf": [{ "required": ["env"] }, { "required": ["header"] }],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "description": "Ключ у settings запиту встановлення.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$" },
+        "title": { "description": "Підпис поля.", "type": "string", "minLength": 1 },
+        "description": { "description": "Підказка під полем.", "type": "string" },
+        "placeholder": { "description": "Приклад значення.", "type": "string" },
+        "required": { "type": "boolean" },
+        "env": { "description": "Змінна середовища (stdio).", "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "header": { "description": "Заголовок (http).", "type": "string", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" }
       }
     },
     "key": {

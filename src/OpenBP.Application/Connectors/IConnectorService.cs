@@ -78,6 +78,12 @@ public sealed record ConnectorConfig
 
     /// <summary>Запис каталогу, з якого встановлено конектор (F6-16); <c>null</c> — додано вручну.</summary>
     public string? Catalog { get; init; }
+
+    /// <summary>
+    /// Як поля credential'а загального типу стають змінними середовища (stdio) чи заголовками (http) — F3-93,
+    /// <see cref="ConnectorCredentialMap"/>. Копіюється з маніфесту при встановленні з каталогу; лише назви, без значень.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? CredentialMap { get; init; }
 }
 
 /// <summary>Тіло <c>POST/PUT /connectors</c>.</summary>

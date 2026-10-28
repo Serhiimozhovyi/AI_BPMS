@@ -15,6 +15,11 @@
     "url": "http://onec:8080/mcp"
   },
   "credential": {
+    "type": "basic",
+    "map": {
+      "username": "ONEC_USERNAME",
+      "password": "ONEC_PASSWORD"
+    },
     "env": [
       {
         "name": "Connector__BaseUrl",
@@ -37,6 +42,16 @@
     ],
     "headers": []
   },
+  "settings": [
+    {
+      "name": "baseUrl",
+      "title": "Адреса OData",
+      "description": "Стандартний OData-інтерфейс бази 1С.",
+      "placeholder": "http://srv/trade/odata/standard.odata/",
+      "required": true,
+      "env": "Connector__BaseUrl"
+    }
+  ],
   "actions": [
     {
       "name": "create_order",

@@ -15,6 +15,12 @@
     "url": "http://kit-crm:8080/mcp"
   },
   "credential": {
+    "type": "oauth2.clientCredentials",
+    "map": {
+      "tokenUrl": "KIT_TOKEN_URL",
+      "clientId": "KIT_CLIENT_ID",
+      "clientSecret": "KIT_CLIENT_SECRET"
+    },
     "env": [
       {
         "name": "Connector__BaseUrl",
@@ -55,6 +61,28 @@
     ],
     "headers": []
   },
+  "settings": [
+    {
+      "name": "baseUrl",
+      "title": "Адреса OData",
+      "description": "Адреса OData-сервісу Кіт CRM.",
+      "placeholder": "https://crm.example.ua/odata/",
+      "required": true,
+      "env": "Connector__BaseUrl"
+    },
+    {
+      "name": "frontPagePath",
+      "title": "Сторінка для запису (FrontPagePath)",
+      "description": "Лише якщо роль сервісного користувача не CRM_user.",
+      "env": "KIT_FRONT_PAGE_PATH"
+    },
+    {
+      "name": "authorPersonId",
+      "title": "Id автора нотаток",
+      "description": "Id особи (CrmPerson) сервісного користувача.",
+      "env": "Connector__AuthorPersonId"
+    }
+  ],
   "actions": [
     {
       "name": "add_sale_note",

@@ -15,6 +15,11 @@
     "url": "http://msgraph:8080/mcp"
   },
   "credential": {
+    "type": "oauth2.clientCredentials",
+    "map": {
+      "clientId": "CLIENT_ID",
+      "clientSecret": "CLIENT_SECRET"
+    },
     "env": [
       {
         "name": "TENANT_ID",
@@ -37,6 +42,16 @@
     ],
     "headers": []
   },
+  "settings": [
+    {
+      "name": "tenantId",
+      "title": "Tenant ID",
+      "description": "Tenant ID застосунку Entra ID (Azure AD).",
+      "placeholder": "00000000-0000-0000-0000-000000000000",
+      "required": true,
+      "env": "TENANT_ID"
+    }
+  ],
   "actions": [
     {
       "name": "append_row",

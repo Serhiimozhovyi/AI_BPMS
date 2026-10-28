@@ -31,6 +31,22 @@
     ],
     "headers": []
   },
+  "settings": [
+    {
+      "name": "allowedHosts",
+      "title": "Дозволені хости",
+      "description": "Через кому; порожньо — будь-які публічні.",
+      "placeholder": "example.com, *.example.org",
+      "env": "HTTP_ALLOWED_HOSTS"
+    },
+    {
+      "name": "allowPrivate",
+      "title": "Хости з приватними адресами",
+      "description": "Яким хостам дозволено приватні адреси, або * — усім.",
+      "placeholder": "host.docker.internal",
+      "env": "HTTP_ALLOW_PRIVATE"
+    }
+  ],
   "actions": [
     {
       "name": "http_request",

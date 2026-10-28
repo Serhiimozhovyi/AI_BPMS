@@ -23,11 +23,48 @@ public static class OAuth2Credential
     /// <summary>За скільки до <c>expiresAt</c> токен оновлюється заздалегідь.</summary>
     public static readonly TimeSpan RefreshMargin = TimeSpan.FromSeconds(60);
 
+    /// <summary>Тип <c>oauth2.clientCredentials</c> (F3-93): токен за client credentials отримує й оновлює OpenBP, без входу користувача.</summary>
+    public const string ClientCredentialsType = "oauth2.clientCredentials";
+
     /// <summary>Поля, якими керує OpenBP (користувач їх не задає).</summary>
     public static IReadOnlyList<string> ManagedFields { get; } = ["accessToken", "refreshToken", "expiresAt", "tokenType", "oauthError"];
 
+    /// <summary>Поля типу <see cref="ClientCredentialsType"/>, якими керує OpenBP.</summary>
+    public static IReadOnlyList<string> ClientCredentialsManagedFields { get; } = ["accessToken", "expiresAt", "tokenType", "oauthError", "oauthErrorAt"];
+
     /// <summary>Поля налаштувань: їх зміна скидає отримані токени.</summary>
     public static IReadOnlyList<string> ClientFields { get; } = ["authorizationUrl", "tokenUrl", "clientId", "clientSecret", "scopes", "audience"];
+
+    /// <summary>Чи керує OpenBP токенами credential'а цього типу.</summary>
+    /// <param name="type">Значення <c>credentials.type</c>.</param>
+    public static bool IsOAuth(string? type) => type is Type or ClientCredentialsType;
+
+    /// <summary>
+    /// Чи треба отримати новий токен за client credentials: токена немає або він спливає протягом <see cref="RefreshMargin"/>.
+    /// Після помилки провайдера (<c>oauthError</c>) нова спроба — не раніше ніж через <see cref="RetryAfterError"/>.
+    /// </summary>
+    /// <param name="data">Дані.</param>
+    /// <param name="now">Поточний час.</param>
+    public static bool NeedsClientToken(JsonObject data, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (!string.IsNullOrEmpty(Text(data, "oauthError"))
+            && DateTimeOffset.TryParse(Text(data, "oauthErrorAt"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var failedAt)
+            && now - failedAt < RetryAfterError)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(Text(data, "accessToken")))
+        {
+            return true;
+        }
+
+        return ExpiresAt(data) is { } at && at - now < RefreshMargin;
+    }
+
+    /// <summary>Пауза перед новою спробою отримати токен після помилки провайдера.</summary>
+    public static readonly TimeSpan RetryAfterError = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Заголовок <c>Authorization</c> для HTTP-конектора з oauth2-credential'ом: <c>&lt;tokenType|Bearer&gt; &lt;accessToken&gt;</c>;
@@ -95,16 +132,23 @@ public static class OAuth2Credential
 
         result["tokenType"] = tokens.TokenType ?? "Bearer";
         result.Remove("oauthError");
+        result.Remove("oauthErrorAt");
         return result;
     }
 
     /// <summary>Копія даних з позначкою помилки оновлення (токени лишаються).</summary>
     /// <param name="data">Поточні дані.</param>
     /// <param name="error">Код помилки без секретів.</param>
-    public static JsonObject WithError(JsonObject data, string error)
+    /// <param name="at">Час помилки (для паузи перед новою спробою client credentials); <c>null</c> — не записувати.</param>
+    public static JsonObject WithError(JsonObject data, string error, DateTimeOffset? at = null)
     {
         var result = (JsonObject)data.DeepClone();
         result["oauthError"] = error;
+        if (at is { } time)
+        {
+            result["oauthErrorAt"] = time.ToString("O", CultureInfo.InvariantCulture);
+        }
+
         return result;
     }
 
@@ -155,6 +199,26 @@ public sealed class OAuth2Client(HttpClient http)
         if (OAuth2Credential.Text(config, "scopes") is { Length: > 0 } scopes)
         {
             form["scope"] = scopes;
+        }
+
+        return RequestAsync(config, form, ct);
+    }
+
+    /// <summary>Отримує токен за client credentials (RFC 6749 §4.4) з <c>scope</c> і <c>audience</c>, якщо задані.</summary>
+    /// <param name="config">Дані credential'а (<c>tokenUrl</c>, <c>clientId</c>, <c>clientSecret</c>, <c>scopes?</c>, <c>audience?</c>).</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="OAuth2Exception">Сервер відмовив або відповідь некоректна.</exception>
+    public Task<OAuth2TokenResponse> ClientCredentialsAsync(JsonObject config, CancellationToken ct)
+    {
+        var form = new Dictionary<string, string> { ["grant_type"] = "client_credentials" };
+        if (OAuth2Credential.Text(config, "scopes") is { Length: > 0 } scopes)
+        {
+            form["scope"] = scopes;
+        }
+
+        if (OAuth2Credential.Text(config, "audience") is { Length: > 0 } audience)
+        {
+            form["audience"] = audience;
         }
 
         return RequestAsync(config, form, ct);

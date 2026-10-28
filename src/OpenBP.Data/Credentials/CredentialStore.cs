@@ -16,6 +16,8 @@ namespace OpenBP.Data.Credentials;
 /// <item>Credential <c>oauth2</c> (F4-04) при читанні оновлюється, якщо токен спливає (<see cref="OAuth2Credential.NeedsRefresh"/>):
 /// під блокуванням рядка (<c>FOR UPDATE</c>), тож паралельні читання з кількох воркерів оновлюють його один раз.
 /// Без <paramref name="oauth"/> — не оновлюється.</item>
+/// <item>Credential <c>oauth2.clientCredentials</c> (F3-93) отримує токен так само під блокуванням, але лише на запит
+/// (<see cref="GetDataAsync(Guid, bool, CancellationToken)"/>).</item>
 /// </list>
 /// Потокобезпечний: кожен виклик бере власний <see cref="OpenBpDbContext"/> з фабрики.
 /// </summary>
@@ -91,7 +93,19 @@ public sealed class CredentialStore(
     /// <param name="ct">Скасування.</param>
     /// <returns>Відкриті дані або <c>null</c>, якщо credential'а немає.</returns>
     /// <exception cref="CredentialDecryptionException">Інший ключ, пошкоджені дані або nonce.</exception>
-    public async Task<JsonObject?> GetDataAsync(Guid id, CancellationToken ct)
+    public Task<JsonObject?> GetDataAsync(Guid id, CancellationToken ct) => GetDataAsync(id, issueAccessToken: false, ct);
+
+    /// <summary>
+    /// Читає й розшифровує дані credential'а; для <c>oauth2.clientCredentials</c> з <paramref name="issueAccessToken"/>
+    /// спершу отримує токен, якщо його немає або він спливає (F3-93: конектор, якому OpenBP передає <c>$accessToken</c>).
+    /// Без запиту токен не отримується: конектор, що сам ходить по токен (Кіт CRM), не чекає на token endpoint.
+    /// </summary>
+    /// <param name="id">Id credential'а.</param>
+    /// <param name="issueAccessToken">Отримати токен client credentials, якщо треба.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Відкриті дані або <c>null</c>, якщо credential'а немає.</returns>
+    /// <exception cref="CredentialDecryptionException">Інший ключ, пошкоджені дані або nonce.</exception>
+    public async Task<JsonObject?> GetDataAsync(Guid id, bool issueAccessToken, CancellationToken ct)
     {
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         var row = await db.Credentials
@@ -106,13 +120,20 @@ public sealed class CredentialStore(
         }
 
         var data = Decrypt(id, row.DataEncrypted, row.Nonce);
-        if (oauth is null || row.Type != OAuth2Credential.Type || !OAuth2Credential.NeedsRefresh(data, _time.GetUtcNow()))
+        if (oauth is null || !NeedsToken(row.Type, data, issueAccessToken))
         {
             return data;
         }
 
-        return await RefreshAsync(id, ct).ConfigureAwait(false) ?? data;
+        return await RefreshAsync(id, issueAccessToken, ct).ConfigureAwait(false) ?? data;
     }
+
+    private bool NeedsToken(string type, JsonObject data, bool issueAccessToken) => type switch
+    {
+        OAuth2Credential.Type => OAuth2Credential.NeedsRefresh(data, _time.GetUtcNow()),
+        OAuth2Credential.ClientCredentialsType => issueAccessToken && OAuth2Credential.NeedsClientToken(data, _time.GetUtcNow()),
+        _ => false,
+    };
 
     /// <summary>
     /// Оновлює токен oauth2-credential'а під блокуванням рядка, якщо він досі спливає (інший процес міг уже оновити).
@@ -121,7 +142,9 @@ public sealed class CredentialStore(
     /// <param name="id">Id credential'а.</param>
     /// <param name="ct">Скасування.</param>
     /// <returns>Дані після оновлення або <c>null</c>, якщо credential'а немає.</returns>
-    public async Task<JsonObject?> RefreshAsync(Guid id, CancellationToken ct)
+    public Task<JsonObject?> RefreshAsync(Guid id, CancellationToken ct) => RefreshAsync(id, issueAccessToken: false, ct);
+
+    private async Task<JsonObject?> RefreshAsync(Guid id, bool issueAccessToken, CancellationToken ct)
     {
         await using var db = await _contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
         await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -136,19 +159,23 @@ public sealed class CredentialStore(
         }
 
         var data = Decrypt(id, row.DataEncrypted, row.Nonce);
-        if (oauth is null || !OAuth2Credential.NeedsRefresh(data, _time.GetUtcNow()))
+        if (oauth is null || !NeedsToken(row.Type, data, issueAccessToken))
         {
             return data;
         }
 
+        var clientCredentials = row.Type == OAuth2Credential.ClientCredentialsType;
         try
         {
-            var tokens = await oauth.RefreshAsync(data, ct).ConfigureAwait(false);
+            var tokens = clientCredentials
+                ? await oauth.ClientCredentialsAsync(data, ct).ConfigureAwait(false)
+                : await oauth.RefreshAsync(data, ct).ConfigureAwait(false);
             data = OAuth2Credential.WithTokens(data, tokens, _time.GetUtcNow());
         }
         catch (OAuth2Exception ex)
         {
-            data = OAuth2Credential.WithError(data, ex.Message);
+            // Client credentials: час помилки — щоб наступні читання не штурмували token endpoint.
+            data = OAuth2Credential.WithError(data, ex.Message, clientCredentials ? _time.GetUtcNow() : null);
         }
 
         var (cipher, nonce) = Encrypt(id, data);

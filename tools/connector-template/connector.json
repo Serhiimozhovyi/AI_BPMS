@@ -15,6 +15,10 @@
     "url": "http://connector.template:8080/mcp"
   },
   "credential": {
+    "type": "bearer",
+    "map": {
+      "token": "CONNECTOR_TOKEN"
+    },
     "env": [
       {
         "name": "Connector__BaseUrl",
@@ -31,6 +35,22 @@
     ],
     "headers": []
   },
+  "settings": [
+    {
+      "name": "baseUrl",
+      "title": "Адреса REST API",
+      "placeholder": "https://api.example.com/",
+      "required": true,
+      "env": "Connector__BaseUrl"
+    },
+    {
+      "name": "authType",
+      "title": "Спосіб входу",
+      "description": "bearer — токен з облікових даних; none — без входу.",
+      "placeholder": "bearer",
+      "env": "Connector__Auth__Type"
+    }
+  ],
   "actions": [
     {
       "name": "changes_since",

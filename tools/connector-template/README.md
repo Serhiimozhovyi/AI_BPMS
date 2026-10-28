@@ -106,6 +106,11 @@ dotnet publish src/Acme.Crm -c Release -o out
   - секрети — у credential конектора у форматі `{ "env": { "CONNECTOR_TOKEN": "…" } }` (поле `credentialId`):
     OpenBP зберігає його зашифрованим і передає процесу як змінні середовища, у конфігурації конектора й відповідях
     API значень немає.
+  - або (F3-93) — загальний тип облікових даних у `connector.json`: `"credential": { "type": "bearer", "map": { "token":
+    "CONNECTOR_TOKEN" } }` і несекретні `settings[]` (`Connector__BaseUrl`, `Connector__Auth__Type`). Тоді при встановленні з
+    каталогу користувач заповнює поля «Токен», «Адреса REST API», а не назви змінних; інші типи (`basic`, `apiKey`,
+    `oauth2.clientCredentials`, `database`…) і обчислювані поля `$accessToken`/`$authorization`/`$connectionString` —
+    `docs/connectors.md` §5.2.
 - **http** (конектор — окремий сервіс, напр. контейнер):
   - запуск: `dotnet out/Acme.Crm.dll --http http://0.0.0.0:8080`, секрети — змінні середовища контейнера;
   - в OpenBP: транспорт `http`, URL `http://<хост>:8080/mcp`.
