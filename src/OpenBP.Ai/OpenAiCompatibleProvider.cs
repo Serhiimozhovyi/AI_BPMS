@@ -87,15 +87,28 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider, 
             var message = new JsonObject { ["role"] = "assistant", ["content"] = m.Text };
             if (m.ToolCalls is { Count: > 0 } calls)
             {
-                message["tool_calls"] = new JsonArray([.. calls.Select(c => (JsonNode)new JsonObject
-                {
-                    ["id"] = c.Id,
-                    ["type"] = "function",
-                    ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = (c.Arguments ?? []).ToJsonString() },
-                })]);
+                message["tool_calls"] = new JsonArray([.. calls.Select(c => (JsonNode)Call(c))]);
             }
 
             return message;
+        }
+
+        static JsonObject Call(ChatToolCall c)
+        {
+            var call = new JsonObject
+            {
+                ["id"] = c.Id,
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = (c.Arguments ?? []).ToJsonString() },
+            };
+
+            // Gemini 3 відхиляє (400) крок, де виклик повернуто без підпису міркування з extra_content.
+            if (c.ProviderData?["extra_content"] is { } extra)
+            {
+                call["extra_content"] = extra.DeepClone();
+            }
+
+            return call;
         }
     }
 
@@ -119,7 +132,8 @@ internal sealed class OpenAiCompatibleProvider(HttpClient http) : ILlmProvider, 
                 .Select((c, i) => new ChatToolCall(
                     c["id"]?.GetValue<string>() ?? $"call_{i}",
                     c["function"]?["name"]?.GetValue<string>() ?? "",
-                    ChatJson.Arguments(c["function"]?["arguments"])))
+                    ChatJson.Arguments(c["function"]?["arguments"]),
+                    c["extra_content"] is JsonObject extra ? new JsonObject { ["extra_content"] = extra.DeepClone() } : null))
                 .ToList();
             if (text is not null || calls.Count > 0)
             {

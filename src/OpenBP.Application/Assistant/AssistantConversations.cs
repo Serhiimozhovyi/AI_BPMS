@@ -480,7 +480,7 @@ public sealed class AssistantSessionService(
                     break;
                 case "assistant":
                     ClosePending();
-                    var calls = turn.Calls?.Select(c => new LlmToolCall(c.Id, c.Name, (JsonObject)c.Arguments.DeepClone())).ToList();
+                    var calls = turn.Calls?.Select(c => new LlmToolCall(c.Id, c.Name, (JsonObject)c.Arguments.DeepClone(), c.ProviderData?.DeepClone() as JsonObject)).ToList();
                     turns.Add(new LlmTurn("assistant", turn.Text, calls is { Count: > 0 } ? calls : null));
                     pending.AddRange(calls?.Select(c => c.Id) ?? []);
                     break;
@@ -616,7 +616,7 @@ public sealed class AssistantSessionService(
                 added.Add(new StoredTurn(
                     "assistant",
                     reply.Text,
-                    [.. reply.ToolCalls.Select(c => new StoredCall(c.Id, c.Name, c.Arguments))],
+                    [.. reply.ToolCalls.Select(c => new StoredCall(c.Id, c.Name, c.Arguments, c.ProviderData))],
                     At: now));
                 if (!string.IsNullOrWhiteSpace(reply.Text))
                 {
@@ -769,7 +769,8 @@ public sealed class AssistantSessionService(
         AssistantPageContext? Context = null);
 
     /// <summary>Збережений виклик інструмента.</summary>
-    internal sealed record StoredCall(string Id, string Name, JsonObject Arguments);
+    /// <param name="ProviderData">Непрозорі дані провайдера (Gemini — підпис міркування), повертаються моделі з історією.</param>
+    internal sealed record StoredCall(string Id, string Name, JsonObject Arguments, JsonObject? ProviderData = null);
 
     /// <summary>Збережена пропозиція змін.</summary>
     internal sealed class StoredProposal
