@@ -1308,9 +1308,10 @@
 - Зроблено: як у «Що», з уточненнями (ADR-005, `docs/projects.md` §2): нові операції додано до `core.dataTable` v1 без нової версії вузла, відповідь — `_inserted`/`_reason`; серіалізація — advisory lock таблиці; дія аудиту — `dataTable.sensitiveRead`; `ref` перевіряється при збереженні структури, а не по рядках; `user` — id без розгортання в email.
 
 ### F8-03 · Список проєктів і сторінка проєкту з вкладками
-- model: `sonnet` · status: `ready` · depends: F8-02
+- model: `sonnet` · status: `review` · depends: F8-02
 - Що: `workflow_groups` + `description`, `icon`; `GET /workflow-groups` → ще `description`, `icon`, `memberRole`; `PATCH` приймає їх; пункт меню «Проєкти» і сторінка `/projects` (картки: назва, опис, значок, сценарії, роль); `/projects/:id` з вкладками Огляд (опис, активні сценарії, помилки за добу, відкриті задачі й порушення, стан підключень — з наявних сервісів F6-07 з фільтром проєкту), Сценарії, Таблиці, Підключення (ті самі компоненти `/workflows`, `/tables`, `/connections` з фільтром проєкту), Учасники (наявна сторінка F6-14); адреса вкладки в URL; створення проєкту з картки; AC-Kit, i18n.
 - DoD: Vitest: вкладки, фільтр за проєктом, картки; тести REST нових полів; viewer не бачить «Створити»; `docs/projects.md` §1, `docs/guide/users.md` оновлено.
+- Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §1): моя роль — поле `role`; вкладка «Застосунок» — пояснення до F8-04; огляд проєкту — `/overview?projectId=` з `activeWorkflows`, `openTasks` (стан підключень у вкладці поки не показано).
 
 ### F8-04 · Ролі застосунку й сторінки: `project_pages`, list / detail / form
 - model: `opus` · status: `ready` · depends: F8-03

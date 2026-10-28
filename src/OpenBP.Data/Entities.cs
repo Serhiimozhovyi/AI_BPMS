@@ -67,6 +67,10 @@ public sealed class WorkflowGroupEntity
     /// <summary>Назва у верхньому регістрі (інваріантна культура) — унікальність без урахування регістру.</summary>
     public string NormalizedName { get; set; } = "";
     public int SortOrder { get; set; }
+    /// <summary>Опис проєкту (F8-03); порожній рядок — без опису.</summary>
+    public string Description { get; set; } = "";
+    /// <summary>Значок проєкту (F8-03): назва іконки AC-Kit чи emoji; порожній — типовий.</summary>
+    public string Icon { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
 }
 

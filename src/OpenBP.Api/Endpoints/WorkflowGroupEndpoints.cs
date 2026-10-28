@@ -5,8 +5,10 @@ using OpenBP.Application.Workflows;
 namespace OpenBP.Api.Endpoints;
 
 /// <summary>Тіло <c>POST /workflow-groups</c> і <c>PATCH /workflow-groups/{id}</c>.</summary>
-/// <param name="Name">Назва групи.</param>
-public sealed record WorkflowGroupRequest(string? Name);
+/// <param name="Name">Назва групи; у <c>PATCH</c> <c>null</c> — не змінювати.</param>
+/// <param name="Description">Опис проєкту (F8-03); у <c>PATCH</c> <c>null</c> — не змінювати, порожній рядок очищає.</param>
+/// <param name="Icon">Значок проєкту (F8-03); так само.</param>
+public sealed record WorkflowGroupRequest(string? Name, string? Description = null, string? Icon = null);
 
 /// <summary>Тіло <c>PUT /workflow-groups/order</c>.</summary>
 /// <param name="Ids">Id усіх видимих груп у новому порядку.</param>
@@ -28,12 +30,12 @@ public static class WorkflowGroupEndpoints
 
         groups.MapGet("/", (IWorkflowGroupService service, CancellationToken ct) => service.ListAsync(ct))
             .WithSummary("Групи (проєкти) сценаріїв")
-            .WithDescription("Видимі групи в заданому порядку з кількістю сценаріїв і роллю поточного користувача (`role`); admin бачить усі, " +
+            .WithDescription("Видимі групи в заданому порядку з описом, значком, кількістю сценаріїв і роллю поточного користувача (`role`); admin бачить усі, " +
                              "інші — ті, де вони учасники. Сценарії спільного простору — `GET /workflows?groupId=none`.");
 
         groups.MapPost("/", async (WorkflowGroupRequest body, IWorkflowGroupService service, CancellationToken ct) =>
         {
-            var created = await service.CreateAsync(body.Name ?? "", ct);
+            var created = await service.CreateAsync(body.Name ?? "", ct, body.Description, body.Icon);
             return Results.Created($"/api/v1/workflow-groups/{created.Id}", created);
         })
             .WithSummary("Створити групу")
@@ -42,8 +44,9 @@ public static class WorkflowGroupEndpoints
             .Produces<WorkflowGroupSummary>(StatusCodes.Status201Created);
 
         groups.MapPatch("/{id:guid}", (Guid id, WorkflowGroupRequest body, IWorkflowGroupService service, CancellationToken ct) =>
-            service.RenameAsync(id, body.Name ?? "", ct))
-            .WithSummary("Перейменувати групу");
+            service.UpdateAsync(id, body.Name, body.Description, body.Icon, ct))
+            .WithSummary("Змінити назву, опис чи значок групи")
+            .WithDescription("Лише передані поля; порожній рядок в `description` чи `icon` очищає їх. Назва — як у створенні (409 WORKFLOW_GROUP_NAME_TAKEN).");
 
         groups.MapDelete("/{id:guid}", async (Guid id, IWorkflowGroupService service, CancellationToken ct) =>
         {

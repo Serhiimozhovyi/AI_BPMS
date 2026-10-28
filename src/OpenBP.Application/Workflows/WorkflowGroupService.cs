@@ -26,6 +26,12 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
     /// <summary>Найдовша назва групи.</summary>
     public const int MaxNameLength = 100;
 
+    /// <summary>Найдовший опис проєкту (F8-03).</summary>
+    public const int MaxDescriptionLength = 500;
+
+    /// <summary>Найдовший значок проєкту (F8-03).</summary>
+    public const int MaxIconLength = 40;
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<WorkflowGroupSummary>> ListAsync(CancellationToken ct)
     {
@@ -34,13 +40,13 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         var rows = await db.WorkflowGroups.AsNoTracking()
             .Where(g => scope.All || ids.Contains(g.Id))
             .OrderBy(g => g.SortOrder).ThenBy(g => g.CreatedAt)
-            .Select(g => new { g.Id, g.Name, g.SortOrder, Count = db.Workflows.Count(w => w.GroupId == g.Id) })
+            .Select(g => new { g.Id, g.Name, g.SortOrder, g.Description, g.Icon, Count = db.Workflows.Count(w => w.GroupId == g.Id) })
             .ToListAsync(ct);
-        return [.. rows.Select(g => new WorkflowGroupSummary(g.Id, g.Name, g.SortOrder, g.Count, scope.RoleIn(g.Id)))];
+        return [.. rows.Select(g => new WorkflowGroupSummary(g.Id, g.Name, g.SortOrder, g.Count, scope.RoleIn(g.Id)) { Description = g.Description, Icon = g.Icon })];
     }
 
     /// <inheritdoc />
-    public async Task<WorkflowGroupSummary> CreateAsync(string name, CancellationToken ct)
+    public async Task<WorkflowGroupSummary> CreateAsync(string name, CancellationToken ct, string? description = null, string? icon = null)
     {
         currentUser.Require(UserRole.Editor);
         if (currentUser.ApiKeyProjectId is not null)
@@ -61,6 +67,8 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
             Name = trimmed,
             NormalizedName = normalized,
             SortOrder = last + 1,
+            Description = ValidText(description, MaxDescriptionLength, "Опис проєкту"),
+            Icon = ValidText(icon, MaxIconLength, "Значок проєкту"),
             CreatedAt = now,
         };
         db.WorkflowGroups.Add(group);
@@ -79,14 +87,20 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
 
         db.Audit(currentUser, now, AuditActions.ProjectCreated, AuditEntities.Project, group.Id.ToString(), new JsonObject { ["name"] = trimmed });
         await SaveAsync(trimmed, ct);
-        return new WorkflowGroupSummary(group.Id, group.Name, group.SortOrder, 0, admin ? UserRole.Admin : UserRole.Editor);
+        return new WorkflowGroupSummary(group.Id, group.Name, group.SortOrder, 0, admin ? UserRole.Admin : UserRole.Editor)
+        {
+            Description = group.Description,
+            Icon = group.Icon,
+        };
     }
 
     /// <inheritdoc />
-    public async Task<WorkflowGroupSummary> RenameAsync(Guid id, string name, CancellationToken ct)
+    public async Task<WorkflowGroupSummary> UpdateAsync(Guid id, string? name, string? description, string? icon, CancellationToken ct)
     {
-        var trimmed = ValidName(name);
         var group = await FindManagedAsync(id, ct);
+        var trimmed = name is null ? group.Name : ValidName(name);
+        var newDescription = description is null ? group.Description : ValidText(description, MaxDescriptionLength, "Опис проєкту");
+        var newIcon = icon is null ? group.Icon : ValidText(icon, MaxIconLength, "Значок проєкту");
         var normalized = Normalize(trimmed);
         await ThrowIfNameTakenAsync(normalized, id, trimmed, ct);
 
@@ -98,6 +112,8 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
 
         group.Name = trimmed;
         group.NormalizedName = normalized;
+        group.Description = newDescription;
+        group.Icon = newIcon;
         await SaveAsync(trimmed, ct);
         return await SummaryAsync(group, ct);
     }
@@ -158,6 +174,14 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         return trimmed.Length <= MaxNameLength
             ? trimmed
             : throw new ArgumentException($"Назва групи довша за {MaxNameLength} символів.", nameof(name));
+    }
+
+    private static string ValidText(string? text, int maxLength, string what)
+    {
+        var trimmed = text?.Trim() ?? "";
+        return trimmed.Length <= maxLength
+            ? trimmed
+            : throw new ArgumentException($"{what} довший за {maxLength} символів.", nameof(text));
     }
 
     private static string Normalize(string name) => name.ToUpper(CultureInfo.InvariantCulture);
@@ -260,5 +284,9 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
 
     private async Task<WorkflowGroupSummary> SummaryAsync(WorkflowGroupEntity group, CancellationToken ct) =>
         new(group.Id, group.Name, group.SortOrder, await db.Workflows.CountAsync(w => w.GroupId == group.Id, ct),
-            await _access.RoleInAsync(group.Id, ct));
+            await _access.RoleInAsync(group.Id, ct))
+        {
+            Description = group.Description,
+            Icon = group.Icon,
+        };
 }

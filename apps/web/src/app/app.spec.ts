@@ -95,6 +95,7 @@ describe('routes', () => {
       '',
       'workflows',
       'workflows/:id',
+      'projects',
       'projects/:id',
       undefined, // /executions[/:id] — matcher (F3-81)
       'tasks',
@@ -173,7 +174,7 @@ describe('App: вибір проєкту (F6-14)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(TestBed.inject(ProjectContextService).current()).toBe('p1');
-    expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe('/projects/p1');
+    expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe('/projects/p1/members');
     localStorage.removeItem('openbp.project');
   });
 });

@@ -51,10 +51,44 @@ export const routes: Routes = [
           import('./pages/workflow-editor/workflow-editor.page').then((m) => m.WorkflowEditorPage),
       },
       {
-        // Проєкт і його учасники (F6-14).
+        // Список проєктів (F8-03).
+        path: 'projects',
+        pathMatch: 'full',
+        title: $localize`:@@projects.title:Проєкти`,
+        loadComponent: () => import('./pages/projects/projects.page').then((m) => m.ProjectsPage),
+      },
+      {
+        // Проєкт як робочий простір: вкладки — дочірні маршрути (F8-03); учасники — F6-14.
         path: 'projects/:id',
         title: $localize`:@@project.title:Проєкт`,
         loadComponent: () => import('./pages/project/project.page').then((m) => m.ProjectPage),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'overview' },
+          {
+            path: 'overview',
+            loadComponent: () => import('./pages/overview/overview.page').then((m) => m.OverviewPage),
+          },
+          {
+            path: 'workflows',
+            loadComponent: () => import('./pages/workflows/workflows.page').then((m) => m.WorkflowsPage),
+          },
+          {
+            path: 'tables',
+            loadComponent: () => import('./pages/tables/tables.page').then((m) => m.TablesPage),
+          },
+          {
+            path: 'connections',
+            loadComponent: () => import('./pages/connections/connections.page').then((m) => m.ConnectionsPage),
+          },
+          {
+            path: 'app',
+            loadComponent: () => import('./pages/project/project-app.page').then((m) => m.ProjectAppPage),
+          },
+          {
+            path: 'members',
+            loadComponent: () => import('./pages/project/project-members.page').then((m) => m.ProjectMembersPage),
+          },
+        ],
       },
       {
         matcher: executionsMatcher,

@@ -286,4 +286,61 @@ public class ProjectTests(ApiFactory api)
         Assert.Contains("project.created", audit);
         Assert.Contains("project.deleted", audit);
     }
+
+    [Fact]
+    public async Task Project_has_description_and_icon_that_patch_changes_independently()
+    {
+        var (editor, _) = await LoginAsync(UserRole.Editor);
+        var created = await editor.PostAsJsonAsync(Groups, new { name = Unique("Опис"), description = "Бот психологічної підтримки", icon = "psychology" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var body = await JsonAsync(created);
+        var id = IdOf(body);
+        Assert.Equal("Бот психологічної підтримки", body.GetProperty("description").GetString());
+        Assert.Equal("psychology", body.GetProperty("icon").GetString());
+
+        // Лише передані поля змінюються; порожній рядок очищає.
+        var renamed = await JsonAsync(await editor.PatchAsJsonAsync($"{Groups}/{id}", new { name = Unique("Нова назва") }));
+        Assert.Equal("Бот психологічної підтримки", renamed.GetProperty("description").GetString());
+        Assert.Equal("psychology", renamed.GetProperty("icon").GetString());
+        var cleared = await JsonAsync(await editor.PatchAsJsonAsync($"{Groups}/{id}", new { description = "", icon = "work" }));
+        Assert.Equal("", cleared.GetProperty("description").GetString());
+        Assert.Equal("work", cleared.GetProperty("icon").GetString());
+        Assert.Equal(renamed.GetProperty("name").GetString(), cleared.GetProperty("name").GetString());
+
+        var listed = (await JsonAsync(await editor.GetAsync(Groups))).EnumerateArray().Single(g => IdOf(g) == id);
+        Assert.Equal("work", listed.GetProperty("icon").GetString());
+        Assert.Equal("editor", listed.GetProperty("role").GetString());
+
+        var tooLong = await editor.PatchAsJsonAsync($"{Groups}/{id}", new { description = new string('x', 501) });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+
+        // Viewer проєкту не змінює опис.
+        var (viewer, viewerEmail) = await LoginAsync(UserRole.Viewer);
+        Assert.Equal(HttpStatusCode.OK, (await editor.PutAsJsonAsync($"{Groups}/{id}/members", new { email = viewerEmail, role = "viewer" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PatchAsJsonAsync($"{Groups}/{id}", new { description = "хак" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Overview_can_be_narrowed_to_a_project_and_counts_active_workflows()
+    {
+        var (editor, _) = await LoginAsync(UserRole.Editor);
+        var mine = await CreateProjectAsync(editor, Unique("Огляд А"));
+        var other = await CreateProjectAsync(editor, Unique("Огляд Б"));
+        var inMine = await CreateWorkflowAsync(editor, Unique("Сц А"), mine);
+        await CreateWorkflowAsync(editor, Unique("Сц Б"), other);
+        await CreateWorkflowAsync(editor, Unique("Сц Б2"), other);
+
+        var before = await JsonAsync(await editor.GetAsync($"/api/v1/overview?projectId={mine}"));
+        Assert.Equal(0, before.GetProperty("activeWorkflows").GetInt32());
+        Assert.Equal(0, before.GetProperty("openTasks").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Workflows}/{inMine}/publish", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsync($"{Workflows}/{inMine}/activate", null)).StatusCode);
+        var after = await JsonAsync(await editor.GetAsync($"/api/v1/overview?projectId={mine}"));
+        Assert.Equal(1, after.GetProperty("activeWorkflows").GetInt32());
+
+        // Чужий проєкт для не-адміна — 404; невідомий — теж.
+        var (stranger, _) = await LoginAsync(UserRole.Editor);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/v1/overview?projectId={mine}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/v1/overview?projectId={Guid.NewGuid()}")).StatusCode);
+    }
 }
