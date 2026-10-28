@@ -112,9 +112,11 @@ test('вузол Telegram: «+ Нове підключення…» → токе
   const dialog = page.getByTestId('new-connection');
   await expect(dialog.getByTestId('catalog-connect')).toBeVisible();
   await dialog.getByLabel('Токен бота').fill('123:abc');
+  const installed = page.waitForResponse((r) => r.url().endsWith('/connectors/catalog/telegram/install') && r.request().method() === 'POST');
   await dialog.getByTestId('credential-save').click();
+  await installed;
 
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByTestId('connection-select')).toContainText('Telegram');
   await expect.poll(() => api.node()['parameters']).toEqual({ serverId: 'bot2', toolName: 'send_message', arguments: { chat_id: '@agro', text: 'Привіт' } });
 });
