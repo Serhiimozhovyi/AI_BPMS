@@ -30,7 +30,7 @@ describe('ConnectorToolsComponent', () => {
 
   it('без tools — підказка оновити', () => {
     const { host } = setup([]);
-    expect(host.querySelector('[data-testid="no-tools"]')?.textContent).toContain('Оновити tools');
+    expect(host.querySelector('[data-testid="no-tools"]')?.textContent).toContain("Перевірити з'єднання");
   });
 
   it('показує tools зі схемою аргументів', () => {

@@ -4,7 +4,7 @@ import { Page, expect, test } from '@playwright/test';
 const USER = { id: 'u1', email: 'admin@firma.ua', role: 'admin' };
 
 function summary(id: string, name: string) {
-  return { id, name, transport: 'http', status: 'ok', toolCount: 1, toolsCachedAt: '2026-10-27T10:00:00Z' };
+  return { id, name, transport: 'http', status: 'ok', toolCount: 1, toolsCachedAt: new Date().toISOString() };
 }
 
 async function install(page: Page, options: { blocked?: boolean } = {}) {
