@@ -27,7 +27,7 @@ public static class AssistantEndpoints
             service.SetAsync(body, ct))
             .WithTags(OpenApiSetup.Tags.Assistant)
             .WithSummary("Змінити налаштування помічника")
-            .WithDescription("Лише admin. Credential типу `anthropic`, `openai`, `openai-compatible` або `ollama` і модель; `credentialId: null` вимикає помічника.");
+            .WithDescription("Лише admin. Credential типу `anthropic`, `openai`, `gemini`, `openai-compatible` або `ollama` і модель; `credentialId: null` вимикає помічника.");
 
         api.MapGet("/settings/assistant/models", (Guid credentialId, IAssistantModelsService service, CancellationToken ct) =>
             service.ListAsync(credentialId, ct))

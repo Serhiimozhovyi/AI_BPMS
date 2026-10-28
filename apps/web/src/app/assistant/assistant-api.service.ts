@@ -68,7 +68,7 @@ export interface WorkflowExplanation {
 }
 
 /** Типи credential'ів, з якими працює помічник. */
-export const ASSISTANT_PROVIDERS = ['anthropic', 'openai', 'openai-compatible', 'ollama'];
+export const ASSISTANT_PROVIDERS = ['anthropic', 'openai', 'gemini', 'openai-compatible', 'ollama'];
 
 /**
  * Розбирає накопичений текст `text/event-stream` на події; повертає події з повних блоків і довжину розібраного префікса.

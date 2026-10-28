@@ -15,6 +15,7 @@
       "enum": [
         "anthropic",
         "openai",
+        "gemini",
         "openai-compatible",
         "ollama"
       ]

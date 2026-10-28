@@ -212,7 +212,7 @@ describe('вибір облікових даних (F4-03)', () => {
     expect(rules.options).toEqual(['a1']);
     expect(rules.labels).toEqual(['Anthropic прод']);
     expect(credentialField({}).props!['label']).toBe('Облікові дані');
-    expect(credentialTypesFor('ai.llm', llm.credentials![0], {})).toEqual(['anthropic', 'openai', 'openai-compatible', 'ollama']);
+    expect(credentialTypesFor('ai.llm', llm.credentials![0], {})).toEqual(['anthropic', 'openai', 'gemini', 'openai-compatible', 'ollama']);
     expect(credentialTypesFor('ai.agent', llm.credentials![0], { provider: 'openai' })).toEqual(['openai']);
   });
 
