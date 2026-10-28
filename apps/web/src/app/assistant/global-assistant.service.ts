@@ -84,12 +84,14 @@ export class GlobalAssistantService {
     { initialValue: this.router.url },
   );
   private readonly nodeId = signal<string | null>(null);
+  /** Вузол із запиту ззовні («Розібрати з помічником»): лише для найближчого повідомлення. */
+  private readonly promptNode = signal<string | null>(null);
   private request: Subscription | null = null;
 
   /** Де користувач: сторінка й ідентифікатори з адреси та вибраний вузол. */
   readonly context = computed<AssistantPageContext>(() => {
     const context = contextFromUrl(this.url());
-    const nodeId = this.nodeId();
+    const nodeId = this.promptNode() ?? this.nodeId();
     return nodeId ? { ...context, nodeId } : context;
   });
 
@@ -105,14 +107,15 @@ export class GlobalAssistantService {
 
   close(): void {
     this.open.set(false);
+    this.promptNode.set(null);
   }
 
   /** Відкриває панель; з `prompt` — підставляє текст у поле або одразу надсилає. */
   show(prompt?: GlobalAssistantPrompt): void {
     this.open.set(true);
     this.historyOpen.set(false);
-    if (prompt?.nodeId) this.nodeId.set(prompt.nodeId);
     if (!prompt) return;
+    this.promptNode.set(prompt.nodeId ?? null);
     this.draft.set(prompt.text);
     if (prompt.send) this.send();
     else this.focusRequest.update((n) => n + 1);
@@ -121,6 +124,7 @@ export class GlobalAssistantService {
   /** Новий порожній чат; розмова створюється з першим повідомленням. */
   newConversation(): void {
     this.stop();
+    this.promptNode.set(null);
     this.currentId.set(null);
     this.lines.set([]);
     this.proposals.set([]);
@@ -167,6 +171,7 @@ export class GlobalAssistantService {
     this.notConfigured.set(false);
     this.lines.update((lines) => [...lines, { kind: 'user', text: message }]);
     const context = this.context();
+    this.promptNode.set(null);
     const existing = this.currentId();
     if (existing) {
       this.ask(existing, message, context);
