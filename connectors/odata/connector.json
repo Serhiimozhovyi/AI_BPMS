@@ -1,0 +1,120 @@
+{
+  "$schema": "../../tools/connector-template/schemas/connector.schema.json",
+  "id": "odata",
+  "name": "OData",
+  "description": "Будь-який сервіс OData v4 (1С, Dynamics, SAP, Кіт CRM…): набори сутностей з $metadata, запити з $filter/$select/$expand/$orderby і сторінками, читання за ключем, створення, зміна й видалення.",
+  "icon": "🗂️",
+  "transport": "stdio",
+  "stdio": {
+    "command": "dotnet",
+    "arguments": [
+      "/opt/openbp/connectors/odata/OpenBP.Connectors.OData.dll"
+    ]
+  },
+  "http": {
+    "url": "http://odata:8080/mcp"
+  },
+  "credential": {
+    "type": "oauth2.clientCredentials",
+    "map": {
+      "tokenUrl": "ODATA_TOKEN_URL",
+      "clientId": "ODATA_CLIENT_ID",
+      "clientSecret": "ODATA_CLIENT_SECRET",
+      "scopes": "ODATA_SCOPES",
+      "audience": "ODATA_AUDIENCE"
+    },
+    "env": [
+      {
+        "name": "Connector__BaseUrl",
+        "title": "Адреса сервісу OData, напр. https://erp.example.ua/odata/",
+        "required": true,
+        "secret": false
+      },
+      {
+        "name": "ODATA_TOKEN_URL",
+        "title": "Адреса видачі токена (oauth2 client credentials)",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "ODATA_CLIENT_ID",
+        "title": "Client ID",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "ODATA_CLIENT_SECRET",
+        "title": "Client secret",
+        "required": false,
+        "secret": true
+      },
+      {
+        "name": "ODATA_SCOPES",
+        "title": "Scopes через пробіл (необов'язково)",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "ODATA_AUDIENCE",
+        "title": "Audience (необов'язково)",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "ODATA_TOKEN",
+        "title": "Готовий токен для Authorization: Bearer (замість oauth2)",
+        "required": false,
+        "secret": true
+      },
+      {
+        "name": "ODATA_USERNAME",
+        "title": "Ім'я користувача для Basic (замість oauth2)",
+        "required": false,
+        "secret": false
+      },
+      {
+        "name": "ODATA_PASSWORD",
+        "title": "Пароль для Basic",
+        "required": false,
+        "secret": true
+      }
+    ],
+    "headers": []
+  },
+  "settings": [
+    {
+      "name": "baseUrl",
+      "title": "Адреса сервісу OData",
+      "description": "Корінь сервісу OData v4: за адресою + $metadata має відкриватись опис сервісу.",
+      "placeholder": "https://erp.example.ua/odata/",
+      "required": true,
+      "env": "Connector__BaseUrl"
+    }
+  ],
+  "actions": [
+    {
+      "name": "create_entity",
+      "title": "Створити запис"
+    },
+    {
+      "name": "delete_entity",
+      "title": "Видалити запис"
+    },
+    {
+      "name": "get_entity",
+      "title": "Отримати запис за ключем"
+    },
+    {
+      "name": "list_entity_sets",
+      "title": "Список сутностей"
+    },
+    {
+      "name": "query_entities",
+      "title": "Отримати записи"
+    },
+    {
+      "name": "update_entity",
+      "title": "Змінити запис"
+    }
+  ]
+}
