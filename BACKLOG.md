@@ -954,7 +954,7 @@
 - DoD: тести; `architecture.md` §8 оновлено.
 
 ### F3-114 · Документація й e2e загального помічника
-- model: `sonnet` · status: `ready` · depends: F3-111, F3-112
+- model: `sonnet` · status: `review` · depends: F3-111, F3-112
 - Що: `docs/guide/users.md`, приклади розмов, наскрізний Playwright з фейковим провайдером.
 - DoD: документація і e2e зелені.
 ### F3-107 · Помічник: список моделей з основною
