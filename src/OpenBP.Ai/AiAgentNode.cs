@@ -47,6 +47,7 @@ public sealed partial class AiAgentNode : INode
     private readonly IChatProvider _openAiCompatible;
     private readonly IChatProvider _ollama;
     private readonly IChatProvider _openAi;
+    private readonly IChatProvider _gemini;
     private readonly IChatProvider _anthropic;
 
     /// <summary>Створює вузол.</summary>
@@ -65,6 +66,7 @@ public sealed partial class AiAgentNode : INode
         _openAiCompatible = compatible;
         _ollama = new OllamaProvider(http);
         _openAi = new OpenAiProvider(compatible);
+        _gemini = new GeminiProvider(compatible);
         _anthropic = new AnthropicProvider(http);
     }
 
@@ -119,8 +121,9 @@ public sealed partial class AiAgentNode : INode
             "openai-compatible" => _openAiCompatible,
             "ollama" => _ollama,
             "openai" => _openAi,
+            "gemini" => _gemini,
             "anthropic" => _anthropic,
-            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai, openai-compatible або ollama."),
+            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai, gemini, openai-compatible або ollama."),
         };
         if (string.IsNullOrWhiteSpace(p.Model) || string.IsNullOrWhiteSpace(p.Prompt))
         {

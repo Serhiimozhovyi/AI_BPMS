@@ -148,6 +148,8 @@ public static class CredentialTypes
             ]),
         Build("anthropic", "LLM: Anthropic", "Вузол ai.llm з провайдером anthropic.",
             [new("apiKey", "API-ключ", CredentialFieldKind.Secret, true)]),
+        Build("gemini", "LLM: Google Gemini", "Вузол ai.llm і помічник з провайдером gemini: лише ключ з Google AI Studio, адреса вшита.",
+            [new("apiKey", "API-ключ (Google AI Studio)", CredentialFieldKind.Secret, true)]),
         Build("openai", "LLM: OpenAI", "Вузол ai.llm з провайдером openai.",
             [new("apiKey", "API-ключ", CredentialFieldKind.Secret, true)]),
         Build(OAuth2Credential.Type, "OAuth2 (authorization code)", "Вхід через провайдера (Microsoft, Google…): кнопка «Підключити» отримує токен, OpenBP оновлює його сам. Для HTTP-конектора додає Authorization: Bearer.",

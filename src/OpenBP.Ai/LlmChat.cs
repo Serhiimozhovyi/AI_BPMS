@@ -38,7 +38,7 @@ public sealed record LlmReply(string Text, IReadOnlyList<LlmToolCall> ToolCalls)
 
 /// <summary>
 /// Розмова з інструментами (F3-60, помічник у редакторі) поверх тих самих провайдерів, що й <c>ai.llm</c>/<c>ai.agent</c>:
-/// провайдер — тип credential'а (<c>anthropic</c>, <c>openai</c>, <c>openai-compatible</c>, <c>ollama</c>). Один виклик — одна відповідь
+/// провайдер — тип credential'а (<c>anthropic</c>, <c>openai</c>, <c>gemini</c>, <c>openai-compatible</c>, <c>ollama</c>). Один виклик — одна відповідь
 /// моделі; цикл «виклик інструмента → результат» веде викликач. Ключ іде лише в заголовки запиту.
 /// </summary>
 public sealed class LlmChat
@@ -47,6 +47,7 @@ public sealed class LlmChat
 
     private readonly IChatProvider anthropic;
     private readonly IChatProvider openAi;
+    private readonly IChatProvider gemini;
     private readonly IChatProvider openAiCompatible;
     private readonly OllamaProvider ollama;
 
@@ -58,12 +59,13 @@ public sealed class LlmChat
         var compatible = new OpenAiCompatibleProvider(http);
         anthropic = new AnthropicProvider(http);
         openAi = new OpenAiProvider(compatible);
+        gemini = new GeminiProvider(compatible);
         openAiCompatible = compatible;
         ollama = new OllamaProvider(http);
     }
 
     /// <summary>Типи credential'ів, з якими працює розмова.</summary>
-    public static IReadOnlyList<string> Providers { get; } = ["anthropic", "openai", "openai-compatible", "ollama"];
+    public static IReadOnlyList<string> Providers { get; } = ["anthropic", "openai", "gemini", "openai-compatible", "ollama"];
 
     /// <summary>Моделі, встановлені в Ollama (<c>GET /api/tags</c>), за алфавітом.</summary>
     /// <param name="credential">Розшифровані дані credential'а типу <c>ollama</c>.</param>
@@ -104,9 +106,10 @@ public sealed class LlmChat
         {
             "anthropic" => anthropic,
             "openai" => openAi,
+            "gemini" => gemini,
             "openai-compatible" => openAiCompatible,
             "ollama" => ollama,
-            _ => throw new LlmException($"Невідомий провайдер «{provider}». Оберіть credential типу anthropic, openai, openai-compatible або ollama."),
+            _ => throw new LlmException($"Невідомий провайдер «{provider}». Оберіть credential типу anthropic, openai, gemini, openai-compatible або ollama."),
         };
         var request = new ChatRequest(
             model,

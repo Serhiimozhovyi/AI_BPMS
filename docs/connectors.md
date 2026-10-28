@@ -204,7 +204,7 @@ tool'а — помилка вузла (з `continueOnFail` — item помилк
 
 ## 4. `ai.llm`
 
-Параметри: `provider` (`anthropic` | `openai` | `openai-compatible` | `ollama`), `model`, `credentialId`, `system`, `prompt` (з `{{ }}`), `outputSchema` (JSON Schema, опційно), `temperature`, `maxTokens`.
+Параметри: `provider` (`anthropic` | `openai` | `gemini` | `openai-compatible` | `ollama`), `model`, `credentialId`, `system`, `prompt` (з `{{ }}`), `outputSchema` (JSON Schema, опційно), `temperature`, `maxTokens`.
 З `outputSchema` вузол вимагає structured output і валідує відповідь схемою; без — віддає `{ text }`.
 Нода має один вихід; помилка валідації схеми — звичайна помилка вузла.
 
@@ -212,13 +212,14 @@ tool'а — помилка вузла (з `continueOnFail` — item помилк
 - `ollama` (F3-101) — рідний `POST {baseUrl}/api/chat`, `stream: false`. На відміну від `/v1`, передає `options.num_ctx` (інакше Ollama бере 4–8 тис. токенів і мовчки обрізає початок розмови), `think` (типово `false`: qwen3/gemma4 міркують за замовчуванням і відповідають удвічі довше), `keep_alive`; structured output — `format: <JSON Schema>`; tools — `tools`/`tool_calls`. Якщо `prompt_eval_count` ≥ `num_ctx` — помилка «запит не вмістився в контекст», а не мовчазно обрізана відповідь. Моделі, встановлені в Ollama, віддає `GET /api/v1/settings/assistant/models?credentialId=` (`/api/tags`).
 - `openai-compatible` — `POST {baseUrl}/chat/completions` (vLLM, LM Studio, OpenAI-сумісні шлюзи; Ollama теж, але без `num_ctx`); structured output — `response_format: json_schema`.
 - `openai` — `POST https://api.openai.com/v1/chat/completions`; `response_format: json_schema`, ліміт токенів — `max_completion_tokens`.
+- `gemini` (F3-106) — Google Gemini через OpenAI-сумісний `POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`; `response_format: json_schema`, `max_tokens`. Credential `{ "apiKey": "…" }` (ключ з Google AI Studio), адреса вшита; модель — вручну (`gemini-…`). Безкоштовний рівень Google використовує вміст запитів для покращення своїх продуктів.
 - `anthropic` — `POST https://api.anthropic.com/v1/messages`; structured output через tool use: `outputSchema` → `input_schema` інструмента `output` + `tool_choice`; `maxTokens` за замовчуванням 4096 (поле обов'язкове в API).
 Для кожного вхідного item'а робиться окремий запит. Таймаут — `timeoutSec` вузла, за замовчуванням 60 с.
 
 Credential типу `ollama`: `{ "baseUrl"?: "http://host.docker.internal:11434", "contextLength"?: 16384, "keepAlive"?: "10m", "think"?: false }`; усі поля необов'язкові, ключа немає. `baseUrl` без `/v1` (суфікс `/v1` відкидається). З контейнера Docker Ollama на Mac/Windows доступна як `host.docker.internal`.
 Credential типу `openai-compatible`: `{ "baseUrl": "http://localhost:11434/v1", "apiKey"?: "…" }`. `baseUrl` — абсолютна http(s)-адреса без `/chat/completions`;
 `apiKey` необов'язковий (Ollama працює без нього), іде лише в `Authorization: Bearer` і не потрапляє в тексти помилок.
-Credential типів `openai` і `anthropic`: `{ "apiKey": "…" }` (обов'язковий; `anthropic` — заголовок `x-api-key`). Спільне для всіх провайдерів: валідація `outputSchema`, таймаут, помилка вузла на будь-який не-2xx (401, 429, 5xx) без секретів у тексті.
+Credential типів `openai`, `gemini` і `anthropic`: `{ "apiKey": "…" }` (обов'язковий; `anthropic` — заголовок `x-api-key`). Спільне для всіх провайдерів: валідація `outputSchema`, таймаут, помилка вузла на будь-який не-2xx (401, 429, 5xx) без секретів у тексті.
 
 ### 4.1. `ai.agent` (F6-12)
 
