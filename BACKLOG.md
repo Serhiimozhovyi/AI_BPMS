@@ -1327,9 +1327,10 @@
 - Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §3, «Реалізовано (F8-05)»): сценарій викликається в режимі `Trigger` з `AllowInactive`/`KeepSuccessfulData` (не потрібно активувати), результат — `PageActionResult` (200 замість 204), `PAGE_WORKFLOW_NOT_AVAILABLE` прибрано; `actions[].roles`; плитки мають `key`; конструктор — `/projects/:id/app/_builder` з запасним JSON-редактором.
 
 ### F8-06 · Шаблон проєкту: експорт/імпорт через UI, REST і CLI
-- model: `sonnet` · status: `ready` · depends: F8-05
+- model: `sonnet` · status: `review` · depends: F8-05
 - Що: `GET /projects/{id}/export?rowsFor=` і `POST /projects/import { bundle, mapping }` за `docs/projects.md` §5 (поверх `IWorkflowTransferService` F6-09: перемапінг конекторів/credentials, пропозиція встановити відсутні з каталогу F6-16); повторний імпорт у наявний проєкт оновлює сторінки й сценарії за `ref`, таблиці лише розширює; чутливі колонки в `rows` не потрапляють; CLI `openbp export-project` / `import-project`; UI: «Експортувати проєкт» на Огляді, «Імпортувати проєкт» на `/projects`; каталог шаблонів `examples/projects/*/bundle.json` + `README.md` і CI-job, який імпортує кожен у порожній інстанс і проганяє сценарії з pinData; MCP `export_project`, `import_project`.
 - DoD: тести: експорт → імпорт у чистий інстанс → ідентичні таблиці/сторінки/сценарії; повторний імпорт не дублює; `rows` без чутливих колонок; CLI round-trip; `docs/projects.md` §5, `docs/guide/integrators.md` оновлено.
+- Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §5, «Реалізовано (F8-06)»): сценарії посилаються один на одного й на таблиці мітками `ref:…`/назвами, `errorWorkflowId` ставиться другим проходом; відповідники перевіряються до першої зміни, невдалий імпорт у новий проєкт відкочується; повторний імпорт замінює чернетки сценаріїв за назвою (опубліковані версії не чіпає), у таблиці додає лише колонки; пропозиція встановити з каталогу (F6-16) — лише перелік відсутніх у формі імпорту; окремий CI-job не потрібен — каталог перевіряють тести `.NET build + test` (`ProjectTemplateCatalogTests`, `ProjectTemplatePinTests`); перший шаблон — `examples/projects/helpdesk`.
 
 ### F8-07 · Telegram-конектор: `send_document`, `send_video`, `send_audio`, `send_voice`
 - model: `sonnet` · status: `ready` · depends: —

@@ -121,7 +121,46 @@ public class CliTransferTests(ApiFactory api) : IDisposable
         Assert.Contains("Імпортовано", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Export_project_to_file_and_stdout_then_import_project_creates_a_copy()
+    {
+        var user = await api.CreateUserAsync(UserRole.Editor, Pass);
+        var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Pass })).StatusCode);
+        var key = (await (await client.PostAsJsonAsync("/api/v1/api-keys", new { name = "ci" })).Content.ReadFromJsonAsync<ApiKeyCreated>())!.Key;
+        var name = $"CLI-проєкт {Guid.NewGuid():N}";
+        var project = JsonNode.Parse(await (await client.PostAsJsonAsync("/api/v1/workflow-groups", new { name })).Content.ReadAsStringAsync())!["id"]!.GetValue<string>();
+        await client.PostAsJsonAsync("/api/v1/tables", new { name = "notes", projectId = project, columns = new[] { new { name = "text", type = "string" } } });
+        Directory.CreateDirectory(_dir);
+        var file = Path.Combine(_dir, "bundle.json");
+
+        var (code, output, error) = await RunAsync("export-project", project, "--out", file, "--rows", "notes", "--url", "http://localhost", "--api-key", key);
+
+        Assert.True(code == CliApp.Ok, error);
+        Assert.Contains(name, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(key, output, StringComparison.Ordinal);
+        var bundle = JsonNode.Parse(await File.ReadAllTextAsync(file))!;
+        Assert.Equal("notes", bundle["tables"]![0]!["name"]!.GetValue<string>());
+
+        // Без --out шаблон іде у stdout, придатний для `> bundle.json`.
+        (code, output, error) = await RunAsync("export-project", project, "--url", "http://localhost", "--api-key", key);
+        Assert.True(code == CliApp.Ok, error);
+        Assert.Equal(name, JsonNode.Parse(output)!["project"]!["name"]!.GetValue<string>());
+
+        var copyName = $"CLI-копія {Guid.NewGuid():N}";
+        (code, output, error) = await RunAsync("import-project", file, "--name", copyName, "--url", "http://localhost", "--api-key", key);
+
+        Assert.True(code == CliApp.Ok, error);
+        Assert.Contains("Створено проєкт", output, StringComparison.Ordinal);
+        Assert.Contains(copyName, output, StringComparison.Ordinal);
+        Assert.Contains("таблиці: нових 1", output, StringComparison.Ordinal);
+    }
+
     [Theory]
+    [InlineData("export-project")]
+    [InlineData("export-project", "not-an-id", "--url", "http://localhost", "--api-key", "k")]
+    [InlineData("import-project", "--url", "http://localhost", "--api-key", "k")]
+    [InlineData("import-project", "f.json", "--rows", "x", "--url", "http://localhost", "--api-key", "k")]
     [InlineData("export")]
     [InlineData("export", "not-an-id", "--url", "http://localhost", "--api-key", "k")]
     [InlineData("import", "--url", "http://localhost", "--api-key", "k")]

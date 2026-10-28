@@ -54,6 +54,10 @@ public static class AuditActions
     public const string ProjectMemberRemoved = "project.memberRemoved";
     public const string ProjectPageSaved = "project.pageSaved";
     public const string ProjectPageDeleted = "project.pageDeleted";
+    /// <summary>Експорт проєкту шаблоном (F8-06).</summary>
+    public const string ProjectExported = "project.exported";
+    /// <summary>Імпорт шаблону проєкту (F8-06).</summary>
+    public const string ProjectImported = "project.imported";
 }
 
 /// <summary>
