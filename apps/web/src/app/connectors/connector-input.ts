@@ -1,4 +1,4 @@
-import { ConnectorInput, ConnectorStatus, ConnectorTransport } from './connectors-api.service';
+import { ConnectorInput, ConnectorStatus, ConnectorSummary, ConnectorTransport } from './connectors-api.service';
 
 /** Сирі значення форми додавання конектора. */
 export interface ConnectorFormValue {
@@ -132,4 +132,23 @@ export function statusLabel(status: ConnectorStatus): string {
     default:
       return $localize`:@@connectors.status.new:Не перевірено`;
   }
+}
+
+/** Кеш дій старший за стільки — картка підключення перечитує його сама (F3-100). */
+export const TOOLS_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+
+/** Потрібна автоперевірка: збій, ще не перевірено або кеш застарів. */
+export function needsCheck(summary: Pick<ConnectorSummary, 'status' | 'toolsCachedAt'>, now = Date.now()): boolean {
+  if (summary.status !== 'ok' || !summary.toolsCachedAt) return true;
+  return now - Date.parse(summary.toolsCachedAt) > TOOLS_CACHE_MAX_AGE_MS;
+}
+
+/** «щойно», «5 хв тому», «3 год тому», «2 дн тому». */
+export function agoLabel(iso: string, now = Date.now()): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000));
+  if (minutes < 1) return $localize`:@@connectors.ago.now:щойно`;
+  if (minutes < 60) return $localize`:@@connectors.ago.minutes:${minutes}:n: хв тому`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return $localize`:@@connectors.ago.hours:${hours}:n: год тому`;
+  return $localize`:@@connectors.ago.days:${Math.floor(hours / 24)}:n: дн тому`;
 }

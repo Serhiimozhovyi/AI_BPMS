@@ -11,7 +11,7 @@ import { CredentialsApiService } from '../../credentials/credentials-api.service
 import { NotifyService } from '../../shared/notify.service';
 import { ConnectorCatalogComponent } from '../../connectors/connector-catalog.component';
 import { ConnectorFormComponent } from '../../connectors/connector-form.component';
-import { statusLabel } from '../../connectors/connector-input';
+import { agoLabel, needsCheck, statusLabel } from '../../connectors/connector-input';
 import { ConnectorToolsComponent } from '../../connectors/connector-tools.component';
 import {
   ConnectorDetail,
@@ -85,7 +85,7 @@ import {
               <th class="p-2" i18n="@@connectors.col.name">Назва</th>
               <th class="p-2" i18n="@@connectors.col.transport">Транспорт</th>
               <th class="p-2" i18n="@@connectors.col.status">Стан</th>
-              <th class="p-2" i18n="@@connectors.col.tools">Tools</th>
+              <th class="p-2" i18n="@@connectors.col.tools">Дії</th>
               <th class="p-2" i18n="@@connectors.col.cachedAt">Оновлено</th>
               <th class="p-2"><span class="sr-only" i18n="@@connectors.col.actions">Дії</span></th>
             </tr>
@@ -117,12 +117,12 @@ import {
             <button
               mat-stroked-button
               type="button"
-              data-testid="refresh-button"
+              data-testid="check-connection"
               [disabled]="refreshing()"
               (click)="refresh(d.summary.id)"
-              i18n="@@connectors.refresh"
+              i18n="@@connectors.check"
             >
-              Оновити tools
+              Перевірити з'єднання
             </button>
             <button mat-button type="button" color="warn" data-testid="delete-button" [disabled]="deleting()" (click)="confirmingDelete.set(true)" i18n="@@connectors.delete">
               Видалити
@@ -149,6 +149,7 @@ import {
               {{ d.config.url }}
             }
           </p>
+          <p class="mb-2 text-sm" data-testid="connection-state" [class]="statusClass(d.summary.status)">{{ connectionState(d.summary) }}</p>
           @if (detailError()) {
             <p role="alert" class="mb-2 text-red-700" data-testid="detail-error">{{ detailError() }}</p>
           }
@@ -178,6 +179,8 @@ export class ConnectorsPage implements OnInit {
   /** Запис каталогу з `?catalog=`. */
   readonly highlight = signal<string | null>(null);
   readonly connectors = signal<ConnectorSummary[]>([]);
+  /** Причина збою останньої перевірки з'єднання (F3-100). */
+  private readonly connectError = signal<string | null>(null);
   readonly selected = signal<ConnectorDetail | null>(null);
   readonly loading = signal(false);
   readonly refreshing = signal(false);
@@ -234,15 +237,31 @@ export class ConnectorsPage implements OnInit {
 
   select(id: string): void {
     this.detailError.set(null);
-    this.reloadDetail(id);
+    this.connectError.set(null);
+    this.reloadDetail(id, true);
   }
 
-  private reloadDetail(id: string): void {
+  /** «Підключено · 12 дій · перевірено 5 хв тому» або причина збою (F3-100). */
+  connectionState(summary: ConnectorSummary): string {
+    if (summary.status === 'error') {
+      const reason = this.connectError();
+      return reason ? $localize`:@@connectors.state.errorReason:Не вдалося підключитись: ${reason}:reason:` : $localize`:@@connectors.state.error:Не вдалося підключитись.`;
+    }
+    if (summary.status !== 'ok') return $localize`:@@connectors.state.unknown:З'єднання ще не перевірено.`;
+    const actions = $localize`:@@connectors.state.actions:${summary.toolCount}:count: дій`;
+    const when = summary.toolsCachedAt ? ' · ' + $localize`:@@connectors.state.checked:перевірено ${agoLabel(summary.toolsCachedAt)}:ago:` : '';
+    return $localize`:@@connectors.state.ok:Підключено` + ` · ${actions}${when}`;
+  }
+
+  private reloadDetail(id: string, autoCheck = false): void {
     this.api
       .get(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (detail) => this.selected.set(detail),
+        next: (detail) => {
+          this.selected.set(detail);
+          if (autoCheck && needsCheck(detail.summary)) this.refresh(id, true);
+        },
         error: (e: unknown) => this.error.set(apiErrorMessage(e)),
       });
   }
@@ -293,7 +312,8 @@ export class ConnectorsPage implements OnInit {
       });
   }
 
-  refresh(id: string): void {
+  /** `silent` — автоперевірка при відкритті картки: без сповіщення про успіх. */
+  refresh(id: string, silent = false): void {
     this.refreshing.set(true);
     this.detailError.set(null);
     this.api
@@ -302,12 +322,13 @@ export class ConnectorsPage implements OnInit {
       .subscribe({
         next: (detail) => {
           this.refreshing.set(false);
+          this.connectError.set(null);
           this.applyDetail(detail);
-          this.notify.success($localize`:@@connectors.refreshed:Tools оновлено.`);
+          if (!silent) this.notify.success($localize`:@@connectors.refreshed:З'єднання перевірено, список дій оновлено.`);
         },
         error: (e: unknown) => {
           this.refreshing.set(false);
-          this.detailError.set(apiErrorMessage(e));
+          this.connectError.set(apiErrorMessage(e));
           // Сервер уже записав стан `error` — перечитати список і деталі.
           this.load();
           this.reloadDetail(id);

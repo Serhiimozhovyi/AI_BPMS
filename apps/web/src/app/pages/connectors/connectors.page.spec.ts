@@ -6,7 +6,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ConnectorDetail, ConnectorSummary } from '../../connectors/connectors-api.service';
 import { ConnectorsPage } from './connectors.page';
 
-const ok: ConnectorSummary = { id: 'c1', name: '1С', transport: 'http', status: 'ok', toolCount: 1, toolsCachedAt: '2026-10-23T10:00:00Z' };
+const ok: ConnectorSummary = { id: 'c1', name: '1С', transport: 'http', status: 'ok', toolCount: 1, toolsCachedAt: new Date().toISOString() };
 const broken: ConnectorSummary = { id: 'c2', name: 'Файли', transport: 'stdio', status: 'error', toolCount: 0, toolsCachedAt: null };
 
 const detail: ConnectorDetail = {
@@ -75,13 +75,13 @@ describe('ConnectorsPage', () => {
     expect(article.querySelector('[data-tool="create_order"]')).not.toBeNull();
   });
 
-  it('«Оновити tools» оновлює деталі і рядок списку', async () => {
+  it("«Перевірити з'єднання» оновлює деталі і рядок списку", async () => {
     const { fixture, http, host } = await setup();
     fixture.componentInstance.select('c1');
     http.expectOne('/api/v1/connectors/c1').flush(detail);
     await render(fixture);
 
-    host.querySelector<HTMLButtonElement>('[data-testid="refresh-button"]')!.click();
+    host.querySelector<HTMLButtonElement>('[data-testid="check-connection"]')!.click();
     const refreshed: ConnectorDetail = {
       ...detail,
       summary: { ...ok, toolCount: 2 },
@@ -110,8 +110,49 @@ describe('ConnectorsPage', () => {
     http.expectOne('/api/v1/connectors/c1').flush({ ...detail, summary: { ...ok, status: 'error' } });
     await render(fixture);
 
-    expect(host.querySelector('[data-testid="detail-error"]')?.textContent).toContain('таймаут');
+    expect(host.querySelector('[data-testid="connection-state"]')?.textContent).toContain('Не вдалося підключитись: MCP-сервер недоступний: таймаут');
     expect(host.querySelector('[data-connector="c1"] [data-testid="status"]')?.textContent).toContain('Помилка');
+  });
+
+  describe("стан з'єднання (F3-100)", () => {
+    it("на картці немає «tools», є стан і «Перевірити з'єднання»; свіжий кеш — без запиту", async () => {
+      const { fixture, http, host } = await setup();
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush(detail);
+      await render(fixture);
+
+      const article = host.querySelector('[data-testid="connector-detail"]')!;
+      expect(article.textContent?.toLowerCase()).not.toContain('tools');
+      expect(article.textContent).toContain("Перевірити з'єднання");
+      expect(article.querySelector('[data-testid="connection-state"]')?.textContent).toMatch(/Підключено · 1 дій · перевірено (щойно|\d+ хв тому)/);
+      http.expectNone('/api/v1/connectors/c1/refresh-tools');
+    });
+
+    it('кеш старший за 10 хвилин — один запит при відкритті картки', async () => {
+      const { fixture, http, host } = await setup();
+      const stale = { ...ok, toolsCachedAt: new Date(Date.now() - 11 * 60_000).toISOString() };
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush({ ...detail, summary: stale });
+      http.expectOne({ method: 'POST', url: '/api/v1/connectors/c1/refresh-tools' }).flush({ ...detail, summary: ok });
+      await render(fixture);
+
+      expect(host.querySelector('[data-testid="connection-state"]')?.textContent).toContain('перевірено');
+      http.expectNone('/api/v1/connectors/c1/refresh-tools');
+    });
+
+    it('статус «помилка» — перевірка при відкритті й причина збою в стані', async () => {
+      const { fixture, http, host } = await setup();
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush({ ...detail, summary: { ...ok, status: 'error' } });
+      http
+        .expectOne('/api/v1/connectors/c1/refresh-tools')
+        .flush({ detail: 'MCP-сервер недоступний: таймаут', code: 'CONNECTOR_UNAVAILABLE' }, { status: 502, statusText: 'Bad Gateway' });
+      http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [{ ...ok, status: 'error' }], page: 1, pageSize: 200, total: 1 });
+      http.expectOne('/api/v1/connectors/c1').flush({ ...detail, summary: { ...ok, status: 'error' } });
+      await render(fixture);
+
+      expect(host.querySelector('[data-testid="connection-state"]')?.textContent).toContain('Не вдалося підключитись: MCP-сервер недоступний: таймаут');
+    });
   });
 
   describe('видалення (F3-98)', () => {

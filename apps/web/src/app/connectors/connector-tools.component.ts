@@ -24,7 +24,7 @@ interface CallState {
   template: `
     @if (tools().length === 0) {
       <p class="opacity-70" data-testid="no-tools" i18n="@@connectors.tools.empty">
-        Tools ще не отримано. Натисніть «Оновити tools».
+        Дії ще не отримано. Натисніть «Перевірити з'єднання».
       </p>
     } @else {
       <mat-accordion multi>
