@@ -215,6 +215,17 @@ describe('GlobalAssistantService', () => {
     expect(service.historyOpen()).toBe(false);
   });
 
+  it('вузол із запиту ззовні (F3-112) йде лише в найближчому повідомленні й не лишається в контексті', async () => {
+    const { service, http } = await setup(`/executions/${ID}`);
+    service.show({ text: 'Розбери помилку', send: true, nodeId: 'n_http' });
+    http.expectOne({ method: 'POST', url: BASE }).flush({ id: 'c1', title: 'Нова', messages: [], proposals: [] });
+    const request = http.expectOne(`${BASE}/c1/messages`);
+    expect(request.request.body.context).toEqual({ page: `/executions/${ID}`, executionId: ID, nodeId: 'n_http' });
+    request.flush(sse({ type: 'done' }));
+    http.expectOne({ method: 'GET', url: BASE }).flush([]);
+    expect(service.context().nodeId).toBeUndefined();
+  });
+
   it('show() з текстом і send=false лише підставляє його в поле', async () => {
     const { service } = await setup();
     service.show({ text: 'Напиши вираз: ', send: false, nodeId: 'n1' });

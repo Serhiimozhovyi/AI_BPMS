@@ -15,6 +15,8 @@ import { BusinessRun } from '../../business-view/business-run';
 import { EditorView, readEditorView, writeEditorView } from '../../business-view/editor-view';
 import { NodeTypeInfo, NodesApiService } from '../../nodes/nodes-api.service';
 import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
+import { executionErrorPrompt } from '../../assistant/execution-error-prompt';
+import { GlobalAssistantService } from '../../assistant/global-assistant.service';
 import { StageStripComponent } from '../../executions/stage-strip.component';
 import {
   ExecutionsQuery,
@@ -310,6 +312,11 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
           @if (d.summary.error) {
             <p role="alert" class="mb-2 text-red-700" data-testid="detail-error">{{ d.summary.error }}</p>
           }
+          @if (assistant.available() && d.summary.state === 'error') {
+            <button mat-stroked-button type="button" class="mb-2" data-testid="explain-error" (click)="explainError(d)" i18n="@@executions.explainError">
+              Розібрати з помічником
+            </button>
+          }
           @if (actionError()) {
             <p role="alert" class="mb-2 text-red-700" data-testid="action-error">{{ actionError() }}</p>
           }
@@ -430,6 +437,7 @@ export class ExecutionsPage implements OnInit {
   private readonly nodesApi = inject(NodesApiService);
   private readonly connectorsApi = inject(ConnectorsApiService);
   private readonly route = inject(ActivatedRoute);
+  protected readonly assistant = inject(GlobalAssistantService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -734,6 +742,12 @@ export class ExecutionsPage implements OnInit {
 
   canRetry(state: ExecutionState): boolean {
     return isFinalState(state);
+  }
+
+  /** «Розібрати з помічником»: панель відкривається з запитом про помилку; id виконання йде в контексті з адреси (F3-112). */
+  protected explainError(detail: ExecutionDetail): void {
+    const prompt = executionErrorPrompt(detail, this.workflowName(detail.summary.workflowId));
+    this.assistant.show({ text: prompt.text, send: true, nodeId: prompt.nodeId ?? undefined });
   }
 
   workflowName(id: string): string {

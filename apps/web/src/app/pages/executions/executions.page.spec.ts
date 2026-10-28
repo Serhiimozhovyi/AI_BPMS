@@ -2,7 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { GlobalAssistantService } from '../../assistant/global-assistant.service';
 import { executionsMatcher } from '../../app.routes';
+import { AuthService } from '../../auth/auth.service';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { EVENT_SOURCE_FACTORY, ExecutionDetail, ExecutionStep, ExecutionSummary } from '../../executions/executions-api.service';
 import { FakeEventSource } from '../../executions/fake-event-source';
@@ -216,6 +218,36 @@ describe('ExecutionsPage', () => {
     expectList(http).flush(null, { status: 403, statusText: 'Forbidden' });
     await render(harness);
     expect((harness.routeNativeElement as HTMLElement).querySelector('[data-testid="page-error"]')?.textContent).toContain('прав');
+  });
+
+  it('«Розібрати з помічником» (F3-112): відкриває панель із запитом про помилку й вузлом, що впав; дані кроків у запит не йдуть', async () => {
+    const s = await setup();
+    TestBed.inject(AuthService).user.set({ id: 'u1', email: 'e@f.ua', role: 'editor' });
+    const show = vi.spyOn(TestBed.inject(GlobalAssistantService), 'show').mockReturnValue(undefined);
+    await openDetail(s, failedDetail);
+
+    s.host.querySelector<HTMLButtonElement>('[data-testid="explain-error"]')!.click();
+    expect(show).toHaveBeenCalledTimes(1);
+    const prompt = show.mock.calls[0][0]!;
+    expect(prompt.send).toBe(true);
+    expect(prompt.nodeId).toBe('n_1c');
+    expect(prompt.text).toContain('Розбери помилку виконання e1 сценарію «Telegram → 1С»');
+    expect(prompt.text).toContain('Вузол «1С» завершився помилкою.');
+    expect(prompt.text).toContain('Упав вузол n_1c (запуск 0): HTTP 500 від 1С');
+    expect(prompt.text).not.toContain('"in"');
+  });
+
+  it('«Розібрати з помічником» є лише для виконання з помилкою і лише для editor/admin', async () => {
+    const viewer = await setup();
+    TestBed.inject(AuthService).user.set({ id: 'u1', email: 'v@f.ua', role: 'viewer' });
+    await openDetail(viewer, failedDetail);
+    expect(viewer.host.querySelector('[data-testid="explain-error"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const editor = await setup();
+    TestBed.inject(AuthService).user.set({ id: 'u1', email: 'e@f.ua', role: 'editor' });
+    await openDetail(editor, { summary: running, steps: [step('s1', 'n_webhook')] });
+    expect(editor.host.querySelector('[data-testid="explain-error"]')).toBeNull();
   });
 
   it('деталі: кроки з назвами вузлів, помилка, input/output кроку з помилкою; «Повторити» для фінального', async () => {
