@@ -708,6 +708,21 @@ Api — при кожній зміні через `IConnectorService`; Worker �
 credentials (у визначенні — лише `credentialId`) і журналу виконань; ключ провайдера йде лише в заголовок запиту.
 Credential моделі розшифровується в Api на час запиту (§8).
 
+**Побудова з опису (F3-103, `docs/workflow-drafter.md`).** `IWorkflowDrafter` (`POST /workflows/{id}/draft`, editor, SSE)
+бере ту саму модель, що й помічник, але не дає їй вільного циклу інструментів: (1) план — один запит зі структурованим
+виходом (`LlmChat.SendAsync(..., outputSchema)`: `format` в Ollama, `response_format: json_schema` в OpenAI-сумісних,
+інструмент-відповідь в Anthropic), де `kind` і `use` — закриті списки зі стислого каталогу F3-102; (2) `DraftCompiler`
+кодом перевіряє план (рівно один тригер, відомі `use`, зв'язки до існуючих кроків, гілки — назви виходів дескриптора
+або синоніми на кшталт `approved`/`так`, усі кроки досяжні) і збирає `WorkflowDefinition`: id `n_<крок>`, остання
+`typeVersion`, дія конектора — `mcp.tool` з `serverId`/`toolName`, крок без вузла — заглушка `core.set` з нотаткою,
+розкладка зліва направо по рангу (240×120), учасники — `business.lanes` і `node.business.lane`; назва й налаштування
+беруться з поточного сценарію; (3) параметри — окремий запит на вузол зі схемою лише цього вузла (для `mcp.tool` —
+`inputSchema` tool'а як `arguments`), без параметрів облікових даних; `credentialId` з відповіді відкидається;
+(4) після кожного вузла — `IWorkflowService.ValidateAsync`, помилки цього вузла повертаються моделі. Спроб: план — 3,
+вузол — 3 (`DrafterLimits`, 300 с на все). Події: `step` (`stage`: `plan`/`compile`/`node`/`retry`, `index`/`total`),
+`definition`, `todo` (облікові дані, заглушки, невиправлені помилки), `error` (`DRAFT_PLAN_FAILED`,
+`DRAFT_PROVIDER_ERROR`, `DRAFT_TIMEOUT`), `done`. Нічого не зберігається; поточні вузли сценарію в промпт не йдуть.
+
 **Пояснення сценарію (F3-72).** Кожне збереження (`SaveAsync`, `CreateAsync`, повернення чернетки) у тій самій транзакції
 позначає `workflow_explanations.status = pending` і ставить job `explain` з `run_at` = зараз + 15 с; помічник не
 налаштований — `not_configured` без job'а. Автозбереження пише версію на кожну правку, тож воркер пояснює лише
