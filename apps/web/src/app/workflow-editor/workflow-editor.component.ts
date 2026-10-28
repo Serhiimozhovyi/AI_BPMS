@@ -2108,10 +2108,18 @@ export class WorkflowEditorComponent implements OnInit {
       tap((catalog) => this.catalog.set(catalog)),
     );
     return forkJoin([this.connectors.list(), catalog$]).pipe(
-      switchMap(([page]): Observable<PaletteServer[]> => {
-        this.noConnectors.set(page.items.length === 0);
-        this.connectionList.set(page.items);
-        const withTools = page.items.filter((c) => c.toolCount > 0);
+      // Підключення зі статусом помилки перевіряються при відкритті палітри (F3-100): збій лишає статус `error`.
+      switchMap(([page]) => {
+        const failed = page.items.filter((c) => c.status === 'error');
+        if (failed.length === 0) return of(page.items);
+        return forkJoin(failed.map((c) => this.connectors.refreshTools(c.id).pipe(catchError(() => of(null))))).pipe(
+          map((checked) => page.items.map((c) => checked.find((d) => d?.summary.id === c.id)?.summary ?? c)),
+        );
+      }),
+      switchMap((items): Observable<PaletteServer[]> => {
+        this.noConnectors.set(items.length === 0);
+        this.connectionList.set(items);
+        const withTools = items.filter((c) => c.toolCount > 0);
         if (withTools.length === 0) return of([]);
         return forkJoin(withTools.map((c) => this.connectors.get(c.id))).pipe(
           map((details) => details.map((d): PaletteServer => ({ id: d.summary.id, name: d.summary.name, tools: d.tools, catalogId: d.summary.catalogId ?? null }))),

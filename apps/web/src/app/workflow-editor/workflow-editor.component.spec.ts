@@ -614,6 +614,20 @@ describe('WorkflowEditorComponent', () => {
     expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
   });
 
+  it('підключення зі статусом «помилка» перевіряється при відкритті палітри, інші — ні (F3-100)', async () => {
+    const { fixture, http } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    const failed: ConnectorSummary = { ...withTools, status: 'error' };
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [failed, noTools], page: 1, pageSize: 200, total: 2 });
+    http.expectNone('/api/v1/connectors/c2/refresh-tools');
+    http.expectOne({ method: 'POST', url: '/api/v1/connectors/c1/refresh-tools' }).flush(detail1c);
+    http.expectOne('/api/v1/connectors/c1').flush(detail1c);
+    await render(fixture);
+
+    expect((fixture.componentInstance as unknown as { servers(): { id: string }[] }).servers().map((x) => x.id)).toEqual(['c1']);
+  });
+
   describe('палітра: смуга й розгорнутий вигляд (F3-89)', () => {
     beforeEach(() => localStorage.removeItem('openbp.editor.palette'));
 
