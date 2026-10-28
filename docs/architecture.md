@@ -170,9 +170,10 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `user_logins` | id, user_id → users (cascade), provider, subject (unique provider+subject), created_at, last_login_at (F4-14) |
 | `api_keys` | id, user_id, hash, name, last_used_at, project_id (→ `workflow_groups`, cascade; null — весь інстанс; F6-14) |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
-| `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням; F6-14: група — це проєкт) |
-| `project_members` | project_id → workflow_groups (cascade), user_id → users (cascade) — PK разом, role (`editor` \| `viewer`), created_at (F6-14) |
-| `data_tables` | id, name, normalized_name (unique), columns (jsonb: `[{ name, type, key? }]`), created_at, updated_at (F6-11) |
+| `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням; F6-14: група — це проєкт); фаза 8 (ADR-005): + description, icon (F8-03), app_roles jsonb (F8-04) |
+| `project_members` | project_id → workflow_groups (cascade), user_id → users (cascade) — PK разом, role (`editor` \| `viewer`), created_at (F6-14); + app_role null (F8-04) |
+| `project_pages` | id, project_id → workflow_groups (cascade), key (unique у проєкті), name, kind (`list` \| `detail` \| `form` \| `metrics`), definition (jsonb), roles (jsonb), sort_order, updated_at (F8-04, `docs/projects.md` §3) |
+| `data_tables` | id, name, normalized_name (unique), columns (jsonb: `[{ name, type, key? }]`), created_at, updated_at (F6-11); фаза 8 (F8-02): + project_id (→ `workflow_groups`, restrict; null — спільна; назва унікальна в межах проєкту), constraints (jsonb: `{ required, unique: [{ columns, where? }] }`), у колонках типи `datetime` \| `enum` \| `ref` \| `user` і `sensitive` — `docs/projects.md` §2 |
 | `data_rows` | table_id → data_tables (cascade), key (PK разом з table_id), data (jsonb), created_at, updated_at; індекс (table_id, created_at) |
 | `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
@@ -649,6 +650,10 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
     ширших ключів не видає. Створити ключ проєкту може його учасник (admin — будь-якого).
   - Міграція `Projects` робить кожного наявного editor/viewer учасником кожної наявної групи з його глобальною роллю —
     після оновлення ніхто не втрачає доступу; далі учасників змінюють на сторінці проєкту (`/projects/:id`).
+  - Фаза 8 (ADR-005, `docs/projects.md`): проєкт — робочий простір; таблиці даних отримують `project_id` і ті самі права
+    (F8-02); ролі застосунку (`workflow_groups.app_roles`, `project_members.app_role`) керують лише сторінками
+    застосунку `project_pages` і не змінюють ролі `editor`/`viewer` (F8-04); чутливі колонки читають admin, editor проєкту
+    й учасники з роллю застосунку.
   - Модель готує мультитенантність: тенант — ізольований набір проєктів (окрема колонка `tenant_id` на `workflow_groups`
     і `users` поверх тих самих перевірок).
 - OIDC (F4-14): провайдери з `OpenBp:Oidc:Providers:<key>` (змінні `OpenBp__Oidc__Providers__<key>__<Поле>`; поля —

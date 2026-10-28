@@ -9,6 +9,7 @@ OpenBP — MCP-native BPMS-конструктор: тригер → граф в�
 - `docs/architecture.md` — проєкти, потоки даних, інтерфейси Engine, схема БД
 - `docs/workflow-format.md` — формат workflow JSON (джерело правди для движка, канвасу, MCP)
 - `docs/connectors.md` — контракт вузлів, `mcp.tool`, `ai.llm`, Connector Kit
+- `docs/adr/ADR-005-projects.md` і `docs/projects.md` — проєкт як робочий простір: таблиці проєкту, сторінки застосунку, ролі, шаблон
 - `docs/roadmap.md` — фази; `BACKLOG.md` — задачі; `docs/night-agent.md` — як працює агент
 
 ## Стек (не змінювати без ADR)
