@@ -167,7 +167,7 @@ public class DrafterTests(ApiFactory api)
 
         // Сценарій валідний.
         var validation = await editor.PostAsJsonAsync("/api/v1/workflows/validate", new { definition = JsonNode.Parse(definition.GetRawText()) });
-        Assert.Contains("\"valid\":true", (await validation.Content.ReadAsStringAsync()).Replace(" ", "", StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.Contains("\"isValid\":true", (await validation.Content.ReadAsStringAsync()).Replace(" ", "", StringComparison.Ordinal), StringComparison.Ordinal);
 
         // Ключ провайдера — лише в заголовку; секрети сценарію й облікових даних — ніде в промптах.
         Assert.All(provider.Requests, body =>
