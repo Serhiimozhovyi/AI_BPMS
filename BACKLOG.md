@@ -913,7 +913,7 @@
 - Стан (2026-10-28): набір, команда `draft-eval` і тести готові; таблиця замірів чекає живого прогону на Mac (потрібна згода власника) — після нього `done`.
 
 ### F3-106 · Провайдер Gemini
-- model: `sonnet` · status: `review` · depends: F3-103
+- model: `sonnet` · status: `done` · depends: F3-103
 - Що: окремий тип облікових даних і провайдер `gemini` (Google Gemini через OpenAI-сумісний ендпоінт, лише `apiKey`, адреса вшита) для `ai.llm`, `ai.agent` і помічника в Налаштуваннях.
 - DoD: тести провайдера на фейковому HTTP (адреса, ключ у заголовку, `response_format`, помилка без ключа); `docs/connectors.md` оновлено; build/test/format, lint/test/build зелені.
 
