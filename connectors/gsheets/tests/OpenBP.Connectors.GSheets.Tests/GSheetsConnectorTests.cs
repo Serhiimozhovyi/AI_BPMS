@@ -82,6 +82,13 @@ public sealed class GSheetsConnectorTests : IAsyncLifetime
     private static Dictionary<string, object?> Args(params (string Key, object? Value)[] args) => args.ToDictionary(a => a.Key, a => a.Value);
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("gsheets", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_returns_the_table_contract()
     {
         var client = await ConnectAsync();

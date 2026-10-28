@@ -32,5 +32,143 @@
       }
     ]
   },
+  "actions": [
+    {
+      "name": "anonymize_old_records",
+      "title": "Знеособити старі записи"
+    },
+    {
+      "name": "book_bst",
+      "title": "Записати на групову сесію"
+    },
+    {
+      "name": "book_slot",
+      "title": "Записатися на слот"
+    },
+    {
+      "name": "bot_bst",
+      "title": "Бот: групові сесії"
+    },
+    {
+      "name": "bot_cabinet",
+      "title": "Бот: кабінет психолога"
+    },
+    {
+      "name": "bot_consult",
+      "title": "Бот: консультації"
+    },
+    {
+      "name": "bot_events",
+      "title": "Бот: події"
+    },
+    {
+      "name": "bot_materials",
+      "title": "Бот: матеріали"
+    },
+    {
+      "name": "bot_menu",
+      "title": "Бот: меню, довідка, SOS"
+    },
+    {
+      "name": "bot_start",
+      "title": "Бот: початок і контакт"
+    },
+    {
+      "name": "cancel_booking",
+      "title": "Скасувати запис"
+    },
+    {
+      "name": "cancel_bst",
+      "title": "Скасувати запис на групову сесію"
+    },
+    {
+      "name": "cancel_event_registration",
+      "title": "Скасувати реєстрацію на подію"
+    },
+    {
+      "name": "due_notifications",
+      "title": "Сповіщення до відправлення"
+    },
+    {
+      "name": "generate_slots",
+      "title": "Згенерувати слоти"
+    },
+    {
+      "name": "get_counters",
+      "title": "Отримати лічильники"
+    },
+    {
+      "name": "get_material",
+      "title": "Прочитати матеріал"
+    },
+    {
+      "name": "get_user",
+      "title": "Отримати особу"
+    },
+    {
+      "name": "join_waitlist",
+      "title": "Стати в чергу очікування"
+    },
+    {
+      "name": "leave_waitlist",
+      "title": "Вийти з черги очікування"
+    },
+    {
+      "name": "list_bookings",
+      "title": "Список записів"
+    },
+    {
+      "name": "list_bst_sessions",
+      "title": "Список групових сесій"
+    },
+    {
+      "name": "list_events",
+      "title": "Список подій"
+    },
+    {
+      "name": "list_materials",
+      "title": "Список матеріалів"
+    },
+    {
+      "name": "list_psychologists",
+      "title": "Список психологів"
+    },
+    {
+      "name": "list_slots",
+      "title": "Список вільних слотів"
+    },
+    {
+      "name": "mark_notifications_sent",
+      "title": "Позначити сповіщення надісланими"
+    },
+    {
+      "name": "move_booking",
+      "title": "Перенести запис"
+    },
+    {
+      "name": "move_bst",
+      "title": "Перенести запис на групову сесію"
+    },
+    {
+      "name": "rate_event",
+      "title": "Оцінити подію"
+    },
+    {
+      "name": "register_event",
+      "title": "Зареєструватися на подію"
+    },
+    {
+      "name": "register_user",
+      "title": "Зареєструвати особу"
+    },
+    {
+      "name": "send_bst_notice",
+      "title": "Надіслати нагадування про групову сесію"
+    },
+    {
+      "name": "send_event_notice",
+      "title": "Надіслати нагадування про подію"
+    }
+  ],
   "triggers": []
 }

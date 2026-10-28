@@ -37,6 +37,55 @@
     ],
     "headers": []
   },
+  "actions": [
+    {
+      "name": "append_row",
+      "title": "Додати рядок (Excel)",
+      "description": "Додає рядок у таблицю книги Excel."
+    },
+    {
+      "name": "append_rows",
+      "title": "Додати кілька рядків (Excel)",
+      "description": "Додає список рядків у таблицю книги Excel."
+    },
+    {
+      "name": "get_attachment",
+      "title": "Отримати вкладення",
+      "description": "Вміст вкладення листа."
+    },
+    {
+      "name": "get_message",
+      "title": "Отримати лист",
+      "description": "Лист за ідентифікатором."
+    },
+    {
+      "name": "list_attachments",
+      "title": "Список вкладень листа"
+    },
+    {
+      "name": "list_messages",
+      "title": "Список листів",
+      "description": "Листи поштової скриньки."
+    },
+    {
+      "name": "read_sheets",
+      "title": "Прочитати аркуші (Excel)",
+      "description": "Рядки аркушів книги Excel."
+    },
+    {
+      "name": "send_mail",
+      "title": "Надіслати лист",
+      "description": "Лист від імені поштової скриньки, за потреби з вкладеннями."
+    },
+    {
+      "name": "update_row",
+      "title": "Змінити рядок (Excel)"
+    },
+    {
+      "name": "upsert_row",
+      "title": "Додати або змінити рядок (Excel)"
+    }
+  ],
   "triggers": [
     {
       "id": "new_mail",

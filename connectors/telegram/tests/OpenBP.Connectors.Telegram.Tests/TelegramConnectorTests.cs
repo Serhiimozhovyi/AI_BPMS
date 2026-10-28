@@ -47,6 +47,13 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
     private static string Text(CallToolResult result) => string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("telegram", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_returns_the_tools_with_schemas()
     {
         var client = await ConnectAsync();

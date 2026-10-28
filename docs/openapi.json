@@ -6339,6 +6339,36 @@
                 "$ref": "#/components/schemas/JsonArray"
               }
             ]
+          },
+          "actions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConnectorManifestAction"
+            }
+          }
+        }
+      },
+      "ConnectorManifestAction": {
+        "required": [
+          "name",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
