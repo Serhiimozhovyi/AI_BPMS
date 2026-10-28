@@ -583,7 +583,7 @@ describe('WorkflowEditorComponent', () => {
 
     expect(host.querySelector('[data-testid="tools-error"]')).toBeNull();
     expect(host.querySelector('[data-testid="no-connectors"]')?.textContent).toContain('Конекторів ще немає');
-    expect(host.querySelector('[data-testid="no-connectors"] a')?.getAttribute('href')).toBe('/connectors');
+    expect(host.querySelector('[data-testid="no-connectors"] a')?.getAttribute('href')).toBe('/connections');
   });
 
   it('збій конекторів показує причину і «Повторити» перезавантажує список (F3-77)', async () => {

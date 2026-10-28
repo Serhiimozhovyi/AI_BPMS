@@ -46,7 +46,7 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
                 <p class="start__missing" data-testid="template-missing" [attr.data-template-missing]="t.id">
                   <span i18n="@@emptystart.templates.missing">Потрібні конектори:</span>
                   @for (c of need; track c.id) {
-                    <a [routerLink]="['/connectors']" [queryParams]="{ catalog: c.id }" [attr.data-install]="c.id">{{ c.name }}</a>
+                    <a [routerLink]="['/connections']" [queryParams]="{ tab: 'catalog', catalog: c.id }" [attr.data-install]="c.id">{{ c.name }}</a>
                   }
                   <span i18n="@@emptystart.templates.missingHint">— встановіть з каталогу.</span>
                 </p>

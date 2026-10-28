@@ -14,8 +14,8 @@ test('порожні «Конектори» → «Відкрити катало�
   await page.goto('/connectors');
   await expect(page.getByTestId('empty-title')).toContainText('Ще немає жодного MCP-сервера');
   await page.getByTestId('empty-action').click();
-  await expect(page.getByTestId('view-catalog')).toHaveClass(/mat-button-toggle-checked/);
-  await expect(page).toHaveURL(/catalog=/);
+  await expect(page.getByTestId('tab-catalog')).toHaveClass(/mat-button-toggle-checked/);
+  await expect(page).toHaveURL(/tab=catalog/);
 });
 
 test('створення змінної показує сповіщення', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -33,20 +33,22 @@ import {
   template: `
     <section class="p-6">
       <div class="mb-4 flex items-center gap-4">
-        <h1 class="mat-font-headline-sm" i18n="@@connectors.title">Конектори</h1>
-        <mat-button-toggle-group [value]="view()" (change)="showView($event.value)" data-testid="connectors-view">
-          <mat-button-toggle value="installed" data-testid="view-installed" i18n="@@connectors.view.installed">Встановлені</mat-button-toggle>
-          <mat-button-toggle value="catalog" data-testid="view-catalog" i18n="@@connectors.view.catalog">Каталог</mat-button-toggle>
-        </mat-button-toggle-group>
-        @if (!adding() && view() === 'installed') {
+        @if (!embedded()) {
+          <h1 class="mat-font-headline-sm" i18n="@@connectors.title">Конектори</h1>
+          <mat-button-toggle-group [value]="currentView()" (change)="showView($event.value)" data-testid="connectors-view">
+            <mat-button-toggle value="installed" data-testid="view-installed" i18n="@@connectors.view.installed">Встановлені</mat-button-toggle>
+            <mat-button-toggle value="catalog" data-testid="view-catalog" i18n="@@connectors.view.catalog">Каталог</mat-button-toggle>
+          </mat-button-toggle-group>
+        }
+        @if (!adding() && currentView() === 'installed') {
           <button mat-flat-button type="button" data-testid="add-button" (click)="adding.set(true)" i18n="@@connectors.add">
             Додати MCP-сервер
           </button>
         }
       </div>
 
-      @if (view() === 'catalog') {
-        <app-connector-catalog [highlight]="highlight()" (installed)="onInstalled($event)" />
+      @if (currentView() === 'catalog') {
+        <app-connector-catalog [highlight]="highlight() ?? highlightId()" (installed)="onInstalled($event)" />
       } @else {
 
       @if (adding()) {
@@ -165,8 +167,14 @@ export class ConnectorsPage implements OnInit {
   private readonly notify = inject(NotifyService);
   private readonly credentials = inject(CredentialsApiService);
 
+  /** У сторінці «Підключення» (F3-99): без власного заголовка й перемикача, вкладку задає батьківська сторінка. */
+  readonly embedded = input(false);
+  readonly tab = input<'installed' | 'catalog' | null>(null);
+  readonly highlightId = input<string | null>(null);
+  readonly viewChange = output<'installed' | 'catalog'>();
   /** Вкладка: встановлені конектори або каталог (F6-16). */
   readonly view = signal<'installed' | 'catalog'>('installed');
+  readonly currentView = computed(() => this.tab() ?? this.view());
   /** Запис каталогу з `?catalog=`. */
   readonly highlight = signal<string | null>(null);
   readonly connectors = signal<ConnectorSummary[]>([]);
@@ -183,7 +191,7 @@ export class ConnectorsPage implements OnInit {
   readonly statusLabel = statusLabel;
 
   ngOnInit(): void {
-    const catalog = this.route.snapshot.queryParamMap.get('catalog');
+    const catalog = this.embedded() ? null : this.route.snapshot.queryParamMap.get('catalog');
     if (catalog !== null) {
       this.view.set('catalog');
       this.highlight.set(catalog || null);
@@ -192,6 +200,10 @@ export class ConnectorsPage implements OnInit {
   }
 
   showView(view: 'installed' | 'catalog'): void {
+    if (this.embedded()) {
+      this.viewChange.emit(view);
+      return;
+    }
     this.view.set(view);
     void this.router.navigate([], { relativeTo: this.route, queryParams: { catalog: view === 'catalog' ? (this.highlight() ?? '') : null }, replaceUrl: true });
   }

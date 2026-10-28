@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -20,7 +20,9 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
-        <h1 class="mat-font-headline-sm" i18n="@@credentials.title">Облікові дані</h1>
+        @if (!embedded()) {
+          <h1 class="mat-font-headline-sm" i18n="@@credentials.title">Облікові дані</h1>
+        }
         @if (!adding() && types().length > 0) {
           <button mat-flat-button type="button" data-testid="add-button" (click)="startAdd()" i18n="@@credentials.add">
             Додати облікові дані
@@ -155,6 +157,8 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
   `,
 })
 export class CredentialsPage implements OnInit {
+  /** У сторінці «Підключення» (F3-99) заголовок показує батьківська сторінка. */
+  readonly embedded = input(false);
   private readonly api = inject(CredentialsApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notify = inject(NotifyService);
