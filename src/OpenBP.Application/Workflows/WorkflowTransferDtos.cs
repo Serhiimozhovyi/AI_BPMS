@@ -55,7 +55,14 @@ public sealed record WorkflowImportRequest(
     WorkflowDefinition? Definition,
     WorkflowManifest? Manifest = null,
     ImportMapping? Mapping = null,
-    Guid? GroupId = null);
+    Guid? GroupId = null)
+{
+    /// <summary>
+    /// Сценарій, який замінює імпорт (повторний імпорт проєкту, F8-06): зберігається нова версія чернетки цього сценарію,
+    /// а не створюється новий. Опублікована версія й активність не змінюються.
+    /// </summary>
+    public Guid? ReplaceWorkflowId { get; init; }
+}
 
 /// <summary>Посилання, для якого імпорт не знайшов відповідника (422 <c>IMPORT_UNMAPPED</c>).</summary>
 /// <param name="Kind"><c>connector</c>, <c>credential</c> або <c>workflow</c>.</param>

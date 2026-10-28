@@ -46,6 +46,34 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
     /// <inheritdoc />
     public async Task<WorkflowImportResult> ImportAsync(WorkflowImportRequest request, CancellationToken ct)
     {
+        var plan = await PlanAsync(request, ct);
+        if (plan.Unmapped.Count > 0)
+        {
+            throw new ImportUnmappedException(plan.Unmapped);
+        }
+
+        References.Rewrite(plan.Document, plan.Connectors, plan.Credentials, plan.Workflows);
+        var definition = plan.Document.Deserialize<WorkflowDefinition>(WorkflowJson.Options)!;
+        var created = request.ReplaceWorkflowId is { } replace
+            ? await workflows.SaveAsync(replace, definition, ct)
+            : await workflows.CreateAsync(definition, request.GroupId, ct);
+
+        var keys = VariableReferences.Keys(plan.Document);
+        var known = keys.Count == 0
+            ? []
+            : await db.Variables.AsNoTracking().Where(v => keys.Contains(v.Key)).Select(v => v.Key).ToListAsync(ct);
+        return new WorkflowImportResult(
+            created,
+            new ImportMapping(plan.Connectors, plan.Credentials, plan.Workflows),
+            [.. keys.Where(k => !known.Contains(k, StringComparer.Ordinal))]);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UnmappedReference>> CheckAsync(WorkflowImportRequest request, CancellationToken ct) =>
+        (await PlanAsync(request, ct)).Unmapped;
+
+    private async Task<ImportPlan> PlanAsync(WorkflowImportRequest request, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(request);
         currentUser.Require(UserRole.Viewer);
         var definition = request.Definition ?? throw new ArgumentException("Потрібне поле definition.", nameof(request));
@@ -87,22 +115,7 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
             mapping.Workflows,
             targetWorkflows,
             unmapped);
-        if (unmapped.Count > 0)
-        {
-            throw new ImportUnmappedException(unmapped);
-        }
-
-        References.Rewrite(document, connectorMap, credentialMap, workflowMap);
-        var created = await workflows.CreateAsync(document.Deserialize<WorkflowDefinition>(WorkflowJson.Options)!, request.GroupId, ct);
-
-        var keys = VariableReferences.Keys(document);
-        var known = keys.Count == 0
-            ? []
-            : await db.Variables.AsNoTracking().Where(v => keys.Contains(v.Key)).Select(v => v.Key).ToListAsync(ct);
-        return new WorkflowImportResult(
-            created,
-            new ImportMapping(connectorMap, credentialMap, workflowMap),
-            [.. keys.Where(k => !known.Contains(k, StringComparer.Ordinal))]);
+        return new ImportPlan(document, connectorMap, credentialMap, workflowMap, unmapped);
     }
 
     /// <inheritdoc />
@@ -178,6 +191,13 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
         JsonSerializer.SerializeToNode(definition, WorkflowJson.Options)!.AsObject();
 
     private sealed record Target(Guid Id, string Name, string? Type);
+
+    private sealed record ImportPlan(
+        JsonObject Document,
+        Dictionary<string, string> Connectors,
+        Dictionary<string, string> Credentials,
+        Dictionary<string, string> Workflows,
+        List<UnmappedReference> Unmapped);
 
     /// <summary>Посилання сценарію на інші об'єкти: <c>serverId</c>/<c>credentialId</c> будь-де в параметрах вузлів, <c>settings.errorWorkflowId</c>.</summary>
     private sealed record References(IReadOnlyCollection<string> Connectors, IReadOnlyCollection<string> Credentials, IReadOnlyCollection<string> Workflows)

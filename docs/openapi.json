@@ -4151,6 +4151,112 @@
         ]
       }
     },
+    "/api/v1/projects/{projectId}/export": {
+      "get": {
+        "tags": [
+          "Шаблони проєктів"
+        ],
+        "summary": "Експортувати проєкт шаблоном",
+        "description": "Лише editor проєкту. JSON `{ formatVersion, project, tables, pages, workflows[{ ref, export }], manifest }` (docs/projects.md §5). `rowsFor=settings,materials` додає рядки перелічених таблиць (до 10000 на таблицю), чутливі колонки в рядки не потрапляють. Секретів, учасників і значень змінних у шаблоні немає.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rowsFor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/import": {
+      "post": {
+        "tags": [
+          "Шаблони проєктів"
+        ],
+        "summary": "Імпортувати шаблон проєкту",
+        "description": "Створює проєкт (або оновлює `projectId`): ролі застосунку, таблиці, сценарії (неактивні) і сторінки. `mapping` — явні відповідники конекторів і credentials, як у `POST /workflows/import`; відсутні — 422 IMPORT_UNMAPPED, нічого не створено. Повторний імпорт у наявний проєкт замінює сторінки за ключем і чернетки сценаріїв за назвою, таблиці лише розширює колонками. Некоректний шаблон — 422 BUNDLE_INVALID, новіший формат — 422 BUNDLE_VERSION_UNSUPPORTED.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectImportResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/notification-channels": {
       "get": {
         "tags": [
@@ -10835,6 +10941,132 @@
           }
         }
       },
+      "ProjectImportRequest": {
+        "required": [
+          "bundle"
+        ],
+        "type": "object",
+        "properties": {
+          "bundle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
+          "mapping": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImportMapping"
+              }
+            ]
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ProjectImportResult": {
+        "required": [
+          "projectId",
+          "name",
+          "projectCreated",
+          "tablesCreated",
+          "tablesExtended",
+          "rowsInserted",
+          "pagesCreated",
+          "pagesUpdated",
+          "workflowsCreated",
+          "workflowsUpdated",
+          "missingVariables",
+          "mapping"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectCreated": {
+            "type": "boolean"
+          },
+          "tablesCreated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tablesExtended": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rowsInserted": {
+            "type": "object",
+            "additionalProperties": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          "pagesCreated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pagesUpdated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workflowsCreated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workflowsUpdated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missingVariables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ImportMapping"
+          }
+        }
+      },
       "ProjectMember": {
         "required": [
           "userId",
@@ -12203,6 +12435,13 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "replaceWorkflowId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -12538,6 +12777,10 @@
     {
       "name": "Сторінки застосунку",
       "description": "Сторінки застосунку проєкту (список, картка, форма) над таблицями проєкту; видимість — за ролями застосунку, змінює editor проєкту."
+    },
+    {
+      "name": "Шаблони проєктів",
+      "description": "Експорт проєкту одним JSON (таблиці, сторінки, сценарії, маніфест залежностей) та імпорт у новий чи наявний проєкт. Лише editor."
     },
     {
       "name": "Огляд",

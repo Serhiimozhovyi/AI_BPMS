@@ -36,6 +36,7 @@ public static class McpServerSetup
             .WithTools<TestNodeTool>(McpJson.Options)
             .WithTools<DataTableTools>(McpJson.Options)
             .WithTools<ProjectPageTools>(McpJson.Options)
+            .WithTools<ProjectTransferTools>(McpJson.Options)
             .WithTools<EvaluationTools>(McpJson.Options)
             .WithTools<ExplanationTools>(McpJson.Options)
             .WithTools<TaskTools>(McpJson.Options)

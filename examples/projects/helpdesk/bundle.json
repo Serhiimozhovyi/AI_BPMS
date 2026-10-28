@@ -1,0 +1,128 @@
+{
+  "formatVersion": 1,
+  "project": {
+    "name": "Заявки до підтримки",
+    "description": "Приклад шаблону проєкту: заявки, форма подачі, закриття заявки сценарієм і показники.",
+    "icon": "support_agent",
+    "appRoles": [
+      { "key": "agent", "name": "Агент підтримки" }
+    ]
+  },
+  "tables": [
+    {
+      "name": "tickets",
+      "columns": [
+        { "name": "title", "type": "string" },
+        { "name": "priority", "type": "enum", "values": ["low", "normal", "high"] },
+        { "name": "status", "type": "enum", "values": ["open", "closed"] }
+      ],
+      "constraints": { "required": ["title"] },
+      "rows": [
+        { "title": "Не працює принтер", "priority": "normal", "status": "open" },
+        { "title": "Потрібен доступ до CRM", "priority": "high", "status": "open" }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "key": "tickets",
+      "name": "Заявки",
+      "kind": "list",
+      "definition": {
+        "table": "tickets",
+        "columns": [
+          { "column": "title", "label": "Тема" },
+          { "column": "priority", "label": "Пріоритет" },
+          { "column": "status", "label": "Стан" }
+        ],
+        "search": ["title"],
+        "actions": [
+          {
+            "label": "Закрити",
+            "workflow": "Закрити заявку",
+            "confirm": "Закрити заявку?",
+            "when": "{{ $row.status === 'open' }}"
+          }
+        ],
+        "create": { "page": "new-ticket" }
+      },
+      "roles": ["agent"],
+      "sortOrder": 0
+    },
+    {
+      "key": "new-ticket",
+      "name": "Нова заявка",
+      "kind": "form",
+      "definition": {
+        "table": "tickets",
+        "fields": [
+          { "column": "title", "required": true },
+          { "column": "priority" },
+          { "column": "status", "value": "open" }
+        ],
+        "onSubmit": { "operation": "insert" },
+        "then": { "page": "tickets" }
+      },
+      "roles": [],
+      "sortOrder": 1
+    },
+    {
+      "key": "stats",
+      "name": "Показники",
+      "kind": "metrics",
+      "definition": {
+        "tiles": [
+          { "key": "open", "label": "Відкритих", "table": "tickets", "aggregate": "count", "where": [{ "column": "status", "operator": "eq", "value": "open" }] },
+          { "key": "all", "label": "Усього", "table": "tickets", "aggregate": "count" },
+          { "label": "Частка відкритих", "expression": "{{ $tiles.all ? $tiles.open / $tiles.all : 0 }}" }
+        ],
+        "charts": [
+          { "label": "За станом", "table": "tickets", "groupBy": "status", "aggregate": "count" }
+        ]
+      },
+      "roles": ["agent"],
+      "sortOrder": 2
+    }
+  ],
+  "workflows": [
+    {
+      "ref": "close-ticket",
+      "export": {
+        "definition": {
+          "formatVersion": 1,
+          "name": "Закрити заявку",
+          "settings": { "timezone": "Europe/Kyiv", "executionTimeoutSec": 60, "errorWorkflowId": null, "saveSuccessfulData": false },
+          "nodes": [
+            { "id": "n_in", "name": "Вхід", "type": "core.workflowTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+            {
+              "id": "n_update",
+              "name": "Закрити в таблиці",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, 0],
+              "parameters": { "table": "tickets", "operation": "update", "key": "{{ $json.rowKey }}", "values": { "status": "closed" } }
+            },
+            {
+              "id": "n_answer",
+              "name": "Відповідь",
+              "type": "core.set",
+              "typeVersion": 1,
+              "position": [480, 0],
+              "parameters": { "fields": [{ "name": "message", "value": "Заявку закрито" }] }
+            }
+          ],
+          "connections": [
+            { "from": { "node": "n_in", "output": 0 }, "to": { "node": "n_update", "input": 0 } },
+            { "from": { "node": "n_update", "output": 0 }, "to": { "node": "n_answer", "input": 0 } }
+          ],
+          "pinData": {
+            "n_in": [{ "json": { "rowKey": "1", "row": { "title": "Не працює принтер", "status": "open" }, "user": { "id": "u1", "email": "agent@example.com" } } }],
+            "n_update": [{ "json": { "_key": "1", "title": "Не працює принтер", "status": "closed" } }]
+          }
+        },
+        "manifest": { "connectors": [], "credentials": [], "variables": [], "workflows": [] }
+      }
+    }
+  ],
+  "manifest": { "connectors": [], "credentials": [], "variables": [] }
+}

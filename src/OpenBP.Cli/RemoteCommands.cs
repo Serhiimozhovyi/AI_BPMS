@@ -14,7 +14,7 @@ namespace OpenBP.Cli;
 /// </summary>
 internal static class RemoteCommands
 {
-    public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.Ordinal) { "export", "import", "activate" };
+    public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.Ordinal) { "export", "import", "activate", "export-project", "import-project" };
 
     private const int PageSize = 100;
 
@@ -30,6 +30,8 @@ internal static class RemoteCommands
         {
             "export" => await ExportAsync(http, options, stdout, ct).ConfigureAwait(false),
             "import" => await ImportAsync(http, options, stdout, ct).ConfigureAwait(false),
+            "export-project" => await ExportProjectAsync(http, options, stdout, ct).ConfigureAwait(false),
+            "import-project" => await ImportProjectAsync(http, options, stdout, ct).ConfigureAwait(false),
             _ => await ActivateAsync(http, options, stdout, ct).ConfigureAwait(false),
         };
     }
@@ -87,6 +89,71 @@ internal static class RemoteCommands
 
         return CliApp.Ok;
     }
+
+    private static async Task<int> ExportProjectAsync(HttpClient http, RemoteOptions options, TextWriter stdout, CancellationToken ct)
+    {
+        var id = ParseId(options.Target!);
+        var query = string.IsNullOrWhiteSpace(options.Rows) ? "" : $"?rowsFor={Uri.EscapeDataString(options.Rows)}";
+        var bundle = await SendAsync(http, HttpMethod.Get, $"api/v1/projects/{id}/export{query}", null, ct).ConfigureAwait(false);
+        var json = bundle.ToJsonString(Indented) + "\n";
+        if (options.Out is { } file)
+        {
+            await File.WriteAllTextAsync(file, json, ct).ConfigureAwait(false);
+            await stdout.WriteLineAsync($"{file}  {bundle["project"]?["name"]}").ConfigureAwait(false);
+        }
+        else
+        {
+            // Без --out шаблон іде у stdout як є: `openbp export-project <id> > bundle.json`.
+            await stdout.WriteAsync(json).ConfigureAwait(false);
+        }
+
+        return CliApp.Ok;
+    }
+
+    private static async Task<int> ImportProjectAsync(HttpClient http, RemoteOptions options, TextWriter stdout, CancellationToken ct)
+    {
+        var body = new JsonObject { ["bundle"] = ReadObject(options.Target!, "шаблону проєкту") };
+        if (options.Map is { } map)
+        {
+            body["mapping"] = ReadObject(map, "відповідників");
+        }
+
+        if (options.Project is { } project)
+        {
+            body["projectId"] = ParseId(project).ToString();
+        }
+
+        if (options.Name is { } name)
+        {
+            body["name"] = name;
+        }
+
+        var response = await SendRawAsync(http, HttpMethod.Post, "api/v1/projects/import", body, ct).ConfigureAwait(false);
+        if (response.Status == HttpStatusCode.UnprocessableEntity && response.Body?["code"]?.GetValue<string>() == "IMPORT_UNMAPPED")
+        {
+            await stdout.WriteLineAsync("Немає відповідників у цьому середовищі (додайте їх у --map):").ConfigureAwait(false);
+            foreach (var u in response.Body["unmapped"]!.AsArray())
+            {
+                await stdout.WriteLineAsync($"  {u!["kind"]} {u["ref"]} «{u["name"]}» ({u["type"]}): {u["reason"]}").ConfigureAwait(false);
+            }
+
+            return CliApp.ExecutionFailed;
+        }
+
+        var result = EnsureSuccess(response);
+        await stdout.WriteLineAsync($"{((result["projectCreated"]?.GetValue<bool>() ?? false) ? "Створено проєкт" : "Оновлено проєкт")}: {result["projectId"]}  {result["name"]}").ConfigureAwait(false);
+        await stdout.WriteLineAsync($"  таблиці: нових {Count(result, "tablesCreated")}, розширено {Count(result, "tablesExtended")}").ConfigureAwait(false);
+        await stdout.WriteLineAsync($"  сторінки: нових {Count(result, "pagesCreated")}, оновлено {Count(result, "pagesUpdated")}").ConfigureAwait(false);
+        await stdout.WriteLineAsync($"  сценарії: нових {Count(result, "workflowsCreated")}, оновлено {Count(result, "workflowsUpdated")} (неактивні)").ConfigureAwait(false);
+        if (result["missingVariables"] is JsonArray { Count: > 0 } missing)
+        {
+            await stdout.WriteLineAsync($"Відсутні змінні: {string.Join(", ", missing.Select(v => v!.GetValue<string>()))}").ConfigureAwait(false);
+        }
+
+        return CliApp.Ok;
+    }
+
+    private static int Count(JsonNode result, string name) => (result[name] as JsonArray)?.Count ?? 0;
 
     private static async Task<int> ActivateAsync(HttpClient http, RemoteOptions options, TextWriter stdout, CancellationToken ct)
     {
@@ -177,12 +244,13 @@ internal static class RemoteCommands
 
     private sealed record RawResponse(HttpStatusCode Status, JsonNode? Body, bool Success);
 
-    private sealed record RemoteOptions(string Command, string? Target, bool All, Uri Url, string ApiKey, string? Out, string? Map)
+    private sealed record RemoteOptions(
+        string Command, string? Target, bool All, Uri Url, string ApiKey, string? Out, string? Map, string? Rows = null, string? Project = null, string? Name = null)
     {
         public static RemoteOptions Parse(string[] args)
         {
             var command = args[0];
-            string? target = null, url = null, key = null, output = null, map = null;
+            string? target = null, url = null, key = null, output = null, map = null, rows = null, project = null, name = null;
             var all = false;
             for (var i = 1; i < args.Length; i++)
             {
@@ -191,7 +259,7 @@ internal static class RemoteCommands
                     case "--all" when command == "export":
                         all = true;
                         break;
-                    case "--url" or "--api-key" or "--out" or "--map" when i + 1 >= args.Length:
+                    case "--url" or "--api-key" or "--out" or "--map" or "--rows" or "--project" or "--name" when i + 1 >= args.Length:
                         throw new CliException($"Після {args[i]} очікується значення.", showUsage: true);
                     case "--url":
                         url = args[++i];
@@ -199,11 +267,20 @@ internal static class RemoteCommands
                     case "--api-key":
                         key = args[++i];
                         break;
-                    case "--out" when command == "export":
+                    case "--out" when command is "export" or "export-project":
                         output = args[++i];
                         break;
-                    case "--map" when command == "import":
+                    case "--map" when command is "import" or "import-project":
                         map = args[++i];
+                        break;
+                    case "--rows" when command == "export-project":
+                        rows = args[++i];
+                        break;
+                    case "--project" when command == "import-project":
+                        project = args[++i];
+                        break;
+                    case "--name" when command == "import-project":
+                        name = args[++i];
                         break;
                     case var a when a.StartsWith("--", StringComparison.Ordinal):
                         throw new CliException($"Невідомий параметр «{a}» для {command}.", showUsage: true);
@@ -222,7 +299,13 @@ internal static class RemoteCommands
 
             if (target is null && command != "export")
             {
-                throw new CliException(command == "import" ? "Не вказано файл експорту." : "Не вказано id сценарію.", showUsage: true);
+                throw new CliException(command switch
+                {
+                    "import" => "Не вказано файл експорту.",
+                    "import-project" => "Не вказано файл шаблону проєкту.",
+                    "export-project" => "Не вказано id проєкту.",
+                    _ => "Не вказано id сценарію.",
+                }, showUsage: true);
             }
 
             url ??= Environment.GetEnvironmentVariable("OPENBP_URL");
@@ -237,7 +320,7 @@ internal static class RemoteCommands
                 throw new CliException("Вкажіть API-ключ: --api-key або OPENBP_API_KEY.", showUsage: true);
             }
 
-            return new RemoteOptions(command, target, all, baseUri, key, output, map);
+            return new RemoteOptions(command, target, all, baseUri, key, output, map, rows, project, name);
         }
     }
 }

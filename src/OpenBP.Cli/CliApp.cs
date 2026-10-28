@@ -15,7 +15,7 @@ namespace OpenBP.Cli;
 /// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json] [--credentials creds.json]</c> — виконання сценарію без БД
 /// (docs/architecture.md §1): in-memory store, <c>core.*</c> і <c>mcp.*</c> вузли, Jint-вирази.
 /// Друкує input/output кожного вузла. Коди виходу: 0 — успіх, 1 — виконання завершилось не успіхом, 2 — помилка запуску.
-/// <c>openbp export | import | activate</c> — робота з запущеним OpenBP через REST для CI/CD (<see cref="RemoteCommands"/>):
+/// <c>openbp export | import | activate | export-project | import-project</c> — робота з запущеним OpenBP через REST для CI/CD (<see cref="RemoteCommands"/>):
 /// 1 — імпорт без відповідників, 2 — помилка аргументів чи відповідь OpenBP з помилкою.
 /// </summary>
 public static class CliApp
@@ -38,12 +38,17 @@ public static class CliApp
           openbp export <id> | --all [--out dir] [--url URL] [--api-key KEY]
           openbp import <file.json> [--map map.json] [--url URL] [--api-key KEY]
           openbp activate <id> [--url URL] [--api-key KEY]
+          openbp export-project <id> [--rows таблиця,таблиця] [--out file.json] [--url URL] [--api-key KEY]
+          openbp import-project <bundle.json> [--map map.json] [--project id] [--name назва] [--url URL] [--api-key KEY]
           openbp draft-eval --workflow <id> [--cases dir] [--model назва] [--only частина-id] [--out report.md] [--url URL] [--api-key KEY]
 
           --pin        ручний тестовий запуск: вузли з pinData не виконуються, їхній вихід — закріплені items
           --servers    JSON з MCP-серверами, на які посилаються вузли mcp.* (serverId)
           --credentials JSON { "<credentialId>": { … } } з даними credentials для вузлів (напр. ai.llm)
-          --out        тека для файлів експорту (<id>.json); типово поточна
+          --out        export: тека для файлів експорту (<id>.json), типово поточна; export-project: файл шаблону, типово stdout
+          --rows       export-project: таблиці, рядки яких додати в шаблон (чутливі колонки не експортуються)
+          --project    import-project: наявний проєкт для оновлення; типово створюється новий
+          --name       import-project: назва нового проєкту замість назви з шаблону
           --map        JSON { "connectors": { "<ref>": "<id>" }, "credentials": { … }, "workflows": { … } }
           --workflow   draft-eval: сценарій, у який «будуємо» (його вміст не змінюється)
           --cases      draft-eval: тека з описами; типово tests/drafter-cases

@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { ProjectContextService } from '../../projects/project-context.service';
+import { ProjectTransferApiService, downloadBundle } from '../../projects/project-transfer-api.service';
 import {
   OVERVIEW_RANGES,
   Overview,
@@ -44,6 +46,22 @@ import {
             </button>
           }
         </div>
+        @if (projectId && canExport()) {
+          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <input
+              class="rounded border border-ac-line px-2 py-1"
+              type="text"
+              [value]="rowsFor()"
+              (input)="rowsFor.set($any($event.target).value)"
+              placeholder="Таблиці з рядками: settings, materials"
+              i18n-placeholder="@@overview.export.rows"
+              aria-label="Таблиці, рядки яких додати в шаблон"
+              i18n-aria-label="@@overview.export.rowsLabel"
+              data-testid="project-export-rows"
+            />
+            <button mat-stroked-button type="button" data-testid="project-export" [disabled]="exporting()" (click)="exportProject()" i18n="@@overview.export">Експортувати проєкт</button>
+          </div>
+        }
       </div>
 
       @if (loading()) {
@@ -201,12 +219,41 @@ export class OverviewPage implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
+  private readonly projects = inject(ProjectContextService);
+  private readonly transfer = inject(ProjectTransferApiService);
+  readonly rowsFor = signal('');
+  readonly exporting = signal(false);
+
+  /** Шаблон проєкту (F8-06) експортує editor проєкту чи admin. */
+  readonly canExport = computed(() => {
+    const role = this.projects.projects().find((p) => p.id === this.projectId)?.role;
+    return role === 'editor' || role === 'admin';
+  });
+
   readonly rangeLabel = overviewRangeLabel;
   readonly duration = formatDuration;
   readonly rate = formatRate;
 
   ngOnInit(): void {
     this.load();
+  }
+
+  /** Скачує шаблон проєкту JSON-файлом; рядки додаються лише для перелічених таблиць (без чутливих колонок). */
+  exportProject(): void {
+    if (!this.projectId) return;
+    this.exporting.set(true);
+    this.error.set(null);
+    const rows = this.rowsFor().split(',').map((t) => t.trim()).filter((t) => t.length > 0);
+    this.transfer.export(this.projectId, rows).subscribe({
+      next: (bundle) => {
+        this.exporting.set(false);
+        downloadBundle(bundle);
+      },
+      error: (e: unknown) => {
+        this.exporting.set(false);
+        this.error.set(apiErrorMessage(e));
+      },
+    });
   }
 
   select(range: OverviewRange): void {

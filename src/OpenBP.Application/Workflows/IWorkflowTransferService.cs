@@ -28,6 +28,15 @@ public interface IWorkflowTransferService
     Task<WorkflowImportResult> ImportAsync(WorkflowImportRequest request, CancellationToken ct);
 
     /// <summary>
+    /// Лише перевіряє відповідники як <see cref="ImportAsync"/>, нічого не створюючи (F8-06: імпорт проєкту спершу
+    /// перевіряє всі сценарії, щоб не лишити частково створений проєкт).
+    /// </summary>
+    /// <param name="request">Те саме тіло, що й для імпорту.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Посилання без відповідника; порожній список — імпорт можливий.</returns>
+    Task<IReadOnlyList<UnmappedReference>> CheckAsync(WorkflowImportRequest request, CancellationToken ct);
+
+    /// <summary>
     /// Перетворює експорт сценарію n8n на тіло для <see cref="ImportAsync"/> (F6-24, docs/workflow-format.md
     /// §«Імпорт з n8n»): нічого не зберігає. Вузли без відповідника стають заглушками, про них — зауваження.
     /// </summary>

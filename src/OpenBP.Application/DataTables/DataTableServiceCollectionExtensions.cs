@@ -28,6 +28,8 @@ public static class DataTableServiceCollectionExtensions
         // Сторінки застосунку проєкту (F8-04) читають і пишуть рядки тим самим сховищем.
         services.AddScoped<IPageWorkflowRunner, PageWorkflowRunner>();
         services.AddScoped<IProjectPageService, ProjectPageService>();
+        // Шаблон проєкту (F8-06): експорт/імпорт таблиць, сторінок і сценаріїв одним JSON.
+        services.AddScoped<IProjectTransferService, ProjectTransferService>();
         return services;
     }
 }

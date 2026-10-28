@@ -62,4 +62,84 @@ describe('ProjectsPage', () => {
     const { host } = await setup('viewer');
     expect(host.querySelector('[data-testid="project-new"]')).toBeNull();
   });
+
+  describe('імпорт шаблону (F8-06)', () => {
+    const bundle = { formatVersion: 1, project: { name: 'Психологи' }, tables: [], pages: [], workflows: [] };
+
+    function pickFile(host: HTMLElement, content: string) {
+      const input = host.querySelector<HTMLInputElement>('[data-testid="project-import-file"]')!;
+      const file = new File([content], 'bundle.json', { type: 'application/json' });
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change'));
+    }
+
+    async function settle(fixture: { detectChanges(): void; whenStable(): Promise<unknown> }) {
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r));
+        await render(fixture);
+      }
+    }
+
+    it('імпортує файл і показує результат з посиланням на проєкт', async () => {
+      const { fixture, http, host } = await setup('editor');
+      pickFile(host, JSON.stringify(bundle));
+      await settle(fixture);
+      const post = http.expectOne({ method: 'POST', url: '/api/v1/projects/import' });
+      expect(post.request.body).toEqual({ bundle, mapping: { connectors: {}, credentials: {}, workflows: {} } });
+      post.flush({
+        projectId: 'p9', name: 'Психологи', projectCreated: true, tablesCreated: ['users'], tablesExtended: [], rowsInserted: {},
+        pagesCreated: ['list'], pagesUpdated: [], workflowsCreated: ['bot'], workflowsUpdated: [], missingVariables: ['region'],
+      });
+      // Список на сторінці і контекст проєктів у шапці перечитуються окремо.
+      const reloads = http.match({ method: 'GET', url: base });
+      expect(reloads).toHaveLength(2);
+      reloads.forEach((r) => r.flush([]));
+      await settle(fixture);
+      const result = host.querySelector('[data-testid="import-result"]')!;
+      expect(result.textContent).toContain('Психологи');
+      expect(host.querySelector('[data-testid="import-open"]')?.getAttribute('href')).toBe('/projects/p9');
+      expect(host.querySelector('[data-testid="import-variables"]')?.textContent).toContain('region');
+    });
+
+    it('без відповідника просить id і повторює імпорт із mapping', async () => {
+      const { fixture, http, host } = await setup('editor');
+      pickFile(host, JSON.stringify(bundle));
+      await settle(fixture);
+      http.expectOne({ method: 'POST', url: '/api/v1/projects/import' }).flush(
+        { code: 'IMPORT_UNMAPPED', unmapped: [{ kind: 'credential', ref: 'c-src', name: 'Telegram', type: 'telegram.bot', reason: 'not_found' }] },
+        { status: 422, statusText: 'Unprocessable Entity' },
+      );
+      await settle(fixture);
+      const field = host.querySelector<HTMLInputElement>('[data-testid="unmapped-field"]')!;
+      expect(field.getAttribute('data-ref')).toBe('c-src');
+      field.value = 'c-target';
+      field.dispatchEvent(new Event('input'));
+      host.querySelector<HTMLFormElement>('[data-testid="import-unmapped"]')!.dispatchEvent(new Event('submit'));
+      const retry = http.expectOne({ method: 'POST', url: '/api/v1/projects/import' });
+      expect(retry.request.body.mapping).toEqual({ connectors: {}, credentials: { 'c-src': 'c-target' }, workflows: {} });
+      retry.flush({
+        projectId: 'p9', name: 'Психологи', projectCreated: true, tablesCreated: [], tablesExtended: [], rowsInserted: {},
+        pagesCreated: [], pagesUpdated: [], workflowsCreated: [], workflowsUpdated: [], missingVariables: [],
+      });
+      // Список на сторінці і контекст проєктів у шапці перечитуються окремо.
+      const reloads = http.match({ method: 'GET', url: base });
+      expect(reloads).toHaveLength(2);
+      reloads.forEach((r) => r.flush([]));
+      await settle(fixture);
+      expect(host.querySelector('[data-testid="import-unmapped"]')).toBeNull();
+      expect(host.querySelector('[data-testid="import-result"]')).not.toBeNull();
+    });
+
+    it('не шаблон — повідомлення без запиту; viewer кнопки не бачить', async () => {
+      const { fixture, http, host } = await setup('editor');
+      pickFile(host, '{"hello": 1}');
+      await settle(fixture);
+      http.expectNone('/api/v1/projects/import');
+      expect(host.querySelector('[data-testid="page-error"]')?.textContent).toContain('Це не шаблон проєкту');
+
+      TestBed.resetTestingModule();
+      const viewer = await setup('viewer');
+      expect(viewer.host.querySelector('[data-testid="project-import"]')).toBeNull();
+    });
+  });
 });

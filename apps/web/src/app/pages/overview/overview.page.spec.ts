@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ProjectContextService } from '../../projects/project-context.service';
 import { Overview, formatDuration, formatRate } from '../../overview/overview-api.service';
 import { OverviewPage } from './overview.page';
 
@@ -157,5 +158,55 @@ describe('OverviewPage', () => {
     expect(host.querySelector('[data-testid="now-active"]')?.textContent).toContain('3');
     expect(host.querySelector('[data-testid="now-tasks"]')?.textContent).toContain('2');
     expect(host.querySelector('h1')).toBeNull();
+  });
+
+  it('editor проєкту експортує шаблон: запит з rowsFor і скачування файлу (F8-06)', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { parent: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } } },
+      ],
+    });
+    TestBed.inject(ProjectContextService).projects.set([{ id: 'p1', name: 'Психологи', sortOrder: 0, workflowCount: 0, role: 'editor' }]);
+    const fixture = TestBed.createComponent(OverviewPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne((r) => r.url === '/api/v1/overview').flush(day);
+    await render(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    const rows = host.querySelector<HTMLInputElement>('[data-testid="project-export-rows"]')!;
+    rows.value = 'settings, materials';
+    rows.dispatchEvent(new Event('input'));
+    host.querySelector<HTMLButtonElement>('[data-testid="project-export"]')!.click();
+    const req = http.expectOne((r) => r.url === '/api/v1/projects/p1/export');
+    expect(req.request.params.get('rowsFor')).toBe('settings,materials');
+    req.flush({ formatVersion: 1, project: { name: 'Психологи' } });
+
+    expect(create).toHaveBeenCalledOnce();
+    expect(click).toHaveBeenCalledOnce();
+    vi.restoreAllMocks();
+  });
+
+  it('viewer проєкту кнопки експорту не бачить', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { parent: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } } },
+      ],
+    });
+    TestBed.inject(ProjectContextService).projects.set([{ id: 'p1', name: 'Психологи', sortOrder: 0, workflowCount: 0, role: 'viewer' }]);
+    const fixture = TestBed.createComponent(OverviewPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne((r) => r.url === '/api/v1/overview').flush(day);
+    await render(fixture);
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="project-export"]')).toBeNull();
   });
 });
