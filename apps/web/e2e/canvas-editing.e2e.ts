@@ -197,6 +197,18 @@ function card(page: Page, name: string): Locator {
   return page.locator('[data-node-id]').filter({ has: page.locator('.node__name', { hasText: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) });
 }
 
+/** Положення картки, коли воно перестало змінюватись: після додавання вузла канвас ще підганяє масштаб і зсув. */
+async function settledBox(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+  let previous = await locator.boundingBox();
+  for (let i = 0; i < 50; i++) {
+    await locator.page().waitForTimeout(200);
+    const current = await locator.boundingBox();
+    if (previous && current && previous.x === current.x && previous.y === current.y && previous.width === current.width) return current;
+    previous = current;
+  }
+  throw new Error('Картка так і не зупинилась');
+}
+
 /** Тягне мишею від вихідного порту `from` до вхідного порту `to` (порти — на середині правого/лівого краю картки). */
 async function connect(page: Page, from: string, to: string): Promise<void> {
   await expect(card(page, from)).toBeVisible();
@@ -518,7 +530,7 @@ test('F3-50: з’єднання, відпущене в порожньому м�
   await page.locator('[data-item="core.manualTrigger"]').click();
   await expect(card(page, 'Ручний запуск')).toBeVisible();
 
-  const a = (await card(page, 'Ручний запуск').boundingBox())!;
+  const a = await settledBox(card(page, 'Ручний запуск'));
   await page.mouse.move(a.x + a.width - 4, a.y + a.height / 2);
   await page.mouse.move(a.x + a.width, a.y + a.height / 2, { steps: 3 });
   // Дати канвасу побачити наведення на порт до початку перетягування (інакше на повільному CI жест губиться).

@@ -109,6 +109,36 @@ public class AssistantConversationTests(ApiFactory api)
         JsonNode.Parse(requestBody)!["messages"]!.AsArray().Last(m => (string?)m!["role"] == "user")!["content"]!.ToString();
 
     [Fact]
+    public async Task Provider_data_of_a_tool_call_is_stored_and_sent_back_on_the_next_step()
+    {
+        var provider = new FakeProvider(i =>
+        {
+            if (i != 1)
+            {
+                return Text("Сценаріїв немає.");
+            }
+
+            var reply = ToolCall("list_tables", [], i);
+            reply["choices"]![0]!["message"]!["tool_calls"]![0]!["extra_content"] = new JsonObject
+            {
+                ["google"] = new JsonObject { ["thought_signature"] = "sig-1" },
+            };
+            return reply;
+        });
+        var factory = WithProvider(provider);
+        await ConfigureAsync(factory);
+        var editor = await LoginAsync(factory, UserRole.Editor);
+        var id = await CreateConversationAsync(editor);
+
+        var events = await SendAsync(editor, id, new { message = "Які є таблиці?" });
+
+        Assert.Equal(["step", "message", "done"], events.Select(e => e.Type));
+        var second = JsonNode.Parse(provider.Requests.ElementAt(1))!["messages"]!.AsArray();
+        var call = second.Single(m => (string?)m!["role"] == "assistant")!["tool_calls"]![0]!;
+        Assert.Equal("sig-1", (string?)call["extra_content"]!["google"]!["thought_signature"]);
+    }
+
+    [Fact]
     public async Task Reads_run_at_once_changes_wait_for_the_user_and_the_decision_reaches_the_model()
     {
         var tableName = $"Заявки {Guid.NewGuid():N}";

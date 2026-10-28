@@ -12,7 +12,9 @@ public sealed record LlmTool(string Name, string Description, JsonObject InputSc
 /// <param name="Id">Id виклику від провайдера — ним позначається результат.</param>
 /// <param name="Name">Інструмент.</param>
 /// <param name="Arguments">Аргументи.</param>
-public sealed record LlmToolCall(string Id, string Name, JsonObject Arguments);
+/// <param name="ProviderData">Непрозорі дані провайдера до виклику (Gemini — підпис міркування); їх треба зберегти й повернути
+/// разом із викликом в історії, інакше провайдер відхиляє наступний крок.</param>
+public sealed record LlmToolCall(string Id, string Name, JsonObject Arguments, JsonObject? ProviderData = null);
 
 /// <summary>Репліка розмови: користувача (<see cref="Text"/>), моделі (текст і/або виклики) чи результат інструмента.</summary>
 /// <param name="Role"><c>user</c>, <c>assistant</c> або <c>tool</c>.</param>
@@ -117,7 +119,7 @@ public sealed class LlmChat
             [.. turns.Select(t => new ChatMessage(
                 t.Role switch { "assistant" => ChatRole.Assistant, "tool" => ChatRole.Tool, _ => ChatRole.User },
                 t.Text,
-                t.ToolCalls?.Select(c => new ChatToolCall(c.Id, c.Name, c.Arguments)).ToList(),
+                t.ToolCalls?.Select(c => new ChatToolCall(c.Id, c.Name, c.Arguments, c.ProviderData)).ToList(),
                 t.ToolCallId))],
             [.. tools.Select(t => new ChatTool(t.Name, t.Description, t.InputSchema))],
             OutputSchema: outputSchema,
@@ -125,6 +127,6 @@ public sealed class LlmChat
             maxTokens ?? MaxTokens,
             credential);
         var response = await chat.ChatAsync(request, ct).ConfigureAwait(false);
-        return new LlmReply(response.Text ?? "", [.. response.ToolCalls.Select(c => new LlmToolCall(c.Id, c.Name, c.Arguments ?? []))]);
+        return new LlmReply(response.Text ?? "", [.. response.ToolCalls.Select(c => new LlmToolCall(c.Id, c.Name, c.Arguments ?? [], c.ProviderData))]);
     }
 }

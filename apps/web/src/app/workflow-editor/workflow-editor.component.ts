@@ -1074,6 +1074,16 @@ export class WorkflowEditorComponent implements OnInit {
       if (this.globalAssistant.open()) untracked(() => this.assistantOpen.set(false));
     });
     this.destroyRef.onDestroy(() => this.globalAssistant.setNode(null));
+    // Застосована пропозиція помічника змінила збережений сценарій, який відкрито тут, — перечитуємо його (F3-115).
+    effect(() => {
+      const change = this.globalAssistant.workflowChanged();
+      if (!change) return;
+      untracked(() => {
+        if (change.workflowId !== this.workflowId() || this.version()) return;
+        this.reloadingAfterAssistant = true;
+        this.reloadTick.update((n) => n + 1);
+      });
+    });
     // Панель вузла, що відкрилася, звужує канвас: вибраний вузол не має лишитися за його краєм (F3-88).
     effect(() => {
       const id = this.selectedNode()?.id;
@@ -1088,15 +1098,19 @@ export class WorkflowEditorComponent implements OnInit {
 
   /** `workflowId` як потік: компонент перевикористовується при переході між сценаріями. */
   /** Id і версія для перегляду: зміна будь-чого перезавантажує редактор. */
-  private readonly source$ = toObservable(computed(() => ({ id: this.workflowId(), version: this.version() })));
+  private readonly source$ = toObservable(computed(() => ({ id: this.workflowId(), version: this.version(), tick: this.reloadTick() })));
+  /** Збільшується, коли помічник змінив цей сценарій на сервері: редактор перечитує його (F3-115). */
+  private readonly reloadTick = signal(0);
+  private reloadingAfterAssistant = false;
 
   ngOnInit(): void {
     // Перезавантажуємо за кожним id (і версією для перегляду).
     this.source$
       .pipe(
         tap(() => {
-          // Зміни попереднього сценарію зберігаються до переходу; стан автозбереження — з нуля.
-          this.autosave.flush();
+          // Зміни попереднього сценарію зберігаються до переходу; стан автозбереження — з нуля. Коли сценарій змінив помічник,
+          // відкладена правка редактора застаріла (вона затерла б зміну помічника) — її відкидаємо.
+          if (!this.reloadingAfterAssistant) this.autosave.flush();
           this.autosave.reset();
           this.loading.set(true);
           this.error.set(null);
@@ -1142,6 +1156,10 @@ export class WorkflowEditorComponent implements OnInit {
           }
         }
         this.loading.set(false);
+        if (this.reloadingAfterAssistant) {
+          this.reloadingAfterAssistant = false;
+          if (loaded) this.showNotice($localize`:@@workfloweditor.assistant.reloaded:Помічник змінив сценарій — відкрито актуальну версію.`);
+        }
       });
 
     this.reloadServers();

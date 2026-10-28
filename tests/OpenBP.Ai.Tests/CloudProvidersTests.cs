@@ -6,7 +6,7 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Ai.Tests;
 
-/// <summary>Провайдери <c>anthropic</c> і <c>openai</c> проти фейкового HTTP.</summary>
+/// <summary>Провайдери <c>anthropic</c>, <c>openai</c> і <c>gemini</c> проти фейкового HTTP.</summary>
 public sealed class CloudProvidersTests
 {
     private const string ApiKey = "sk-cloud-secret-777";
@@ -132,6 +132,49 @@ public sealed class CloudProvidersTests
         var body = JsonNode.Parse(request.Body)!;
         Assert.Equal(50, body["max_tokens"]!.GetValue<int>());
         Assert.Equal("json_schema", body["response_format"]!["type"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Gemini_ToolCall_EchoesThoughtSignature_InNextRequest()
+    {
+        var http = new Fake(_ => Json(JsonNode.Parse("""
+            { "choices": [ { "message": { "role": "assistant", "content": null, "tool_calls": [
+              { "id": "call_1", "type": "function", "function": { "name": "list_workflows", "arguments": "{}" },
+                "extra_content": { "google": { "thought_signature": "sig-abc" } } } ] } } ] }
+            """)!));
+        var chat = new LlmChat(new HttpClient(http));
+        var credential = new JsonObject { ["apiKey"] = ApiKey };
+
+        var reply = await chat.SendAsync("gemini", credential, "gemini-x", "s", [LlmTurn.User("q")], [], CancellationToken.None);
+        var call = Assert.Single(reply.ToolCalls);
+        await chat.SendAsync(
+            "gemini", credential, "gemini-x", "s",
+            [LlmTurn.User("q"), new LlmTurn("assistant", null, reply.ToolCalls), LlmTurn.Tool(call.Id, "[]")],
+            [], CancellationToken.None);
+
+        var sent = JsonNode.Parse(http.Requests[1].Body)!["messages"]!.AsArray().Single(m => m!["role"]!.GetValue<string>() == "assistant")!;
+        Assert.Equal("sig-abc", sent["tool_calls"]![0]!["extra_content"]!["google"]!["thought_signature"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task OpenAi_ToolCall_WithoutExtraContent_SendsNoExtraContent()
+    {
+        var http = new Fake(_ => Json(JsonNode.Parse("""
+            { "choices": [ { "message": { "role": "assistant", "tool_calls": [
+              { "id": "call_1", "type": "function", "function": { "name": "t", "arguments": "{}" } } ] } } ] }
+            """)!));
+        var chat = new LlmChat(new HttpClient(http));
+        var credential = new JsonObject { ["apiKey"] = ApiKey };
+
+        var reply = await chat.SendAsync("openai", credential, "gpt-x", "s", [LlmTurn.User("q")], [], CancellationToken.None);
+        await chat.SendAsync(
+            "openai", credential, "gpt-x", "s",
+            [LlmTurn.User("q"), new LlmTurn("assistant", null, reply.ToolCalls), LlmTurn.Tool("call_1", "[]")],
+            [], CancellationToken.None);
+
+        Assert.Null(Assert.Single(reply.ToolCalls).ProviderData);
+        var sent = JsonNode.Parse(http.Requests[1].Body)!["messages"]!.AsArray().Single(m => m!["role"]!.GetValue<string>() == "assistant")!;
+        Assert.Null(sent["tool_calls"]![0]!["extra_content"]);
     }
 
     [Fact]

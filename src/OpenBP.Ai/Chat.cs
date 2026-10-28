@@ -19,7 +19,9 @@ internal enum ChatRole
 /// <param name="Id">Id виклику від провайдера (для відповіді результатом).</param>
 /// <param name="Name">Назва функції, як її бачить модель.</param>
 /// <param name="Arguments">Аргументи; <c>null</c> — модель передала не JSON-об'єкт.</param>
-internal sealed record ChatToolCall(string Id, string Name, JsonObject? Arguments);
+/// <param name="ProviderData">Непрозорі дані провайдера до виклику, які треба повернути в наступному запиті без змін
+/// (Gemini: <c>extra_content.google.thought_signature</c>); <c>null</c> — немає.</param>
+internal sealed record ChatToolCall(string Id, string Name, JsonObject? Arguments, JsonObject? ProviderData = null);
 
 /// <summary>Повідомлення діалогу, не залежне від провайдера.</summary>
 /// <param name="Role">Роль.</param>
