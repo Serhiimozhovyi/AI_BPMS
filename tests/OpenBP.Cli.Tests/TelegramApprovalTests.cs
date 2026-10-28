@@ -58,7 +58,7 @@ public sealed class FakeTelegramApprovals : IDisposable
 {
     public const string Token = "777:approval-test-SECRET";
 
-    private readonly HttpListener _listener = new();
+    private readonly HttpListener _listener;
     private readonly Task _loop;
     private int _checks;
     private string? _token;
@@ -67,16 +67,35 @@ public sealed class FakeTelegramApprovals : IDisposable
 
     public FakeTelegramApprovals()
     {
-        int port;
-        using (var probe = new TcpListener(IPAddress.Loopback, 0))
+        // Порт спершу підбирається, а потім відпускається, тож паралельний тест може його перехопити:
+        // тоді беремо інший, а не падаємо.
+        for (var attempt = 0; ; attempt++)
         {
-            probe.Start();
-            port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            int port;
+            using (var probe = new TcpListener(IPAddress.Loopback, 0))
+            {
+                probe.Start();
+                port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            }
+
+            var address = $"http://127.0.0.1:{port}/";
+            var listener = new HttpListener();
+            listener.Prefixes.Add(address);
+            try
+            {
+                listener.Start();
+            }
+            catch (HttpListenerException) when (attempt < 10)
+            {
+                listener.Close();
+                continue;
+            }
+
+            _listener = listener;
+            Address = address;
+            break;
         }
 
-        Address = $"http://127.0.0.1:{port}/";
-        _listener.Prefixes.Add(Address);
-        _listener.Start();
         _loop = Task.Run(LoopAsync);
     }
 
@@ -97,8 +116,16 @@ public sealed class FakeTelegramApprovals : IDisposable
 
     public void Dispose()
     {
-        _listener.Stop();
-        _listener.Close();
+        try
+        {
+            _listener.Stop();
+            _listener.Close();
+        }
+        catch (HttpListenerException)
+        {
+            // Порт уже віддано; слухач і так зупинений.
+        }
+
         try
         {
             _loop.Wait(TimeSpan.FromSeconds(5));
