@@ -939,7 +939,7 @@
 - DoD: Vitest, Playwright з фейковим провайдером, lint/test/build зелені.
 
 ### F3-111 · UI: картки підтвердження змін
-- model: `sonnet` · status: `review` · depends: F3-110, F3-109
+- model: `sonnet` · status: `done` · depends: F3-110, F3-109
 - Що: картка «що буде створено/змінено» з кнопками «Застосувати» / «Скасувати», посилання на створене.
 - DoD: Vitest і Playwright (застосувати, скасувати), lint/test/build зелені.
 
