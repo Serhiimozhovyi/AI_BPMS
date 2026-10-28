@@ -90,7 +90,9 @@ export class Autosave<T, R = unknown> {
       next: (result) => {
         this.onSaved(result, value);
         if (generation !== this.generation) return;
-        this.errors.set([]);
+        // Порожній масив — новий об'єкт: без перевірки кожне вдале збереження перебудовувало б усі вузли канвасу
+        // (нотатка, яку саме редагують, втрачала фокус і зникала).
+        if (this.errors().length > 0) this.errors.set([]);
         this.message.set(null);
       },
       error: (e: unknown) => {
