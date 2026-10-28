@@ -958,7 +958,7 @@
 - Що: `docs/guide/users.md`, приклади розмов, наскрізний Playwright з фейковим провайдером.
 - DoD: документація і e2e зелені.
 ### F3-107 · Помічник: список моделей з основною
-- model: `sonnet` · status: `review` · depends: F3-106
+- model: `sonnet` · status: `done` · depends: F3-106
 - Що: у «Налаштування → Помічник» замість одного поля «облікові дані + модель» — список підключених моделей (Ollama, Gemini, Anthropic…) із позначкою «Основна». `PUT /settings/assistant` приймає `profiles[]` і `primaryIndex` (старе тіло `{ credentialId, model }` працює як одна модель); `credentialId`/`model` у відповіді та в сховищі — дзеркало основної, тож побудова з опису, чат і пояснення сценаріїв не змінюються.
 - DoD: тести Api (кілька моделей, основна, помилки), Vitest на форму списку; `architecture.md` §10 і `docs/guide/ai-connectors.md` оновлено; build/test/format, lint/test/build/e2e зелені.
 
