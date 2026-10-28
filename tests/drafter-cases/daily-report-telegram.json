@@ -1,0 +1,17 @@
+{
+  "id": "daily-report-telegram",
+  "description": "Щоранку о 9:00 надсилати звіт про продажі в Telegram.",
+  "expect": {
+    "trigger": [
+      "core.schedule"
+    ],
+    "requireTypes": [
+      [
+        "mcp.tool",
+        "core.set"
+      ]
+    ],
+    "minNodes": 2,
+    "maxNodes": 6
+  }
+}

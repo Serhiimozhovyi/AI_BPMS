@@ -237,4 +237,51 @@ public class DrafterTests(ApiFactory api)
         var empty = await editor.PostAsJsonAsync($"/api/v1/workflows/{workflowId}/draft", new { description = " " });
         Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
     }
+
+    [Fact]
+    public async Task Draft_eval_command_reports_validity_structure_and_retries()
+    {
+        var provider = new FakeProvider((_, attempt) => attempt == 1 ? Plan("core.startProcess") : Plan(), (name, _) => GoodNode(name));
+        var (editor, workflowId) = await PrepareAsync(provider);
+        var key = (await (await editor.PostAsJsonAsync("/api/v1/api-keys", new { name = "eval" })).Content.ReadFromJsonAsync<ApiKeyCreated>())!.Key;
+        var dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"openbp-eval-{Guid.NewGuid():N}")).FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(dir, "a.json"), new JsonObject
+            {
+                ["id"] = "case-a",
+                ["description"] = Description,
+                ["expect"] = JsonNode.Parse("""{ "trigger": ["core.manualTrigger"], "requireTypes": [["core.approval"]], "minBranches": 1, "minLanes": 2 }"""),
+            }.ToJsonString());
+            await File.WriteAllTextAsync(Path.Combine(dir, "b.json"), new JsonObject
+            {
+                ["id"] = "case-b",
+                ["description"] = Description,
+                ["expect"] = JsonNode.Parse("""{ "trigger": ["core.schedule"] }"""),
+            }.ToJsonString());
+
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+            var code = await OpenBP.Cli.CliApp.RunAsync(
+                ["draft-eval", "--workflow", workflowId.ToString(), "--cases", dir, "--url", "http://localhost", "--api-key", key],
+                stdout,
+                stderr,
+                api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(new LlmChat(new HttpClient(provider))))).Server.CreateHandler(),
+                CancellationToken.None);
+
+            var output = stdout.ToString();
+            Assert.True(code == OpenBP.Cli.CliApp.Ok, stderr.ToString() + output);
+            Assert.Contains("Модель: fake-model; описів: 2", output, StringComparison.Ordinal);
+            Assert.Contains("| case-a | так | так | 1 |", output, StringComparison.Ordinal);
+            Assert.Contains("| case-b | так | ні: тригер core.manualTrigger, очікувався core.schedule | 0 |", output, StringComparison.Ordinal);
+            Assert.Contains("Валідних сценаріїв: 2 з 2", output, StringComparison.Ordinal);
+            Assert.Contains("Збігів структури: 1 з 2", output, StringComparison.Ordinal);
+            Assert.Contains("Повторів: 1", output, StringComparison.Ordinal);
+            Assert.DoesNotContain(key, output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

@@ -84,12 +84,31 @@ function assistantStream(definition: unknown): string {
   return events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
 }
 
+/** Відповідь фейкової побудови з опису (F3-103): кроки прогресу, сценарій з доріжками, «Що доналаштувати». */
+function draftStream(): string {
+  const definition = {
+    ...TEMPLATES[0].definition,
+    name: 'E2E',
+    business: { lanes: [{ id: 'lane_1', name: 'Працівник' }] },
+  };
+  const events = [
+    { type: 'step', stage: 'plan', text: 'Складаю план процесу' },
+    { type: 'step', stage: 'plan', ok: true, text: 'План: кроків 2' },
+    { type: 'step', stage: 'node', index: 1, total: 1, text: 'Налаштовую «Привітання»' },
+    { type: 'definition', definition },
+    { type: 'todo', todo: [{ nodeId: 'n_greeting', text: 'Привітання: вкажіть поля' }] },
+    { type: 'done' },
+  ];
+  return events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+}
+
 /** Фейковий Api: сценарій з версіями; кожен `PUT` — нова версія. */
 class FakeApi {
   version = 1;
   /** Визначення кожної збереженої версії (індекс = номер − 1) — для «Історії» (F3-61). */
   saved: Definition[] = [];
   assistantRequests: unknown[] = [];
+  draftRequests: unknown[] = [];
   /** Останнє виконання сценарію (F3-76); `null` — запусків не було. */
   lastExecution: { summary: Record<string, unknown>; steps: Record<string, unknown>[] } | null = null;
   definition: Definition = {
@@ -136,6 +155,10 @@ class FakeApi {
       if (path === `/api/v1/workflows/${WORKFLOW_ID}/assistant` && request.method() === 'POST') {
         this.assistantRequests.push(request.postDataJSON());
         return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(TEMPLATES[0].definition) });
+      }
+      if (path === `/api/v1/workflows/${WORKFLOW_ID}/draft` && request.method() === 'POST') {
+        this.draftRequests.push(request.postDataJSON());
+        return route.fulfill({ status: 200, contentType: 'text/event-stream', body: draftStream() });
       }
       if (path === '/api/v1/executions' && request.method() === 'GET') {
         const items = this.lastExecution ? [this.lastExecution.summary] : [];
@@ -654,6 +677,7 @@ test('F3-60: «Описати процес» → помічник будує с�
   await page.getByTestId('start-describe').click();
   await expect(page.getByTestId('assistant-panel')).toBeVisible();
   await expect(page.getByTestId('empty-start')).toHaveCount(0);
+  await page.getByTestId('assistant-mode').click();
   await page.getByTestId('assistant-input').fill('зроби сценарій з тригером і Set');
   await page.getByTestId('assistant-send').click();
 
@@ -668,6 +692,34 @@ test('F3-60: «Описати процес» → помічник будує с�
 
   // Відповідь помічника — одна правка в історії: «Скасувати» повертає порожній сценарій.
   await page.getByTestId('assistant-close').click();
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
+});
+
+test('F3-104: «Описати процес» → вузли на канвасі, «Що доналаштувати» відкриває панель вузла; «Скасувати» повертає порожній канвас', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+
+  await page.getByTestId('start-describe').click();
+  await expect(page.getByTestId('describe-process')).toBeVisible();
+  await expect(page.getByTestId('describe-replace-warning')).toHaveCount(0);
+  await page.getByTestId('describe-input').fill('працівник подає заявку, система вітає');
+  await page.getByTestId('describe-run').click();
+
+  await expect.poll(() => api.draftRequests.length).toBe(1);
+  expect(api.draftRequests).toEqual([expect.objectContaining({ description: 'працівник подає заявку, система вітає' })]);
+  // Є доріжки — відкрився «Бізнес»-вигляд, а «Що доналаштувати» лишилось поруч.
+  await expect(page.getByTestId('business-view')).toBeVisible();
+  await expect(page.getByTestId('describe-todo-item')).toContainText('Привітання: вкажіть поля');
+
+  // Клік по пункту відкриває вузол у технічному вигляді.
+  await page.getByTestId('describe-todo-item').click();
+  await expect(page.getByTestId('node-panel-name')).toHaveText('Привітання');
+  await expect(card(page, 'Старт')).toBeVisible();
+  await expect(card(page, 'Привітання')).toBeVisible();
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
+
   await page.getByTestId('undo').click();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
 });

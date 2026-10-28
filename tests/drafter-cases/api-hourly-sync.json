@@ -1,0 +1,17 @@
+{
+  "id": "api-hourly-sync",
+  "description": "Щогодини забирати курси валют із зовнішнього API й оновлювати рядок у таблиці.",
+  "expect": {
+    "trigger": [
+      "core.schedule"
+    ],
+    "requireTypes": [
+      [
+        "mcp.tool",
+        "core.set"
+      ]
+    ],
+    "minNodes": 2,
+    "maxNodes": 6
+  }
+}

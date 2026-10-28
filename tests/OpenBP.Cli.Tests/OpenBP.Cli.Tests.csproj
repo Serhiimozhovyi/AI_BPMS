@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Еталонні описи побудови сценарію з опису (F3-105). -->
+    <None Include="../drafter-cases/*.json" Link="drafter-cases/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/OpenBP.Cli/OpenBP.Cli.csproj" />
     <!-- Моки 1С і Telegram для прикладу examples/telegram-1c.json. -->
     <ProjectReference Include="../OpenBP.Mcp.Tests/FakeServer/OpenBP.Mcp.FakeServer.csproj" />

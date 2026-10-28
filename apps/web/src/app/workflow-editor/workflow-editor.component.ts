@@ -34,6 +34,8 @@ import { PathSegment, expressionFor } from '../canvas/data-schema';
 import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickAdd, quickAddSections, readRecent, rememberRecent, writeRecent } from '../canvas/quick-add';
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EmptyStartComponent } from '../canvas/empty-start.component';
+import { DraftTodoItem } from '../assistant/assistant-api.service';
+import { DraftResult } from '../assistant/describe-process.component';
 import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
 import { VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore } from '../workflows/version-history-dialog.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
@@ -182,7 +184,14 @@ export interface EditorErrorEvent {
       }
       @if (definition(); as def) {
         @if (view() === 'business') {
-          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
+          <div class="editor__body">
+            <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
+          @if (assistantOpen() && !readonly()) {
+            <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" [draftTodo]="draftTodo()" (definitionChange)="assistantChanged($event)" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
+            </aside>
+          }
+          </div>
         } @else {
         <div class="editor__body">
           @if (!readonly() && !paletteOpen()) {
@@ -287,7 +296,7 @@ export interface EditorErrorEvent {
           </div>
           @if (assistantOpen() && !readonly()) {
             <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
-              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" (definitionChange)="assistantChanged($event)" (closed)="assistantOpen.set(false)" />
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" [draftTodo]="draftTodo()" (definitionChange)="assistantChanged($event)" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
             </aside>
           } @else if (selectedNode(); as node) {
             <aside class="editor__panel" data-testid="editor-panel" [class.editor__panel--wide]="wide()" [style.width.px]="panelWidth()">
@@ -450,6 +459,7 @@ export interface EditorErrorEvent {
     .editor__business {
       flex: 1;
       min-height: 0;
+      min-width: 0;
     }
 
 
@@ -1236,6 +1246,7 @@ export class WorkflowEditorComponent implements OnInit {
   /** Панель «Помічник» замість панелі вузла (F3-60). */
   protected readonly assistantOpen = signal(false);
   protected readonly assistantPrompt = signal<AssistantPrompt | null>(null);
+  protected readonly draftTodo = signal<DraftTodoItem[]>([]);
   private assistantSeq = 0;
 
   protected toggleAssistant(): void {
@@ -1245,6 +1256,23 @@ export class WorkflowEditorComponent implements OnInit {
   /** Відповідь помічника — одна правка з історією: Ctrl+Z скасовує її цілком. */
   protected assistantChanged(definition: WorkflowDefinition): void {
     this.changed(definition);
+  }
+
+  /**
+   * Сценарій, побудований з опису (F3-104): звичайна правка з історією — Ctrl+Z повертає попередній (порожній) канвас.
+   * Є доріжки — відкриваємо «Бізнес»-вигляд, щоб одразу побачити, хто що робить.
+   */
+  protected draftedFromDescription(result: DraftResult): void {
+    this.draftTodo.set(result.todo);
+    this.selection.set(EMPTY_SELECTION);
+    this.changed(result.definition);
+    if (result.definition.business?.lanes?.length) this.setView('business');
+  }
+
+  /** «Що доналаштувати»: панель вузла замість панелі помічника; список лишається — його видно, коли знову відкрити «Описати процес». */
+  protected openDraftTodo(nodeId: string): void {
+    this.assistantOpen.set(false);
+    this.openStep(nodeId);
   }
 
   /** Швидкі дії: пояснити вузол, виправити помилку (з текстом помилки й входом), написати вираз; «Описати процес». */
@@ -1266,7 +1294,7 @@ export class WorkflowEditorComponent implements OnInit {
       send = false;
     }
     this.assistantOpen.set(true);
-    this.assistantPrompt.set({ text, send, seq: ++this.assistantSeq });
+    this.assistantPrompt.set({ text, send, seq: ++this.assistantSeq, mode: kind === 'describe' ? 'describe' : undefined });
   }
 
   /** Порожній сценарій → «Додати тригер» (F3-59). */

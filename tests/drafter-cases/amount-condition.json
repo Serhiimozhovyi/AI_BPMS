@@ -1,0 +1,20 @@
+{
+  "id": "amount-condition",
+  "description": "Коли менеджер вручну вводить суму замовлення: якщо сума більша за 1000, повідомити директора, інакше просто записати замовлення.",
+  "expect": {
+    "trigger": [
+      "core.manualTrigger",
+      "core.formTrigger",
+      "core.webhook"
+    ],
+    "requireTypes": [
+      [
+        "core.if",
+        "core.switch"
+      ]
+    ],
+    "minBranches": 1,
+    "minNodes": 4,
+    "maxNodes": 8
+  }
+}

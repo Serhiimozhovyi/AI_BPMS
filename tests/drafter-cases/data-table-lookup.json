@@ -1,0 +1,17 @@
+{
+  "id": "data-table-lookup",
+  "description": "Коли на вебхук приходить звернення, шукати клієнта в таблиці проєкту за телефоном. Якщо клієнта немає, створити запис, інакше оновити останню дату звернення.",
+  "expect": {
+    "trigger": [
+      "core.webhook"
+    ],
+    "requireTypes": [
+      [
+        "core.dataTable"
+      ]
+    ],
+    "minBranches": 1,
+    "minNodes": 4,
+    "maxNodes": 9
+  }
+}

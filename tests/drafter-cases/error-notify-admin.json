@@ -1,0 +1,17 @@
+{
+  "id": "error-notify-admin",
+  "description": "Якщо будь-який сценарій завершився помилкою, написати адміністратору в Telegram з назвою сценарію й текстом помилки.",
+  "expect": {
+    "trigger": [
+      "core.errorTrigger"
+    ],
+    "requireTypes": [
+      [
+        "mcp.tool",
+        "core.set"
+      ]
+    ],
+    "minNodes": 2,
+    "maxNodes": 5
+  }
+}
