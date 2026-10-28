@@ -989,7 +989,7 @@
           "Помічник"
         ],
         "summary": "Змінити налаштування помічника",
-        "description": "Лише admin. Credential типу `anthropic`, `openai` або `openai-compatible` і модель; `credentialId: null` вимикає помічника.",
+        "description": "Лише admin. Credential типу `anthropic`, `openai`, `openai-compatible` або `ollama` і модель; `credentialId: null` вимикає помічника.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1007,6 +1007,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AssistantSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/settings/assistant/models": {
+      "get": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Моделі credential'а помічника",
+        "description": "Лише admin. Для credential типу `ollama` — моделі, встановлені в Ollama (`GET /api/tags`); для інших типів — порожній список. Ollama недоступна — 502 ASSISTANT_PROVIDER_ERROR.",
+        "parameters": [
+          {
+            "name": "credentialId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssistantModel"
+                  }
                 }
               }
             }
@@ -10565,6 +10618,17 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "AssistantModel": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
           }
         }
       }

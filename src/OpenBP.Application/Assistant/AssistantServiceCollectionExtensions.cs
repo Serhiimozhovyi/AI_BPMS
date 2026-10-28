@@ -27,6 +27,11 @@ public static class AssistantServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(_ => new LlmChat(new HttpClient { Timeout = AssistantLimits.Default.Timeout }));
         services.AddScoped<IAssistantSettingsService, AssistantSettingsService>();
+        services.AddScoped<IAssistantModelsService>(sp => new AssistantModelsService(
+            sp.GetRequiredService<ICurrentUser>(),
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<CredentialEncryptionKey>(),
+            sp.GetRequiredService<LlmChat>()));
         services.AddScoped<IWorkflowExplanationService, WorkflowExplanationService>();
         services.TryAddScoped(sp => new WorkflowExplainer(
             sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),

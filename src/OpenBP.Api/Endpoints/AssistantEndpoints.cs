@@ -26,7 +26,13 @@ public static class AssistantEndpoints
             service.SetAsync(body, ct))
             .WithTags(OpenApiSetup.Tags.Assistant)
             .WithSummary("Змінити налаштування помічника")
-            .WithDescription("Лише admin. Credential типу `anthropic`, `openai` або `openai-compatible` і модель; `credentialId: null` вимикає помічника.");
+            .WithDescription("Лише admin. Credential типу `anthropic`, `openai`, `openai-compatible` або `ollama` і модель; `credentialId: null` вимикає помічника.");
+
+        api.MapGet("/settings/assistant/models", (Guid credentialId, IAssistantModelsService service, CancellationToken ct) =>
+            service.ListAsync(credentialId, ct))
+            .WithTags(OpenApiSetup.Tags.Assistant)
+            .WithSummary("Моделі credential'а помічника")
+            .WithDescription("Лише admin. Для credential типу `ollama` — моделі, встановлені в Ollama (`GET /api/tags`); для інших типів — порожній список. Ollama недоступна — 502 ASSISTANT_PROVIDER_ERROR.");
 
         api.MapPost("/workflows/{id:guid}/assistant", AskAsync)
             .WithTags(OpenApiSetup.Tags.Assistant)

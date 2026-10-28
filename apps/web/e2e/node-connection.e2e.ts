@@ -111,9 +111,16 @@ test('вузол Telegram: «+ Нове підключення…» → токе
 
   const dialog = page.getByTestId('new-connection');
   await expect(dialog.getByTestId('catalog-connect')).toBeVisible();
-  await dialog.getByLabel('Токен бота').fill('123:abc');
+  // Форма може перемонтуватися, поки діалог дочитує каталог і типи облікових даних, і тоді вписаний токен зникає:
+  // токен вписується, доки не лишиться в полі, а кнопка не стане активною (інакше «Підключити» мовчки нічого не надсилає).
+  const save = dialog.getByTestId('credential-save');
+  await expect(async () => {
+    await dialog.getByLabel('Токен бота').fill('123:abc');
+    await expect(dialog.getByLabel('Токен бота')).toHaveValue('123:abc');
+    await expect(save).toBeEnabled();
+  }).toPass({ timeout: 10_000 });
   const installed = page.waitForResponse((r) => r.url().endsWith('/connectors/catalog/telegram/install') && r.request().method() === 'POST');
-  await dialog.getByTestId('credential-save').click();
+  await save.click();
   await installed;
 
   await expect(dialog).toHaveCount(0, { timeout: 15_000 });

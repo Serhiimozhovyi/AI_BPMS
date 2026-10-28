@@ -38,7 +38,7 @@ public sealed record LlmReply(string Text, IReadOnlyList<LlmToolCall> ToolCalls)
 
 /// <summary>
 /// Розмова з інструментами (F3-60, помічник у редакторі) поверх тих самих провайдерів, що й <c>ai.llm</c>/<c>ai.agent</c>:
-/// провайдер — тип credential'а (<c>anthropic</c>, <c>openai</c>, <c>openai-compatible</c>). Один виклик — одна відповідь
+/// провайдер — тип credential'а (<c>anthropic</c>, <c>openai</c>, <c>openai-compatible</c>, <c>ollama</c>). Один виклик — одна відповідь
 /// моделі; цикл «виклик інструмента → результат» веде викликач. Ключ іде лише в заголовки запиту.
 /// </summary>
 public sealed class LlmChat
@@ -48,6 +48,7 @@ public sealed class LlmChat
     private readonly IChatProvider anthropic;
     private readonly IChatProvider openAi;
     private readonly IChatProvider openAiCompatible;
+    private readonly OllamaProvider ollama;
 
     /// <summary>Створює клієнта.</summary>
     /// <param name="http">HTTP-клієнт провайдерів.</param>
@@ -58,10 +59,21 @@ public sealed class LlmChat
         anthropic = new AnthropicProvider(http);
         openAi = new OpenAiProvider(compatible);
         openAiCompatible = compatible;
+        ollama = new OllamaProvider(http);
     }
 
     /// <summary>Типи credential'ів, з якими працює розмова.</summary>
-    public static IReadOnlyList<string> Providers { get; } = ["anthropic", "openai", "openai-compatible"];
+    public static IReadOnlyList<string> Providers { get; } = ["anthropic", "openai", "openai-compatible", "ollama"];
+
+    /// <summary>Моделі, встановлені в Ollama (<c>GET /api/tags</c>), за алфавітом.</summary>
+    /// <param name="credential">Розшифровані дані credential'а типу <c>ollama</c>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="LlmException">Ollama недоступна або відповідь нерозбірлива.</exception>
+    public Task<IReadOnlyList<string>> ListOllamaModelsAsync(JsonObject credential, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        return ollama.ListModelsAsync(credential, ct);
+    }
 
     /// <summary>Надсилає розмову і повертає наступну відповідь моделі.</summary>
     /// <param name="provider">Тип credential'а.</param>
@@ -91,7 +103,8 @@ public sealed class LlmChat
             "anthropic" => anthropic,
             "openai" => openAi,
             "openai-compatible" => openAiCompatible,
-            _ => throw new LlmException($"Невідомий провайдер «{provider}». Оберіть credential типу anthropic, openai або openai-compatible."),
+            "ollama" => ollama,
+            _ => throw new LlmException($"Невідомий провайдер «{provider}». Оберіть credential типу anthropic, openai, openai-compatible або ollama."),
         };
         var request = new ChatRequest(
             model,

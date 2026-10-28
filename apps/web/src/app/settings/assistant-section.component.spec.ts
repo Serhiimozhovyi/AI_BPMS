@@ -35,4 +35,24 @@ describe('AssistantSection', () => {
     expect(host.querySelector('[data-testid="assistant-saved"]')).not.toBeNull();
     http.verify();
   });
+
+  it('для Ollama підставляє встановлені моделі зі списку', () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const fixture = TestBed.createComponent(AssistantSection);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/settings/assistant').flush({ credentialId: null, credentialName: null, provider: null, model: null, configured: false });
+    http.expectOne('/api/v1/credentials/options').flush([{ id: 'c3', name: 'Мій Mac', type: 'ollama' }]);
+    fixture.detectChanges();
+
+    fixture.componentInstance['credential'].setValue('c3');
+    const request = http.expectOne((r) => r.url === '/api/v1/settings/assistant/models');
+    expect(request.request.params.get('credentialId')).toBe('c3');
+    request.flush([{ name: 'qwen3:14b' }, { name: 'qwen3:8b' }]);
+    fixture.detectChanges();
+
+    const options = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('datalist option')).map((o) => o.getAttribute('value'));
+    expect(options).toEqual(['qwen3:14b', 'qwen3:8b']);
+    http.verify();
+  });
 });

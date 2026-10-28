@@ -140,6 +140,12 @@ public static class CredentialTypes
             [new("env", "Змінні середовища", CredentialFieldKind.SecretMap, true)]),
         Build("openai-compatible", "LLM: OpenAI-сумісний (Ollama, vLLM…)", "Вузол ai.llm з провайдером openai-compatible.",
             [new("baseUrl", "Адреса API", CredentialFieldKind.Url, true), new("apiKey", "API-ключ", CredentialFieldKind.Secret, false)]),
+        Build("ollama", "LLM: Ollama (локально)", "Вузол ai.llm і помічник з провайдером ollama: рідний API Ollama з довгим контекстом і вимкненим міркуванням.",
+            [
+                new("baseUrl", "Адреса Ollama (типово http://host.docker.internal:11434)", CredentialFieldKind.Url, false),
+                new("contextLength", "Контекст, токенів (типово 16384)", CredentialFieldKind.Text, false),
+                new("keepAlive", "Скільки тримати модель у пам'яті (типово 10m)", CredentialFieldKind.Text, false),
+            ]),
         Build("anthropic", "LLM: Anthropic", "Вузол ai.llm з провайдером anthropic.",
             [new("apiKey", "API-ключ", CredentialFieldKind.Secret, true)]),
         Build("openai", "LLM: OpenAI", "Вузол ai.llm з провайдером openai.",

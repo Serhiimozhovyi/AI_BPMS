@@ -45,6 +45,7 @@ public sealed partial class AiAgentNode : INode
     private readonly IDataTableStore? _dataTables;
     private readonly TimeProvider _time;
     private readonly IChatProvider _openAiCompatible;
+    private readonly IChatProvider _ollama;
     private readonly IChatProvider _openAi;
     private readonly IChatProvider _anthropic;
 
@@ -62,6 +63,7 @@ public sealed partial class AiAgentNode : INode
         http ??= new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         var compatible = new OpenAiCompatibleProvider(http);
         _openAiCompatible = compatible;
+        _ollama = new OllamaProvider(http);
         _openAi = new OpenAiProvider(compatible);
         _anthropic = new AnthropicProvider(http);
     }
@@ -115,9 +117,10 @@ public sealed partial class AiAgentNode : INode
         var provider = p.Provider switch
         {
             "openai-compatible" => _openAiCompatible,
+            "ollama" => _ollama,
             "openai" => _openAi,
             "anthropic" => _anthropic,
-            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai або openai-compatible."),
+            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai, openai-compatible або ollama."),
         };
         if (string.IsNullOrWhiteSpace(p.Model) || string.IsNullOrWhiteSpace(p.Prompt))
         {

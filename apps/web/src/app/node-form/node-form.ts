@@ -41,7 +41,7 @@ export function parameterFields(
 export function credentialTypesFor(nodeType: string, requirement: CredentialRequirement, parameters: Record<string, unknown>): string[] {
   if (nodeType === 'ai.llm' || nodeType === 'ai.agent') {
     const provider = parameters['provider'];
-    return typeof provider === 'string' && provider && !isExpressionText(provider) ? [provider] : ['anthropic', 'openai', 'openai-compatible'];
+    return typeof provider === 'string' && provider && !isExpressionText(provider) ? [provider] : ['anthropic', 'openai', 'openai-compatible', 'ollama'];
   }
   return [requirement.type];
 }
