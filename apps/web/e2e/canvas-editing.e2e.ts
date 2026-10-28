@@ -519,14 +519,17 @@ test('F3-50: з’єднання, відпущене в порожньому м�
   await expect(card(page, 'Ручний запуск')).toBeVisible();
 
   const a = (await card(page, 'Ручний запуск').boundingBox())!;
-  await page.mouse.move(a.x + a.width, a.y + a.height / 2);
+  await page.mouse.move(a.x + a.width - 4, a.y + a.height / 2);
+  await page.mouse.move(a.x + a.width, a.y + a.height / 2, { steps: 3 });
+  // Дати канвасу побачити наведення на порт до початку перетягування (інакше на повільному CI жест губиться).
+  await page.waitForTimeout(150);
   await page.mouse.down();
-  await page.mouse.move(a.x + a.width + 150, a.y + a.height / 2 + 40, { steps: 5 });
-  await page.mouse.move(a.x + a.width + 300, a.y + a.height / 2 + 80, { steps: 5 });
+  await page.mouse.move(a.x + a.width + 150, a.y + a.height / 2 + 40, { steps: 10 });
+  await page.mouse.move(a.x + a.width + 300, a.y + a.height / 2 + 80, { steps: 10 });
   await page.mouse.up();
 
   const popup = page.getByTestId('quick-add');
-  await expect(popup).toBeVisible();
+  await expect(popup).toBeVisible({ timeout: 10_000 });
   await popup.locator('[data-item="core.code"]').click();
 
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
