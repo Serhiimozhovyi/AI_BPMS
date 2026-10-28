@@ -63,7 +63,9 @@ test('кнопка «Увійти через …» → провайдер → п
   await expect(page.getByTestId('current-user')).toHaveText(USER.email);
   expect(loginRequests).toEqual(['?returnUrl=%2Fsettings']);
 
-  // Вихід; провайдер відмовляє (домен пошти) — повідомлення на сторінці входу.
+  // Вихід; провайдер відмовляє (домен пошти) — повідомлення на сторінці входу. Спершу чекаємо, доки лінива сторінка
+  // налаштувань стартує (її запит ключів іде в ngOnInit): запит після виходу дістає 401 і веде на `/login?returnUrl=…`.
+  await expect(page.getByTestId('key-name')).toBeVisible();
   await page.getByTestId('logout').click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/login?returnUrl=%2Fexecutions');
