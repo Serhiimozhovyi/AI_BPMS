@@ -301,6 +301,52 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Check_requests_a_token_without_storing_it_and_returns_only_the_outcome()
+    {
+        var (admin, _) = await LoginAsync();
+        var tokenUrl = OAuthUrl("/token").ToString();
+        var before = _server.ClientCalls;
+
+        var good = await admin.PostAsJsonAsync("/api/v1/credentials/check", new
+        {
+            type = "oauth2.clientCredentials",
+            data = new { tokenUrl, clientId = "svc", clientSecret = ClientSecret, scopes = "crm.read" },
+        });
+        var body = await good.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, good.StatusCode);
+        Assert.Equal(before + 1, _server.ClientCalls);
+        Assert.True(JsonDocument.Parse(body).RootElement.GetProperty("ok").GetBoolean());
+        Assert.DoesNotContain("cc-", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(ClientSecret, body, StringComparison.Ordinal);
+
+        var bad = JsonDocument.Parse(await (await admin.PostAsJsonAsync("/api/v1/credentials/check", new
+        {
+            type = "oauth2.clientCredentials",
+            data = new { tokenUrl, clientId = "svc", clientSecret = "wrong" },
+        })).Content.ReadAsStringAsync()).RootElement;
+        Assert.False(bad.GetProperty("ok").GetBoolean());
+        Assert.Equal("invalid_client", bad.GetProperty("error").GetString());
+
+        // Редагування: порожній секрет у формі береться зі збереженого credential'а.
+        var id = await CreateClientCredentialsAsync(admin);
+        var stored = JsonDocument.Parse(await (await admin.PostAsJsonAsync("/api/v1/credentials/check", new
+        {
+            type = "oauth2.clientCredentials",
+            credentialId = id,
+            data = new { scopes = "crm.write" },
+        })).Content.ReadAsStringAsync()).RootElement;
+        Assert.True(stored.GetProperty("ok").GetBoolean());
+        Assert.Equal("crm.write", _server.LastScope);
+        Assert.Null((await Store(refresh: false).GetDataAsync(id, CancellationToken.None))!["accessToken"]);
+
+        // Невірні дані й тип без перевірки — 400; viewer — 403.
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/v1/credentials/check", new { type = "oauth2.clientCredentials", data = new { clientId = "svc" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/v1/credentials/check", new { type = "bearer", data = new { token = "t" } })).StatusCode);
+        var (viewer, _) = await LoginAsync(UserRole.Viewer);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/v1/credentials/check", new { type = "oauth2.clientCredentials", data = new { tokenUrl } })).StatusCode);
+    }
+
+    [Fact]
     public async Task Connector_receives_client_credentials_token_through_the_map()
     {
         var (admin, _) = await LoginAsync();

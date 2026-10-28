@@ -33,6 +33,11 @@ public static class CredentialEndpoints
             .WithSummary("Створити облікові дані").WithDescription("Секрети шифруються (AES-256-GCM) і у відповідях не повертаються.")
             .Produces<CredentialSummary>(StatusCodes.Status201Created);
 
+        credentials.MapPost("/check", (CredentialCheckInput? input, ICredentialService service, CancellationToken ct) =>
+            service.CheckAsync(input ?? throw new ArgumentException("Тіло запиту має містити тип і дані.", nameof(input)), ct))
+            .WithSummary("Перевірити доступ без збереження")
+            .WithDescription("Для `oauth2.clientCredentials`: запитує токен у провайдера. Повертає `{ ok, error? }` (лише код помилки), токен не зберігається і не повертається.");
+
         credentials.MapPatch("/{id:guid}", (Guid id, CredentialUpdateInput? input, ICredentialService service, CancellationToken ct) =>
             service.UpdateAsync(id, input ?? new CredentialUpdateInput(), ct))
             .WithSummary("Змінити облікові дані").WithDescription("Часткова заміна: не вказані поля не змінюються, `null` видаляє поле.");

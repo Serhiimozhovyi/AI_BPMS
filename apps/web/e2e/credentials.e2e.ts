@@ -61,7 +61,7 @@ test('створити облікові дані → «заповнено», з�
 
   const row = page.locator('[data-credential="c1"]');
   await expect(row).toContainText('Anthropic прод');
-  await expect(row).toContainText('apiKey');
+  await expect(row).toContainText('API-ключ');
   expect(stored[0].data).toEqual({ apiKey: SECRET });
 
   // Редагування: поле позначене «заповнено», значення в DOM немає.

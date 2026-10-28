@@ -9,9 +9,11 @@ import { AuthService } from '../auth/auth.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { ProjectContextService } from '../projects/project-context.service';
 import {
+  CHECKABLE_TYPES,
   CredentialFormValue,
   PairValue,
   buildData,
+  checkMessage,
   emptyPair,
   formFields,
   initialValue,
@@ -112,19 +114,53 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
                 Додати пару
               </button>
             </fieldset>
+          } @else if (f.options) {
+            <mat-form-field appearance="outline" [attr.data-field]="f.name">
+              <mat-label>{{ label(f) }}</mat-label>
+              <mat-select
+                [attr.data-testid]="'field-' + f.name"
+                [value]="value().fields[f.name]"
+                (selectionChange)="setField(f.name, $event.value)"
+              >
+                @if (!f.required) {
+                  <mat-option value="" i18n="@@credentials.form.notSet">— не вказано —</mat-option>
+                }
+                @for (o of f.options; track o) {
+                  <mat-option [value]="o">{{ o }}</mat-option>
+                }
+              </mat-select>
+              @if (f.description) {
+                <mat-hint>{{ f.description }}</mat-hint>
+              }
+            </mat-form-field>
           } @else {
             <mat-form-field appearance="outline" [attr.data-field]="f.name">
-              <mat-label>{{ f.title }}</mat-label>
+              <mat-label>{{ label(f) }}</mat-label>
               <input
                 matInput
                 [attr.data-testid]="'field-' + f.name"
-                [type]="f.kind === 'secret' ? 'password' : 'text'"
+                [type]="f.kind === 'secret' && !revealed()[f.name] ? 'password' : 'text'"
                 [autocomplete]="f.kind === 'secret' ? 'new-password' : 'off'"
                 [value]="value().fields[f.name]"
-                [placeholder]="filled(f.name) ? filledLabel : ''"
+                [placeholder]="filled(f.name) ? filledLabel : (f.placeholder ?? '')"
                 (input)="setField(f.name, text($event))"
               />
-              @if (filled(f.name)) {
+              @if (f.kind === 'secret') {
+                <button
+                  mat-icon-button
+                  matSuffix
+                  type="button"
+                  [attr.data-testid]="'reveal-' + f.name"
+                  [attr.aria-label]="revealLabel"
+                  [attr.aria-pressed]="!!revealed()[f.name]"
+                  (click)="toggleReveal(f.name)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">{{ revealed()[f.name] ? 'visibility_off' : 'visibility' }}</span>
+                </button>
+              }
+              @if (f.description) {
+                <mat-hint>{{ f.description }}</mat-hint>
+              } @else if (filled(f.name)) {
                 <mat-hint i18n="@@credentials.form.filled">заповнено</mat-hint>
               }
             </mat-form-field>
@@ -136,10 +172,26 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
         <p role="alert" class="text-sm text-ac-red" data-testid="form-error">{{ e }}</p>
       }
 
-      <div class="flex gap-2">
-        <button mat-flat-button type="button" data-testid="credential-save" (click)="save()" [disabled]="saving() || !type()" i18n="@@credentials.form.save">
-          Зберегти
+      @if (checkResult(); as r) {
+        <p role="status" class="text-sm" [class.text-green-700]="r.ok" [class.text-ac-red]="!r.ok" data-testid="check-result">{{ r.message }}</p>
+      }
+
+      <div class="flex flex-wrap gap-2">
+        <button mat-flat-button type="button" data-testid="credential-save" (click)="save()" [disabled]="saving() || !type() || saveDisabled()">
+          {{ saveLabel() || defaultSaveLabel }}
         </button>
+        @if (checkable()) {
+          <button
+            mat-stroked-button
+            type="button"
+            data-testid="credential-check"
+            [disabled]="checking() || saving()"
+            (click)="check()"
+            i18n="@@credentials.form.check"
+          >
+            Перевірити
+          </button>
+        }
         <button mat-button type="button" data-testid="credential-cancel" (click)="cancelled.emit()" i18n="@@credentials.form.cancel">
           Скасувати
         </button>
@@ -166,16 +218,28 @@ export class CredentialFormComponent implements OnInit {
   /** Ключі першої мапи нового credential'а (змінні чи заголовки з маніфесту конектора, F6-16). */
   readonly presetKeys = input<string[]>([]);
 
+  /** Підпис кнопки збереження; порожній — «Зберегти» (у кроці «Підключення» каталогу — «Підключити»). */
+  readonly saveLabel = input('');
+  /** Заблокувати збереження, поки батьківська форма не готова (напр. не заповнені обов'язкові налаштування). */
+  readonly saveDisabled = input(false);
+
   readonly saved = output<CredentialSummary>();
   readonly cancelled = output<void>();
 
   readonly filledLabel = $localize`:@@credentials.form.filledPlaceholder:•••••• (заповнено)`;
+  readonly defaultSaveLabel = $localize`:@@credentials.form.save:Зберегти`;
+  readonly revealLabel = $localize`:@@credentials.form.reveal:Показати значення`;
+  private readonly optionalLabel = $localize`:@@credentials.form.optional:необов'язково`;
 
   readonly name = signal('');
   readonly typeName = signal<string | null>(null);
   readonly value = signal<CredentialFormValue>({ fields: {}, maps: {} });
   readonly errors = signal<string[]>([]);
   readonly saving = signal(false);
+  readonly checking = signal(false);
+  readonly checkResult = signal<{ ok: boolean; message: string } | null>(null);
+  /** Секретні поля, значення яких тимчасово показано (лише те, що користувач вписав сам). */
+  readonly revealed = signal<Record<string, boolean>>({});
   /** Проєкт нового credential'а (F6-14); `null` — спільний. */
   readonly projectId = signal<string | null>(null);
   readonly targets = computed(() => this.context.targets(this.auth.user()?.role === 'admin'));
@@ -189,6 +253,8 @@ export class CredentialFormComponent implements OnInit {
     const t = this.type();
     return t ? formFields(t) : [];
   });
+
+  readonly checkable = computed(() => CHECKABLE_TYPES.includes(this.typeName() ?? ''));
 
   ngOnInit(): void {
     const fixed = this.fixedProjectId();
@@ -218,6 +284,44 @@ export class CredentialFormComponent implements OnInit {
     if (t && !this.type()) this.typeName.set(t.type);
     this.value.set(t ? initialValue(t, this.credential()) : { fields: {}, maps: {} });
     this.errors.set([]);
+    this.checkResult.set(null);
+    this.revealed.set({});
+  }
+
+  /** Підпис поля; необов'язкове позначається, обов'язкове — ні. */
+  label(f: { title: string; required: boolean }): string {
+    return f.required ? f.title : `${f.title} (${this.optionalLabel})`;
+  }
+
+  toggleReveal(field: string): void {
+    this.revealed.update((r) => ({ ...r, [field]: !r[field] }));
+  }
+
+  /** Перевіряє доступ без збереження (F3-94): токен запитується в провайдера, результат — «працює» або причина. */
+  check(): void {
+    const t = this.type();
+    if (!t) return;
+    const { data, errors } = buildData(t, this.value(), this.credential());
+    this.errors.set(errors);
+    this.checkResult.set(null);
+    if (errors.length > 0) return;
+    this.checking.set(true);
+    this.api
+      .check(t.type, data ?? {}, this.credential()?.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (r) => {
+          this.checking.set(false);
+          this.checkResult.set({
+            ok: r.ok,
+            message: r.ok ? $localize`:@@credentials.check.ok:З'єднання працює: токен отримано.` : checkMessage(r.error),
+          });
+        },
+        error: (e: unknown) => {
+          this.checking.set(false);
+          this.errors.set(fieldErrors(e) ?? [apiErrorMessage(e)]);
+        },
+      });
   }
 
   filled(field: string): boolean {

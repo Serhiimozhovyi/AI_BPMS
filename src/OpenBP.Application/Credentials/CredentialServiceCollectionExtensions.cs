@@ -19,7 +19,8 @@ public static class CredentialServiceCollectionExtensions
         services.AddScoped<ICredentialService>(sp => new CredentialService(
             sp.GetRequiredService<OpenBpDbContext>(),
             sp.GetRequiredService<ICurrentUser>(),
-            new CredentialStore(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>())));
+            new CredentialStore(sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(), sp.GetRequiredService<CredentialEncryptionKey>()),
+            oauth: sp.GetService<OAuth2Client>()));
         services.AddScoped(sp => new OAuth2Service(
             sp.GetRequiredService<OpenBpDbContext>(),
             sp.GetRequiredService<ICurrentUser>(),

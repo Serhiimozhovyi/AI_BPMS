@@ -52,8 +52,17 @@ describe('CredentialsPage', () => {
     const { host } = await setup();
     const row = host.querySelector('[data-credential="c1"]')!;
     expect(row.textContent).toContain('LLM: Anthropic');
-    expect(row.textContent).toContain('apiKey');
+    // Заповнені поля — підписами типу, а не ключами даних.
+    expect(row.textContent).toContain('API-ключ');
+    expect(row.textContent).not.toContain('apiKey');
     expect(row.textContent).toContain('сценарій «Звіт»');
+  });
+
+  it('таблиця: кількість підключень, що використовують облікові дані', async () => {
+    const { host } = await setup([
+      { ...used, usedBy: { connectors: [{ id: 'k1', name: 'Бот 1' }, { id: 'k2', name: 'Бот 2' }], workflows: [] } },
+    ]);
+    expect(host.querySelector('[data-credential="c1"] [data-testid="connection-count"]')?.textContent?.trim()).toBe('2');
   });
 
   it('створення: єдиний тип обрано, ключ іде в POST, у таблиці значення немає', async () => {

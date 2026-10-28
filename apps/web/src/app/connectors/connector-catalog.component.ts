@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, injec
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { catchError, of } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { CredentialFormComponent } from '../credentials/credential-form.component';
-import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '../credentials/credentials-api.service';
+import { CredentialOption, CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '../credentials/credentials-api.service';
 import { ProjectContextService } from '../projects/project-context.service';
 import { credentialTypesFor } from './connector-form.component';
 import {
@@ -14,10 +17,13 @@ import {
   ConnectorDetail,
   ConnectorManifest,
   ConnectorManifestKey,
+  ConnectorManifestSetting,
   ConnectorTransport,
   ConnectorsApiService,
   apiErrorMessage,
+  manifestCredentialType,
   manifestKeys,
+  manifestSettings,
   manifestTransports,
 } from './connectors-api.service';
 
@@ -28,20 +34,100 @@ interface PendingCredential {
   keys: ConnectorManifestKey[];
 }
 
+/** Крок «Підключення» (F3-94): запис каталогу, для якого треба назва, налаштування й облікові дані. */
+interface Connecting {
+  entry: ConnectorCatalogEntry;
+  transport: ConnectorTransport;
+  /** Загальний тип облікових даних запису; `null` — облікові дані не потрібні. */
+  credentialType: string | null;
+  settings: ConnectorManifestSetting[];
+}
+
 /**
- * Каталог конекторів (F6-16): записи `GET /connectors/catalog`, «Встановити» одним кліком (сервер створює конектор
- * з типовими налаштуваннями) і одразу форма облікових даних з ключами з маніфесту. Готовий конектор — `installed`.
+ * Каталог конекторів (F6-16, F3-94): записи `GET /connectors/catalog`. «Встановити» відкриває крок «Підключення»:
+ * назва, налаштування з `settings` маніфесту й облікові дані загального типу — наявні (вибір) або нові (форма типу
+ * з підписаними полями, без імен змінних середовища); сервер створює конектор одним запитом. Запис без загального
+ * типу й налаштувань ставиться одразу, а старі ключі `env`/`headers` (psy-support) — формою пар після встановлення.
+ * Готовий конектор — `installed`.
  */
 @Component({
   selector: 'app-connector-catalog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatButtonToggleModule, MatProgressBarModule, CredentialFormComponent],
+  imports: [MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, CredentialFormComponent],
   template: `
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
     }
     @if (error()) {
       <p role="alert" class="mb-4 text-red-700" data-testid="catalog-error">{{ error() }}</p>
+    }
+
+    @if (connecting(); as c) {
+      <div class="mb-6 max-w-2xl rounded-lg border border-ac-line p-4" data-testid="catalog-connect">
+        <h2 class="mb-3 font-semibold" i18n="@@connectors.catalog.connectTitle">Підключити «{{ c.entry.manifest.name }}»</h2>
+        <div class="flex flex-col gap-2">
+          <mat-form-field appearance="outline">
+            <mat-label i18n="@@connectors.catalog.connectName">Назва підключення</mat-label>
+            <input matInput data-testid="connect-name" [value]="connectName()" (input)="connectName.set(text($event))" />
+          </mat-form-field>
+          @for (st of c.settings; track st.name) {
+            <mat-form-field appearance="outline" [attr.data-setting]="st.name">
+              <mat-label>{{ st.required ? st.title : st.title + ' (' + optionalLabel + ')' }}</mat-label>
+              <input
+                matInput
+                [attr.data-testid]="'setting-' + st.name"
+                [value]="settingValues()[st.name] ?? ''"
+                [placeholder]="st.placeholder ?? ''"
+                (input)="setSetting(st.name, text($event))"
+              />
+              @if (st.description) {
+                <mat-hint>{{ st.description }}</mat-hint>
+              }
+            </mat-form-field>
+          }
+          @if (c.credentialType) {
+            <mat-form-field appearance="outline">
+              <mat-label i18n="@@connectors.catalog.connectCredential">Облікові дані</mat-label>
+              <mat-select data-testid="connect-credential" [value]="credentialChoice()" (selectionChange)="credentialChoice.set($event.value)">
+                @for (o of existingCredentials(); track o.id) {
+                  <mat-option [value]="o.id" [attr.data-credential]="o.id">{{ o.name }}</mat-option>
+                }
+                <mat-option value="new" data-credential="new" i18n="@@connectors.catalog.connectNewCredential">+ Нові облікові дані</mat-option>
+              </mat-select>
+              <mat-hint i18n="@@connectors.catalog.connectCredentialHint">Наявні можна використати ще раз — у кількох підключеннях.</mat-hint>
+            </mat-form-field>
+            @if (credentialChoice() === 'new') {
+              <app-credential-form
+                [types]="credentialTypes()"
+                [allowedTypes]="[c.credentialType]"
+                [fixedProjectId]="projectId()"
+                [presetName]="c.entry.manifest.name"
+                [saveLabel]="connectLabel"
+                [saveDisabled]="connectDisabled()"
+                (saved)="onCredentialCreated($event)"
+                (cancelled)="cancelConnect()"
+              />
+            }
+          }
+          @if (connectError()) {
+            <p role="alert" class="text-sm text-ac-red" data-testid="connect-error">{{ connectError() }}</p>
+          }
+          @if (!c.credentialType || credentialChoice() !== 'new') {
+            <div class="flex gap-2">
+              <button
+                mat-flat-button
+                type="button"
+                data-testid="connect-submit"
+                [disabled]="connectDisabled()"
+                (click)="connect(c.credentialType ? credentialChoice() : undefined)"
+              >
+                {{ connectLabel }}
+              </button>
+              <button mat-button type="button" data-testid="connect-cancel" (click)="cancelConnect()" i18n="@@connectors.catalog.cancel">Скасувати</button>
+            </div>
+          }
+        </div>
+      </div>
     }
 
     @if (pending(); as p) {
@@ -112,8 +198,8 @@ interface PendingCredential {
               mat-flat-button
               type="button"
               data-testid="catalog-install"
-              [disabled]="installing() !== null || !canInstall()"
-              (click)="install(e)"
+              [disabled]="installing() !== null || connecting() !== null || !canInstall()"
+              (click)="begin(e)"
               i18n="@@connectors.catalog.install"
             >
               Встановити
@@ -146,6 +232,13 @@ export class ConnectorCatalogComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly installing = signal<string | null>(null);
   readonly pending = signal<PendingCredential | null>(null);
+  readonly connecting = signal<Connecting | null>(null);
+  readonly connectName = signal('');
+  readonly settingValues = signal<Record<string, string>>({});
+  /** Вибір облікових даних у кроці: id наявних або `new`. */
+  readonly credentialChoice = signal<string>('new');
+  readonly existingCredentials = signal<CredentialOption[]>([]);
+  readonly connectError = signal<string | null>(null);
   private readonly chosen = signal<Record<string, ConnectorTransport>>({});
 
   private readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
@@ -153,6 +246,17 @@ export class ConnectorCatalogComponent implements OnInit {
   readonly canInstall = computed(() => this.isAdmin() || this.context.manageable().length > 0);
 
   readonly transportLabel = $localize`:@@connectors.catalog.transport:Транспорт`;
+  readonly connectLabel = $localize`:@@connectors.catalog.connect:Підключити`;
+  readonly optionalLabel = $localize`:@@connectors.catalog.optionalShort:необов'язково`;
+
+  /** Проєкт нового підключення (заданий контекстом); `null` — спільний. */
+  readonly projectId = computed(() => this.context.initialTarget(this.isAdmin()) ?? null);
+  /** Не вистачає назви чи обов'язкових налаштувань. */
+  readonly connectDisabled = computed(() => {
+    const c = this.connecting();
+    if (!c || this.installing() !== null || !this.connectName().trim()) return true;
+    return c.settings.some((s) => s.required && !(this.settingValues()[s.name] ?? '').trim());
+  });
 
   ngOnInit(): void {
     this.load();
@@ -205,6 +309,93 @@ export class ConnectorCatalogComponent implements OnInit {
 
   credentialType(transport: ConnectorTransport): string {
     return credentialTypesFor(transport)[0];
+  }
+
+  text(event: Event): string {
+    return (event.target as HTMLInputElement).value;
+  }
+
+  setSetting(name: string, value: string): void {
+    this.settingValues.update((v) => ({ ...v, [name]: value }));
+  }
+
+  /**
+   * «Встановити»: запис із загальним типом облікових даних чи налаштуваннями відкриває крок «Підключення»,
+   * решта (без облікових даних, старі `env`/`headers`) ставиться одразу.
+   */
+  begin(entry: ConnectorCatalogEntry): void {
+    const transport = this.transportOf(entry);
+    const credentialType = manifestCredentialType(entry.manifest);
+    const settings = manifestSettings(entry.manifest, transport);
+    if (!credentialType && settings.length === 0) {
+      this.install(entry);
+      return;
+    }
+    this.error.set(null);
+    this.pending.set(null);
+    this.connectError.set(null);
+    this.connectName.set(entry.manifest.name);
+    this.settingValues.set({});
+    this.existingCredentials.set([]);
+    this.credentialChoice.set('new');
+    this.connecting.set({ entry, transport, credentialType, settings });
+    if (!credentialType) return;
+    this.credentialsApi
+      .options(credentialType)
+      .pipe(
+        catchError(() => of([] as CredentialOption[])),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((options) => {
+        this.existingCredentials.set(options);
+        if (options.length > 0 && this.credentialChoice() === 'new') this.credentialChoice.set(options[0].id);
+      });
+  }
+
+  cancelConnect(): void {
+    this.connecting.set(null);
+  }
+
+  /** Облікові дані створено формою кроку — відразу підключаємо; після помилки вони лишаються вибраними. */
+  onCredentialCreated(credential: CredentialSummary): void {
+    this.existingCredentials.update((list) => [...list, { id: credential.id, name: credential.name, type: credential.type, projectId: credential.projectId ?? null }]);
+    this.credentialChoice.set(credential.id);
+    this.connect(credential.id);
+  }
+
+  /** Створює підключення одним запитом: назва, значення налаштувань і вибрані облікові дані. */
+  connect(credentialId?: string): void {
+    const c = this.connecting();
+    if (!c || this.connectDisabled()) return;
+    const settings = Object.fromEntries(
+      Object.entries(this.settingValues())
+        .map(([k, v]) => [k, v.trim()] as const)
+        .filter(([, v]) => v !== ''),
+    );
+    const request: Parameters<ConnectorsApiService['install']>[1] = { name: this.connectName().trim(), transport: c.transport };
+    const projectId = this.projectId();
+    if (projectId) request.projectId = projectId;
+    if (credentialId && credentialId !== 'new') request.credentialId = credentialId;
+    if (Object.keys(settings).length > 0) request.settings = settings;
+    this.installing.set(c.entry.manifest.id);
+    this.connectError.set(null);
+    this.api
+      .install(c.entry.manifest.id, request)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (detail) => {
+          this.installing.set(null);
+          this.connecting.set(null);
+          this.entries.update((list) =>
+            list.map((e) => (e.manifest.id === c.entry.manifest.id ? { ...e, installed: [...e.installed, detail.summary] } : e)),
+          );
+          this.installed.emit(detail);
+        },
+        error: (e: unknown) => {
+          this.installing.set(null);
+          this.connectError.set(apiErrorMessage(e));
+        },
+      });
   }
 
   install(entry: ConnectorCatalogEntry): void {
