@@ -78,7 +78,7 @@ describe('EmptyStartComponent', () => {
     const link = hints[0].querySelector('[data-install]') as HTMLAnchorElement;
     expect(link.getAttribute('data-install')).toBe('telegram');
     expect(link.textContent).toContain('Telegram Bot API');
-    expect(link.getAttribute('href')).toBe('/connectors?catalog=telegram');
+    expect(link.getAttribute('href')).toBe('/connections?tab=catalog&catalog=telegram');
     expect(hints[0].querySelector('[data-install="onec"]')).toBeNull();
   });
 });

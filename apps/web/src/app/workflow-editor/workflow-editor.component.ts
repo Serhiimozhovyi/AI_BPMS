@@ -213,7 +213,7 @@ export interface EditorErrorEvent {
                     <ng-container i18n="@@workfloweditor.noConnectorsEmbedded">Конекторів ще немає.</ng-container>
                   } @else {
                     <ng-container i18n="@@workfloweditor.noConnectors">Конекторів ще немає — додайте в розділі</ng-container>
-                    <a class="underline" routerLink="/connectors" i18n="@@workfloweditor.noConnectorsLink">Конектори</a>.
+                    <a class="underline" routerLink="/connections" i18n="@@workfloweditor.noConnectorsLink">Підключення</a>.
                   }
                 </p>
               }

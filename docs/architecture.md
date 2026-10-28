@@ -236,7 +236,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ## 7. Frontend (Angular)
 
-- Standalone-компоненти, Signals, роутинг: `/` («Огляд», F6-07), `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tasks` і `/tasks/:id` (задачі погодження, F6-02; картка — і за токеном з `$execution.taskUrl`), `/tables` (таблиці даних, F6-11), `/connectors`, `/credentials`, `/settings`.
+- Standalone-компоненти, Signals, роутинг: `/` («Огляд», F6-07), `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tasks` і `/tasks/:id` (задачі погодження, F6-02; картка — і за токеном з `$execution.taskUrl`), `/tables` (таблиці даних, F6-11), `/connections` («Підключення», F3-99: вкладки `?tab=connected|catalog|credentials`; старі `/connectors` і `/credentials` — редіректи), `/settings`.
 - Вхід (F3-24): `/login` (email + пароль, `POST /auth/login`, cookie-сесія); решта маршрутів — під guard'ом, який перевіряє сесію через `GET /auth/me` і без неї веде на `/login?returnUrl=…` (лише шлях усередині застосунку). 401 від Api посеред роботи — теж на `/login` з поверненням; «Вийти» — `POST /auth/logout`.
 - Канвас — обраний у спайку фази 2 (ngx-vflow або Rete.js); обгорнутий у власний компонент `CanvasComponent`, щоб бібліотеку можна було замінити.
 - Форма вузла — ngx-formly з JSON Schema; для `mcp.tool` схема береться з `tools_cache`.

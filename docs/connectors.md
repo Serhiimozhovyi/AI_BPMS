@@ -309,7 +309,7 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
 ### 5.1. Маніфест `connector.json` і каталог (F6-16)
 
 Кожен `connectors/<id>` і шаблон Connector Kit мають `connector.json` (схема —
-`tools/connector-template/schemas/connector.schema.json`). З нього сторінка «Конектори → Каталог» встановлює конектор
+`tools/connector-template/schemas/connector.schema.json`). З нього сторінка «Підключення → Каталог» встановлює конектор
 одним кліком:
 
 ```json
@@ -431,7 +431,7 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
 
 Шаблони «Почати з прикладу» оголошують залежності в `examples/templates.json` (`"connectors": ["telegram", "onec"]`,
 поле `connectors` у `GET /workflows/templates`): якщо такого конектора ще не встановлено, у списку шаблонів поруч
-з'являється посилання на запис каталогу (`/connectors?catalog=<id>`).
+з'являється посилання на запис каталогу (`/connections?tab=catalog&catalog=<id>`; старе `/connectors?catalog=<id>` перенаправляє туди).
 
 Наші конектори лежать у `connectors/<назва>`: це проєкти, створені з шаблону (`dotnet new openbp-connector`), з
 власними sln і `Directory.*.props`, поза `OpenBP.sln`; CI job «Конектори» збирає, форматує й тестує кожен.

@@ -1,4 +1,5 @@
-import { Routes, UrlMatcher, UrlSegment } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes, UrlMatcher, UrlSegment } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
 /** `/form/<шлях з кількох сегментів>` — публічна сторінка форми (F6-03). */
@@ -77,15 +78,24 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/tables/tables.page').then((m) => m.TablesPage),
       },
       {
+        // «Підключення» (F3-99): конектори, каталог і облікові дані в одному місці; `?tab=connected|catalog|credentials`.
+        path: 'connections',
+        title: $localize`:@@connections.title:Підключення`,
+        loadComponent: () => import('./pages/connections/connections.page').then((m) => m.ConnectionsPage),
+      },
+      {
+        // Старі посилання (документація, сповіщення, шаблони): `?catalog=<id>` відкриває каталог із підсвіченим записом.
         path: 'connectors',
-        title: $localize`:@@connectors.title:Конектори`,
-        loadComponent: () => import('./pages/connectors/connectors.page').then((m) => m.ConnectorsPage),
+        redirectTo: ({ queryParams }) => {
+          const catalog = queryParams['catalog'] as string | undefined;
+          return inject(Router).createUrlTree(['/connections'], {
+            queryParams: catalog === undefined ? { tab: 'connected' } : { tab: 'catalog', catalog },
+          });
+        },
       },
       {
         path: 'credentials',
-        title: $localize`:@@credentials.title:Облікові дані`,
-        loadComponent: () =>
-          import('./pages/credentials/credentials.page').then((m) => m.CredentialsPage),
+        redirectTo: () => inject(Router).createUrlTree(['/connections'], { queryParams: { tab: 'credentials' } }),
       },
       {
         path: 'settings',

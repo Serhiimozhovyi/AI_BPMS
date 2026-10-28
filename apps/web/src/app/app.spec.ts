@@ -54,7 +54,7 @@ describe('App', () => {
     const host = fixture.nativeElement as HTMLElement;
     const nav = host.querySelector('nav');
     expect(nav?.textContent).toContain('Сценарії');
-    expect(nav?.textContent).toContain('Конектори');
+    expect(nav?.textContent).toContain('Підключення');
     expect(host.querySelector('[data-testid="current-user"]')?.textContent).toContain('admin@firma.ua');
     expect(host.querySelector('[data-testid="logout"]')?.textContent).toContain('Вийти');
   });
@@ -100,8 +100,7 @@ describe('routes', () => {
       'tasks',
       'tasks/:id',
       'tables',
-      'connectors',
-      'credentials',
+      'connections',
       'settings',
       '**',
     ]);
