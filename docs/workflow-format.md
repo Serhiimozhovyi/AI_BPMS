@@ -725,6 +725,9 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
    (credential) з маніфесту;
 3. без маніфесту посилання лишається, якщо такий id тут є.
 
+Значення з виразом (`"serverId": "{{ $vars.psy_telegram_server }}"`) — не посилання: в експорт і маніфест воно не
+потрапляє і переноситься як є (F8-08); змінну задають у приймачі, її ключ — у `manifest.variables`.
+
 Якщо для чогось відповідника немає, відповідь — 422 `IMPORT_UNMAPPED` зі списком
 `unmapped: [{ kind: connector | credential | workflow, ref, name, type, reason: not_found | ambiguous | invalid }]`, і
 нічого не створюється. Після перемапінгу сценарій проходить звичайну валідацію (422 `WORKFLOW_INVALID`). Відповідь

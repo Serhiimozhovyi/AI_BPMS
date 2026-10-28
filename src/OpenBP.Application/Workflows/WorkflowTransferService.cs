@@ -5,6 +5,7 @@ using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Variables;
 using OpenBP.Data;
+using OpenBP.Engine.Expressions;
 using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Workflows;
@@ -199,7 +200,10 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
         Dictionary<string, string> Workflows,
         List<UnmappedReference> Unmapped);
 
-    /// <summary>Посилання сценарію на інші об'єкти: <c>serverId</c>/<c>credentialId</c> будь-де в параметрах вузлів, <c>settings.errorWorkflowId</c>.</summary>
+    /// <summary>
+    /// Посилання сценарію на інші об'єкти: <c>serverId</c>/<c>credentialId</c> будь-де в параметрах вузлів (крім значень з
+    /// виразом <c>{{ }}</c>), <c>settings.errorWorkflowId</c>.
+    /// </summary>
     private sealed record References(IReadOnlyCollection<string> Connectors, IReadOnlyCollection<string> Credentials, IReadOnlyCollection<string> Workflows)
     {
         public static References Collect(JsonObject document)
@@ -210,6 +214,12 @@ public sealed class WorkflowTransferService(OpenBpDbContext db, ICurrentUser cur
             {
                 Walk(parameters, (name, value) =>
                 {
+                    if (ExpressionSyntax.ContainsExpression(value))
+                    {
+                        // Сервер чи credential з виразу (напр. {{ $vars.… }}) визначає виконання — переносити нічого.
+                        return null;
+                    }
+
                     if (name == ServerParameter)
                     {
                         connectors.Add(value);
