@@ -163,35 +163,32 @@ export class AssistantApiService {
   }
 
   private stream<T>(workflowId: string, action: string, body: object): Observable<T> {
-    let consumed = 0;
-    return this.http
-      .post(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/${action}`, body, {
-        observe: 'events',
-        reportProgress: true,
-        responseType: 'text',
-      })
-      .pipe(
-        filter(
-          (e) => e.type === HttpEventType.DownloadProgress || e.type === HttpEventType.Response,
-        ),
-        map((e) =>
-          e.type === HttpEventType.Response
-            ? (e.body ?? '')
-            : ((e as HttpDownloadProgressEvent).partialText ?? ''),
-        ),
-        mergeMap((text) => {
-          const parsed = parseAssistantStream(text.slice(consumed));
-          consumed += parsed.consumed;
-          return parsed.events as unknown as T[];
-        }),
-        // Тіло помилки (problem+json) прийшло текстом — розбираємо, щоб apiErrorMessage показав detail.
-        catchError((e: unknown) =>
-          throwError(() =>
-            e instanceof HttpErrorResponse && typeof e.error === 'string' ? withJsonBody(e) : e,
-          ),
-        ),
-      );
+    return postEventStream<T>(this.http, `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/${action}`, body);
   }
+}
+
+/**
+ * POST із відповіддю `text/event-stream`: події надходять у міру отримання. Тіло помилки (problem+json) приходить текстом —
+ * розбираємо, щоб `apiErrorMessage` показав `detail`. Спільне для помічника редактора й загального помічника (F3-110).
+ */
+export function postEventStream<T>(http: HttpClient, url: string, body: object): Observable<T> {
+  let consumed = 0;
+  return http
+    .post(url, body, { observe: 'events', reportProgress: true, responseType: 'text' })
+    .pipe(
+      filter((e) => e.type === HttpEventType.DownloadProgress || e.type === HttpEventType.Response),
+      map((e) =>
+        e.type === HttpEventType.Response ? (e.body ?? '') : ((e as HttpDownloadProgressEvent).partialText ?? ''),
+      ),
+      mergeMap((text) => {
+        const parsed = parseAssistantStream(text.slice(consumed));
+        consumed += parsed.consumed;
+        return parsed.events as unknown as T[];
+      }),
+      catchError((e: unknown) =>
+        throwError(() => (e instanceof HttpErrorResponse && typeof e.error === 'string' ? withJsonBody(e) : e)),
+      ),
+    );
 }
 
 function withJsonBody(e: HttpErrorResponse): HttpErrorResponse {

@@ -6,6 +6,7 @@ import { provideRouter } from '@angular/router';
 import { CanvasComponent } from '../canvas/canvas.component';
 import { SAMPLE_DESCRIPTORS } from '../canvas/sample-workflows';
 import { ConnectorDetail, ConnectorSummary } from '../connectors/connectors-api.service';
+import { GlobalAssistantService } from '../assistant/global-assistant.service';
 import { AUTOSAVE_DEBOUNCE_MS } from '../canvas/autosave';
 import { WorkflowDefinition, WorkflowDetail, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
 import { EVENT_SOURCE_FACTORY, ExecutionStep } from '../executions/executions-api.service';
@@ -1441,6 +1442,33 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
     expect(canvasNodes(fixture)).toEqual([]);
   });
+  it('загальний помічник (F3-110): знає вибраний вузол; його панель і панель редактора не відкриті разом', async () => {
+    const { fixture, http, host } = await loaded();
+    const global = TestBed.inject(GlobalAssistantService);
+    canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+    expect(global.context().nodeId).toBe('n_set');
+
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
+    click(host, '[data-testid="assistant-toggle"]');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="assistant-panel"]')).not.toBeNull();
+    http
+      .expectOne('/api/v1/workflows/w1/explanation')
+      .flush({ status: 'none', version: null, currentVersion: 1, text: null, error: null, updatedAt: null, stale: false });
+
+    global.show();
+    await render(fixture);
+    expect(host.querySelector('[data-testid="assistant-panel"]')).toBeNull();
+
+    canvasComponent(fixture).selectionChange.emit({ nodes: [], edges: [] });
+    await render(fixture);
+    expect(global.context().nodeId).toBeUndefined();
+    fixture.destroy();
+    expect(global.context().nodeId).toBeUndefined();
+  });
+
   it('помічник (F3-60): «Пояснити вузол» відкриває панель замість панелі вузла; відповідь — одна правка, Ctrl+Z її скасовує', async () => {
     const { fixture, http, host } = await loaded();
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });

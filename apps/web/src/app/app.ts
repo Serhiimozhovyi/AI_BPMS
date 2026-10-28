@@ -7,6 +7,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { GlobalAssistantComponent } from './assistant/global-assistant.component';
+import { GlobalAssistantService } from './assistant/global-assistant.service';
 import { AuthService } from './auth/auth.service';
 import { ConnectivityService } from './connectivity/connectivity.service';
 import { MOBILE_QUERY } from './layout/breakpoints';
@@ -14,7 +16,7 @@ import { ProjectContextService } from './projects/project-context.service';
 import { NO_GROUP } from './workflows/workflow-groups';
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatToolbarModule, MatButtonModule, MatSelectModule],
+  imports: [GlobalAssistantComponent, RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatToolbarModule, MatButtonModule, MatSelectModule],
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './app.scss',
@@ -26,6 +28,7 @@ export class App {
   protected readonly user = this.auth.user;
   protected readonly projects = inject(ProjectContextService);
   protected readonly connectivity = inject(ConnectivityService);
+  protected readonly assistant = inject(GlobalAssistantService);
   protected readonly sharedSpace = NO_GROUP;
   /** Телефон (< 768 px): навігація, проєкт і користувач — у drawer за кнопкою-бургером (F3-84). */
   protected readonly mobile = toSignal(inject(BreakpointObserver).observe(MOBILE_QUERY).pipe(map((s) => s.matches)), {

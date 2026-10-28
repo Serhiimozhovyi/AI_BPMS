@@ -35,6 +35,7 @@ import { QuickAddMode, QuickAddRequest, QuickAddTarget, ScreenPoint, applyQuickA
 import { QuickAddComponent } from '../canvas/quick-add.component';
 import { EmptyStartComponent } from '../canvas/empty-start.component';
 import { DraftTodoItem } from '../assistant/assistant-api.service';
+import { GlobalAssistantService } from '../assistant/global-assistant.service';
 import { DraftResult } from '../assistant/describe-process.component';
 import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
 import { VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore } from '../workflows/version-history-dialog.component';
@@ -777,6 +778,7 @@ export class WorkflowEditorComponent implements OnInit {
   private readonly clipboard = inject(CanvasClipboardService);
   private readonly executions = inject(ExecutionsApiService);
   private readonly dialog = inject(MatDialog);
+  private readonly globalAssistant = inject(GlobalAssistantService);
 
   protected readonly defaultTitle = $localize`:@@workfloweditor.title:Редактор сценарію`;
 
@@ -1066,6 +1068,12 @@ export class WorkflowEditorComponent implements OnInit {
 
   constructor() {
     effect(() => (this.expressionEditor.workflowId = this.workflowId()));
+    // Загальний помічник (F3-110) знає, який вузол вибрано; його панель і панель редактора не відкриті разом.
+    effect(() => this.globalAssistant.setNode(this.selectedNode()?.id ?? null));
+    effect(() => {
+      if (this.globalAssistant.open()) untracked(() => this.assistantOpen.set(false));
+    });
+    this.destroyRef.onDestroy(() => this.globalAssistant.setNode(null));
     // Панель вузла, що відкрилася, звужує канвас: вибраний вузол не має лишитися за його краєм (F3-88).
     effect(() => {
       const id = this.selectedNode()?.id;
@@ -1251,6 +1259,7 @@ export class WorkflowEditorComponent implements OnInit {
 
   protected toggleAssistant(): void {
     this.assistantOpen.update((open) => !open);
+    if (this.assistantOpen()) this.globalAssistant.close();
   }
 
   /** Відповідь помічника — одна правка з історією: Ctrl+Z скасовує її цілком. */
@@ -1294,6 +1303,7 @@ export class WorkflowEditorComponent implements OnInit {
       send = false;
     }
     this.assistantOpen.set(true);
+    this.globalAssistant.close();
     this.assistantPrompt.set({ text, send, seq: ++this.assistantSeq, mode: kind === 'describe' ? 'describe' : undefined });
   }
 
