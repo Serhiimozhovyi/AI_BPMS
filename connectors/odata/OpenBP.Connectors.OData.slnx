@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenBP.Connectors.OData/OpenBP.Connectors.OData.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenBP.Connectors.OData.Tests/OpenBP.Connectors.OData.Tests.csproj" />
+  </Folder>
+</Solution>

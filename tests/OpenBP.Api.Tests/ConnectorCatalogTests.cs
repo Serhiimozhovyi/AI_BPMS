@@ -175,6 +175,7 @@ public class ConnectorCatalogTests(ApiFactory api)
         Assert.Equal("database", types["sql"]);
         Assert.Equal("google.serviceAccount", types["gsheets"]);
         Assert.Equal("basic", types["onec"]);
+        Assert.Equal("oauth2.clientCredentials", types["odata"]);
         Assert.Null(types["http"]);
     }
 

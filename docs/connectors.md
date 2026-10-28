@@ -418,7 +418,7 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
 `msgraph` → `oauth2.clientCredentials` (`CLIENT_ID`/`CLIENT_SECRET`) + налаштування «Tenant ID»; `onec` → `basic`
 (`ONEC_USERNAME`/`ONEC_PASSWORD`) + «Адреса OData»; `sql` → `database` (`engine` → `SQL_PROVIDER`, `$connectionString` →
 `SQL_CONNECTION_STRING`) + «Дозволити запис», «Найбільше рядків», «Таймаут»; `gsheets` → `google.serviceAccount`;
-`http` — без облікових даних, налаштування «Дозволені хости», «Хости з приватними адресами»; шаблон Connector Kit →
+`http` — без облікових даних, налаштування «Дозволені хости», «Хости з приватними адресами»; `odata` — `oauth2.clientCredentials` (`ODATA_TOKEN_URL`/`ODATA_CLIENT_ID`/`ODATA_CLIENT_SECRET`/`ODATA_SCOPES`/`ODATA_AUDIENCE`) + налаштування «Адреса сервісу OData» (Bearer і Basic — через змінні середовища вручну, див. `connectors/odata/README.md`); шаблон Connector Kit →
 `bearer` (`CONNECTOR_TOKEN`) + «Адреса REST API», «Спосіб входу». `psy-support` лишається на старому способі (рядок
 підключення до БД для stdio і bearer-токен для http — різні доступи). Старі `env`/`headers` у маніфестах лишаються
 для підключень без `credential.type`.
@@ -484,6 +484,12 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
   cursor }`, для `mcp.poll` — `keyField = id`). М'яко видалені записи не повертаються; токен Keycloak за client
   credentials (`KIT_TOKEN_URL`/`KIT_CLIENT_ID`/`KIT_CLIENT_SECRET`), на 401 — одне повторне отримання, `FrontPagePath`
   на запис — `KIT_FRONT_PAGE_PATH`.
+- `connectors/odata` — будь-який сервіс OData v4 (F3-97): `list_entity_sets` (набори з `$metadata`: ключі, властивості,
+  навігація), `query_entities` (`$filter`/`$select`/`$expand`/`$orderby`, `top`, сторінки через `@odata.nextLink`, `hasMore`),
+  `get_entity` (ключ — число, Guid чи рядок), `create_entity`, `update_entity` (PATCH), `delete_entity`. Відповідь —
+  `{ result }` без `@odata.*`; поле `entitySet` має `x-openbp-options` на `list_entity_sets`. Вхід за змінними:
+  `ODATA_TOKEN_URL`/`ODATA_CLIENT_ID`/`ODATA_CLIENT_SECRET` (токен кешується, на 401 — одне перевидання), `ODATA_TOKEN` або
+  `ODATA_USERNAME`/`ODATA_PASSWORD`. Посилання `nextLink` на інший хост не відкривається. Приклад — `examples/odata-list.json`.
 - `connectors/psy-support` — застосунок психологічної підтримки з власною БД і адмінкою (F3-34, `docs/psy-support.md`):
   сім tools бота `bot_*` повертають `{ ok, code, screen { text, parse_mode, reply_markup, new_message }, notifications,
   commands }` для Telegram-конектора; доменні tools (`book_slot`, `register_event`, `book_bst`, `join_waitlist`,

@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "name": "OData: відкриті замовлення",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 120,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_start",
+      "name": "Старт",
+      "type": "core.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "n_query",
+      "name": "Відкриті замовлення",
+      "type": "mcp.tool",
+      "typeVersion": 1,
+      "position": [
+        340,
+        300
+      ],
+      "parameters": {
+        "serverId": "srv_odata",
+        "toolName": "query_entities",
+        "arguments": {
+          "entitySet": "Orders",
+          "filter": "Status eq 'Open'",
+          "select": "Id,Number,Amount",
+          "orderby": "Id desc",
+          "top": 50
+        }
+      },
+      "notes": "Набір обирається зі списку (з $metadata сервісу), $filter — звичайний вираз OData.",
+      "timeoutSec": 60
+    },
+    {
+      "id": "n_total",
+      "name": "Підсумок",
+      "type": "core.code",
+      "typeVersion": 1,
+      "position": [
+        580,
+        300
+      ],
+      "parameters": {
+        "mode": "allItems",
+        "code": "// Один item на відповідь tool'а: result — записи, hasMore — чи є ще.\nconst rows = items[0]?.result ?? [];\nreturn [{ count: rows.length, hasMore: !!items[0]?.hasMore, amount: rows.reduce((sum, r) => sum + (Number(r.Amount) || 0), 0) }];"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {
+        "node": "n_start",
+        "output": 0
+      },
+      "to": {
+        "node": "n_query",
+        "input": 0
+      }
+    },
+    {
+      "from": {
+        "node": "n_query",
+        "output": 0
+      },
+      "to": {
+        "node": "n_total",
+        "input": 0
+      }
+    }
+  ],
+  "pinData": {}
+}
