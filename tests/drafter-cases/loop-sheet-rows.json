@@ -1,0 +1,16 @@
+{
+  "id": "loop-sheet-rows",
+  "description": "Раз на тиждень взяти всі рядки таблиці й для кожного рядка надіслати лист клієнту.",
+  "expect": {
+    "trigger": [
+      "core.schedule"
+    ],
+    "requireTypes": [
+      [
+        "core.loop"
+      ]
+    ],
+    "minNodes": 3,
+    "maxNodes": 8
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "purchase-multi-lane",
+  "description": "Закупівля: менеджер подає заявку, фінансист перевіряє бюджет. Якщо сума більша за 10 000, потрібне погодження директора, інакше заявка йде далі без нього. Потім закупівельник оформлює замовлення й повідомляє менеджера.",
+  "expect": {
+    "trigger": [
+      "core.formTrigger",
+      "core.manualTrigger",
+      "core.webhook"
+    ],
+    "requireTypes": [
+      [
+        "core.approval"
+      ],
+      [
+        "core.if",
+        "core.switch"
+      ]
+    ],
+    "minBranches": 2,
+    "minLanes": 3,
+    "minNodes": 6,
+    "maxNodes": 12
+  }
+}

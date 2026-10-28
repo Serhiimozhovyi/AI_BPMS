@@ -38,12 +38,16 @@ public static class CliApp
           openbp export <id> | --all [--out dir] [--url URL] [--api-key KEY]
           openbp import <file.json> [--map map.json] [--url URL] [--api-key KEY]
           openbp activate <id> [--url URL] [--api-key KEY]
+          openbp draft-eval --workflow <id> [--cases dir] [--model назва] [--only частина-id] [--out report.md] [--url URL] [--api-key KEY]
 
           --pin        ручний тестовий запуск: вузли з pinData не виконуються, їхній вихід — закріплені items
           --servers    JSON з MCP-серверами, на які посилаються вузли mcp.* (serverId)
           --credentials JSON { "<credentialId>": { … } } з даними credentials для вузлів (напр. ai.llm)
           --out        тека для файлів експорту (<id>.json); типово поточна
           --map        JSON { "connectors": { "<ref>": "<id>" }, "credentials": { … }, "workflows": { … } }
+          --workflow   draft-eval: сценарій, у який «будуємо» (його вміст не змінюється)
+          --cases      draft-eval: тека з описами; типово tests/drafter-cases
+          --model      draft-eval: підпис моделі в звіті; типово — модель з налаштувань помічника
           --url        адреса OpenBP; типово змінна OPENBP_URL
           --api-key    API-ключ (Bearer); типово змінна OPENBP_API_KEY — у CI беріть його із секрету
         """;
@@ -71,6 +75,11 @@ public static class CliApp
         ArgumentNullException.ThrowIfNull(stderr);
         try
         {
+            if (args.Length > 0 && args[0] == DraftEval.Name)
+            {
+                return await DraftEval.RunAsync(args, stdout, http, ct).ConfigureAwait(false);
+            }
+
             if (args.Length > 0 && RemoteCommands.Names.Contains(args[0]))
             {
                 return await RemoteCommands.RunAsync(args, stdout, http, ct).ConfigureAwait(false);

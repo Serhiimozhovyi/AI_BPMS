@@ -1,0 +1,18 @@
+{
+  "id": "wait-reminder",
+  "description": "Після того як клієнт залишив заявку, почекати три дні й нагадати йому повідомленням у Telegram.",
+  "expect": {
+    "trigger": [
+      "core.formTrigger",
+      "core.webhook",
+      "core.manualTrigger"
+    ],
+    "requireTypes": [
+      [
+        "core.wait"
+      ]
+    ],
+    "minNodes": 3,
+    "maxNodes": 7
+  }
+}

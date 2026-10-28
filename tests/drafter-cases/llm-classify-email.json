@@ -1,0 +1,25 @@
+{
+  "id": "llm-classify-email",
+  "description": "Коли надходить лист від клієнта, ШІ визначає тему: оплата, доставка чи інше. Залежно від теми лист передається відповідному відділу в Telegram.",
+  "expect": {
+    "trigger": [
+      "core.webhook",
+      "mcp.poll",
+      "core.manualTrigger",
+      "core.formTrigger"
+    ],
+    "requireTypes": [
+      [
+        "ai.llm",
+        "ai.agent"
+      ],
+      [
+        "core.switch",
+        "core.if"
+      ]
+    ],
+    "minBranches": 1,
+    "minNodes": 4,
+    "maxNodes": 9
+  }
+}

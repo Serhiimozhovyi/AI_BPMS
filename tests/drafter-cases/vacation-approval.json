@@ -1,0 +1,18 @@
+{
+  "id": "vacation-approval",
+  "description": "Працівник подає заявку на відпустку у формі, керівник погоджує або відхиляє. Якщо погоджено, кадровик отримує повідомлення, якщо відхилено, працівник дізнається про відмову.",
+  "expect": {
+    "trigger": [
+      "core.formTrigger"
+    ],
+    "requireTypes": [
+      [
+        "core.approval"
+      ]
+    ],
+    "minBranches": 1,
+    "minLanes": 2,
+    "minNodes": 4,
+    "maxNodes": 9
+  }
+}
