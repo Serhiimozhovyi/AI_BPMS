@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Forms;
+using OpenBP.Application.Projects;
 
 namespace OpenBP.Api.Errors;
 
@@ -39,6 +40,10 @@ public sealed class OpenBpExceptionHandler(IProblemDetailsService problems) : IE
         else if (exception is FormValidationException form)
         {
             problem.Extensions["errors"] = form.Errors;
+        }
+        else if (exception is PageFormInvalidException page)
+        {
+            problem.Extensions["errors"] = page.Errors;
         }
         else if (exception is FormLoginRequiredException login)
         {

@@ -32,6 +32,12 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
     /// <summary>Найдовший значок проєкту (F8-03).</summary>
     public const int MaxIconLength = 40;
 
+    /// <summary>Найбільше ролей застосунку в проєкті (F8-04).</summary>
+    public const int MaxAppRoles = 20;
+
+    /// <summary>Код конфлікту: прибрана роль застосунку ще призначена учасникам (F8-04).</summary>
+    public const string AppRoleInUseCode = "APP_ROLE_IN_USE";
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<WorkflowGroupSummary>> ListAsync(CancellationToken ct)
     {
@@ -40,9 +46,15 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         var rows = await db.WorkflowGroups.AsNoTracking()
             .Where(g => scope.All || ids.Contains(g.Id))
             .OrderBy(g => g.SortOrder).ThenBy(g => g.CreatedAt)
-            .Select(g => new { g.Id, g.Name, g.SortOrder, g.Description, g.Icon, Count = db.Workflows.Count(w => w.GroupId == g.Id) })
+            .Select(g => new { g.Id, g.Name, g.SortOrder, g.Description, g.Icon, g.AppRoles, Count = db.Workflows.Count(w => w.GroupId == g.Id) })
             .ToListAsync(ct);
-        return [.. rows.Select(g => new WorkflowGroupSummary(g.Id, g.Name, g.SortOrder, g.Count, scope.RoleIn(g.Id)) { Description = g.Description, Icon = g.Icon })];
+        return [.. rows.Select(g => new WorkflowGroupSummary(g.Id, g.Name, g.SortOrder, g.Count, scope.RoleIn(g.Id))
+        {
+            Description = g.Description,
+            Icon = g.Icon,
+            AppRoles = ProjectAppRoles.Parse(g.AppRoles),
+            AppRole = scope.AppRoleIn(g.Id),
+        })];
     }
 
     /// <inheritdoc />
@@ -95,9 +107,26 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
     }
 
     /// <inheritdoc />
-    public async Task<WorkflowGroupSummary> UpdateAsync(Guid id, string? name, string? description, string? icon, CancellationToken ct)
+    public async Task<WorkflowGroupSummary> UpdateAsync(
+        Guid id, string? name, string? description, string? icon, CancellationToken ct, IReadOnlyList<ProjectAppRole>? appRoles = null)
     {
         var group = await FindManagedAsync(id, ct);
+        if (appRoles is not null)
+        {
+            var roles = ProjectAppRoles.Validate(appRoles, MaxAppRoles);
+            var keys = roles.Select(r => r.Key).ToList();
+            var used = await db.ProjectMembers.AsNoTracking()
+                .Where(m => m.ProjectId == id && m.AppRole != null && !keys.Contains(m.AppRole))
+                .Select(m => m.AppRole!).Distinct().ToListAsync(ct);
+            if (used.Count > 0)
+            {
+                throw new ConflictException(AppRoleInUseCode,
+                    $"Роль застосунку {string.Join(", ", used.Order(StringComparer.Ordinal))} ще призначена учасникам — спершу змініть їм роль.");
+            }
+
+            group.AppRoles = ProjectAppRoles.Serialize(roles);
+        }
+
         var trimmed = name is null ? group.Name : ValidName(name);
         var newDescription = description is null ? group.Description : ValidText(description, MaxDescriptionLength, "Опис проєкту");
         var newIcon = icon is null ? group.Icon : ValidText(icon, MaxIconLength, "Значок проєкту");
@@ -216,14 +245,17 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         await FindVisibleAsync(id, ct);
         var rows = await db.ProjectMembers.AsNoTracking()
             .Where(m => m.ProjectId == id)
-            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new { m.UserId, u.Email, m.Role, GlobalRole = u.Role })
+            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new { m.UserId, u.Email, m.Role, m.AppRole, GlobalRole = u.Role })
             .OrderBy(m => m.Email)
             .ToListAsync(ct);
-        return [.. rows.Select(m => new ProjectMember(m.UserId, m.Email, UserRoles.TryParse(m.Role) ?? UserRole.Viewer, UserRoles.TryParse(m.GlobalRole)))];
+        return [.. rows.Select(m => new ProjectMember(m.UserId, m.Email, UserRoles.TryParse(m.Role) ?? UserRole.Viewer, UserRoles.TryParse(m.GlobalRole))
+        {
+            AppRole = m.AppRole,
+        })];
     }
 
     /// <inheritdoc />
-    public async Task<ProjectMember> SetMemberAsync(Guid id, string email, UserRole role, CancellationToken ct)
+    public async Task<ProjectMember> SetMemberAsync(Guid id, string email, UserRole role, CancellationToken ct, string? appRole = null)
     {
         if (role is not (UserRole.Editor or UserRole.Viewer))
         {
@@ -235,7 +267,13 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
             throw new ArgumentException("Потрібен email користувача.", nameof(email));
         }
 
-        await FindManagedAsync(id, ct);
+        var group = await FindManagedAsync(id, ct);
+        appRole = string.IsNullOrWhiteSpace(appRole) ? null : appRole.Trim();
+        if (appRole is not null && !ProjectAppRoles.Parse(group.AppRoles).Any(r => r.Key == appRole))
+        {
+            throw new ArgumentException($"У проєкті немає ролі застосунку «{appRole}».", nameof(appRole));
+        }
+
         var normalized = email.Trim();
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email.ToLower() == normalized.ToLower(), ct)
                    ?? throw new NotFoundException("user", normalized);
@@ -248,10 +286,11 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         }
 
         member.Role = UserRoles.ToValue(role);
+        member.AppRole = appRole;
         db.Audit(currentUser, now, AuditActions.ProjectMemberSet, AuditEntities.Project, id.ToString(),
-            new JsonObject { ["userId"] = user.Id.ToString(), ["email"] = user.Email, ["role"] = member.Role });
+            new JsonObject { ["userId"] = user.Id.ToString(), ["email"] = user.Email, ["role"] = member.Role, ["appRole"] = appRole });
         await db.SaveChangesAsync(ct);
-        return new ProjectMember(user.Id, user.Email, role, UserRoles.TryParse(user.Role));
+        return new ProjectMember(user.Id, user.Email, role, UserRoles.TryParse(user.Role)) { AppRole = appRole };
     }
 
     /// <inheritdoc />
@@ -288,5 +327,7 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         {
             Description = group.Description,
             Icon = group.Icon,
+            AppRoles = ProjectAppRoles.Parse(group.AppRoles),
+            AppRole = await _access.AppRoleInAsync(group.Id, ct),
         };
 }

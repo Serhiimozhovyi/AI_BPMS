@@ -1,6 +1,6 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, HostListener, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
@@ -32,6 +32,15 @@ export class App {
     initialValue: false,
   });
   protected readonly drawerOpen = signal(false);
+  /** Користувач лише з роллю застосунку (F8-04): меню «Застосунок» і «Огляд» його проєкту. */
+  protected readonly appOnly = computed(() => this.projects.appOnlyProject(this.user()?.role));
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map((e) => e.urlAfterRedirects),
+    ),
+    { initialValue: '' },
+  );
   /** Публічна форма (`/form/…`, F6-03) — без шапки й меню застосунку. */
   protected readonly bare = toSignal(
     this.router.events.pipe(
@@ -55,6 +64,11 @@ export class App {
     effect(() => {
       if (this.user()) this.projects.reload();
       else this.projects.projects.set([]);
+    });
+    // Користувач лише застосунку з головної — одразу в застосунок свого проєкту (F8-04).
+    effect(() => {
+      const project = this.appOnly();
+      if (project && this.url() === '/') void this.router.navigate(['/projects', project.id, 'app'], { replaceUrl: true });
     });
   }
 

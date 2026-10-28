@@ -10,7 +10,7 @@ const alice: ProjectMember = { userId: 'u1', email: 'alice@firma.ua', role: 'edi
 const bob: ProjectMember = { userId: 'u2', email: 'bob@firma.ua', role: 'viewer', globalRole: 'viewer' };
 
 describe('ProjectMembersPage', () => {
-  async function setup(role: WorkflowGroup['role'] = 'editor', members: ProjectMember[] = [alice, bob]) {
+  async function setup(role: WorkflowGroup['role'] = 'editor', members: ProjectMember[] = [alice, bob], appRoles: WorkflowGroup['appRoles'] = []) {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -22,7 +22,7 @@ describe('ProjectMembersPage', () => {
     const fixture = TestBed.createComponent(ProjectMembersPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne({ method: 'GET', url: base }).flush([{ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 3, role }]);
+    http.expectOne({ method: 'GET', url: base }).flush([{ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 3, role, appRoles }]);
     http.expectOne({ method: 'GET', url: `${base}/p1/members` }).flush(members);
     await render(fixture);
     return { fixture, http, host: fixture.nativeElement as HTMLElement };
@@ -52,7 +52,7 @@ describe('ProjectMembersPage', () => {
 
     host.querySelector<HTMLButtonElement>('[data-testid="member-add"]')!.click();
     const put = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
-    expect(put.request.body).toEqual({ email: 'bob@firma.ua', role: 'viewer' });
+    expect(put.request.body).toEqual({ email: 'bob@firma.ua', role: 'viewer', appRole: null });
     put.flush(bob);
     http.expectOne({ method: 'GET', url: base }).flush([]);
     await render(fixture);
@@ -67,7 +67,7 @@ describe('ProjectMembersPage', () => {
     select.value = 'editor';
     select.dispatchEvent(new Event('change'));
     const put = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
-    expect(put.request.body).toEqual({ email: 'bob@firma.ua', role: 'editor' });
+    expect(put.request.body).toEqual({ email: 'bob@firma.ua', role: 'editor', appRole: null });
     put.flush({ ...bob, role: 'editor' });
     http.expectOne({ method: 'GET', url: base }).flush([]);
     await render(fixture);
@@ -93,5 +93,48 @@ describe('ProjectMembersPage', () => {
       .flush({ code: 'FORBIDDEN', detail: 'Потрібна роль editor.' }, { status: 403, statusText: 'Forbidden' });
     await render(fixture);
     expect(host.querySelector('[data-testid="project-error"]')).not.toBeNull();
+  });
+
+  it('ролі застосунку: додає роль і призначає її учаснику, зміна ролі проєкту зберігає роль застосунку', async () => {
+    const operator = { key: 'operator', name: 'Оператор' };
+    const { fixture, http, host } = await setup('editor', [alice, { ...bob, appRole: 'operator' }], [operator]);
+    expect(host.querySelector('[data-app-role="operator"]')?.textContent).toContain('Оператор');
+
+    const key = host.querySelector<HTMLInputElement>('[data-testid="app-role-key"]')!;
+    key.value = 'psychologist';
+    key.dispatchEvent(new Event('input'));
+    const name = host.querySelector<HTMLInputElement>('[data-testid="app-role-name"]')!;
+    name.value = 'Психолог';
+    name.dispatchEvent(new Event('input'));
+    await render(fixture);
+    host.querySelector<HTMLButtonElement>('[data-testid="app-role-add"]')!.click();
+    const patch = http.expectOne({ method: 'PATCH', url: `${base}/p1` });
+    const roles = [operator, { key: 'psychologist', name: 'Психолог' }];
+    expect(patch.request.body).toEqual({ appRoles: roles });
+    patch.flush({ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 3, role: 'editor', appRoles: roles });
+    http.expectOne({ method: 'GET', url: base }).flush([]);
+    await render(fixture);
+    expect(host.querySelectorAll('[data-app-role]')).toHaveLength(2);
+
+    const appRole = host.querySelector<HTMLSelectElement>('[data-member="alice@firma.ua"] [data-testid="member-app-role"]')!;
+    appRole.value = 'psychologist';
+    appRole.dispatchEvent(new Event('change'));
+    const put = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
+    expect(put.request.body).toEqual({ email: 'alice@firma.ua', role: 'editor', appRole: 'psychologist' });
+    put.flush({ ...alice, appRole: 'psychologist' });
+    http.expectOne({ method: 'GET', url: base }).flush([]);
+    await render(fixture);
+
+    const role = host.querySelector<HTMLSelectElement>('[data-member="bob@firma.ua"] [data-testid="member-role-change"]')!;
+    role.value = 'editor';
+    role.dispatchEvent(new Event('change'));
+    const kept = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
+    expect(kept.request.body).toEqual({ email: 'bob@firma.ua', role: 'editor', appRole: 'operator' });
+  });
+
+  it('viewer бачить роль застосунку текстом', async () => {
+    const { host } = await setup('viewer', [{ ...bob, appRole: 'operator' }], [{ key: 'operator', name: 'Оператор' }]);
+    expect(host.querySelector('[data-testid="app-role-form"]')).toBeNull();
+    expect(host.querySelector('[data-member="bob@firma.ua"]')?.textContent).toContain('Оператор');
   });
 });

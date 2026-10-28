@@ -81,6 +81,9 @@ public static class OpenApiSetup
 
         /// <summary>Оцінки якості вузлів ШІ.</summary>
         public const string Evaluations = "Оцінки";
+
+        /// <summary>Сторінки застосунку проєкту (F8-04).</summary>
+        public const string ProjectPages = "Сторінки застосунку";
     }
 
     private static readonly (string Name, string Description)[] TagDescriptions =
@@ -96,6 +99,7 @@ public static class OpenApiSetup
         (Tags.Credentials, "Облікові дані без значень секретів (лише admin), OAuth2-вхід."),
         (Tags.Audit, "Журнал змін: хто й коли створив, змінив чи видалив сценарій, облікові дані, конектор, ключ, змінну чи таблицю. Лише admin."),
         (Tags.Notifications, "Канали сповіщень адміністратору (email, Telegram, webhook) про помилки виконань, вимкнені сценарії, недоступні конектори, воркери й бекапи. Лише admin."),
+        (Tags.ProjectPages, "Сторінки застосунку проєкту (список, картка, форма) над таблицями проєкту; видимість — за ролями застосунку, змінює editor проєкту."),
         (Tags.Overview, "Підсумки виконань за 24 год / 7 / 30 днів і поточний стан черги."),
         (Tags.Webhooks, "Тригер core.webhook: `/webhook/{path}` поза /api/v1, автентифікація — у самому вузлі."),
         (Tags.Forms, "Публічні форми для сторінки `/form/{path}`: тригер core.formTrigger і крок core.wait (режим form, `resume/{token}`). Доступ задає вузол: none, login або token."),

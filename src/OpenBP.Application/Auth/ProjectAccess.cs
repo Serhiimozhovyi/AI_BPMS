@@ -43,19 +43,31 @@ public sealed class ProjectAccess(OpenBpDbContext db, ICurrentUser currentUser)
         var userId = currentUser.UserId!.Value;
         var members = await db.ProjectMembers.AsNoTracking()
             .Where(m => m.UserId == userId && (keyProject == null || m.ProjectId == keyProject))
-            .Select(m => new { m.ProjectId, m.Role })
+            .Select(m => new { m.ProjectId, m.Role, m.AppRole })
             .ToListAsync(ct);
-        var projects = members
-            .Select(m => (m.ProjectId, Role: UserRoles.TryParse(m.Role)))
-            .Where(m => m.Role is UserRole.Viewer or UserRole.Editor)
-            .ToDictionary(m => m.ProjectId, m => m.Role!.Value);
-        return _scope = new ProjectScope(false, projects, keyProject is null ? role : null);
+        var valid = members.Where(m => UserRoles.TryParse(m.Role) is UserRole.Viewer or UserRole.Editor).ToList();
+        var projects = valid.ToDictionary(m => m.ProjectId, m => UserRoles.TryParse(m.Role)!.Value);
+        var appRoles = valid.Where(m => !string.IsNullOrEmpty(m.AppRole)).ToDictionary(m => m.ProjectId, m => m.AppRole!);
+        return _scope = new ProjectScope(false, projects, keyProject is null ? role : null) { AppRoles = appRoles };
     }
 
     /// <summary>Роль у проєкті <paramref name="projectId"/> (<c>null</c> — спільний простір); <c>null</c> — немає доступу.</summary>
     /// <param name="projectId">Проєкт.</param>
     /// <param name="ct">Скасування.</param>
     public async Task<UserRole?> RoleInAsync(Guid? projectId, CancellationToken ct) => (await ScopeAsync(ct)).RoleIn(projectId);
+
+    /// <summary>Роль застосунку користувача запиту в проєкті (F8-04); <c>null</c> — немає (або це admin без членства).</summary>
+    /// <param name="projectId">Проєкт.</param>
+    /// <param name="ct">Скасування.</param>
+    public async Task<string?> AppRoleInAsync(Guid projectId, CancellationToken ct) => (await ScopeAsync(ct)).AppRoleIn(projectId);
+
+    /// <summary>
+    /// Чи бачить користувач запиту значення чутливих колонок таблиці проєкту <paramref name="projectId"/>: admin, editor
+    /// проєкту й учасник з роллю застосунку (F8-02, F8-04).
+    /// </summary>
+    /// <param name="projectId">Проєкт таблиці; <c>null</c> — спільна.</param>
+    /// <param name="ct">Скасування.</param>
+    public async Task<bool> CanReadSensitiveAsync(Guid? projectId, CancellationToken ct) => (await ScopeAsync(ct)).CanReadSensitive(projectId);
 
     /// <summary>
     /// Вимагає роль не нижчу за <paramref name="minimum"/> у проєкті. Чужий проєкт виглядає як відсутня сутність
@@ -146,4 +158,16 @@ public sealed record ProjectScope(bool All, IReadOnlyDictionary<Guid, UserRole> 
         All ? UserRole.Admin
         : projectId is { } id ? Projects.TryGetValue(id, out var role) ? role : null
         : SharedRole;
+
+    /// <summary>Ролі застосунку в проєктах, де вони є (F8-04): проєкт → ключ ролі.</summary>
+    public IReadOnlyDictionary<Guid, string> AppRoles { get; init; } = new Dictionary<Guid, string>();
+
+    /// <summary>Роль застосунку в проєкті; <c>null</c> — немає.</summary>
+    /// <param name="projectId">Проєкт.</param>
+    public string? AppRoleIn(Guid projectId) => AppRoles.TryGetValue(projectId, out var role) ? role : null;
+
+    /// <summary>Чи видно значення чутливих колонок таблиці проєкту: admin, editor проєкту або роль застосунку в ньому.</summary>
+    /// <param name="projectId">Проєкт таблиці; <c>null</c> — спільна.</param>
+    public bool CanReadSensitive(Guid? projectId) =>
+        RoleIn(projectId) >= UserRole.Editor || (projectId is { } id && RoleIn(id) is not null && AppRoleIn(id) is not null);
 }

@@ -30,15 +30,19 @@ public interface IWorkflowGroupService
     /// <exception cref="ConflictException">Група з такою назвою вже є.</exception>
     Task<WorkflowGroupSummary> CreateAsync(string name, CancellationToken ct, string? description = null, string? icon = null);
 
-    /// <summary>Змінює назву, опис і значок групи; <c>null</c> — поле не змінюється, порожній рядок очищає опис чи значок.</summary>
+    /// <summary>
+    /// Змінює назву, опис, значок і ролі застосунку групи; <c>null</c> — поле не змінюється, порожній рядок очищає опис чи
+    /// значок.
+    /// </summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>
     /// <param name="name">Нова назва, непорожня.</param>
     /// <param name="description">Новий опис.</param>
     /// <param name="icon">Новий значок.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="appRoles">Ролі застосунку (F8-04) цілим списком; роль, яку має учасник, прибрати не можна.</param>
     /// <exception cref="NotFoundException">Групи немає.</exception>
-    /// <exception cref="ConflictException">Інша група з такою назвою вже є.</exception>
-    Task<WorkflowGroupSummary> UpdateAsync(Guid id, string? name, string? description, string? icon, CancellationToken ct);
+    /// <exception cref="ConflictException">Інша група з такою назвою вже є; прибрана роль застосунку ще в когось є (<c>APP_ROLE_IN_USE</c>).</exception>
+    Task<WorkflowGroupSummary> UpdateAsync(Guid id, string? name, string? description, string? icon, CancellationToken ct, IReadOnlyList<ProjectAppRole>? appRoles = null);
 
     /// <summary>Видаляє групу; її сценарії лишаються без групи.</summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>
@@ -65,9 +69,10 @@ public interface IWorkflowGroupService
     /// <param name="email">Email наявного користувача.</param>
     /// <param name="role"><see cref="UserRole.Editor"/> або <see cref="UserRole.Viewer"/>.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="appRole">Роль застосунку (F8-04) — ключ з ролей проєкту; <c>null</c> — без неї.</param>
     /// <exception cref="NotFoundException">Проєкту чи користувача немає.</exception>
     /// <exception cref="ForbiddenException">Користувач не admin і не editor проєкту.</exception>
-    Task<ProjectMember> SetMemberAsync(Guid id, string email, UserRole role, CancellationToken ct);
+    Task<ProjectMember> SetMemberAsync(Guid id, string email, UserRole role, CancellationToken ct, string? appRole = null);
 
     /// <summary>Прибирає користувача з проєкту (admin або editor проєкту).</summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>

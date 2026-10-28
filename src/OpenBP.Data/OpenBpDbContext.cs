@@ -12,6 +12,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
     public DbSet<WorkflowExplanationEntity> WorkflowExplanations => Set<WorkflowExplanationEntity>();
     public DbSet<WorkflowGroupEntity> WorkflowGroups => Set<WorkflowGroupEntity>();
     public DbSet<ProjectMemberEntity> ProjectMembers => Set<ProjectMemberEntity>();
+    public DbSet<ProjectPageEntity> ProjectPages => Set<ProjectPageEntity>();
     public DbSet<EvaluationEntity> Evaluations => Set<EvaluationEntity>();
     public DbSet<EvaluationCaseEntity> EvaluationCases => Set<EvaluationCaseEntity>();
     public DbSet<EvaluationRunEntity> EvaluationRuns => Set<EvaluationRunEntity>();
@@ -74,6 +75,15 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
         {
             e.ToTable("workflow_groups");
             e.HasIndex(x => x.NormalizedName).IsUnique();
+            e.Property(x => x.AppRoles).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+        });
+        b.Entity<ProjectPageEntity>(e =>
+        {
+            e.ToTable("project_pages");
+            e.HasIndex(x => new { x.ProjectId, x.Key }).IsUnique();
+            e.Property(x => x.Definition).HasColumnType("jsonb");
+            e.Property(x => x.Roles).HasColumnType("jsonb");
+            e.HasOne<WorkflowGroupEntity>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ProjectMemberEntity>(e =>
         {

@@ -52,6 +52,8 @@ public static class AuditActions
     public const string ProjectDeleted = "project.deleted";
     public const string ProjectMemberSet = "project.memberSet";
     public const string ProjectMemberRemoved = "project.memberRemoved";
+    public const string ProjectPageSaved = "project.pageSaved";
+    public const string ProjectPageDeleted = "project.pageDeleted";
 }
 
 /// <summary>

@@ -71,6 +71,8 @@ public sealed class WorkflowGroupEntity
     public string Description { get; set; } = "";
     /// <summary>Значок проєкту (F8-03): назва іконки AC-Kit чи emoji; порожній — типовий.</summary>
     public string Icon { get; set; } = "";
+    /// <summary>Ролі застосунку проєкту (F8-04), jsonb: <c>[{ key, name }]</c>.</summary>
+    public string AppRoles { get; set; } = "[]";
     public DateTimeOffset CreatedAt { get; set; }
 }
 
@@ -80,7 +82,28 @@ public sealed class ProjectMemberEntity
     public Guid ProjectId { get; set; }
     public Guid UserId { get; set; }
     public string Role { get; set; } = "viewer";
+    /// <summary>Роль застосунку (F8-04): ключ з <see cref="WorkflowGroupEntity.AppRoles"/> або <c>null</c>.</summary>
+    public string? AppRole { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>
+/// Сторінка застосунку проєкту (F8-04, docs/projects.md §3): <c>list</c>, <c>detail</c> чи <c>form</c> над таблицею проєкту.
+/// <c>key</c> унікальний у проєкті й є адресою <c>/projects/:id/app/&lt;key&gt;</c>.
+/// </summary>
+public sealed class ProjectPageEntity
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public string Key { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Kind { get; set; } = "list";
+    /// <summary>jsonb: визначення сторінки за типом.</summary>
+    public string Definition { get; set; } = "{}";
+    /// <summary>jsonb: ключі ролей застосунку, яким видно сторінку; <c>[]</c> — усім учасникам.</summary>
+    public string Roles { get; set; } = "[]";
+    public int SortOrder { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 /// <summary>Таблиця даних (F6-11): колонки — JSON <c>[{ name, type, key }]</c>.</summary>

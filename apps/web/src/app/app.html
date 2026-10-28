@@ -6,6 +6,7 @@
   </div>
 }
 <ng-template #projectBlock>
+@if (!appOnly()) {
 <div class="shell-project">
         <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
         <mat-select
@@ -35,6 +36,7 @@
           </a>
         }
       </div>
+}
 </ng-template>
 <ng-template #userBlock>
       <div class="shell-user">
@@ -49,6 +51,16 @@
       </div>
 </ng-template>
 <ng-template #navLinks>
+@if (appOnly(); as ap) {
+      <a class="shell-nav__link" data-testid="nav-app" [routerLink]="['/projects', ap.id, 'app']" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">apps</span>
+        <span i18n="@@nav.app">Застосунок</span>
+      </a>
+      <a class="shell-nav__link" data-testid="nav-app-overview" [routerLink]="['/projects', ap.id, 'overview']" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+        <span i18n="@@nav.overview">Огляд</span>
+      </a>
+} @else {
       <a class="shell-nav__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
         <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
         <span i18n="@@nav.overview">Огляд</span>
@@ -81,6 +93,7 @@
         <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         <span i18n="@@nav.settings">Налаштування</span>
       </a>
+}
 </ng-template>
 @if (!bare()) {
   <mat-toolbar class="shell-top">

@@ -181,7 +181,7 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
             if (hidden is not null)
             {
                 throw new DataTableValidationException(new DataTableException(DataTableRules.Codes.FilterInvalid,
-                    $"Колонка «{hidden.Column}» чутлива: відбирати за нею може лише editor проєкту."));
+                    $"Колонка «{hidden.Column}» чутлива: відбирати за нею може лише editor проєкту чи учасник з роллю застосунку."));
             }
         }
 
@@ -427,8 +427,7 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
         return (entity, PostgresDataTableStore.ToInfo(entity));
     }
 
-    private async Task<bool> CanReadSensitiveAsync(DataTableInfo table, CancellationToken ct) =>
-        await _access.RoleInAsync(table.ProjectId, ct) >= UserRole.Editor;
+    private Task<bool> CanReadSensitiveAsync(DataTableInfo table, CancellationToken ct) => _access.CanReadSensitiveAsync(table.ProjectId, ct);
 
     /// <summary>
     /// Рядки для відповіді: без права на чутливі колонки їхні значення <c>null</c>, інакше читання пишеться в audit log.
@@ -461,7 +460,7 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
         {
             ProjectId = t.ProjectId,
             Constraints = PostgresDataTableStore.ParseConstraints(t.Constraints),
-            CanReadSensitive = scope.RoleIn(t.ProjectId) >= UserRole.Editor,
+            CanReadSensitive = scope.CanReadSensitive(t.ProjectId),
         };
 
     private static DataRowDto ToDto(DataRow row) => new(row.Key, row.Data, row.CreatedAt, row.UpdatedAt);

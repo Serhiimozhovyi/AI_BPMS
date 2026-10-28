@@ -52,7 +52,7 @@ public sealed record DataImportResult(int Inserted, int Updated);
 /// Таблиці даних (F6-11, F8-02): структура і рядки для REST, UI і MCP. Права — права проєкту таблиці
 /// (<see cref="ProjectAccess"/>; спільна таблиця — глобальна роль): читання — <see cref="UserRole.Viewer"/>, зміна таблиць
 /// і рядків — <see cref="UserRole.Editor"/>. Таблиці чужого проєкту для користувача не існує (404). Значення чутливих
-/// колонок бачать лише editor проєкту й admin, для решти вони <c>null</c>; кожне читання їх пишеться в audit log.
+/// колонок бачать лише admin, editor проєкту й учасники з роллю застосунку (F8-04), для решти вони <c>null</c>; кожне читання їх пишеться в audit log.
 /// Правила значень — ті самі, що у вузла <c>core.dataTable</c>.
 /// </summary>
 public interface IDataTableService
