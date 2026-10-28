@@ -184,7 +184,14 @@ export interface EditorErrorEvent {
       }
       @if (definition(); as def) {
         @if (view() === 'business') {
-          <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
+          <div class="editor__body">
+            <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
+          @if (assistantOpen() && !readonly()) {
+            <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" [draftTodo]="draftTodo()" (definitionChange)="assistantChanged($event)" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
+            </aside>
+          }
+          </div>
         } @else {
         <div class="editor__body">
           @if (!readonly() && !paletteOpen()) {
@@ -452,6 +459,7 @@ export interface EditorErrorEvent {
     .editor__business {
       flex: 1;
       min-height: 0;
+      min-width: 0;
     }
 
 

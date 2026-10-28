@@ -707,17 +707,18 @@ test('F3-104: «Описати процес» → вузли на канвасі
   await page.getByTestId('describe-input').fill('працівник подає заявку, система вітає');
   await page.getByTestId('describe-run').click();
 
-  await expect(page.getByTestId('describe-progress')).toContainText('Налаштовую «Привітання» (1 з 1)');
+  await expect.poll(() => api.draftRequests.length).toBe(1);
   expect(api.draftRequests).toEqual([expect.objectContaining({ description: 'працівник подає заявку, система вітає' })]);
-  // Є доріжки — відкрився «Бізнес»-вигляд.
+  // Є доріжки — відкрився «Бізнес»-вигляд, а «Що доналаштувати» лишилось поруч.
   await expect(page.getByTestId('business-view')).toBeVisible();
-  await page.getByTestId('view-technical').click();
+  await expect(page.getByTestId('describe-todo-item')).toContainText('Привітання: вкажіть поля');
+
+  // Клік по пункту відкриває вузол у технічному вигляді.
+  await page.getByTestId('describe-todo-item').click();
+  await expect(page.getByTestId('node-panel-name')).toHaveText('Привітання');
   await expect(card(page, 'Старт')).toBeVisible();
   await expect(card(page, 'Привітання')).toBeVisible();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
-
-  await page.getByTestId('describe-todo-item').click();
-  await expect(page.getByTestId('node-panel-name')).toHaveText('Привітання');
 
   await page.getByTestId('undo').click();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
