@@ -49,6 +49,46 @@
     ],
     "headers": []
   },
+  "actions": [
+    {
+      "name": "changes_since",
+      "title": "Нові чи змінені рядки",
+      "description": "Для тригерів-опитувань: що змінилось від вказаного моменту."
+    },
+    {
+      "name": "delete_rows",
+      "title": "Видалити рядки"
+    },
+    {
+      "name": "describe_table",
+      "title": "Опис таблиці",
+      "description": "Колонки, типи й ключі."
+    },
+    {
+      "name": "execute",
+      "title": "Виконати SQL-команду"
+    },
+    {
+      "name": "insert_rows",
+      "title": "Додати рядки"
+    },
+    {
+      "name": "list_tables",
+      "title": "Список таблиць"
+    },
+    {
+      "name": "query",
+      "title": "SQL-запит на читання"
+    },
+    {
+      "name": "update_rows",
+      "title": "Змінити рядки"
+    },
+    {
+      "name": "upsert_rows",
+      "title": "Додати або змінити рядки"
+    }
+  ],
   "triggers": [
     {
       "id": "new_rows",

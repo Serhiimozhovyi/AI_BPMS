@@ -71,6 +71,7 @@ public sealed class McpContractTests(PostgresFixture pg)
         var names = tools.Select(t => t.Name).ToHashSet();
         Assert.Superset(BotTools.Concat(["book_slot", "cancel_booking", "move_booking", "register_event", "join_waitlist", "due_notifications", "mark_notifications_sent", "generate_slots", "anonymize_old_records"]).ToHashSet(), names);
         Assert.All(tools, t => Assert.NotNull(t.ProtocolTool.OutputSchema));
+        ManifestActions.Verify("psy-support", tools);
 
         var start = await client.CallToolAsync("bot_start", new Dictionary<string, object?> { ["telegram_id"] = 5551, ["name"] = "Олена" });
         Assert.NotEqual(true, start.IsError);

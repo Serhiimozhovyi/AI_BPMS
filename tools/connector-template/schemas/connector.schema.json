@@ -47,6 +47,11 @@
         "headers": { "type": "array", "items": { "$ref": "#/$defs/key" } }
       }
     },
+    "actions": {
+      "description": "Дії (tools) конектора для палітри ще до підключення (F3-92): назви й описи; схему аргументів дає discovery підключення. Імена мають збігатися з tools/list сервера (перевіряє контрактний тест конектора).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/action" }
+    },
     "triggers": {
       "description": "Пресети тригерів конектора для палітри (docs/connectors.md §9.2): готовий вузол mcp.subscribe або mcp.poll без serverId.",
       "type": "array",
@@ -54,6 +59,16 @@
     }
   },
   "$defs": {
+    "action": {
+      "type": "object",
+      "required": ["name", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "description": "Ім'я tool'а в tools/list (toolName вузла).", "type": "string", "minLength": 1 },
+        "title": { "description": "Назва дії для людини.", "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
     "trigger": {
       "type": "object",
       "required": ["id", "title", "node"],

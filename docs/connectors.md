@@ -335,6 +335,11 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
   `workingDirectory`) або `http` (`url`, `headers`). Можна описати обидва — користувач обирає при встановленні.
 - `credential.env` / `credential.headers` — ключі credential'а `mcp.stdio` / `mcp.http`: після встановлення форма
   облікових даних відкривається з цими назвами, лишається вписати значення. Секретів у маніфесті немає.
+- `actions` — дії (tools) конектора для палітри ще до підключення (F3-92): `[{ name, title, description? }]`; `name` — ім'я
+  tool'а в `tools/list`, `title` — назва для людини (українською). Схеми аргументів тут немає: її дає discovery підключення.
+  Контрактний тест кожного конектора звіряє `actions` з `tools/list` (новий tool без запису — червоний тест;
+  `OPENBP_UPDATE_MANIFEST=1 dotnet test` дописує відсутні дії в `connector.json`). Якщо в маніфесті `actions` немає,
+  `GET /connectors/catalog` бере дії з кешу tools першого встановленого підключення цього запису.
 - `triggers` — пресети тригерів конектора (F6-21, схема — §9.2 п. 4): `{ id, title, description?, node: { type, parameters } }`,
   `type` — `mcp.subscribe` (обов'язкові `resourceUri`, `keyField`) або `mcp.poll` (`toolName`, `keyField`, `cron`), `serverId` у
   `parameters` заборонений. Некоректний пресет — помилка завантаження маніфесту з назвою конектора й пресета. Пресети

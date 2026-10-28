@@ -88,6 +88,13 @@ public sealed class KitCrmConnectorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("kit-crm", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_has_sales_tasks_and_poll_tools()
     {
         var client = await ConnectAsync();

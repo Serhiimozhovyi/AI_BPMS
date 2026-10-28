@@ -78,6 +78,35 @@ public class ConnectorCatalogTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Builtin_connectors_ship_actions_for_the_palette_before_any_connection_exists()
+    {
+        var entries = await ListAsync(await LoginAsync(UserRole.Viewer));
+
+        foreach (var entry in entries.Where(e => e.GetProperty("source").GetString() == "builtin"))
+        {
+            var actions = entry.GetProperty("manifest").GetProperty("actions");
+            Assert.True(actions.GetArrayLength() > 0, IdOf(entry));
+            Assert.All(actions.EnumerateArray(), a => Assert.False(string.IsNullOrWhiteSpace(a.GetProperty("title").GetString()), IdOf(entry)));
+        }
+
+        var telegram = entries.Single(e => IdOf(e) == "telegram").GetProperty("manifest").GetProperty("actions").EnumerateArray().ToList();
+        var photo = Assert.Single(telegram, a => a.GetProperty("name").GetString() == "send_photo");
+        Assert.Equal("Надіслати фото", photo.GetProperty("title").GetString());
+        Assert.Contains(telegram, a => a.GetProperty("name").GetString() == "send_message");
+    }
+
+    [Theory]
+    [InlineData("""[{ "name": "a", "title": "A" }, { "name": "a", "title": "B" }]""", "повторюється")]
+    [InlineData("""[{ "name": "a", "title": " " }]""", "title")]
+    [InlineData("""[{ "name": "", "title": "A" }]""", "name")]
+    public void Invalid_actions_are_rejected(string actions, string expected)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => ConnectorCatalog.Parse(
+            $$"""{ "id": "ok", "name": "x", "description": "", "transport": "stdio", "stdio": { "command": "x" }, "actions": {{actions}} }""", "test"));
+        Assert.Contains(expected, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Invalid_manifest_is_rejected()
     {
         var error = Assert.Throws<InvalidOperationException>(() =>
@@ -107,6 +136,11 @@ public class ConnectorCatalogTests(ApiFactory api)
         var id = summary.GetProperty("id").GetGuid();
         var entry = (await ListAsync(admin)).Single(e => IdOf(e) == "fake");
         Assert.Contains(entry.GetProperty("installed").EnumerateArray(), c => c.GetProperty("id").GetGuid() == id);
+
+        // Маніфест без actions бере дії з кешу tools встановленого підключення (F3-92).
+        var actions = entry.GetProperty("manifest").GetProperty("actions");
+        Assert.Equal(detail.GetProperty("tools").EnumerateArray().Select(t => t.GetProperty("name").GetString()), actions.EnumerateArray().Select(a => a.GetProperty("name").GetString()));
+        Assert.All(actions.EnumerateArray(), a => Assert.False(string.IsNullOrWhiteSpace(a.GetProperty("title").GetString())));
 
         // PUT без catalog не прибирає прив'язку до запису каталогу.
         var config = detail.GetProperty("config");

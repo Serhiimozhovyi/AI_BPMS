@@ -78,6 +78,13 @@ public abstract class SqlConnectorTests(DatabaseFixture db) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify("sql", await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_has_all_tools_with_table_picker_and_read_only_hints()
     {
         var client = await ConnectAsync();

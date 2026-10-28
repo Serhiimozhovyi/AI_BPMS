@@ -50,6 +50,13 @@ public sealed class ConnectorContractTests : IAsyncLifetime
     private static string Text(CallToolResult result) => string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
 
     [Fact]
+    public async Task Manifest_actions_match_the_tools_list()
+    {
+        var client = await ConnectAsync();
+        ManifestActions.Verify(null, await client.ListToolsAsync());
+    }
+
+    [Fact]
     public async Task Tools_list_returns_tools_with_input_and_output_schemas()
     {
         var client = await ConnectAsync();
