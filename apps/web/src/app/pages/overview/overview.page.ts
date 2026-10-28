@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
   OVERVIEW_RANGES,
@@ -26,7 +26,9 @@ import {
   template: `
     <section class="p-6">
       <div class="mb-4 flex flex-wrap items-center gap-4">
-        <h1 class="mat-font-headline-sm" i18n="@@overview.title">Огляд</h1>
+        @if (!projectId) {
+          <h1 class="mat-font-headline-sm" i18n="@@overview.title">Огляд</h1>
+        }
         <div class="flex gap-1" role="group" aria-label="Період" i18n-aria-label="@@overview.range.label">
           @for (r of ranges; track r) {
             <button
@@ -81,6 +83,14 @@ import {
 
         <h2 class="mb-2 text-lg font-semibold" i18n="@@overview.now">Зараз</h2>
         <div class="mb-6 flex flex-wrap gap-6" data-testid="now">
+          @if (projectId) {
+            <span data-testid="now-active">
+              <span i18n="@@overview.now.active">Активних сценаріїв</span>: <b>{{ d.activeWorkflows ?? 0 }}</b>
+            </span>
+            <a routerLink="/tasks" data-testid="now-tasks">
+              <span i18n="@@overview.now.tasks">Відкритих задач</span>: <b>{{ d.openTasks ?? 0 }}</b>
+            </a>
+          }
           <a routerLink="/executions" data-testid="now-running">
             <span i18n="@@overview.now.running">Виконуються</span>: <b>{{ d.running }}</b>
           </a>
@@ -182,6 +192,9 @@ export class OverviewPage implements OnInit {
   private readonly api = inject(OverviewApiService);
   private readonly destroyRef = inject(DestroyRef);
 
+  /** Усередині `/projects/:id/overview` (F8-03) огляд звужений до проєкту; на `/` — уся видима область. */
+  readonly projectId = inject(ActivatedRoute).parent?.snapshot.paramMap.get('id') ?? null;
+
   readonly ranges = OVERVIEW_RANGES;
   readonly range = signal<OverviewRange>('24h');
   readonly data = signal<Overview | null>(null);
@@ -206,7 +219,7 @@ export class OverviewPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     this.api
-      .get(this.range())
+      .get(this.range(), this.projectId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (d) => {

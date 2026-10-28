@@ -25,6 +25,17 @@ REST (`architecture.md` §10.3): `GET /workflow-groups` повертає ще `d
 `appRole`; `PATCH /workflow-groups/{id} { name?, description?, icon?, appRoles? }`;
 `PUT /workflow-groups/{id}/members/{userId} { role, appRole? }`.
 
+**Реалізація F8-03** (відхилення від плану вище):
+- Поки є `description` (до 500 символів) і `icon` (назва Material Symbols, до 40): `POST /workflow-groups` і `PATCH` приймають
+  їх; у `PATCH` лише передані поля змінюються, `""` очищає. Моя роль у проєкті лишається полем `role` (як у F6-14), а не
+  `memberRole`; `appRoles`/`appRole` додає F8-04.
+- Вкладки (дочірні маршрути): `overview`, `workflows`, `tables`, `connections`, `app`, `members`; `/projects/:id` перенаправляє на
+  `overview`. Сценарії, таблиці й підключення — ті самі сторінки, що й у меню: вхід на сторінку проєкту робить його вибраним
+  у шапці, і вони фільтруються за ним.
+- «Огляд» — та сама сторінка, що `/`, але `GET /overview?projectId=` (viewer проєкту; чужий — 404) звужує її до сценаріїв
+  проєкту й додає `activeWorkflows` та `openTasks`. Стан підключень у цій вкладці поки не показано.
+- «Застосунок» до F8-04 — пояснення замість сторінок. «Створити проєкт» бачить лише глобальний editor чи admin.
+
 ## 2. Таблиці проєкту
 
 Зміни відносно F6-11 (реалізовано в F8-02):

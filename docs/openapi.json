@@ -797,13 +797,21 @@
           "Огляд"
         ],
         "summary": "Огляд виконань",
-        "description": "Усі ролі. `range`: `24h` (типово), `7d`, `30d`. Підсумки — з погодинних агрегатів (оновлюються раз на 5 хв), тривалість p50/p95 — оцінка за кошиками гістограми; `queued`/`running`/`waiting` — поточний стан.",
+        "description": "Усі ролі. `range`: `24h` (типово), `7d`, `30d`. Підсумки — з погодинних агрегатів (оновлюються раз на 5 хв), тривалість p50/p95 — оцінка за кошиками гістограми; `queued`/`running`/`waiting` — поточний стан. `projectId` звужує огляд до сценаріїв проєкту (потрібна роль viewer у ньому; чужий — 404); `activeWorkflows` і `openTasks` — поточні лічильники.",
         "parameters": [
           {
             "name": "range",
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -2385,7 +2393,7 @@
           "Сценарії"
         ],
         "summary": "Групи (проєкти) сценаріїв",
-        "description": "Видимі групи в заданому порядку з кількістю сценаріїв і роллю поточного користувача (`role`); admin бачить усі, інші — ті, де вони учасники. Сценарії спільного простору — `GET /workflows?groupId=none`.",
+        "description": "Видимі групи в заданому порядку з описом, значком, кількістю сценаріїв і роллю поточного користувача (`role`); admin бачить усі, інші — ті, де вони учасники. Сценарії спільного простору — `GET /workflows?groupId=none`.",
         "responses": {
           "200": {
             "description": "OK",
@@ -2473,7 +2481,8 @@
         "tags": [
           "Сценарії"
         ],
-        "summary": "Перейменувати групу",
+        "summary": "Змінити назву, опис чи значок групи",
+        "description": "Лише передані поля; порожній рядок в `description` чи `icon` очищає їх. Назва — як у створенні (409 WORKFLOW_GROUP_NAME_TAKEN).",
         "parameters": [
           {
             "name": "id",
@@ -5913,6 +5922,17 @@
           }
         }
       },
+      "AssistantModel": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "AssistantRequest": {
         "required": [
           "message",
@@ -8934,6 +8954,24 @@
             "items": {
               "$ref": "#/components/schemas/OverviewSubscription"
             }
+          },
+          "activeWorkflows": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 0
+          },
+          "openTasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 0
           }
         }
       },
@@ -10406,6 +10444,18 @@
               "null",
               "string"
             ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -10450,6 +10500,12 @@
                 "$ref": "#/components/schemas/UserRole"
               }
             ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
           }
         }
       },
@@ -10764,17 +10820,6 @@
               "null",
               "string"
             ]
-          }
-        }
-      },
-      "AssistantModel": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
           }
         }
       }

@@ -57,11 +57,13 @@ public static class NotificationEndpoints
             .WithDescription("Лише admin. Надсилає повідомлення одразу, без cooldown; 502 `NOTIFICATION_DELIVERY_FAILED`, якщо канал не прийняв.")
             .Produces(StatusCodes.Status204NoContent);
 
-        api.MapGet("/overview", (IOverviewService service, CancellationToken ct, string? range) => service.GetAsync(range ?? "24h", ct))
+        api.MapGet("/overview", (IOverviewService service, CancellationToken ct, string? range, Guid? projectId) => service.GetAsync(range ?? "24h", ct, projectId))
             .WithTags(OpenApiSetup.Tags.Overview)
             .WithSummary("Огляд виконань")
             .WithDescription("Усі ролі. `range`: `24h` (типово), `7d`, `30d`. Підсумки — з погодинних агрегатів (оновлюються раз на 5 хв), " +
-                             "тривалість p50/p95 — оцінка за кошиками гістограми; `queued`/`running`/`waiting` — поточний стан.");
+                             "тривалість p50/p95 — оцінка за кошиками гістограми; `queued`/`running`/`waiting` — поточний стан. " +
+                             "`projectId` звужує огляд до сценаріїв проєкту (потрібна роль viewer у ньому; чужий — 404); " +
+                             "`activeWorkflows` і `openTasks` — поточні лічильники.");
         return api;
     }
 

@@ -40,6 +40,10 @@ export interface WorkflowGroup {
   workflowCount: number;
   /** Моя роль у проєкті (F6-14). */
   role?: ProjectRole | null;
+  /** Короткий опис проєкту (F8-03). */
+  description?: string;
+  /** Назва іконки Material Symbols; порожньо — типова (F8-03). */
+  icon?: string;
 }
 
 /** `ProjectMember` — учасник проєкту (`GET /workflow-groups/{id}/members`, F6-14). */
@@ -369,12 +373,17 @@ export class WorkflowsApiService {
     return this.http.get<WorkflowGroup[]>(`${API_BASE}/workflow-groups`);
   }
 
-  createGroup(name: string): Observable<WorkflowGroup> {
-    return this.http.post<WorkflowGroup>(`${API_BASE}/workflow-groups`, { name });
+  createGroup(name: string, description?: string, icon?: string): Observable<WorkflowGroup> {
+    return this.http.post<WorkflowGroup>(`${API_BASE}/workflow-groups`, { name, description, icon });
   }
 
   renameGroup(id: string, name: string): Observable<WorkflowGroup> {
-    return this.http.patch<WorkflowGroup>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`, { name });
+    return this.updateGroup(id, { name });
+  }
+
+  /** Змінює лише передані поля; `''` очищає опис чи іконку (F8-03). */
+  updateGroup(id: string, patch: { name?: string; description?: string; icon?: string }): Observable<WorkflowGroup> {
+    return this.http.patch<WorkflowGroup>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`, patch);
   }
 
   /** Сценарії групи лишаються, без групи. */

@@ -28,7 +28,7 @@
             data-testid="project-members"
             title="Учасники проєкту"
             i18n-title="@@app.project.members"
-            [routerLink]="['/projects', current.id]"
+            [routerLink]="['/projects', current.id, 'members']"
           >
             <span class="material-symbols-outlined" aria-hidden="true">group</span>
             <span class="sr-only" i18n="@@app.project.members">Учасники проєкту</span>
@@ -52,6 +52,10 @@
       <a class="shell-nav__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
         <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
         <span i18n="@@nav.overview">Огляд</span>
+      </a>
+<a class="shell-nav__link" routerLink="/projects" routerLinkActive="active">
+        <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
+        <span i18n="@@nav.projects">Проєкти</span>
       </a>
 <a class="shell-nav__link" routerLink="/workflows" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">account_tree</span>

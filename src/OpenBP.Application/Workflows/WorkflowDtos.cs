@@ -109,7 +109,14 @@ public sealed record WorkflowGroupFilter(Guid? GroupId)
 /// <param name="SortOrder">Позиція в списку груп, з 0.</param>
 /// <param name="WorkflowCount">Скільки сценаріїв у групі.</param>
 /// <param name="Role">Роль поточного користувача в проєкті (F6-14): <c>admin</c> — адміністратор інстансу.</param>
-public sealed record WorkflowGroupSummary(Guid Id, string Name, int SortOrder, int WorkflowCount, UserRole? Role = null);
+public sealed record WorkflowGroupSummary(Guid Id, string Name, int SortOrder, int WorkflowCount, UserRole? Role = null)
+{
+    /// <summary>Опис проєкту (F8-03); порожній — без опису.</summary>
+    public string Description { get; init; } = "";
+
+    /// <summary>Значок проєкту (F8-03): назва іконки чи emoji; порожній — типовий.</summary>
+    public string Icon { get; init; } = "";
+}
 
 /// <summary>Учасник проєкту (<c>GET /workflow-groups/{id}/members</c>, F6-14).</summary>
 /// <param name="UserId"><c>users.id</c>.</param>

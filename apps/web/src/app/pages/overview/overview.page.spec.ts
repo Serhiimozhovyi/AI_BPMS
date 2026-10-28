@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Overview, formatDuration, formatRate } from '../../overview/overview-api.service';
 import { OverviewPage } from './overview.page';
 
@@ -136,5 +136,26 @@ describe('OverviewPage', () => {
       .flush({ detail: 'Немає зв’язку з БД' }, { status: 503, statusText: 'Unavailable' });
     await render(fixture);
     expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="page-error"]')?.textContent).toContain('Немає зв’язку з БД');
+  });
+
+  it('у вкладці проєкту звужує огляд до проєкту й показує активні сценарії та задачі (F8-03)', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { parent: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } } },
+      ],
+    });
+    const fixture = TestBed.createComponent(OverviewPage);
+    fixture.detectChanges();
+    const req = TestBed.inject(HttpTestingController).expectOne((r) => r.url === '/api/v1/overview');
+    expect(req.request.params.get('projectId')).toBe('p1');
+    req.flush({ ...day, activeWorkflows: 3, openTasks: 2 });
+    await render(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="now-active"]')?.textContent).toContain('3');
+    expect(host.querySelector('[data-testid="now-tasks"]')?.textContent).toContain('2');
+    expect(host.querySelector('h1')).toBeNull();
   });
 });

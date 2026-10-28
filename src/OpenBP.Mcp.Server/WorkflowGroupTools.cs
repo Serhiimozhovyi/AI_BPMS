@@ -16,21 +16,25 @@ public sealed class WorkflowGroupTools
     /// <param name="groups">Сервіс груп.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "list_workflow_groups", Title = "List workflow groups", ReadOnly = true, UseStructuredContent = true)]
-    [Description("Lists workflow groups (id, name, sortOrder, workflowCount) in display order. Workflows without a group: list_workflows with groupId \"none\".")]
+    [Description("Lists workflow groups (projects: id, name, description, icon, sortOrder, workflowCount, my role) in display order. Workflows without a group: list_workflows with groupId \"none\".")]
     public static async Task<WorkflowGroupList> ListWorkflowGroups(IWorkflowGroupService groups, CancellationToken ct = default) =>
         new(await groups.ListAsync(ct).ConfigureAwait(false));
 
     /// <summary><c>create_workflow_group</c>.</summary>
     /// <param name="groups">Сервіс груп.</param>
     /// <param name="name">Назва.</param>
+    /// <param name="description">Опис проєкту.</param>
+    /// <param name="icon">Значок проєкту.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "create_workflow_group", Title = "Create workflow group", Destructive = false, UseStructuredContent = true)]
     [Description("Creates a workflow group at the end of the list. Names are unique case-insensitively (error WORKFLOW_GROUP_NAME_TAKEN).")]
     public static Task<WorkflowGroupSummary> CreateWorkflowGroup(
         IWorkflowGroupService groups,
         [Description("Group name, 1–100 characters.")] string name,
+        [Description("Optional project description, up to 500 characters.")] string? description = null,
+        [Description("Optional project icon (icon name or emoji), up to 40 characters.")] string? icon = null,
         CancellationToken ct = default) =>
-        groups.CreateAsync(name, ct);
+        groups.CreateAsync(name, ct, description, icon);
 
     /// <summary><c>move_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>

@@ -25,16 +25,20 @@ public interface IWorkflowGroupService
     /// <summary>Створює групу в кінці списку.</summary>
     /// <param name="name">Назва, непорожня.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="description">Опис проєкту (до <see cref="WorkflowGroupService.MaxDescriptionLength"/> символів).</param>
+    /// <param name="icon">Значок проєкту (до <see cref="WorkflowGroupService.MaxIconLength"/> символів).</param>
     /// <exception cref="ConflictException">Група з такою назвою вже є.</exception>
-    Task<WorkflowGroupSummary> CreateAsync(string name, CancellationToken ct);
+    Task<WorkflowGroupSummary> CreateAsync(string name, CancellationToken ct, string? description = null, string? icon = null);
 
-    /// <summary>Перейменовує групу.</summary>
+    /// <summary>Змінює назву, опис і значок групи; <c>null</c> — поле не змінюється, порожній рядок очищає опис чи значок.</summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>
     /// <param name="name">Нова назва, непорожня.</param>
+    /// <param name="description">Новий опис.</param>
+    /// <param name="icon">Новий значок.</param>
     /// <param name="ct">Скасування.</param>
     /// <exception cref="NotFoundException">Групи немає.</exception>
     /// <exception cref="ConflictException">Інша група з такою назвою вже є.</exception>
-    Task<WorkflowGroupSummary> RenameAsync(Guid id, string name, CancellationToken ct);
+    Task<WorkflowGroupSummary> UpdateAsync(Guid id, string? name, string? description, string? icon, CancellationToken ct);
 
     /// <summary>Видаляє групу; її сценарії лишаються без групи.</summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>

@@ -1302,15 +1302,16 @@
 - DoD: документи українською, посилання перевірені; власник погодив концепцію (тред «Додати проєкти в OpenBP», 2026-10-28).
 
 ### F8-02 · Таблиці в проєкті: `project_id`, типи, обмеження, `core.dataTable` v2
-- model: `opus` · status: `review` · depends: F8-01
+- model: `opus` · status: `done (#224)` · depends: F8-01
 - Що: `data_tables.project_id` (null — спільна) + `constraints` jsonb, міграція (наявні таблиці — спільні), унікальність назви в межах проєкту; типи колонок `datetime`, `enum { values }`, `ref { table }`, `user` і позначка `sensitive`; обмеження `required`, `unique [{ columns, where? }]` при `insert`/`upsert`/`update`/імпорті CSV; `core.dataTable` typeVersion 2: `insertIf { values, where, maxCount }` → `{ inserted, reason?, row? }`, `increment`, `count`, `insert`/`upsert` з `unique` → `{ inserted: false, reason: "unique" }`; запис серіалізується `SELECT … FOR UPDATE` рядка `data_tables` в одній транзакції (`PostgresDataTableStore`); пошук таблиці за назвою: проєкт сценарію → спільні; валідатор: таблиця іншого проєкту → `PROJECT_REFERENCE_FORBIDDEN`; права проєкту в `IDataTableService` (viewer читає, editor пише; чутливі колонки — `null` для viewer без ролі застосунку, читання через REST/MCP → audit `table.sensitive_read`); REST `/tables` з `projectId`, MCP `list_tables`/`query_table` з `projectId`, `openbp://projects/{id}/tables`; `/tables` в UI: вибір проєкту, редактор обмежень і типів (AC-Kit); `describe_nodes` віддає v2; CLI in-memory store підтримує v2.
 - DoD: тести (Testcontainers): `unique where` відхиляє другий активний запис; 20 паралельних `insertIf` з `maxCount: 8` → рівно 8 рядків; `ref` на чужу таблицю → 422; editor проєкту A не бачить таблиць B (REST і MCP); чутлива колонка `null` для viewer і в resource; v1-сценарії зелені; Vitest сторінки; `docs/workflow-format.md`, `architecture.md` §6, `docs/mcp-server.md`, `docs/projects.md` §2 оновлено.
 - Зроблено: як у «Що», з уточненнями (ADR-005, `docs/projects.md` §2): нові операції додано до `core.dataTable` v1 без нової версії вузла, відповідь — `_inserted`/`_reason`; серіалізація — advisory lock таблиці; дія аудиту — `dataTable.sensitiveRead`; `ref` перевіряється при збереженні структури, а не по рядках; `user` — id без розгортання в email.
 
 ### F8-03 · Список проєктів і сторінка проєкту з вкладками
-- model: `sonnet` · status: `ready` · depends: F8-02
+- model: `sonnet` · status: `review` · depends: F8-02
 - Що: `workflow_groups` + `description`, `icon`; `GET /workflow-groups` → ще `description`, `icon`, `memberRole`; `PATCH` приймає їх; пункт меню «Проєкти» і сторінка `/projects` (картки: назва, опис, значок, сценарії, роль); `/projects/:id` з вкладками Огляд (опис, активні сценарії, помилки за добу, відкриті задачі й порушення, стан підключень — з наявних сервісів F6-07 з фільтром проєкту), Сценарії, Таблиці, Підключення (ті самі компоненти `/workflows`, `/tables`, `/connections` з фільтром проєкту), Учасники (наявна сторінка F6-14); адреса вкладки в URL; створення проєкту з картки; AC-Kit, i18n.
 - DoD: Vitest: вкладки, фільтр за проєктом, картки; тести REST нових полів; viewer не бачить «Створити»; `docs/projects.md` §1, `docs/guide/users.md` оновлено.
+- Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §1): моя роль — поле `role`; вкладка «Застосунок» — пояснення до F8-04; огляд проєкту — `/overview?projectId=` з `activeWorkflows`, `openTasks` (стан підключень у вкладці поки не показано).
 
 ### F8-04 · Ролі застосунку й сторінки: `project_pages`, list / detail / form
 - model: `opus` · status: `ready` · depends: F8-03

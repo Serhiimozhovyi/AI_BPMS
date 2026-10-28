@@ -49,6 +49,10 @@ export interface Overview {
   openViolations?: number;
   /** Підписки `mcp.subscribe` активних сценаріїв (F6-20). */
   subscriptions?: OverviewSubscription[];
+  /** Активних сценаріїв у видимій області (F8-03). */
+  activeWorkflows?: number;
+  /** Відкритих людських задач (F8-03). */
+  openTasks?: number;
 }
 
 /** Назва періоду для людей. */
@@ -82,7 +86,8 @@ export function formatRate(rate: number | null): string {
 export class OverviewApiService {
   private readonly http = inject(HttpClient);
 
-  get(range: OverviewRange): Observable<Overview> {
-    return this.http.get<Overview>(`${API_BASE}/overview`, { params: { range } });
+  /** `projectId` звужує огляд до сценаріїв проєкту (F8-03). */
+  get(range: OverviewRange, projectId?: string | null): Observable<Overview> {
+    return this.http.get<Overview>(`${API_BASE}/overview`, { params: projectId ? { range, projectId } : { range } });
   }
 }

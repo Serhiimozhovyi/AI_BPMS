@@ -51,6 +51,8 @@ public sealed record OverviewSubscription(
 /// <param name="Waiting">Зараз чекають події чи часу.</param>
 /// <param name="OpenViolations">Виконань з відкритими порушеннями правил переходу між етапами (F7-04).</param>
 /// <param name="Subscriptions">Підписки push-тригерів <c>mcp.subscribe</c> активних сценаріїв (F6-20).</param>
+/// <param name="ActiveWorkflows">Активних (увімкнених) сценаріїв у видимій області (F8-03).</param>
+/// <param name="OpenTasks">Відкритих людських задач у видимій області (F8-03).</param>
 public sealed record OverviewResult(
     string Range,
     DateTimeOffset From,
@@ -66,7 +68,9 @@ public sealed record OverviewResult(
     int Running,
     int Waiting,
     int OpenViolations = 0,
-    IReadOnlyList<OverviewSubscription>? Subscriptions = null);
+    IReadOnlyList<OverviewSubscription>? Subscriptions = null,
+    int ActiveWorkflows = 0,
+    int OpenTasks = 0);
 
 /// <summary>Дані сторінки «Огляд».</summary>
 public interface IOverviewService
@@ -74,8 +78,10 @@ public interface IOverviewService
     /// <summary>Огляд за період.</summary>
     /// <param name="range"><c>24h</c>, <c>7d</c> або <c>30d</c>.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="projectId">Лише сценарії цього проєкту (потрібна роль viewer у ньому); <c>null</c> — уся видима область.</param>
     /// <exception cref="ArgumentException">Невідомий період.</exception>
-    Task<OverviewResult> GetAsync(string range, CancellationToken ct);
+    /// <exception cref="NotFoundException">Проєкту нема або він чужий.</exception>
+    Task<OverviewResult> GetAsync(string range, CancellationToken ct, Guid? projectId = null);
 }
 
 /// <summary>
@@ -96,7 +102,7 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
     public const string WaitingStatus = ExecutionStatuses.Waiting;
 
     /// <inheritdoc />
-    public async Task<OverviewResult> GetAsync(string range, CancellationToken ct)
+    public async Task<OverviewResult> GetAsync(string range, CancellationToken ct, Guid? projectId = null)
     {
         currentUser.Require(UserRole.Viewer);
         if (!Ranges.TryGetValue(range ?? "", out var span))
@@ -109,8 +115,16 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
         var from = new DateTimeOffset(start.Year, start.Month, start.Day, start.Hour, 0, 0, TimeSpan.Zero);
         // Не-адмін бачить статистику лише сценаріїв своїх проєктів і спільного простору (F6-14).
         var access = new ProjectAccess(db, currentUser);
+        var visibleWorkflows = await access.VisibleWorkflowsAsync(db.Workflows.AsNoTracking(), ct);
         var restricted = await access.VisibleProjectsAsync(ct) is not null;
-        var visible = (await access.VisibleWorkflowsAsync(db.Workflows.AsNoTracking(), ct)).Select(w => w.Id);
+        if (projectId is { } project)
+        {
+            await access.RequireAsync(project, UserRole.Viewer, "project", project, ct);
+            visibleWorkflows = visibleWorkflows.Where(w => w.GroupId == project);
+            restricted = true;
+        }
+
+        var visible = visibleWorkflows.Select(w => w.Id);
         var rows = await db.ExecutionStats.AsNoTracking()
             .Where(s => s.Hour >= from && (!restricted || visible.Contains(s.WorkflowId))).ToListAsync(ct);
 
@@ -152,6 +166,9 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
             .CountAsync(ct);
 
         var subscriptions = await LoadSubscriptionsAsync(restricted, visible, now, ct);
+        var activeWorkflows = await visibleWorkflows.CountAsync(w => w.Active, ct);
+        var openTasks = await db.Tasks.AsNoTracking()
+            .CountAsync(t => t.Status == TaskStatuses.Open && (!restricted || visible.Contains(t.WorkflowId)), ct);
 
         return new OverviewResult(
             range!,
@@ -168,7 +185,9 @@ public sealed class OverviewService(OpenBpDbContext db, ICurrentUser currentUser
             Current(ExecutionStatuses.Running) + Current(ExecutionStatuses.Cancelling),
             Current(WaitingStatus),
             openViolations,
-            subscriptions);
+            subscriptions,
+            activeWorkflows,
+            openTasks);
     }
 
     private async Task<List<OverviewSubscription>> LoadSubscriptionsAsync(
