@@ -185,42 +185,12 @@ F3-34; що зміниться в такому разі, там теж запи�
 `rate_event`). Персональні дані (§8): `list_bookings` віддає телефон, лише якщо виклик іде від імені психолога цього
 запису (у бота) або токена з правом `pii` (§7.3).
 
-## 6. Бот у OpenBP (F3-31)
+## 6. Бот у OpenBP
 
-```
-core.webhook (X-Telegram-Bot-Api-Secret-Token)
-  → core.code «Розбір»: message | callback_query → { telegram_id, name, data, contact, message_id, callback_id }
-  → core.switch v2 «Розділ» (7 правил за префіксом data)
-  → mcp.tool psy-support: bot_start | bot_menu | bot_materials | bot_consult | bot_events | bot_bst | bot_cabinet
-  → «Відповідь»: answer_callback_query (якщо кнопка) → edit_message_text (якщо кнопка) або send_message
-  → core.loop notifications → send_message
-  → set_my_commands (якщо commands)
-```
-
-Сценарій — `examples/psy-support-bot.json`:
-
-- «Розбір» відкидає оновлення без `message` і `callback_query`. Розділ визначається так: кнопки — за префіксом
-  `data`; текст `/psy` — кабінет; решта тексту й контакт — `bot_start`.
-- «Відповідь» (`core.code`) перетворює екран на аргументи tools Telegram:
-  - кнопка — `answer_callback_query` і `edit_message_text` того самого повідомлення;
-  - `new_message` або текст — `send_message`;
-  - `null`-поля відкидаються.
-- «Змінити повідомлення» має `continueOnFail`, бо повторне натискання тієї самої кнопки Telegram відхиляє як «message is not
-  modified».
-- `saveSuccessfulData: false`: виходи вузлів містять телефони й факт запису (§8), тому дані успішних виконань не
-  зберігаються.
-- Webhook перевіряє `X-Telegram-Bot-Api-Secret-Token` (credential `cred_psy_bot_webhook` — `{ token }`, той самий секрет
-  передається в `set_webhook`).
-
-Перевірка в CLI — `tests/OpenBP.Cli.Tests/PsySupportBotTests.cs`:
-- справжній psy-support (stdio) працює з Postgres у Testcontainers, а мок Telegram — це `FakeServer --mock telegram`
-  з контрактом `connectors/telegram`;
-- кожен крок — окремий прогін із оновленням у `pinData`.
-
-Ручний прогін на тестовому боті (не бойовому):
-1. Зареєструйте в `examples/servers.json` сервери `srv_psy_support` і `srv_telegram_bot` з токеном тестового бота
-   в `TELEGRAM_BOT_TOKEN`.
-2. Замініть у сценарії `srv_telegram` на `srv_telegram_bot`.
+Бот зібрано як шаблон проєкту: сценарій `bot` у `examples/projects/psy-support/bundle.json` (F8-09). Граф, підключення
+тестового бота й карта екранів — `examples/projects/psy-support/README.md`, «Сценарій бота»; тести —
+`tests/OpenBP.Cli.Tests/PsySupportTemplateBotTests.cs`. Перший варіант (F3-31, `examples/psy-support-bot.json` поверх
+окремого MCP-сервера psy-support) лишається прикладом, але не розвивається.
 
 Окремий сценарій «Шедулер» — `examples/psy-support-scheduler.json` (F3-38): `core.schedule` (кожні 5 хв) →
 `due_notifications` → `send_messages` конектора Telegram (без зупинки на помилці) → `mark_notifications_sent` для
@@ -228,9 +198,10 @@ core.webhook (X-Telegram-Bot-Api-Secret-Token)
 
 ### 6.1. Коди кнопок
 
-`callback_data` має до 64 байт, тому кнопки несуть числові id (`bigint`, §3). Схема префіксів лишається з n8n
-(`m:`, `mt:`, `c:`, `e:`, `b:`, `p:`), а `<key>` замінюється на id: `c:ok:1834`, перенесення `c:mo:1834:2051`, дата —
-`yyyyMMdd`. Найдовший код займає менше 30 байт.
+`callback_data` має до 64 байт. Схема префіксів лишається з n8n (`m:`, `mt:`, `c:`, `e:`, `b:`, `p:`), а `<key>` —
+ключ рядка: у шаблоні (F8-09) це UUID, закодований base64url у 22 символи, тож найдовший код `c:mo:<запис>:<слот>` займає
+50 байт; дата — `yyyyMMdd`. У шаблоні вибір формату консультації — `c:f:<психолог>:on|of`, дата з форматом —
+`c:d:<психолог>:<дата>:<формат>`.
 
 | Розділ | Коди |
 |---|---|

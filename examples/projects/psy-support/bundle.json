@@ -218,7 +218,9 @@
         {"name": "link", "type": "string"},
         {"name": "status", "type": "enum", "values": ["draft", "published", "archived"]},
         {"name": "published_at", "type": "datetime"},
-        {"name": "views", "type": "number"}
+        {"name": "views", "type": "number"},
+        {"name": "file_type", "type": "enum", "values": ["document", "video", "audio", "voice"]},
+        {"name": "file", "type": "string"}
       ],
       "constraints": {"required": ["title", "status"]}
     },
@@ -246,7 +248,17 @@
     {
       "name": "counters",
       "columns": [{"name": "metric", "type": "string", "key": true}, {"name": "value", "type": "number"}],
-      "constraints": {"required": ["metric"]}
+      "constraints": {"required": ["metric"]},
+      "rows": [
+        {"metric": "psy_section_opened", "value": 0},
+        {"metric": "help_opened", "value": 0},
+        {"metric": "sos_opened", "value": 0},
+        {"metric": "consult_opened", "value": 0},
+        {"metric": "events_opened", "value": 0},
+        {"metric": "bst_opened", "value": 0},
+        {"metric": "materials_opened", "value": 0},
+        {"metric": "material_views", "value": 0}
+      ]
     },
     {
       "name": "audit_log",
@@ -750,6 +762,8 @@
           {"column": "title", "label": "Назва", "required": true},
           {"column": "body", "label": "Текст"},
           {"column": "link", "label": "Посилання (стаття, відео, аудіо)"},
+          {"column": "file_type", "label": "Файл у боті: вид"},
+          {"column": "file", "label": "Файл у боті: посилання або file_id Telegram"},
           {"column": "status", "label": "Стан", "required": true},
           {"column": "published_at", "label": "Опубліковано"}
         ],
@@ -769,6 +783,8 @@
           {"column": "title", "label": "Назва"},
           {"column": "body", "label": "Текст"},
           {"column": "link", "label": "Посилання (стаття, відео, аудіо)"},
+          {"column": "file_type", "label": "Файл у боті: вид"},
+          {"column": "file", "label": "Файл у боті: посилання або file_id Telegram"},
           {"column": "status", "label": "Стан"},
           {"column": "published_at", "label": "Опубліковано"}
         ],
@@ -3645,7 +3661,1023 @@
         },
         "manifest": {"connectors": [], "credentials": [], "variables": ["psy_telegram_server"], "workflows": []}
       }
+    },
+    {
+      "ref": "bot",
+      "export": {
+        "definition": {
+          "formatVersion": 1,
+          "name": "bot",
+          "description": "Бот психологічної підтримки (ТЗ §3–4, docs/psy-support.md §6): webhook Telegram → реєстрація за номером → дія через підсценарії правил → екран розділу → одна відповідь (edit_message_text або send_message).",
+          "settings": {"timezone": "Europe/Kyiv", "executionTimeoutSec": 60, "errorWorkflowId": null, "saveSuccessfulData": false},
+          "nodes": [
+            {
+              "id": "n_webhook",
+              "name": "Telegram",
+              "type": "core.webhook",
+              "typeVersion": 1,
+              "position": [0, 0],
+              "parameters": {
+                "method": "POST",
+                "path": "psy-support-bot",
+                "auth": {
+                  "type": "header",
+                  "credentialId": "cred_psy_bot_webhook",
+                  "headerName": "X-Telegram-Bot-Api-Secret-Token"
+                },
+                "idempotencyKey": "{{ $json.body.update_id }}"
+              },
+              "notes": "set_webhook з secret_token; credential «Секрет вебхука…» (webhook.header) — { token } з тим самим секретом."
+            },
+            {
+              "id": "n_parse",
+              "name": "Розбір",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [240, 0],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "// Telegram update → поля для маршруту. Інші види оновлень (редагування, вступ у групу…) відкидаються.\nconst upd = $json.body || {};\nconst cb = upd.callback_query || null;\nconst m = cb ? cb.message : upd.message;\nif (!m || !m.chat || m.chat.type !== 'private') return [];\nconst from = cb ? cb.from : (m.from || {});\n// Кнопка «🏠 Головне меню» під полем вводу надсилає свій текст — це те саме, що m:psy.\nconst typed = String(m.text || '').trim();\nconst data = cb ? String(cb.data || '') : (/Головне меню$/.test(typed) ? 'm:psy' : typed);\n// Сповіщення («✅ Ви записані», «🔔 Звільнилось місце», «Новий запис»…) — це записи, а не навігація: кнопка в них\n// відкриває екран новим повідомленням, а саме сповіщення лишається в чаті.\nconst record = /^(⏰|🔔|🗓|❌|↔|⚠️|📢|📣|📚 Новий|✅|✖|👋|🚨|☀️|Новий запис|Запис скасовано|Звільнилось місце|Вашу консультацію|Оголошення)/.test(String(m.text || '').trim());\nreturn [{\n  telegram_id: from.id,\n  name: [from.first_name, from.last_name].filter((s) => s).join(' ') || null,\n  chat_id: m.chat.id,\n  message_id: cb && !record ? m.message_id : null,\n  callback_id: cb ? cb.id : null,\n  data: data,\n  contact: !cb && m.contact ? { user_id: m.contact.user_id === undefined ? null : m.contact.user_id, phone_number: String(m.contact.phone_number || '') } : null,\n}];\n"
+              }
+            },
+            {
+              "id": "n_is_button",
+              "name": "Кнопка?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [480, -400],
+              "parameters": {"conditions": [{"left": "{{ $json.callback_id }}", "operator": "isNotEmpty"}]}
+            },
+            {
+              "id": "n_ack",
+              "name": "Підтвердити натискання",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [720, -400],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "answer_callback_query",
+                "arguments": {"callback_query_id": "{{ $json.callback_id }}"}
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_settings",
+              "name": "Налаштування",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [480, -200],
+              "parameters": {"table": "settings", "operation": "list", "limit": 100}
+            },
+            {
+              "id": "n_user",
+              "name": "Людина",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [480, 0],
+              "parameters": {
+                "table": "users",
+                "operation": "list",
+                "where": [
+                  {"column": "telegram_id", "operator": "eq", "value": "{{ String($json.telegram_id) }}"},
+                  {"column": "deleted_at", "operator": "isEmpty"}
+                ],
+                "limit": 1
+              }
+            },
+            {
+              "id": "n_me",
+              "name": "Я психолог",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [480, 200],
+              "parameters": {
+                "table": "psychologists",
+                "operation": "list",
+                "where": [{"column": "telegram_id", "operator": "eq", "value": "{{ String($json.telegram_id) }}"}],
+                "limit": 1
+              }
+            },
+            {
+              "id": "n_route",
+              "name": "Маршрут",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [720, 0],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "// Розділ і дія за кодом кнопки (docs/psy-support.md §6.1). Ключі рядків приходять у base64url — тут вони стають UUID.\nconst all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst u = $json;\nconst user = all('Людина')[0] || null;\nconst meRow = all('Я психолог')[0] || null;\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst dec = (s) => {\n  s = String(s == null ? '' : s);\n  if (!/^[A-Za-z0-9_-]{22}$/.test(s)) return s;\n  let bits = '';\n  for (const ch of s) bits += B64.indexOf(ch).toString(2).padStart(6, '0');\n  let hex = '';\n  for (let i = 0; i < 128; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16);\n  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);\n};\nconst phoneOf = (p) => { let d = String(p || '').replace(/\\D/g, ''); if (d.length === 10 && d[0] === '0') d = '38' + d; return d; };\nconst data = String(u.data || '').trim();\nconst p = data.split(':');\nconst out = { section: 'start', action: 'none', telegram_id: String(u.telegram_id), name: u.name || '', data: data, parts: p, parts_decoded: p.map(dec), metric: null };\nconst sections = [\n  ['menu', /^m:(psy|help|sos)$/],\n  ['materials', /^(m:mat$|mt:)/],\n  ['consult', /^(m:cons$|c:)/],\n  ['events', /^(m:ev$|e:)/],\n  ['bst', /^(m:bst$|b:)/],\n  ['cabinet', /^(\\/psy(@\\w+)?$|p:)/],\n];\nfor (const [name, re] of sections) if (re.test(data)) { out.section = name; break; }\nif (u.contact) {\n  out.section = 'start';\n  const own = u.contact.user_id == null || String(u.contact.user_id) === out.telegram_id;\n  out.phone = phoneOf(u.contact.phone_number);\n  if (!own) out.code = 'not_own_contact';\n  else if (out.phone.length < 10) out.code = 'bad_phone';\n  else out.action = 'register';\n  return [out];\n}\nif (!user) { out.section = 'start'; return [out]; }\nif (out.section === 'start') {\n  // /start чи будь-який текст: психолога, чий телефон збігся, прив'язуємо до Telegram (як у n8n-боті).\n  if (!me && user.phone) { out.action = 'link'; out.phone = user.phone; }\n  return [out];\n}\nconst metrics = { 'm:psy': 'psy_section_opened', 'm:help': 'help_opened', 'm:sos': 'sos_opened', 'm:cons': 'consult_opened',\n  'm:ev': 'events_opened', 'm:bst': 'bst_opened', 'm:mat': 'materials_opened' };\nout.metric = metrics[data] || null;\nconst id = (i) => dec(p[i]);\nconst act = (action, fields) => { out.action = action; Object.assign(out, fields); };\nswitch (p[0] + ':' + (p[1] || '')) {\n  case 'mt:r': act('material_view', { material_id: id(2) }); out.metric = 'material_views'; break;\n  case 'c:ok': act('book', { slot_id: id(2) }); break;\n  case 'c:xx': act('cancel', { booking_id: id(2) }); break;\n  case 'c:mo': act('move', { booking_id: id(2), slot_id: id(3) }); break;\n  case 'e:ok': act('event_register', { event_id: id(2) }); break;\n  case 'e:x': act('event_cancel', { event_id: id(2) }); break;\n  case 'e:fb': act('event_rate', { event_id: id(2), rating: Number(p[3]) }); break;\n  case 'b:ok': act('bst_book', { session_id: id(2) }); break;\n  case 'b:x': act('bst_cancel', { session_id: id(2) }); break;\n  case 'b:w': act('bst_wait', { session_id: id(2) }); break;\n  case 'b:wx': act('bst_leave', { session_id: id(2) }); break;\n  case 'b:mo': act('bst_move', { from_session: id(2), session_id: id(3) }); break;\n  case 'p:se': if (me) act('event_notice', { kind: 'event', id: id(2) }); break;\n  case 'p:sb': if (me) act('bst_notice', { kind: 'bst', id: id(2) }); break;\n}\nreturn [out];\n"
+              }
+            },
+            {
+              "id": "n_metric",
+              "name": "Що порахувати",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [960, -400],
+              "parameters": {"mode": "eachItem", "code": "return $json.metric ? [{ metric: $json.metric }] : [];\n"}
+            },
+            {
+              "id": "n_count",
+              "name": "Лічильник",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1200, -400],
+              "parameters": {"table": "counters", "operation": "increment", "key": "{{ $json.metric }}", "column": "value", "by": 1},
+              "continueOnFail": true
+            },
+            {
+              "id": "n_action",
+              "name": "Дія",
+              "type": "core.switch",
+              "typeVersion": 2,
+              "position": [960, 0],
+              "parameters": {
+                "rules": [
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "register"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "link"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "book"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "cancel"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "move"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "event_register"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "event_cancel"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "event_rate"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "bst_book"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "bst_cancel"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "bst_wait"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "bst_leave"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "bst_move"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "event_notice"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "bst_notice"}]},
+                  {"conditions": [{"left": "{{ $json.action }}", "operator": "equals", "right": "material_view"}]}
+                ]
+              }
+            },
+            {
+              "id": "n_reg_user",
+              "name": "Зареєструвати",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1200, -200],
+              "parameters": {
+                "table": "users",
+                "operation": "insertIf",
+                "values": {
+                  "telegram_id": "{{ $json.telegram_id }}",
+                  "name": "{{ $json.name }}",
+                  "phone": "{{ $json.phone }}",
+                  "registered_at": "{{ $now.toISOString() }}"
+                },
+                "where": [
+                  {"column": "telegram_id", "operator": "eq", "value": "{{ $json.telegram_id }}"},
+                  {"column": "deleted_at", "operator": "isEmpty"}
+                ],
+                "maxCount": 1
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_reg_ok",
+              "name": "Номер вільний?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [1440, -200],
+              "parameters": {"conditions": [{"left": "{{ $json._reason !== 'unique' }}", "operator": "isTrue"}]}
+            },
+            {
+              "id": "n_link_find",
+              "name": "Психолог за номером",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1680, -100],
+              "parameters": {
+                "table": "psychologists",
+                "operation": "list",
+                "where": [
+                  {"column": "phone", "operator": "eq", "value": "{{ $node['Маршрут'].json.phone }}"},
+                  {"column": "telegram_id", "operator": "isEmpty"},
+                  {"column": "active", "operator": "eq", "value": true}
+                ],
+                "limit": 1
+              }
+            },
+            {
+              "id": "n_link",
+              "name": "Прив'язати психолога",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1920, -100],
+              "parameters": {
+                "table": "psychologists",
+                "operation": "update",
+                "key": "{{ $json._key }}",
+                "values": {"telegram_id": "{{ $node['Маршрут'].json.telegram_id }}"}
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_book",
+              "name": "Записати на консультацію",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 200],
+              "parameters": {
+                "workflowId": "ref:book-slot",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, slot_id: $node['Маршрут'].json.slot_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_cancel",
+              "name": "Скасувати консультацію",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 340],
+              "parameters": {
+                "workflowId": "ref:cancel-booking",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, booking_id: $node['Маршрут'].json.booking_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_move",
+              "name": "Перенести консультацію",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 480],
+              "parameters": {
+                "workflowId": "ref:move-booking",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, booking_id: $node['Маршрут'].json.booking_id, slot_id: $node['Маршрут'].json.slot_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_ev_reg",
+              "name": "Зареєструвати на подію",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 620],
+              "parameters": {
+                "workflowId": "ref:register-event",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, event_id: $node['Маршрут'].json.event_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_ev_cancel",
+              "name": "Скасувати реєстрацію",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 760],
+              "parameters": {
+                "workflowId": "ref:cancel-registration",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, event_id: $node['Маршрут'].json.event_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_ev_rate",
+              "name": "Оцінити подію",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 900],
+              "parameters": {
+                "workflowId": "ref:rate-event",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, event_id: $node['Маршрут'].json.event_id, rating: $node['Маршрут'].json.rating }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_bst_book",
+              "name": "Записати на БСТ",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 1040],
+              "parameters": {
+                "workflowId": "ref:book-bst",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, session_id: $node['Маршрут'].json.session_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_bst_cancel",
+              "name": "Скасувати БСТ",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 1180],
+              "parameters": {
+                "workflowId": "ref:cancel-bst",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, session_id: $node['Маршрут'].json.session_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_bst_wait",
+              "name": "У лист очікування",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 1320],
+              "parameters": {
+                "workflowId": "ref:join-waitlist",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, session_id: $node['Маршрут'].json.session_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_ev_notice",
+              "name": "Оголошення події",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 1460],
+              "parameters": {
+                "workflowId": "ref:send-notice",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, kind: $node['Маршрут'].json.kind, id: $node['Маршрут'].json.id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_leave_find",
+              "name": "Мій рядок черги",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1200, 1600],
+              "parameters": {
+                "table": "waitlist",
+                "operation": "list",
+                "where": [
+                  {"column": "session_id", "operator": "eq", "value": "{{ $json.session_id }}"},
+                  {"column": "telegram_id", "operator": "eq", "value": "{{ $json.telegram_id }}"},
+                  {"column": "status", "operator": "ne", "value": "cancelled"},
+                  {"column": "status", "operator": "ne", "value": "booked"}
+                ],
+                "limit": 1
+              }
+            },
+            {
+              "id": "n_leave",
+              "name": "Вийти з черги",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1440, 1600],
+              "parameters": {"table": "waitlist", "operation": "update", "key": "{{ $json._key }}", "values": {"status": "cancelled"}},
+              "continueOnFail": true
+            },
+            {
+              "id": "n_bst_move_book",
+              "name": "Перенести БСТ: новий запис",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1200, 1740],
+              "parameters": {
+                "workflowId": "ref:book-bst",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, session_id: $node['Маршрут'].json.session_id }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_bst_move_ok",
+              "name": "Записано на новий?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [1440, 1740],
+              "parameters": {"conditions": [{"left": "{{ $json.ok }}", "operator": "isTrue"}]}
+            },
+            {
+              "id": "n_bst_move_cancel",
+              "name": "Перенести БСТ: скасувати старий",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1680, 1740],
+              "parameters": {
+                "workflowId": "ref:cancel-bst",
+                "mode": "wait",
+                "items": "{{ ({ telegram_id: $node['Маршрут'].json.telegram_id, session_id: $node['Маршрут'].json.from_session }) }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_sb_find",
+              "name": "Сеанс для оголошення",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1200, 1880],
+              "parameters": {"table": "bst_sessions", "operation": "get", "key": "{{ $json.id }}"}
+            },
+            {
+              "id": "n_sb_own",
+              "name": "Свій сеанс?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [1440, 1880],
+              "parameters": {
+                "conditions": [{"left": "{{ $json.psychologist_id === $node['Я психолог'].json._key }}", "operator": "isTrue"}]
+              }
+            },
+            {
+              "id": "n_bst_notice",
+              "name": "Оголошення сеансу",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1680, 1880],
+              "parameters": {"workflowId": "ref:send-notice", "mode": "wait", "items": "{{ ({ kind: 'bst', id: $json._key }) }}"},
+              "continueOnFail": true
+            },
+            {
+              "id": "n_views",
+              "name": "Перегляд матеріалу",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1200, 2020],
+              "parameters": {
+                "table": "materials",
+                "operation": "increment",
+                "key": "{{ $json.material_id }}",
+                "column": "views",
+                "by": 1
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_after",
+              "name": "Після дії",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2160, 0],
+              "parameters": {"mode": "allItems", "code": "return [{ section: $node['Маршрут'].json.section }];\n"}
+            },
+            {
+              "id": "n_need_psy",
+              "name": "Потрібні психологи",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2400, -300],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "const s = $json.section;\nreturn s === 'consult' || s === 'bst' || s === 'cabinet' ? [{}] : [];\n"
+              }
+            },
+            {
+              "id": "n_psychologists",
+              "name": "Психологи",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, -300],
+              "parameters": {"table": "psychologists", "operation": "list", "limit": 100}
+            },
+            {
+              "id": "n_need_consult",
+              "name": "Потрібні консультації",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2400, -100],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "const s = $json.section;\nreturn s === 'consult' || s === 'cabinet' ? [{}] : [];\n"
+              }
+            },
+            {
+              "id": "n_slots",
+              "name": "Слоти",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, -150],
+              "parameters": {
+                "table": "slots",
+                "operation": "list",
+                "where": [
+                  {"column": "status", "operator": "eq", "value": "open"},
+                  {"column": "starts_at", "operator": "gt", "value": "{{ $now.toISOString() }}"}
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_bookings",
+              "name": "Записи",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, -50],
+              "parameters": {
+                "table": "bookings",
+                "operation": "list",
+                "where": [
+                  {"column": "status", "operator": "eq", "value": "active"},
+                  {"column": "starts_at", "operator": "gt", "value": "{{ $now.toISOString() }}"}
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_need_events",
+              "name": "Потрібні події",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2400, 100],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "const s = $json.section;\nreturn s === 'events' || s === 'cabinet' ? [{}] : [];\n"
+              }
+            },
+            {
+              "id": "n_events",
+              "name": "Події",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, 50],
+              "parameters": {
+                "table": "events",
+                "operation": "list",
+                "where": [{"column": "status", "operator": "ne", "value": "draft"}],
+                "limit": 200
+              }
+            },
+            {
+              "id": "n_regs",
+              "name": "Реєстрації",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, 150],
+              "parameters": {
+                "table": "event_registrations",
+                "operation": "list",
+                "where": [{"column": "status", "operator": "ne", "value": "cancelled"}],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_need_bst",
+              "name": "Потрібні сеанси БСТ",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2400, 300],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "const s = $json.section;\nreturn s === 'bst' || s === 'cabinet' ? [{}] : [];\n"
+              }
+            },
+            {
+              "id": "n_sessions",
+              "name": "Сеанси БСТ",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, 250],
+              "parameters": {
+                "table": "bst_sessions",
+                "operation": "list",
+                "where": [
+                  {
+                    "column": "starts_at",
+                    "operator": "gt",
+                    "value": "{{ new Date(Date.now() - 86400000).toISOString() }}"
+                  }
+                ],
+                "limit": 200
+              }
+            },
+            {
+              "id": "n_bst_bookings",
+              "name": "Записи на БСТ",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, 350],
+              "parameters": {
+                "table": "bst_bookings",
+                "operation": "list",
+                "where": [{"column": "status", "operator": "eq", "value": "active"}],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_waitlist",
+              "name": "Лист очікування",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, 450],
+              "parameters": {
+                "table": "waitlist",
+                "operation": "list",
+                "where": [
+                  {"column": "status", "operator": "ne", "value": "cancelled"},
+                  {"column": "status", "operator": "ne", "value": "booked"}
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_need_materials",
+              "name": "Потрібні матеріали",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2400, 550],
+              "parameters": {"mode": "eachItem", "code": "const s = $json.section;\nreturn s === 'materials' ? [{}] : [];\n"}
+            },
+            {
+              "id": "n_materials",
+              "name": "Матеріали",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2640, 550],
+              "parameters": {
+                "table": "materials",
+                "operation": "list",
+                "where": [{"column": "status", "operator": "ne", "value": "draft"}],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_s_start",
+              "name": "Екран: вітання й реєстрація",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, -300],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('start')) return [];\nconst registration = (text) => [{ ok: false, code: 'not_registered', screen: { text: text, parse_mode: 'HTML', reply_markup: CONTACT, new_message: true } }];\nif (r.code === 'not_own_contact') return registration('Будь ласка, поділіться <b>своїм</b> номером кнопкою нижче.');\nif (r.code === 'bad_phone') return registration('Не вдалося розпізнати номер. Поділіться, будь ласка, номером кнопкою нижче.');\nlet greeting = 'Вітаємо знову 👋';\nif (r.action === 'register') {\n  const reg = first('Зареєструвати');\n  if (!reg) return registration('Не вдалося зберегти номер. Спробуйте, будь ласка, ще раз кнопкою нижче.');\n  if (reg._inserted === false && reg._reason === 'unique') {\n    return [{ ok: false, code: 'phone_taken', screen: { text: 'Цей номер уже зареєстровано з іншого облікового запису Telegram. Зверніться, будь ласка, до координатора.', parse_mode: 'HTML', reply_markup: HOME_KEYBOARD, new_message: true } }];\n  }\n  greeting = '✅ Номер збережено. Дякуємо, ви зареєстровані.';\n} else if (!user) {\n  return registration(esc(setting('TEXT_WELCOME', 'Вітаємо! Щоб продовжити, поділіться, будь ласка, своїм номером телефону.')));\n}\n// Як у n8n-боті: коротке повідомлення ставить під полем вводу кнопку «🏠 Головне меню», а меню з inline-кнопками\n// приходить наступним повідомленням. Щойно прив'язаному психологу — ще й пояснення і команда /psy.\nconst linked = first(\"Прив'язати психолога\");\nconst menu = mainMenu(me || linked);\nconst notifications = [{ chat_id: chat, text: menu.text, parse_mode: 'HTML', reply_markup: menu.markup }];\nlet commands = null;\nif (linked) {\n  notifications.push({ chat_id: chat, text: '👋 Вас підключено як психолога. Сюди приходитимуть сповіщення про нові записи на консультації та про скасування.\\n\\nКабінет психолога — команда /psy: записи, учасники подій і БСТ, оголошення.' });\n  commands = { commands: [{ command: 'start', description: 'Головне меню' }, { command: 'psy', description: 'Кабінет психолога' }], scope: { type: 'chat', chat_id: chat } };\n}\nreturn [{ ok: true, code: r.action === 'register' ? 'registered' : 'ok', screen: { text: greeting, parse_mode: 'HTML', reply_markup: HOME_KEYBOARD, new_message: true }, notifications: notifications, commands: commands }];\n"
+              }
+            },
+            {
+              "id": "n_s_menu",
+              "name": "Екран: меню",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, -150],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('menu')) return [];\nif (r.data === 'm:psy') { const m = mainMenu(me); return done('ok', m.text, m.markup); }\nif (r.data === 'm:help') {\n  return done('ok', esc(setting('TEXT_HELP', 'Оберіть, що вам зараз потрібно:')), column([\n    btn('🗣 Поговорити з психологом наодинці', 'm:cons'),\n    btn('👥 Подивитися найближчі зустрічі й вебінари', 'm:ev'),\n    btn('🧩 Знайти практики самодопомоги', 'm:mat'),\n    btn('☎️ Мені потрібна допомога зараз', 'm:sos'),\n    btn('← Назад до меню', 'm:psy'),\n  ]));\n}\nif (r.data === 'm:sos') return done('ok', esc(setting('TEXT_SOS', 'Якщо вам зараз дуже важко, зателефонуйте на лінію психологічної допомоги.')), column([HOME]));\nreturn stale();\n"
+              }
+            },
+            {
+              "id": "n_s_materials",
+              "name": "Екран: матеріали",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, 0],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('materials')) return [];\nconst PAGE = 8;\nconst list = all('Матеріали').filter((m) => m.status === 'published' || m.status === 'archived');\nconst sorted = (status) => list.filter((m) => m.status === status)\n  .sort((a, b) => String(b.published_at || '').localeCompare(String(a.published_at || '')));\nconst page = (n, archived) => {\n  const items = sorted(archived ? 'archived' : 'published');\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  n = Math.min(Math.max(0, n), pages - 1);\n  const prefix = archived ? 'mt:arch:' : 'mt:p:';\n  const rows = items.slice(n * PAGE, n * PAGE + PAGE).map((m) => [btn(short(m.title, 60), 'mt:r:' + enc(m._key))]);\n  const nav = [];\n  if (n > 0) nav.push(btn('◀️', prefix + (n - 1)));\n  if (n < pages - 1) nav.push(btn('▶️', prefix + (n + 1)));\n  rows.push(nav);\n  rows.push([archived ? btn('📚 Актуальні', 'm:mat') : btn('🗄 Архів', 'mt:arch:0'), HOME]);\n  const title = archived ? '<b>Архів матеріалів</b>' : '<b>Матеріали</b>';\n  const text = items.length === 0 ? title + '\\n\\nПоки що тут порожньо.' : pages > 1 ? title + ' · сторінка ' + (n + 1) + ' з ' + pages : title;\n  return done('ok', text, inline(rows));\n};\nconst p = r.parts;\nif (r.data === 'm:mat') return page(0, false);\nif (p[0] === 'mt' && p[1] === 'p') return page(parseInt(p[2], 10) || 0, false);\nif (p[0] === 'mt' && p[1] === 'arch') return page(parseInt(p[2], 10) || 0, true);\nif (p[0] === 'mt' && p[1] === 'r') {\n  const m = list.find((x) => x._key === r.material_id);\n  if (!m) return stale();\n  let text = '<b>' + esc(m.title) + '</b>';\n  if (m.body) text += '\\n\\n' + esc(m.body);\n  const rows = [];\n  if (/^https?:\\/\\//.test(String(m.link || ''))) rows.push([link('🔗 Відкрити', m.link)]);\n  rows.push([btn('⬅️ До списку', m.status === 'archived' ? 'mt:arch:0' : 'm:mat'), HOME]);\n  // Файл матеріалу (F8-07): посилання — <вид>_url, інакше file_id Telegram.\n  let file = null;\n  const kind = m.file_type || (m.file ? 'document' : null);\n  if (kind && m.file) {\n    const args = { chat_id: chat, caption: short(m.title, 1024) };\n    if (/^https?:\\/\\//.test(String(m.file))) args[kind + '_url'] = m.file; else args.file_id = String(m.file);\n    file = { type: kind, args: args };\n  }\n  return done('ok', text, inline(rows), { file: file });\n}\nreturn stale();\n"
+              }
+            },
+            {
+              "id": "n_s_consult",
+              "name": "Екран: консультації",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, 150],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('consult')) return [];\nconst p = r.parts;\nconst psychologists = all('Психологи');\nconst psyOf = (key) => psychologists.find((x) => x._key === key) || null;\nconst slots = all('Слоти');\nconst bookings = all('Записи');\nconst minHours = num('MIN_HOURS_BEFORE', 24);\nconst takenSlots = {};\nfor (const b of bookings) if (b.status === 'active') takenSlots[b.slot_id] = true;\nconst visible = (s) => {\n  const psy = psyOf(s.psychologist_id);\n  const t = Date.parse(s.starts_at);\n  return s.status === 'open' && psy && psy.active !== false && !takenSlots[s._key]\n    && t >= now + minHours * 3600000 && t <= now + num('HORIZON_DAYS', 21) * 86400000;\n};\nconst byTime = (a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at);\nconst visibleOf = (psyKey, format) => slots.filter((s) => s.psychologist_id === psyKey && visible(s) && (!format || s.format === format)).sort(byTime);\nconst upcoming = bookings.filter((b) => b.telegram_id === tg && b.status === 'active' && Date.parse(b.starts_at) > now).sort(byTime);\nconst own = (key) => upcoming.find((b) => b._key === key) || null;\nconst FMT = { on: 'online', of: 'offline' };\nconst FMT_CODE = { online: 'on', offline: 'of' };\nconst myBookings = (note) => {\n  const lines = ['<b>Мої записи</b>', ''];\n  if (note) lines.unshift(note + '\\n');\n  const rows = [];\n  if (!upcoming.length) { lines.push('Активних записів немає.'); rows.push([btn('🗓 Записатися', 'm:cons')]); }\n  for (const b of upcoming) {\n    const psy = psyOf(b.psychologist_id) || {};\n    const slot = slots.find((s) => s._key === b.slot_id) || {};\n    lines.push('• ' + day(b.starts_at) + ', ' + time(b.starts_at) + ' — ' + esc(psy.name || '') + (slot.format ? ' (' + fmt(slot.format) + ')' : ''));\n    rows.push([btn('🔁 Перенести ' + day(b.starts_at), 'c:mv:' + enc(b._key)), btn('✖️ Скасувати', 'c:x:' + enc(b._key))]);\n  }\n  rows.push([HOME]);\n  return done('ok', lines.join('\\n'), inline(rows));\n};\nconst tooLate = (b, email) => {\n  const psy = psyOf(b.psychologist_id) || {};\n  const contact = email || psy.email;\n  return fail('too_late', 'До консультації ' + day(b.starts_at) + ', ' + time(b.starts_at) + ' лишилось замало часу, тому скасувати чи перенести її через бота вже не можна. Напишіть, будь ласка, психологу' + (contact ? ': ' + esc(contact) : '') + '.',\n    column([btn('📋 Мої записи', 'c:my'), HOME]));\n};\nconst isLate = (b) => Date.parse(b.starts_at) - now < minHours * 3600000;\nconst formats = (psyKey) => { const set = {}; for (const s of visibleOf(psyKey)) set[s.format || 'online'] = true; return Object.keys(set); };\nconst dates = (psyKey, format, moving) => {\n  const list = visibleOf(psyKey, format);\n  const seen = {};\n  const days = [];\n  for (const s of list) { const d = ymd(s.starts_at); if (!seen[d]) { seen[d] = true; days.push(d); } }\n  const back = moving ? btn('⬅️ Назад', 'c:my') : btn('⬅️ Назад', 'm:cons');\n  if (!days.length) return fail('slot_unavailable', 'У цього психолога зараз немає вільного часу.', column([back, HOME]));\n  const suffix = format ? ':' + FMT_CODE[format] : '';\n  const buttons = days.map((d) => btn(dayLabel(fromYmd(d)), moving ? 'c:md:' + enc(moving) + ':' + d : 'c:d:' + enc(psyKey) + ':' + d + suffix));\n  const rows = rowsOf(buttons, 3);\n  rows.push([back, HOME]);\n  const psy = psyOf(psyKey) || {};\n  const title = moving ? '<b>Перенесення запису</b>' : '<b>' + esc(psy.name) + '</b>' + (format ? ', ' + fmt(format) : '');\n  return done('ok', title + '\\n\\nОберіть дату:', inline(rows));\n};\nconst times = (psyKey, date, format, moving) => {\n  const list = visibleOf(psyKey, format).filter((s) => ymd(s.starts_at) === date);\n  const back = moving ? btn('⬅️ Назад', 'c:mv:' + enc(moving)) : btn('⬅️ Назад', format ? 'c:f:' + enc(psyKey) + ':' + FMT_CODE[format] : 'c:p:' + enc(psyKey));\n  if (!list.length) return fail('slot_unavailable', 'На цю дату вільного часу вже немає.', column([back, HOME]));\n  const buttons = list.map((s) => btn(time(s.starts_at) + ' · ' + fmt(s.format), moving ? 'c:mt:' + enc(moving) + ':' + enc(s._key) : 'c:t:' + enc(s._key)));\n  const rows = rowsOf(buttons, 2);\n  rows.push([back, HOME]);\n  const psy = psyOf(psyKey) || {};\n  return done('ok', '<b>' + esc(psy.name) + '</b>, ' + dayLabel(fromYmd(date)) + '\\n\\nОберіть час:', inline(rows));\n};\nconst confirm = (slotKey, moving) => {\n  const s = slots.find((x) => x._key === slotKey);\n  if (!s || !visible(s)) {\n    return fail('slot_unavailable', 'Цей час уже недоступний. Оберіть, будь ласка, інший.', column([btn('⬅️ До психологів', 'm:cons'), HOME]));\n  }\n  const psy = psyOf(s.psychologist_id) || {};\n  const text = [\n    moving ? '<b>Підтвердіть перенесення</b>' : '<b>Підтвердіть запис</b>',\n    '',\n    'Психолог: ' + esc(psy.name),\n    'Коли: ' + day(s.starts_at) + ', ' + time(s.starts_at),\n    'Формат: ' + fmt(s.format) + ', ' + (s.duration_min || num('SLOT_DURATION_MIN', 50)) + ' хв',\n  ].join('\\n');\n  const yes = moving ? btn('✅ Перенести', 'c:mo:' + enc(moving) + ':' + enc(s._key)) : btn('✅ Записатися', 'c:ok:' + enc(s._key));\n  const back = moving ? btn('⬅️ Назад', 'c:md:' + enc(moving) + ':' + ymd(s.starts_at)) : btn('⬅️ Назад', 'c:d:' + enc(s.psychologist_id) + ':' + ymd(s.starts_at));\n  return done('ok', text, inline([[yes], [back, HOME]]));\n};\nconst booked = (title, res, slotKey) => {\n  const s = slots.find((x) => x._key === slotKey) || {};\n  const psy = psyOf(s.psychologist_id) || {};\n  const text = [\n    '✅ <b>' + title + '</b>',\n    '',\n    'Психолог: ' + esc(psy.name),\n    'Коли: ' + day(s.starts_at) + ', ' + time(s.starts_at),\n    'Формат: ' + fmt(s.format) + ', ' + (s.duration_min || num('SLOT_DURATION_MIN', 50)) + ' хв',\n    '',\n    'Ми нагадаємо за добу, за годину і за 10 хвилин.',\n  ].join('\\n');\n  return done(title === 'Ви записані' ? 'booked' : 'moved', text, inline([calendarRow(res.calendar), [btn('📋 Мої записи', 'c:my'), HOME]]));\n};\nconst failed = (res, psyKey) => {\n  const back = psyKey ? btn('⬅️ Інший час', 'c:p:' + enc(psyKey)) : btn('⬅️ До психологів', 'm:cons');\n  const reason = res ? res.reason : 'error';\n  if (reason === 'slot_taken') return fail(reason, '😔 Цей час щойно зайняли. Оберіть, будь ласка, інший.', column([back, HOME]));\n  if (reason === 'limit') return fail(reason, esc(res.message), column([btn('📋 Мої записи', 'c:my'), HOME]));\n  if (reason === 'already_booked') return fail(reason, 'Ви вже записані на цей час.', column([btn('📋 Мої записи', 'c:my'), HOME]));\n  if (reason === 'not_found') return myBookings('Цього запису вже немає.');\n  if (reason === 'error' && res) return fail(reason, 'Перенести не вдалося, запис лишився без змін.', column([btn('📋 Мої записи', 'c:my'), HOME]));\n  if (!res) return fail('error', 'Не вдалося виконати дію. Спробуйте, будь ласка, ще раз трохи пізніше.', column([btn('📋 Мої записи', 'c:my'), HOME]));\n  return fail('slot_unavailable', 'Цей час уже недоступний. Оберіть, будь ласка, інший.', column([back, HOME]));\n};\nconst key = (i) => (p[i] ? r.parts_decoded[i] : null);\nswitch (p[0] === 'm' ? 'm:cons' : p[0] + ':' + (p[1] || '')) {\n  case 'm:cons': {\n    const list = psychologists.filter((x) => x.active !== false && visibleOf(x._key).length > 0).sort((a, b) => String(a.name).localeCompare(String(b.name)));\n    const buttons = list.map((x) => btn(x.name, 'c:p:' + enc(x._key)));\n    if (upcoming.length) buttons.push(btn('📋 Мої записи (' + upcoming.length + ')', 'c:my'));\n    buttons.push(HOME);\n    return done('ok', list.length ? '<b>Консультація психолога</b>\\n\\nОберіть психолога:' : '<b>Консультація психолога</b>\\n\\nЗараз вільного часу немає. Загляньте, будь ласка, пізніше.', column(buttons));\n  }\n  case 'c:p': {\n    const psyKey = key(2);\n    const f = formats(psyKey);\n    // ТЗ §4.2: формат обирають, якщо в психолога є кілька форматів.\n    if (f.length > 1) {\n      const psy = psyOf(psyKey) || {};\n      return done('ok', '<b>' + esc(psy.name) + '</b>\\n\\nОберіть формат консультації:',\n        inline([f.sort().reverse().map((x) => btn(x === 'online' ? '💻 Онлайн' : '🏢 Офлайн', 'c:f:' + enc(psyKey) + ':' + FMT_CODE[x])), [btn('⬅️ Назад', 'm:cons'), HOME]]));\n    }\n    return dates(psyKey, null, null);\n  }\n  case 'c:f': return dates(key(2), FMT[p[3]] || null, null);\n  case 'c:d': return times(key(2), p[3], FMT[p[4]] || null, null);\n  case 'c:t': return confirm(key(2), null);\n  case 'c:ok': {\n    const res = first('Записати на консультацію');\n    const s = slots.find((x) => x._key === r.slot_id);\n    return res && res.ok ? booked('Ви записані', res, r.slot_id) : failed(res, s ? s.psychologist_id : null);\n  }\n  case 'c:my': return myBookings(null);\n  case 'c:x': {\n    const b = own(key(2));\n    if (!b) return myBookings('Цього запису вже немає.');\n    if (isLate(b)) return tooLate(b);\n    const psy = psyOf(b.psychologist_id) || {};\n    return done('ok', 'Скасувати консультацію ' + day(b.starts_at) + ', ' + time(b.starts_at) + ' з психологом ' + esc(psy.name) + '?',\n      inline([[btn('✖️ Так, скасувати', 'c:xx:' + enc(b._key))], [btn('⬅️ Ні', 'c:my'), HOME]]));\n  }\n  case 'c:xx': {\n    const res = first('Скасувати консультацію');\n    if (res && res.ok) return done('cancelled', 'Запис скасовано.', column([btn('🗓 Записатися знову', 'm:cons'), HOME]));\n    if (res && res.reason === 'too_late') return fail('too_late', esc(res.message), column([btn('📋 Мої записи', 'c:my'), HOME]));\n    return myBookings('Цього запису вже немає.');\n  }\n  case 'c:mv': {\n    const b = own(key(2));\n    if (!b) return myBookings('Цього запису вже немає.');\n    return isLate(b) ? tooLate(b) : dates(b.psychologist_id, null, b._key);\n  }\n  case 'c:md': {\n    const b = own(key(2));\n    return b ? times(b.psychologist_id, p[3], null, b._key) : myBookings('Цього запису вже немає.');\n  }\n  case 'c:mt': {\n    const b = own(key(2));\n    return b ? confirm(key(3), b._key) : myBookings('Цього запису вже немає.');\n  }\n  case 'c:mo': {\n    const res = first('Перенести консультацію');\n    if (res && res.ok) return booked('Запис перенесено', res, r.slot_id);\n    if (res && res.reason === 'too_late') return fail('too_late', esc(res.message), column([btn('📋 Мої записи', 'c:my'), HOME]));\n    const s = slots.find((x) => x._key === r.slot_id);\n    return failed(res || null, s ? s.psychologist_id : null);\n  }\n}\nreturn stale();\n"
+              }
+            },
+            {
+              "id": "n_s_events",
+              "name": "Екран: події",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, 300],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('events')) return [];\nconst p = r.parts;\nconst events = all('Події').filter((e) => e.status !== 'draft');\nconst regs = all('Реєстрації');\nconst taken = (e) => regs.filter((x) => x.event_id === e._key && x.status === 'active').length;\nconst myReg = (e) => regs.find((x) => x.event_id === e._key && x.telegram_id === tg) || null;\nconst card = (key, res, note) => {\n  const e = events.find((x) => x._key === key);\n  if (!e) return stale();\n  const reg = myReg(e);\n  const lines = [];\n  if (note) lines.push(note, '');\n  lines.push('<b>' + esc(e.title) + '</b>');\n  if (e.description) lines.push(esc(e.description));\n  lines.push('');\n  lines.push('🗓 ' + day(e.starts_at) + ', ' + time(e.starts_at));\n  if (e.format) lines.push('📍 ' + fmt(e.format));\n  if (e.host) lines.push('🎤 ' + esc(e.host));\n  if (e.contact) lines.push('✉️ ' + esc(e.contact));\n  const cap = Number(e.capacity || 0);\n  const t = taken(e);\n  if (cap > 0) lines.push('Вільних місць: ' + Math.max(0, cap - t) + ' з ' + cap);\n  const rows = [];\n  if (Date.parse(e.starts_at) <= now) {\n    if (reg && reg.status !== 'cancelled') {\n      lines.push('');\n      lines.push(reg.feedback ? 'Ваша оцінка: ' + reg.feedback + ' з 5' : 'Як вам подія? Оцініть, будь ласка:');\n      rows.push([1, 2, 3, 4, 5].map((n) => btn(String(n), 'e:fb:' + enc(e._key) + ':' + n)));\n    }\n  } else if (reg && reg.status === 'active') {\n    lines.push('', 'Ви зареєстровані ✅');\n    rows.push([btn('✖️ Скасувати реєстрацію', 'e:x:' + enc(e._key))]);\n  } else if (e.status === 'open' && (cap === 0 || t < cap)) {\n    rows.push([btn('✅ Зареєструватися', 'e:ok:' + enc(e._key))]);\n  }\n  rows.push([btn('⬅️ Усі події', 'm:ev'), HOME]);\n  return result(res ? !!res.ok : true, res ? (res.ok ? 'ok' : res.reason) : 'ok', lines.join('\\n'), inline(rows));\n};\nconst failure = 'Не вдалося виконати дію. Спробуйте, будь ласка, ще раз трохи пізніше.';\nswitch (p[0] === 'm' ? 'm:ev' : p.length === 2 && p[0] === 'e' ? 'e:card' : p[0] + ':' + (p[1] || '')) {\n  case 'm:ev': {\n    const list = events.filter((e) => e.status === 'open' && Date.parse(e.starts_at) > now).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));\n    const buttons = list.map((e) => { const reg = myReg(e); return btn(short((reg && reg.status === 'active' ? '✅ ' : '') + day(e.starts_at) + ' · ' + e.title, 60), 'e:' + enc(e._key)); });\n    buttons.push(HOME);\n    return done('ok', list.length ? '<b>Події</b>\\n\\nОберіть подію:' : '<b>Події</b>\\n\\nНайближчих подій поки немає.', column(buttons));\n  }\n  case 'e:card': return card(r.parts_decoded[1], null, null);\n  case 'e:ok': {\n    const res = first('Зареєструвати на подію');\n    const note = !res ? failure : res.ok ? '✅ Ви зареєстровані. Ми нагадаємо про подію.' : res.reason === 'full' ? '😔 На жаль, місць уже немає.'\n      : res.reason === 'already_registered' ? 'Ви вже зареєстровані.' : 'Реєстрацію на цю подію закрито.';\n    return card(r.event_id, res || { ok: false, reason: 'error' }, note);\n  }\n  case 'e:x': {\n    const res = first('Скасувати реєстрацію');\n    return card(r.event_id, res || { ok: false, reason: 'error' }, !res ? failure : res.ok ? 'Реєстрацію скасовано.' : 'Реєстрації вже немає.');\n  }\n  case 'e:fb': {\n    const res = first('Оцінити подію');\n    return res && res.ok ? done('rated', 'Дякуємо за оцінку! 💛', column([btn('📅 Інші події', 'm:ev'), HOME])) : stale();\n  }\n}\nreturn stale();\n"
+              }
+            },
+            {
+              "id": "n_s_bst",
+              "name": "Екран: БСТ",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, 450],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('bst')) return [];\nconst p = r.parts;\nconst psychologists = all('Психологи');\nconst sessions = all('Сеанси БСТ');\nconst bookings = all('Записи на БСТ').filter((b) => b.status === 'active');\nconst queue = all('Лист очікування').filter((w) => w.status === 'waiting' || w.status === 'offered')\n  .sort((a, b) => String(a.added_at || '').localeCompare(String(b.added_at || '')));\nconst psyName = (key) => (psychologists.find((x) => x._key === key) || {}).name || '';\nconst taken = (s) => bookings.filter((b) => b.session_id === s._key).length;\nconst cap = (s) => Number(s.capacity || 0);\nconst isOpen = (s) => s.status === 'open' && Date.parse(s.starts_at) > now;\nconst label = (s) => {\n  const t = taken(s);\n  const free = cap(s) === 0 ? '' : t >= cap(s) ? ' · місць немає' : ' · вільно ' + (cap(s) - t);\n  return short(day(s.starts_at) + ' ' + time(s.starts_at) + ' · ' + psyName(s.psychologist_id) + free, 60);\n};\nconst upcomingOpen = () => sessions.filter(isOpen).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));\nconst card = (key, res, note) => {\n  const s = sessions.find((x) => x._key === key);\n  if (!s) return stale();\n  const booked = bookings.some((b) => b.session_id === s._key && b.telegram_id === tg);\n  const waiting = queue.filter((w) => w.session_id === s._key);\n  const mineInQueue = waiting.find((w) => w.telegram_id === tg) || null;\n  const lines = [];\n  if (note) lines.push(note, '');\n  lines.push('<b>Груповий сеанс БСТ</b>');\n  lines.push('🗓 ' + day(s.starts_at) + ', ' + time(s.starts_at));\n  lines.push('🧑‍⚕️ ' + esc(psyName(s.psychologist_id)));\n  if (s.format) lines.push('📍 ' + fmt(s.format));\n  if (cap(s) > 0) lines.push('Вільних місць: ' + Math.max(0, cap(s) - taken(s)) + ' з ' + cap(s));\n  const open = isOpen(s);\n  const full = cap(s) > 0 && taken(s) >= cap(s);\n  const rows = [];\n  if (booked) {\n    lines.push('', 'Ви записані ✅');\n    if (open) {\n      rows.push(calendarRow(calendar(s.starts_at, num('SLOT_DURATION_MIN', 50))));\n      rows.push([btn('🔁 Перенести', 'b:mv:' + enc(s._key)), btn('✖️ Скасувати', 'b:x:' + enc(s._key))]);\n    }\n  } else if (mineInQueue && mineInQueue.status === 'offered' && open) {\n    lines.push('', 'Для вас звільнилось місце.');\n    rows.push([btn('✅ Записатися', 'b:ok:' + enc(s._key)), btn('Не цікаво', 'b:wx:' + enc(s._key))]);\n  } else if (mineInQueue) {\n    const position = waiting.filter((w) => w.status === 'waiting').findIndex((w) => w.telegram_id === tg) + 1;\n    lines.push('', position > 0 ? '⏳ Ви в листі очікування, позиція ' + position + '. Якщо місце звільниться — бот напише.' : 'Ви в листі очікування.');\n    rows.push([btn('Вийти з листа очікування', 'b:wx:' + enc(s._key))]);\n  } else if (open && full) {\n    rows.push([btn('🕒 У лист очікування', 'b:w:' + enc(s._key))]);\n  } else if (open) {\n    rows.push([btn('✅ Записатися', 'b:ok:' + enc(s._key))]);\n  }\n  rows.push([btn('⬅️ Усі сеанси', 'm:bst'), HOME]);\n  return result(res ? !!res.ok : true, res ? (res.ok ? 'ok' : res.reason) : 'ok', lines.join('\\n'), inline(rows));\n};\nconst failure = 'Не вдалося виконати дію. Спробуйте, будь ласка, ще раз трохи пізніше.';\nconst d = r.parts_decoded;\nswitch (p[0] === 'm' ? 'm:bst' : p[0] + ':' + (p[1] || '')) {\n  case 'm:bst': {\n    const list = upcomingOpen();\n    const buttons = list.map((s) => btn(label(s), 'b:s:' + enc(s._key)));\n    buttons.push(HOME);\n    const info = esc(setting('TEXT_BST_INFO', 'БСТ — груповий сеанс підтримки з психологом.'));\n    return done('ok', list.length ? info + '\\n\\nОберіть сеанс:' : info + '\\n\\nНайближчих сеансів поки немає.', column(buttons));\n  }\n  case 'b:s': return card(d[2], null, null);\n  case 'b:ok': {\n    const res = first('Записати на БСТ');\n    const note = !res ? failure : res.ok ? '✅ Ви записані на сеанс. Ми нагадаємо про нього.'\n      : res.reason === 'full' ? '😔 Місць немає. Можна стати в лист очікування — ми напишемо, коли місце звільниться.'\n      : res.reason === 'already_registered' ? 'Ви вже записані.' : 'Запис на цей сеанс закрито.';\n    return card(r.session_id, res || { ok: false, reason: 'error' }, note);\n  }\n  case 'b:x': {\n    const res = first('Скасувати БСТ');\n    return card(r.session_id, res || { ok: false, reason: 'error' }, !res ? failure : res.ok ? 'Запис скасовано.' : 'Запису вже немає.');\n  }\n  case 'b:w': {\n    const res = first('У лист очікування');\n    const note = !res ? failure : res.ok ? 'Ви в листі очікування. Коли місце звільниться, ми напишемо.'\n      : res.reason === 'already_waiting' ? 'Ви вже в листі очікування.' : res.reason === 'already_registered' ? 'Ви вже записані.'\n      : res.reason === 'not_full' ? 'Місця ще є — можна записатися одразу.' : 'Запис на цей сеанс закрито.';\n    return card(r.session_id, res || { ok: false, reason: 'error' }, note);\n  }\n  case 'b:wx': {\n    const left = first('Вийти з черги');\n    return card(r.session_id, { ok: !!left, reason: left ? null : 'not_found' }, left ? 'Ви вийшли з листа очікування.' : 'Вас уже немає в листі очікування.');\n  }\n  case 'b:mv': {\n    const from = d[2];\n    const others = upcomingOpen().filter((s) => s._key !== from && (cap(s) === 0 || taken(s) < cap(s)));\n    const buttons = others.map((s) => btn(label(s), 'b:mt:' + enc(from) + ':' + enc(s._key)));\n    buttons.push(btn('⬅️ Назад', 'b:s:' + enc(from)));\n    return done('ok', others.length ? '<b>Перенесення</b>\\n\\nОберіть новий сеанс:' : 'Інших сеансів з вільними місцями немає.', column(buttons));\n  }\n  case 'b:mt': {\n    const target = sessions.find((x) => x._key === d[3]);\n    if (!target) return stale();\n    return done('ok', 'Перенести запис на сеанс ' + esc(label(target)) + '?',\n      inline([[btn('✅ Перенести', 'b:mo:' + enc(d[2]) + ':' + enc(target._key))], [btn('⬅️ Назад', 'b:mv:' + enc(d[2])), HOME]]));\n  }\n  case 'b:mo': {\n    // Перенесення — запис на новий сеанс, потім скасування старого; новий не вдався — старий лишається.\n    const res = first('Перенести БСТ: новий запис');\n    const cancelled = first('Перенести БСТ: скасувати старий');\n    if (res && res.ok && cancelled && cancelled.ok) return card(r.session_id, { ok: true, reason: 'moved' }, '✅ Запис перенесено.');\n    if (res && res.ok) return card(r.session_id, { ok: false, reason: 'error' }, 'Ви записані на новий сеанс, але старий запис скасувати не вдалося — скасуйте його, будь ласка, вручну.');\n    return card(r.from_session, res || { ok: false, reason: 'error' }, res && res.reason === 'full' ? '😔 На новому сеансі місць уже немає. Запис лишився без змін.' : 'Перенести не вдалося, запис лишився без змін.');\n  }\n}\nreturn stale();\n"
+              }
+            },
+            {
+              "id": "n_s_cabinet",
+              "name": "Екран: кабінет психолога",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [2880, 600],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst first = (name) => all(name)[0] || null;\nconst u = $node['Розбір'].json;\nconst r = $node['Маршрут'].json;\nconst tg = String(u.telegram_id);\nconst chat = Number(u.chat_id);\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst short = (s, n) => { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; };\nconst DAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst ymd = (iso) => { const d = new Date(iso); return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); };\nconst fromYmd = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12, 0, 0);\nconst dayLabel = (d) => DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1);\nconst day = (iso) => dayLabel(new Date(iso));\nconst time = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst now = Date.now();\n// Ключі рядків — UUID (36 символів); у callback_data (до 64 байт) вони йдуть у base64url (22 символи).\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst link = (text, url) => ({ text: text, url: url });\nconst column = (buttons) => ({ inline_keyboard: buttons.map((b) => [b]) });\nconst inline = (rows) => ({ inline_keyboard: rows.filter((row) => row.length) });\nconst rowsOf = (buttons, n) => { const rows = []; for (let i = 0; i < buttons.length; i += n) rows.push(buttons.slice(i, i + n)); return rows; };\nconst HOME = btn('🏠 Головне меню', 'm:psy');\nconst CONTACT = { keyboard: [[{ text: '📱 Поділитися номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };\nconst HOME_KEYBOARD = { keyboard: [[{ text: '🏠 Головне меню' }]], resize_keyboard: true };\nconst result = (ok, code, text, markup, extra) => [Object.assign({ ok: ok, code: code, screen: { text: text, parse_mode: 'HTML', reply_markup: markup || null } }, extra || {})];\nconst done = (code, text, markup, extra) => result(true, code, text, markup, extra);\nconst fail = (code, text, markup, extra) => result(false, code, text, markup, extra);\nconst user = first('Людина');\nconst meRow = first('Я психолог');\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst mainMenu = (psychologist) => {\n  const buttons = [\n    btn('🆘 Мені потрібна психологічна допомога', 'm:help'),\n    btn('📅 Записатися на консультацію', 'm:cons'),\n    btn('🧘 Біосугестивна терапія', 'm:bst'),\n    btn('📣 Події та вебінари', 'm:ev'),\n    btn('📚 Корисні матеріали', 'm:mat'),\n    btn('☎️ Термінова допомога', 'm:sos'),\n  ];\n  if (psychologist) buttons.push(btn('🧑‍⚕️ Кабінет психолога', 'p:h'));\n  return { text: esc(setting('TEXT_MENU', 'Оберіть, що вам потрібно.')), markup: column(buttons) };\n};\nconst stale = () => { const m = mainMenu(me); return fail('stale', 'Ця кнопка вже неактуальна.\\n\\n' + m.text, m.markup); };\nconst gcal = (iso) => iso.replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\nconst calendar = (startIso, minutes) => {\n  const end = new Date(Date.parse(startIso) + minutes * 60000).toISOString();\n  const title = encodeURIComponent('Особиста зустріч');\n  return {\n    google: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + gcal(startIso) + '/' + gcal(end),\n    outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title + '&startdt=' + encodeURIComponent(startIso) + '&enddt=' + encodeURIComponent(end),\n  };\n};\nconst calendarRow = (links) => (links ? [link('📅 Google', links.google), link('📅 Outlook', links.outlook)] : []);\nconst mine = (section) => r.section !== section;\nif (mine('cabinet')) return [];\nconst p = r.parts;\nconst d = r.parts_decoded;\nif (!me) { const m = mainMenu(null); return fail('not_psychologist', 'Кабінет доступний лише психологам.\\n\\n' + m.text, m.markup); }\nconst cabinet = btn('🧑‍⚕️ Кабінет', 'p:h');\nconst psychologists = all('Психологи');\nconst psyName = (key) => (psychologists.find((x) => x._key === key) || {}).name || '';\nconst events = all('Події').filter((e) => e.status !== 'draft');\nconst regs = all('Реєстрації').filter((x) => x.status === 'active');\nconst sessions = all('Сеанси БСТ');\nconst bstBookings = all('Записи на БСТ').filter((b) => b.status === 'active');\nconst queue = all('Лист очікування').filter((w) => w.status === 'waiting' || w.status === 'offered')\n  .sort((a, b) => String(a.added_at || '').localeCompare(String(b.added_at || '')));\nconst byTime = (a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at);\nconst noticeNote = (res, count) => !res ? 'Не вдалося надіслати оголошення.'\n  : res.ok ? '📣 Оголошення надіслано (' + (res.sent || 0) + ').'\n  : res.reason === 'notice_unchanged' ? 'Це оголошення вже надіслано. Змініть текст на сторінці застосунку, щоб надіслати нове.'\n  : res.reason === 'notice_empty' ? 'Текст оголошення порожній.' : 'Не вдалося надіслати оголошення.';\nconst preview = (notice, send, back, recipients) => !String(notice || '').trim()\n  ? fail('notice_empty', 'Текст оголошення порожній. Додайте його на сторінці застосунку (поле «Оголошення»).', column([btn('⬅️ Назад', back)]))\n  : done('ok', '<b>Оголошення</b>\\n\\n' + esc(notice) + '\\n\\nОтримувачів: ' + recipients, inline([[btn('📣 Надіслати', send)], [btn('⬅️ Назад', back)]]));\nconst eventCard = (key, res) => {\n  const e = events.find((x) => x._key === key);\n  if (!e) return fail('not_found', 'Подію не знайдено.', column([cabinet]));\n  const people = regs.filter((x) => x.event_id === e._key);\n  const lines = [];\n  if (res !== undefined) lines.push(noticeNote(res, people.length), '');\n  lines.push('<b>' + esc(e.title) + '</b>, ' + day(e.starts_at) + ' ' + time(e.starts_at));\n  lines.push('Учасників: ' + people.length + (Number(e.capacity) > 0 ? ' з ' + e.capacity : ''));\n  people.forEach((x, i) => lines.push((i + 1) + '. ' + esc(x.client_name || 'без імені')));\n  return result(res === undefined ? true : !!(res && res.ok), res === undefined ? 'ok' : res ? (res.ok ? 'notice_sent' : res.reason) : 'error', lines.join('\\n'),\n    column([btn('📣 Оголошення учасникам', 'p:ne:' + enc(e._key)), btn('⬅️ Події', 'p:ev'), cabinet]));\n};\nconst ownSession = (key) => { const s = sessions.find((x) => x._key === key); return s && s.psychologist_id === me._key ? s : null; };\nconst sessionCard = (key, res) => {\n  const s = ownSession(key);\n  if (!s) return fail('not_found', 'Сеанс не знайдено.', column([cabinet]));\n  const people = bstBookings.filter((b) => b.session_id === s._key);\n  const waiting = queue.filter((w) => w.session_id === s._key);\n  const lines = [];\n  if (res !== undefined) lines.push(noticeNote(res, people.length), '');\n  lines.push('<b>БСТ ' + day(s.starts_at) + ', ' + time(s.starts_at) + '</b>');\n  lines.push('Учасників: ' + people.length + (Number(s.capacity) > 0 ? ' з ' + s.capacity : ''));\n  people.forEach((x, i) => lines.push((i + 1) + '. ' + esc(x.client_name || 'без імені')));\n  if (waiting.length) {\n    lines.push('', 'Лист очікування: ' + waiting.length);\n    waiting.forEach((w, i) => lines.push((i + 1) + '. ' + esc(w.client_name || 'без імені') + (w.status === 'offered' ? ' (запропоновано місце)' : '')));\n  }\n  return result(res === undefined ? true : !!(res && res.ok), res === undefined ? 'ok' : res ? (res.ok ? 'notice_sent' : res.reason) : 'error', lines.join('\\n'),\n    column([btn('📣 Оголошення учасникам', 'p:nb:' + enc(s._key)), btn('⬅️ Мої сеанси', 'p:bst'), cabinet]));\n};\nconst route = /^\\/psy/.test(r.data) ? 'p:h' : p[0] + ':' + (p[1] || '');\nswitch (route) {\n  case 'p:h':\n    return done('ok', '<b>Кабінет психолога</b>\\n' + esc(me.name),\n      column([btn('📋 Записи на консультації', 'p:bk'), btn('👥 Мої сеанси БСТ', 'p:bst'), btn('📅 Події', 'p:ev'), HOME]));\n  case 'p:bk': {\n    // Записи всіх психологів на PSY_PEER_VIEW_DAYS днів; ім'я й телефон людини — лише у своїх (§4.8, §8).\n    const days = num('PSY_PEER_VIEW_DAYS', 14);\n    const list = all('Записи').filter((b) => b.status === 'active' && Date.parse(b.starts_at) > now && Date.parse(b.starts_at) <= now + days * 86400000).sort(byTime);\n    const lines = ['<b>Записи на ' + days + ' днів</b>'];\n    if (!list.length) lines.push('', 'Записів немає.');\n    let current = null;\n    for (const b of list) {\n      const dd = ymd(b.starts_at);\n      if (dd !== current) { current = dd; lines.push('', '<b>' + day(b.starts_at) + '</b>'); }\n      if (b.psychologist_id === me._key) {\n        lines.push('• ' + time(b.starts_at) + ' — <b>ваш запис</b>: ' + esc(b.client_name || 'без імені') + (b.client_phone ? ', +' + esc(b.client_phone) : ''));\n      } else {\n        lines.push('• ' + time(b.starts_at) + ' — ' + esc(psyName(b.psychologist_id)));\n      }\n    }\n    return done('ok', lines.join('\\n'), column([cabinet, HOME]));\n  }\n  case 'p:ev': {\n    const list = events.filter((e) => Date.parse(e.starts_at) >= now).sort(byTime);\n    const buttons = list.map((e) => btn(short(day(e.starts_at) + ' · ' + e.title + ' (' + regs.filter((x) => x.event_id === e._key).length + ')', 60), 'p:e:' + enc(e._key)));\n    buttons.push(cabinet);\n    return done('ok', list.length ? '<b>Події</b> (у дужках — скільки зареєстровано):' : 'Найближчих подій немає.', column(buttons));\n  }\n  case 'p:e': return eventCard(d[2], undefined);\n  case 'p:ne': {\n    const e = events.find((x) => x._key === d[2]);\n    if (!e) return stale();\n    return preview(e.notice, 'p:se:' + enc(e._key), 'p:e:' + enc(e._key), regs.filter((x) => x.event_id === e._key).length);\n  }\n  case 'p:se': return eventCard(d[2], first('Оголошення події'));\n  case 'p:bst': {\n    const list = sessions.filter((s) => s.psychologist_id === me._key && Date.parse(s.starts_at) >= now).sort(byTime);\n    const buttons = list.map((s) => {\n      const t = bstBookings.filter((b) => b.session_id === s._key).length;\n      return btn(short(day(s.starts_at) + ' ' + time(s.starts_at) + ' · ' + t + (Number(s.capacity) > 0 ? ' з ' + s.capacity : ''), 60), 'p:b:' + enc(s._key));\n    });\n    buttons.push(cabinet);\n    return done('ok', list.length ? '<b>Мої сеанси БСТ</b>' : 'Найближчих сеансів БСТ у вас немає.', column(buttons));\n  }\n  case 'p:b': return sessionCard(d[2], undefined);\n  case 'p:nb': {\n    const s = ownSession(d[2]);\n    if (!s) return stale();\n    return preview(s.notice, 'p:sb:' + enc(s._key), 'p:b:' + enc(s._key), bstBookings.filter((b) => b.session_id === s._key).length);\n  }\n  case 'p:sb': return ownSession(d[2]) ? sessionCard(d[2], first('Оголошення сеансу')) : stale();\n}\nreturn stale();\n"
+              }
+            },
+            {
+              "id": "n_answer",
+              "name": "Відповідь",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [3120, 0],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "// Екран → виклики Telegram: кнопка редагує своє повідомлення, решта (і new_message) — нове повідомлення.\nconst u = $node['Розбір'].json;\nconst s = $json.screen || {};\nconst clean = (o) => { const x = {}; for (const k of Object.keys(o)) if (o[k] !== null && o[k] !== undefined) x[k] = o[k]; return x; };\nconst edit = !!u.callback_id && !!u.message_id && !s.new_message;\nconst message = { chat_id: Number(u.chat_id), text: s.text, parse_mode: s.parse_mode || 'HTML', reply_markup: s.reply_markup };\nreturn [{\n  ok: $json.ok,\n  code: $json.code,\n  edit: edit ? clean(Object.assign({ message_id: u.message_id }, message)) : null,\n  send: edit ? null : clean(message),\n  notifications: ($json.notifications || []).map((n) => clean({ chat_id: Number(n.chat_id), text: n.text, parse_mode: n.parse_mode || 'HTML', reply_markup: n.reply_markup })),\n  commands: $json.commands || null,\n  file: $json.file || null,\n}];\n"
+              }
+            },
+            {
+              "id": "n_is_edit",
+              "name": "Змінити повідомлення?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [3360, 0],
+              "parameters": {"conditions": [{"left": "{{ $json.edit }}", "operator": "isNotEmpty"}]}
+            },
+            {
+              "id": "n_edit",
+              "name": "Змінити повідомлення",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, -100],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "edit_message_text",
+                "arguments": "{{ $json.edit }}"
+              },
+              "continueOnFail": true,
+              "notes": "Повторне натискання тієї самої кнопки Telegram відхиляє як «message is not modified»."
+            },
+            {
+              "id": "n_send",
+              "name": "Надіслати повідомлення",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 100],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_message",
+                "arguments": "{{ $json.send }}"
+              }
+            },
+            {
+              "id": "n_batches",
+              "name": "Сповіщення",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [3360, 250],
+              "parameters": {
+                "mode": "eachItem",
+                "code": "const list = $json.notifications || [];\nconst batches = [];\nfor (let i = 0; i < list.length; i += 100) batches.push({ messages: list.slice(i, i + 100) });\nreturn batches;\n"
+              }
+            },
+            {
+              "id": "n_notify",
+              "name": "Надіслати сповіщення",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 250],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_messages",
+                "arguments": {"messages": "{{ $json.messages }}"}
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_has_commands",
+              "name": "Команди психолога?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [3360, 400],
+              "parameters": {"conditions": [{"left": "{{ $json.commands }}", "operator": "isNotEmpty"}]}
+            },
+            {
+              "id": "n_commands",
+              "name": "Команди /psy",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 400],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "set_my_commands",
+                "arguments": "{{ $json.commands }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_file",
+              "name": "Файл матеріалу",
+              "type": "core.switch",
+              "typeVersion": 2,
+              "position": [3360, 550],
+              "parameters": {
+                "rules": [
+                  {
+                    "conditions": [{"left": "{{ $json.file && $json.file.type }}", "operator": "equals", "right": "document"}]
+                  },
+                  {
+                    "conditions": [{"left": "{{ $json.file && $json.file.type }}", "operator": "equals", "right": "video"}]
+                  },
+                  {
+                    "conditions": [{"left": "{{ $json.file && $json.file.type }}", "operator": "equals", "right": "audio"}]
+                  },
+                  {
+                    "conditions": [{"left": "{{ $json.file && $json.file.type }}", "operator": "equals", "right": "voice"}]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_file_document",
+              "name": "Надіслати документ",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 550],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_document",
+                "arguments": "{{ $json.file.args }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_file_video",
+              "name": "Надіслати відео",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 670],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_video",
+                "arguments": "{{ $json.file.args }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_file_audio",
+              "name": "Надіслати аудіо",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 790],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_audio",
+                "arguments": "{{ $json.file.args }}"
+              },
+              "continueOnFail": true
+            },
+            {
+              "id": "n_file_voice",
+              "name": "Надіслати голосове",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [3600, 910],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_voice",
+                "arguments": "{{ $json.file.args }}"
+              },
+              "continueOnFail": true
+            }
+          ],
+          "connections": [
+            {"from": {"node": "n_webhook", "output": 0}, "to": {"node": "n_parse", "input": 0}},
+            {"from": {"node": "n_parse", "output": 0}, "to": {"node": "n_is_button", "input": 0}},
+            {"from": {"node": "n_is_button", "output": 0}, "to": {"node": "n_ack", "input": 0}},
+            {"from": {"node": "n_parse", "output": 0}, "to": {"node": "n_settings", "input": 0}},
+            {"from": {"node": "n_parse", "output": 0}, "to": {"node": "n_user", "input": 0}},
+            {"from": {"node": "n_parse", "output": 0}, "to": {"node": "n_me", "input": 0}},
+            {"from": {"node": "n_parse", "output": 0}, "to": {"node": "n_route", "input": 0}},
+            {"from": {"node": "n_settings", "output": 0}, "to": {"node": "n_route", "input": 0}},
+            {"from": {"node": "n_user", "output": 0}, "to": {"node": "n_route", "input": 0}},
+            {"from": {"node": "n_me", "output": 0}, "to": {"node": "n_route", "input": 0}},
+            {"from": {"node": "n_route", "output": 0}, "to": {"node": "n_metric", "input": 0}},
+            {"from": {"node": "n_metric", "output": 0}, "to": {"node": "n_count", "input": 0}},
+            {"from": {"node": "n_route", "output": 0}, "to": {"node": "n_action", "input": 0}},
+            {"from": {"node": "n_action", "output": 1}, "to": {"node": "n_reg_user", "input": 0}},
+            {"from": {"node": "n_reg_user", "output": 0}, "to": {"node": "n_reg_ok", "input": 0}},
+            {"from": {"node": "n_reg_ok", "output": 0}, "to": {"node": "n_link_find", "input": 0}},
+            {"from": {"node": "n_action", "output": 2}, "to": {"node": "n_link_find", "input": 0}},
+            {"from": {"node": "n_link_find", "output": 0}, "to": {"node": "n_link", "input": 0}},
+            {"from": {"node": "n_action", "output": 3}, "to": {"node": "n_book", "input": 0}},
+            {"from": {"node": "n_action", "output": 4}, "to": {"node": "n_cancel", "input": 0}},
+            {"from": {"node": "n_action", "output": 5}, "to": {"node": "n_move", "input": 0}},
+            {"from": {"node": "n_action", "output": 6}, "to": {"node": "n_ev_reg", "input": 0}},
+            {"from": {"node": "n_action", "output": 7}, "to": {"node": "n_ev_cancel", "input": 0}},
+            {"from": {"node": "n_action", "output": 8}, "to": {"node": "n_ev_rate", "input": 0}},
+            {"from": {"node": "n_action", "output": 9}, "to": {"node": "n_bst_book", "input": 0}},
+            {"from": {"node": "n_action", "output": 10}, "to": {"node": "n_bst_cancel", "input": 0}},
+            {"from": {"node": "n_action", "output": 11}, "to": {"node": "n_bst_wait", "input": 0}},
+            {"from": {"node": "n_action", "output": 14}, "to": {"node": "n_ev_notice", "input": 0}},
+            {"from": {"node": "n_action", "output": 12}, "to": {"node": "n_leave_find", "input": 0}},
+            {"from": {"node": "n_leave_find", "output": 0}, "to": {"node": "n_leave", "input": 0}},
+            {"from": {"node": "n_action", "output": 13}, "to": {"node": "n_bst_move_book", "input": 0}},
+            {"from": {"node": "n_bst_move_book", "output": 0}, "to": {"node": "n_bst_move_ok", "input": 0}},
+            {"from": {"node": "n_bst_move_ok", "output": 0}, "to": {"node": "n_bst_move_cancel", "input": 0}},
+            {"from": {"node": "n_action", "output": 15}, "to": {"node": "n_sb_find", "input": 0}},
+            {"from": {"node": "n_sb_find", "output": 0}, "to": {"node": "n_sb_own", "input": 0}},
+            {"from": {"node": "n_sb_own", "output": 0}, "to": {"node": "n_bst_notice", "input": 0}},
+            {"from": {"node": "n_action", "output": 16}, "to": {"node": "n_views", "input": 0}},
+            {"from": {"node": "n_route", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_reg_user", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_reg_ok", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_link_find", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_link", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_book", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_cancel", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_move", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_ev_reg", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_ev_cancel", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_ev_rate", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_book", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_cancel", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_wait", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_ev_notice", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_leave_find", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_leave", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_move_book", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_move_ok", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_move_cancel", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_sb_find", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_sb_own", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_bst_notice", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_views", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_need_psy", "input": 0}},
+            {"from": {"node": "n_need_psy", "output": 0}, "to": {"node": "n_psychologists", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_need_consult", "input": 0}},
+            {"from": {"node": "n_need_consult", "output": 0}, "to": {"node": "n_slots", "input": 0}},
+            {"from": {"node": "n_need_consult", "output": 0}, "to": {"node": "n_bookings", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_need_events", "input": 0}},
+            {"from": {"node": "n_need_events", "output": 0}, "to": {"node": "n_events", "input": 0}},
+            {"from": {"node": "n_need_events", "output": 0}, "to": {"node": "n_regs", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_need_bst", "input": 0}},
+            {"from": {"node": "n_need_bst", "output": 0}, "to": {"node": "n_sessions", "input": 0}},
+            {"from": {"node": "n_need_bst", "output": 0}, "to": {"node": "n_bst_bookings", "input": 0}},
+            {"from": {"node": "n_need_bst", "output": 0}, "to": {"node": "n_waitlist", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_need_materials", "input": 0}},
+            {"from": {"node": "n_need_materials", "output": 0}, "to": {"node": "n_materials", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_start", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_menu", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_materials", "input": 0}},
+            {"from": {"node": "n_materials", "output": 0}, "to": {"node": "n_s_materials", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_consult", "input": 0}},
+            {"from": {"node": "n_psychologists", "output": 0}, "to": {"node": "n_s_consult", "input": 0}},
+            {"from": {"node": "n_slots", "output": 0}, "to": {"node": "n_s_consult", "input": 0}},
+            {"from": {"node": "n_bookings", "output": 0}, "to": {"node": "n_s_consult", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_events", "input": 0}},
+            {"from": {"node": "n_events", "output": 0}, "to": {"node": "n_s_events", "input": 0}},
+            {"from": {"node": "n_regs", "output": 0}, "to": {"node": "n_s_events", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_bst", "input": 0}},
+            {"from": {"node": "n_psychologists", "output": 0}, "to": {"node": "n_s_bst", "input": 0}},
+            {"from": {"node": "n_sessions", "output": 0}, "to": {"node": "n_s_bst", "input": 0}},
+            {"from": {"node": "n_bst_bookings", "output": 0}, "to": {"node": "n_s_bst", "input": 0}},
+            {"from": {"node": "n_waitlist", "output": 0}, "to": {"node": "n_s_bst", "input": 0}},
+            {"from": {"node": "n_after", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_psychologists", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_bookings", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_events", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_regs", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_sessions", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_bst_bookings", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_waitlist", "output": 0}, "to": {"node": "n_s_cabinet", "input": 0}},
+            {"from": {"node": "n_s_start", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_s_menu", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_s_materials", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_s_consult", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_s_events", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_s_bst", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_s_cabinet", "output": 0}, "to": {"node": "n_answer", "input": 0}},
+            {"from": {"node": "n_answer", "output": 0}, "to": {"node": "n_is_edit", "input": 0}},
+            {"from": {"node": "n_is_edit", "output": 0}, "to": {"node": "n_edit", "input": 0}},
+            {"from": {"node": "n_is_edit", "output": 1}, "to": {"node": "n_send", "input": 0}},
+            {"from": {"node": "n_answer", "output": 0}, "to": {"node": "n_batches", "input": 0}},
+            {"from": {"node": "n_batches", "output": 0}, "to": {"node": "n_notify", "input": 0}},
+            {"from": {"node": "n_answer", "output": 0}, "to": {"node": "n_has_commands", "input": 0}},
+            {"from": {"node": "n_has_commands", "output": 0}, "to": {"node": "n_commands", "input": 0}},
+            {"from": {"node": "n_answer", "output": 0}, "to": {"node": "n_file", "input": 0}},
+            {"from": {"node": "n_file", "output": 1}, "to": {"node": "n_file_document", "input": 0}},
+            {"from": {"node": "n_file", "output": 2}, "to": {"node": "n_file_video", "input": 0}},
+            {"from": {"node": "n_file", "output": 3}, "to": {"node": "n_file_audio", "input": 0}},
+            {"from": {"node": "n_file", "output": 4}, "to": {"node": "n_file_voice", "input": 0}}
+          ],
+          "pinData": {}
+        },
+        "manifest": {
+          "connectors": [],
+          "credentials": [
+            {
+              "ref": "cred_psy_bot_webhook",
+              "name": "Секрет вебхука бота психологічної підтримки",
+              "type": "webhook.header"
+            }
+          ],
+          "variables": ["psy_telegram_server"],
+          "workflows": []
+        }
+      }
     }
   ],
-  "manifest": {"connectors": [], "credentials": [], "variables": ["psy_telegram_server"]}
+  "manifest": {
+    "connectors": [],
+    "credentials": [{"ref": "cred_psy_bot_webhook", "name": "Секрет вебхука бота психологічної підтримки", "type": "webhook.header"}],
+    "variables": ["psy_telegram_server"]
+  }
 }

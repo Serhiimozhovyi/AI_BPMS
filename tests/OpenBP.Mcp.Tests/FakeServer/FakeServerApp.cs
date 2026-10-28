@@ -357,6 +357,42 @@ public static class MockTelegramTools
         },
     };
 
+    /// <summary>«Надсилає» документ (F8-07): файл — посилання або file_id.</summary>
+    [McpServerTool(Name = "send_document", Title = "Надіслати документ", UseStructuredContent = true)]
+    [Description("Надсилає документ у чат Telegram.")]
+    public static SentFile SendDocument(
+        [Description("Id чату")] long chat_id,
+        [Description("URL файлу")] string? document_url = null,
+        [Description("file_id Telegram")] string? file_id = null,
+        [Description("Підпис")] string? caption = null) => new(true, chat_id, "document", document_url, file_id, caption);
+
+    /// <summary>«Надсилає» відео (F8-07).</summary>
+    [McpServerTool(Name = "send_video", Title = "Надіслати відео", UseStructuredContent = true)]
+    [Description("Надсилає відео в чат Telegram.")]
+    public static SentFile SendVideo(
+        [Description("Id чату")] long chat_id,
+        [Description("URL відео")] string? video_url = null,
+        [Description("file_id Telegram")] string? file_id = null,
+        [Description("Підпис")] string? caption = null) => new(true, chat_id, "video", video_url, file_id, caption);
+
+    /// <summary>«Надсилає» аудіо (F8-07).</summary>
+    [McpServerTool(Name = "send_audio", Title = "Надіслати аудіо", UseStructuredContent = true)]
+    [Description("Надсилає аудіо в чат Telegram.")]
+    public static SentFile SendAudio(
+        [Description("Id чату")] long chat_id,
+        [Description("URL аудіо")] string? audio_url = null,
+        [Description("file_id Telegram")] string? file_id = null,
+        [Description("Підпис")] string? caption = null) => new(true, chat_id, "audio", audio_url, file_id, caption);
+
+    /// <summary>«Надсилає» голосове (F8-07).</summary>
+    [McpServerTool(Name = "send_voice", Title = "Надіслати голосове", UseStructuredContent = true)]
+    [Description("Надсилає голосове повідомлення в чат Telegram.")]
+    public static SentFile SendVoice(
+        [Description("Id чату")] long chat_id,
+        [Description("URL запису")] string? voice_url = null,
+        [Description("file_id Telegram")] string? file_id = null,
+        [Description("Підпис")] string? caption = null) => new(true, chat_id, "voice", voice_url, file_id, caption);
+
     /// <summary>Задає меню команд.</summary>
     [McpServerTool(Name = "set_my_commands", Title = "Команди бота", UseStructuredContent = true)]
     [Description("Задає меню команд бота.")]
@@ -388,6 +424,15 @@ public sealed record SentMessage(
 
 /// <summary>Результат <c>edit_message_text</c>.</summary>
 public sealed record EditedMessage(bool Ok, long ChatId, long MessageId, string Text, string? ParseMode, JsonElement? ReplyMarkup);
+
+/// <summary>Результат мок-<c>send_document</c>/<c>send_video</c>/<c>send_audio</c>/<c>send_voice</c>.</summary>
+public sealed record SentFile(
+    bool Ok,
+    long ChatId,
+    string Kind,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FileId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Caption);
 
 /// <summary>Результат <c>answer_callback_query</c>.</summary>
 public sealed record AnsweredCallback(bool Ok, string CallbackQueryId);
