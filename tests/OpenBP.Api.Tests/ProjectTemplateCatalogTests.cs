@@ -36,12 +36,30 @@ public class ProjectTemplateCatalogTests(ApiFactory api)
     public async Task Template_imports_into_an_empty_instance_with_everything_it_describes(string relativePath)
     {
         var bundle = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(RepoRoot(), relativePath)))!.AsObject();
-        var user = await api.CreateUserAsync(UserRole.Editor, "User-pass-1");
-        var editor = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
-        Assert.Equal(HttpStatusCode.NoContent, (await editor.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = "User-pass-1" })).StatusCode);
+        var editor = await LoginAsync(UserRole.Editor);
+
+        // Credentials шаблону (секрет вебхука тощо) адміністратор створює перед імпортом — тут з унікальною назвою і mapping.
+        var credentials = new JsonObject();
+        var admin = await LoginAsync(UserRole.Admin);
+        foreach (var credential in bundle["manifest"]?["credentials"]?.AsArray() ?? [])
+        {
+            var created = await admin.PostAsJsonAsync("/api/v1/credentials", new
+            {
+                name = $"{credential!["name"]} {Guid.NewGuid():N}",
+                type = credential["type"]!.GetValue<string>(),
+                data = new { token = "template-secret" },
+            });
+            Assert.True(created.IsSuccessStatusCode, $"{relativePath}: {created.StatusCode} {await created.Content.ReadAsStringAsync()}");
+            credentials[credential["ref"]!.GetValue<string>()] = JsonNode.Parse(await created.Content.ReadAsStringAsync())!["id"]!.GetValue<string>();
+        }
 
         var response = await editor.PostAsync("/api/v1/projects/import", new StringContent(
-            new JsonObject { ["bundle"] = bundle.DeepClone(), ["name"] = $"{bundle["project"]!["name"]} {Guid.NewGuid():N}" }.ToJsonString(), Encoding.UTF8, "application/json"));
+            new JsonObject
+            {
+                ["bundle"] = bundle.DeepClone(),
+                ["name"] = $"{bundle["project"]!["name"]} {Guid.NewGuid():N}",
+                ["mapping"] = new JsonObject { ["credentials"] = credentials },
+            }.ToJsonString(), Encoding.UTF8, "application/json"));
         var text = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{relativePath}: {response.StatusCode} {text}");
 
@@ -61,6 +79,14 @@ public class ProjectTemplateCatalogTests(ApiFactory api)
         var pages = JsonNode.Parse(await editor.GetStringAsync($"/api/v1/projects/{project}/pages"))!.AsArray();
         Assert.Equal(bundle["pages"]!.AsArray().Select(p => p!["key"]!.GetValue<string>()).Order(StringComparer.Ordinal),
             pages.Select(p => p!["key"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+    }
+
+    private async Task<HttpClient> LoginAsync(UserRole role)
+    {
+        var user = await api.CreateUserAsync(role, "User-pass-1");
+        var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = "User-pass-1" })).StatusCode);
+        return client;
     }
 
     private static string RepoRoot()
