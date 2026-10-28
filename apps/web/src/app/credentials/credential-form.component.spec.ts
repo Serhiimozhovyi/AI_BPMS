@@ -138,4 +138,22 @@ describe('checkMessage', () => {
     expect(checkMessage('OAuth-сервер недоступний: ConnectionError.')).toBe('OAuth-сервер недоступний: ConnectionError.');
     expect(checkMessage('weird')).toContain('weird');
   });
+
+  it('типи надійшли після створення форми: єдиний дозволений тип обирається сам (діалог «Нове підключення»)', async () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.inject(AuthService).user.set({ id: 'u1', email: 'a@openbp.test', role: 'admin' } as never);
+    const fixture = TestBed.createComponent(CredentialFormComponent);
+    fixture.componentRef.setInput('types', []);
+    fixture.componentRef.setInput('allowedTypes', ['bearer']);
+    fixture.componentRef.setInput('fixedProjectId', null);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="field-token"]')).toBeNull();
+
+    fixture.componentRef.setInput('types', types);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="field-token"]')).not.toBeNull();
+  });
 });

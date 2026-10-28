@@ -83,6 +83,9 @@ public sealed class ExplainJobTests(PostgresFixture postgres)
             Assert.Equal(Reply, row.Text);
             Assert.Equal(1, row.Version);
             Assert.Equal(1, provider.Calls);
+            // the row turns Ready before the worker completes (deletes) the job
+            for (var i = 0; i < 100 && await worker.JobCountAsync() != 0; i++)
+                await Task.Delay(100);
             Assert.Equal(0, await worker.JobCountAsync());
         }
         finally

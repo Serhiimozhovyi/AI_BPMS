@@ -1,6 +1,6 @@
 import { McpToolInfo } from '../connectors/connectors-api.service';
 import { WorkflowDefinition, emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { changeNodeTool, classifyAction, defaultAction, filterActions, groupActions, isAutomaticName } from './connector-actions';
+import { changeNodeConnection, changeNodeTool, classifyAction, defaultAction, filterActions, groupActions, isAutomaticName } from './connector-actions';
 
 const tool = (name: string, extra: Partial<McpToolInfo> = {}): McpToolInfo => ({ name, inputSchema: { type: 'object' }, ...extra });
 
@@ -91,6 +91,32 @@ describe('connector-actions', () => {
       expect(isAutomaticName('send_message', null, 'send_message')).toBe(true);
       expect(isAutomaticName('Надіслати повідомлення клієнту', send)).toBe(false);
       expect(isAutomaticName('Надіслати повідомлення x', send)).toBe(false);
+    });
+  });
+
+  describe('changeNodeConnection', () => {
+    const send = tool('send_message', { title: 'Надіслати повідомлення' });
+    const edit = tool('edit_message_text', { title: 'Змінити повідомлення' });
+    const definition: WorkflowDefinition = {
+      ...emptyWorkflowDefinition('С'),
+      nodes: [{ id: 'b', name: 'Надіслати повідомлення', type: 'mcp.tool', typeVersion: 1, position: [0, 0], parameters: { serverId: 'bot1', toolName: 'send_message', arguments: { chat_id: 1 } } }],
+    };
+
+    it('змінює лише serverId: дія й arguments лишаються', () => {
+      const after = changeNodeConnection(definition, 'b', 'bot2', null, send);
+      expect(after.nodes[0].parameters).toEqual({ serverId: 'bot2', toolName: 'send_message', arguments: { chat_id: 1 } });
+      expect(after.nodes[0].name).toBe('Надіслати повідомлення');
+    });
+
+    it('з дією на заміну — аргументи скидаються, автоматична назва оновлюється', () => {
+      const after = changeNodeConnection(definition, 'b', 'bot2', edit, send);
+      expect(after.nodes[0].parameters).toEqual({ serverId: 'bot2', toolName: 'edit_message_text', arguments: {} });
+      expect(after.nodes[0].name).toBe('Змінити повідомлення');
+    });
+
+    it('те саме підключення чи невідомий вузол — без змін', () => {
+      expect(changeNodeConnection(definition, 'b', 'bot1', null, send)).toBe(definition);
+      expect(changeNodeConnection(definition, 'x', 'bot2', null, send)).toBe(definition);
     });
   });
 });

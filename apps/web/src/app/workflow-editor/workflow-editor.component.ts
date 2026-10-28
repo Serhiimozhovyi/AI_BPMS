@@ -26,7 +26,7 @@ import { GROUP_COLORS } from '../canvas/vflow/vflow-canvas.component';
 import { CanvasClipboardService } from '../canvas/clipboard.service';
 import { EditHistory } from '../canvas/edit-history';
 import { PaletteItem, PaletteServer, actionKey, addNode, buildPalette, randomNodeId } from '../canvas/palette';
-import { changeNodeTool } from '../canvas/connector-actions';
+import { changeNodeConnection, changeNodeTool } from '../canvas/connector-actions';
 import { PaletteComponent } from '../canvas/palette.component';
 import { paletteExpanded, readPaletteChoice, writePaletteChoice } from '../canvas/palette-state';
 import { DataFieldPick, DataPort, NodeDataViewComponent } from '../canvas/node-data-view.component';
@@ -41,13 +41,15 @@ import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
 import { PinnedDataEditorComponent } from '../canvas/pinned-data-editor.component';
 import { TestRun, ancestorIds, applyEvent, isRunning, itemCounts, nodeRunErrors, nodeStatuses, runOutputs, singleNodeRequest, startedRun, streamFailed, untilNodeRequest } from '../canvas/test-run';
 import { ExecutionItem, ExecutionsApiService, StartExecutionRequest, StepStatus } from '../executions/executions-api.service';
-import { ConnectorCatalogEntry, ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
+import { ConnectorCatalogEntry, ConnectorDetail, ConnectorSummary, ConnectorsApiService, McpToolInfo, apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 import { EMPTY_EXPRESSION_CONTEXT, expressionContext } from '../node-form/expression-suggest';
 import { ExpressionTargetService } from '../node-form/expression-target';
 import { ExpressionEditorService } from '../node-form/expression-editor-dialog.component';
 import { MCP_TOOL_TYPES, updateNode } from '../node-form/node-form';
-import { NodePanelComponent } from '../node-form/node-panel.component';
+import { NewConnectionDialogComponent, NewConnectionDialogData } from '../node-form/new-connection-dialog.component';
+import { SUBSCRIBE_NODE_TYPE } from '../node-form/node-form';
+import { ConnectionChange, NodeConnection, NodePanelComponent } from '../node-form/node-panel.component';
 import { NodeTypeInfo, NodesApiService } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowTemplate, WorkflowsApiService } from '../workflows/workflows-api.service';
 import { WorkflowSettingsDialogComponent, WorkflowSettingsDialogData } from '../workflow-settings/workflow-settings-dialog.component';
@@ -364,7 +366,7 @@ export interface EditorErrorEvent {
                   </app-node-data-view>
                 </div>
                 <div class="editor__col editor__col--params" data-testid="panel-params" [hidden]="!wide() && panelTab() !== 'params'">
-                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" [compactHeader]="true" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)">
+                  <app-node-panel [node]="node" [descriptor]="selectedDescriptor()" [tool]="selectedTool()" [serverTools]="selectedServerTools()" [connections]="nodeConnections()" [credentials]="credentialOptions()" [expressionContext]="selectedExpressionContext()" [readonly]="readonly()" [compactHeader]="true" (nodeChange)="nodeEdited($event)" (toolChange)="toolChanged(node.id, $event)" (connectionChange)="connectionChanged(node.id, $event)" (newConnection)="newConnectionFor(node.id)">
                     @if (selectedPinItems(); as items) {
                       <app-pinned-data-editor panelPinned class="editor__pinned" [items]="items" [readonly]="readonly()" (save)="savePinned(node.id, $event)" />
                     }
@@ -779,6 +781,8 @@ export class WorkflowEditorComponent implements OnInit {
   /** Назва групи сценарію (F3-64); без групи — `null`. */
   protected readonly groupName = signal<string | null>(null);
   private readonly servers = signal<PaletteServer[]>([]);
+  /** Усі підключення зі списку (і без tools): поле «Підключення» панелі вузла. */
+  private readonly connectionList = signal<ConnectorSummary[]>([]);
   /** Облікові дані для вибору у вузлах (F4-03); `null` — недоступні (немає прав або помилка), поля лишаються текстовими. */
   protected readonly credentialOptions = signal<CredentialOption[] | null>(null);
   protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
@@ -874,6 +878,10 @@ export class WorkflowEditorComponent implements OnInit {
     if (!node || !MCP_TOOL_TYPES.includes(node.type)) return null;
     return this.servers().find((s) => s.id === node.parameters?.['serverId'])?.tools ?? null;
   });
+  /** Усі підключення (навіть без tools) для поля «Підключення» панелі вузла (F3-95). */
+  protected readonly nodeConnections = computed<NodeConnection[]>(() =>
+    this.connectionList().map((c) => ({ id: c.id, name: c.name, catalogId: c.catalogId ?? null, tools: this.servers().find((s) => s.id === c.id)?.tools ?? [] })),
+  );
   /** Підказки виразів для виділеного вузла (F2-19): output останнього тестового запуску, де його немає — `pinData`. */
   protected readonly selectedExpressionContext = computed(() => {
     const node = this.selectedNode();
@@ -1542,6 +1550,45 @@ export class WorkflowEditorComponent implements OnInit {
     this.remember({ key: actionKey(serverId, tool.name) });
   }
 
+  /** Інше підключення з панелі (F3-95): дія й `arguments` лишаються, якщо така дія є в новому підключенні. */
+  protected connectionChanged(nodeId: string, change: ConnectionChange): void {
+    const def = this.definition();
+    const node = def?.nodes.find((n) => n.id === nodeId);
+    if (!def || !node) return;
+    const previous = this.servers().find((s) => s.id === node.parameters?.['serverId'])?.tools.find((t) => t.name === node.parameters?.['toolName']) ?? null;
+    const next = changeNodeConnection(def, nodeId, change.serverId, change.tool, previous);
+    // Ресурс подій належить підключенню: інше підключення — інші ресурси.
+    this.changed(node.type === SUBSCRIBE_NODE_TYPE ? clearResource(next, nodeId) : next);
+  }
+
+  /** «+ Нове підключення…» (F3-95): діалог встановлення з каталогу; готове підключення підставляється у вузол. */
+  protected newConnectionFor(nodeId: string): void {
+    const node = this.definition()?.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    const catalogId = this.connectionList().find((c) => c.id === node.parameters?.['serverId'])?.catalogId ?? null;
+    this.dialog
+      .open<NewConnectionDialogComponent, NewConnectionDialogData, ConnectorDetail>(NewConnectionDialogComponent, { width: '720px', maxWidth: '95vw', data: { catalogId } })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((detail) => {
+        if (!detail) return;
+        this.loadServers()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe((servers) => {
+            this.servers.set(servers);
+            this.connectionChanged(nodeId, this.changeFor(nodeId, detail, servers));
+          });
+      });
+  }
+
+  /** Дія вузла лишається, якщо є в новому підключенні; інакше — його перша дія (аргументи скидаються). */
+  private changeFor(nodeId: string, detail: ConnectorDetail, servers: readonly PaletteServer[]): ConnectionChange {
+    const node = this.definition()?.nodes.find((n) => n.id === nodeId);
+    const tools = servers.find((s) => s.id === detail.summary.id)?.tools ?? detail.tools;
+    const keep = !node?.parameters?.['toolName'] || tools.length === 0 || tools.some((t) => t.name === node.parameters?.['toolName']);
+    return { serverId: detail.summary.id, tool: keep ? null : tools[0] };
+  }
+
   /** Зміна вузла з панелі. */
   protected nodeEdited(node: WorkflowNode): void {
     const def = this.definition();
@@ -2005,6 +2052,7 @@ export class WorkflowEditorComponent implements OnInit {
     return this.connectors.list().pipe(
       switchMap((page): Observable<PaletteServer[]> => {
         this.noConnectors.set(page.items.length === 0);
+        this.connectionList.set(page.items);
         const withTools = page.items.filter((c) => c.toolCount > 0);
         if (withTools.length === 0) return of([]);
         // Пресети тригерів (F6-21) — з каталогу; запит лише коли є конектори, встановлені з нього. Без каталогу — палітра без пресетів.
@@ -2028,6 +2076,19 @@ export class WorkflowEditorComponent implements OnInit {
       }),
     );
   }
+}
+
+/** Прибирає `resourceUri` вузла `mcp.subscribe`. */
+function clearResource(definition: WorkflowDefinition, nodeId: string): WorkflowDefinition {
+  return {
+    ...definition,
+    nodes: definition.nodes.map((n) => {
+      if (n.id !== nodeId) return n;
+      const parameters = { ...(n.parameters ?? {}) } as Record<string, unknown>;
+      delete parameters['resourceUri'];
+      return { ...n, parameters };
+    }),
+  };
 }
 
 /** Фокус ніде (`body`) або на канвасі: тоді `Tab` відкриває палітру, а не переводить фокус між кнопками. */

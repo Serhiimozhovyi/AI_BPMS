@@ -162,8 +162,8 @@ interface Connecting {
       </div>
     }
 
-    <ul class="grid gap-3 md:grid-cols-2" data-testid="catalog-list">
-      @for (e of entries(); track e.manifest.id) {
+    <ul class="grid gap-3 md:grid-cols-2" data-testid="catalog-list" [hidden]="autoBegin() && connecting() !== null">
+      @for (e of visibleEntries(); track e.manifest.id) {
         <li
           class="flex flex-col gap-2 rounded-lg border p-4"
           [class.border-ac-kit]="e.manifest.id === highlight()"
@@ -223,10 +223,18 @@ export class ConnectorCatalogComponent implements OnInit {
 
   /** Запис, який підсвітити (посилання з шаблону сценарію). */
   readonly highlight = input<string | null>(null);
+  /** Показати лише цей запис (діалог «Нове підключення» з панелі вузла, F3-95). */
+  readonly onlyId = input<string | null>(null);
+  /** Після завантаження одразу відкрити крок «Підключення» для `onlyId`. */
+  readonly autoBegin = input(false);
   /** Конектор встановлено (з обліковими даними або без них). */
   readonly installed = output<ConnectorDetail>();
 
   readonly entries = signal<ConnectorCatalogEntry[]>([]);
+  readonly visibleEntries = computed(() => {
+    const only = this.onlyId();
+    return only ? this.entries().filter((e) => e.manifest.id === only) : this.entries();
+  });
   readonly credentialTypes = signal<CredentialTypeInfo[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -279,6 +287,9 @@ export class ConnectorCatalogComponent implements OnInit {
         next: (list) => {
           this.entries.set(list);
           this.loading.set(false);
+          const only = this.onlyId();
+          const entry = this.autoBegin() && only ? list.find((e) => e.manifest.id === only) : undefined;
+          if (entry && this.canInstall()) this.begin(entry);
         },
         error: (e: unknown) => {
           this.error.set(apiErrorMessage(e));

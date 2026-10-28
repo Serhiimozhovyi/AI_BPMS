@@ -133,3 +133,23 @@ export function changeNodeTool(definition: WorkflowDefinition, nodeId: string, t
   const changed: WorkflowNode = { ...node, name, parameters: { ...node.parameters, toolName: tool.name, arguments: {} } };
   return { ...definition, nodes: definition.nodes.map((n) => (n.id === nodeId ? changed : n)) };
 }
+
+/**
+ * Інше підключення вузла `mcp.*` (F3-95): `serverId` змінюється, дія й `arguments` лишаються. Коли в новому підключенні
+ * такої дії немає, `tool` — дія на заміну: вона ставиться з порожніми `arguments` (`changeNodeTool`).
+ */
+export function changeNodeConnection(
+  definition: WorkflowDefinition,
+  nodeId: string,
+  serverId: string,
+  tool: McpToolInfo | null,
+  previous: McpToolInfo | null,
+): WorkflowDefinition {
+  const node = definition.nodes.find((n) => n.id === nodeId);
+  if (!node || node.parameters?.['serverId'] === serverId) return definition;
+  const moved: WorkflowDefinition = {
+    ...definition,
+    nodes: definition.nodes.map((n) => (n.id === nodeId ? { ...n, parameters: { ...n.parameters, serverId } } : n)),
+  };
+  return tool ? changeNodeTool(moved, nodeId, tool, previous) : moved;
+}
