@@ -1,0 +1,16 @@
+{
+  "id": "manual-greeting",
+  "description": "Процес запускається вручну: задати поле «привітання» і показати його в результаті.",
+  "expect": {
+    "trigger": [
+      "core.manualTrigger"
+    ],
+    "requireTypes": [
+      [
+        "core.set"
+      ]
+    ],
+    "minNodes": 2,
+    "maxNodes": 4
+  }
+}

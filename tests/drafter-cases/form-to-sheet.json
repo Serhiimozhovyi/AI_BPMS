@@ -1,0 +1,18 @@
+{
+  "id": "form-to-sheet",
+  "description": "Коли клієнт заповнює форму заявки на сайті, записати рядок у таблицю Google і повідомити менеджера в Telegram.",
+  "expect": {
+    "trigger": [
+      "core.formTrigger",
+      "core.webhook"
+    ],
+    "requireTypes": [
+      [
+        "mcp.tool",
+        "core.set"
+      ]
+    ],
+    "minNodes": 3,
+    "maxNodes": 8
+  }
+}

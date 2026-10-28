@@ -1,0 +1,17 @@
+{
+  "id": "webhook-order-1c",
+  "description": "Коли на вебхук приходить замовлення, створити замовлення в 1С і відповісти, що воно прийняте.",
+  "expect": {
+    "trigger": [
+      "core.webhook"
+    ],
+    "requireTypes": [
+      [
+        "mcp.tool",
+        "core.set"
+      ]
+    ],
+    "minNodes": 2,
+    "maxNodes": 8
+  }
+}

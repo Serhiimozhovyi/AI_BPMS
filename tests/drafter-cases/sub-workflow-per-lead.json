@@ -1,0 +1,16 @@
+{
+  "id": "sub-workflow-per-lead",
+  "description": "Для кожної нової заявки, що приходить на вебхук, запускати окремий сценарій «Обробка заявки».",
+  "expect": {
+    "trigger": [
+      "core.webhook"
+    ],
+    "requireTypes": [
+      [
+        "core.executeWorkflow"
+      ]
+    ],
+    "minNodes": 2,
+    "maxNodes": 5
+  }
+}

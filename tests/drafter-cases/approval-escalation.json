@@ -1,0 +1,20 @@
+{
+  "id": "approval-escalation",
+  "description": "Заявка на закупівлю йде на погодження керівнику. Якщо він не відповів протягом двох днів, заявка ескалюється директору. Після погодження закупівельник отримує завдання, у разі відмови автор заявки отримує повідомлення.",
+  "expect": {
+    "trigger": [
+      "core.formTrigger",
+      "core.webhook",
+      "core.manualTrigger"
+    ],
+    "requireTypes": [
+      [
+        "core.approval"
+      ]
+    ],
+    "minBranches": 1,
+    "minLanes": 2,
+    "minNodes": 5,
+    "maxNodes": 10
+  }
+}
