@@ -114,6 +114,98 @@ describe('ConnectorsPage', () => {
     expect(host.querySelector('[data-connector="c1"] [data-testid="status"]')?.textContent).toContain('Помилка');
   });
 
+  describe('видалення (F3-98)', () => {
+    const withCredential: ConnectorDetail = { ...detail, credentialId: 'cr1' };
+
+    it('кнопка в рядку питає підтвердження; «Ні» нічого не видаляє', async () => {
+      const { fixture, http, host } = await setup();
+      host.querySelector<HTMLButtonElement>('[data-connector="c1"] [data-testid="row-delete"]')!.click();
+      http.expectOne({ method: 'GET', url: '/api/v1/connectors/c1' }).flush(detail);
+      await render(fixture);
+
+      expect(host.querySelector('[data-testid="delete-confirm-box"]')?.textContent).toContain('«1С»');
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-cancel"]')!.click();
+      await render(fixture);
+      expect(host.querySelector('[data-testid="delete-confirm-box"]')).toBeNull();
+      http.expectNone({ method: 'DELETE' });
+    });
+
+    it('підтвердження видаляє підключення, прибирає його зі списку й закриває деталі', async () => {
+      const { fixture, http, host } = await setup();
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush(detail);
+      await render(fixture);
+
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.click();
+      await render(fixture);
+      expect(host.querySelector('[data-testid="delete-credential"]')).toBeNull();
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-confirm"]')!.click();
+      http.expectOne({ method: 'DELETE', url: '/api/v1/connectors/c1' }).flush(null, { status: 204, statusText: 'No Content' });
+      await render(fixture);
+
+      expect(host.querySelector('[data-connector="c1"]')).toBeNull();
+      expect(host.querySelector('[data-connector="c2"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="connector-detail"]')).toBeNull();
+    });
+
+    it('з прапорцем видаляє й облікові дані; якщо їх хтось використовує — підключення все одно видалене', async () => {
+      const { fixture, http, host } = await setup();
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush(withCredential);
+      await render(fixture);
+
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.click();
+      await render(fixture);
+      expect(host.querySelector('[data-testid="delete-credential"]')).not.toBeNull();
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-confirm"]')!.click();
+      http.expectOne({ method: 'DELETE', url: '/api/v1/connectors/c1' }).flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne({ method: 'DELETE', url: '/api/v1/credentials/cr1' }).flush(
+        { code: 'CREDENTIAL_IN_USE', detail: 'Облікові дані «Бот» використовують: конектор «Інший».' },
+        { status: 409, statusText: 'Conflict' },
+      );
+      await render(fixture);
+
+      expect(host.querySelector('[data-connector="c1"]')).toBeNull();
+    });
+
+    it('без прапорця облікові дані не чіпаються', async () => {
+      const { fixture, http, host } = await setup();
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush(withCredential);
+      await render(fixture);
+
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.click();
+      fixture.componentInstance.deleteCredential.set(false);
+      await render(fixture);
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-confirm"]')!.click();
+      http.expectOne({ method: 'DELETE', url: '/api/v1/connectors/c1' }).flush(null, { status: 204, statusText: 'No Content' });
+      await render(fixture);
+
+      http.expectNone({ method: 'DELETE', url: '/api/v1/credentials/cr1' });
+    });
+
+    it('409: підключення використовують активні сценарії — текст Api й порада, список лишається', async () => {
+      const { fixture, http, host } = await setup();
+      fixture.componentInstance.select('c1');
+      http.expectOne('/api/v1/connectors/c1').flush(detail);
+      await render(fixture);
+
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-button"]')!.click();
+      await render(fixture);
+      host.querySelector<HTMLButtonElement>('[data-testid="delete-confirm"]')!.click();
+      http.expectOne({ method: 'DELETE', url: '/api/v1/connectors/c1' }).flush(
+        { code: 'CONNECTOR_IN_USE', detail: 'Конектор «1С» використовують активні сценарії: «Замовлення».' },
+        { status: 409, statusText: 'Conflict' },
+      );
+      await render(fixture);
+
+      const error = host.querySelector('[data-testid="detail-error"]')!.textContent!;
+      expect(error).toContain('«Замовлення»');
+      expect(error).toContain('Деактивуйте');
+      expect(host.querySelector('[data-connector="c1"]')).not.toBeNull();
+    });
+  });
+
   it('«Додати MCP-сервер» відкриває форму; створений сервер зʼявляється у списку', async () => {
     const { fixture, host } = await setup([]);
     host.querySelector<HTMLButtonElement>('[data-testid="add-button"]')!.click();

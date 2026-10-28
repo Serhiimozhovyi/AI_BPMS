@@ -176,6 +176,11 @@ export class ConnectorsApiService {
     return this.http.post<ConnectorDetail>(`${this.base}/catalog/${encodeURIComponent(catalogId)}/install`, request);
   }
 
+  /** Видаляє підключення; 409 `CONNECTOR_IN_USE` — його використовують активні сценарії. */
+  delete(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${encodeURIComponent(id)}`);
+  }
+
   refreshTools(id: string): Observable<ConnectorDetail> {
     return this.http.post<ConnectorDetail>(`${this.base}/${encodeURIComponent(id)}/refresh-tools`, null);
   }
