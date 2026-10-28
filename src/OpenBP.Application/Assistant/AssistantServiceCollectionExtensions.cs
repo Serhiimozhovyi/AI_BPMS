@@ -50,6 +50,16 @@ public static class AssistantServiceCollectionExtensions
             sp.GetRequiredService<CredentialEncryptionKey>(),
             sp.GetRequiredService<LlmChat>(),
             sp.GetService<AssistantLimits>()));
+        services.AddScoped<IWorkflowDrafter>(sp => new WorkflowDrafter(
+            sp.GetRequiredService<ICurrentUser>(),
+            sp.GetRequiredService<IAssistantSettingsService>(),
+            sp.GetRequiredService<IWorkflowService>(),
+            sp.GetRequiredService<INodeService>(),
+            sp.GetRequiredService<IConnectorService>(),
+            sp.GetRequiredService<IDbContextFactory<OpenBpDbContext>>(),
+            sp.GetRequiredService<CredentialEncryptionKey>(),
+            sp.GetRequiredService<LlmChat>(),
+            sp.GetService<DrafterLimits>()));
         return services;
     }
 }
