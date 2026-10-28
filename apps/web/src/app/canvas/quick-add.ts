@@ -73,15 +73,28 @@ export function isTriggerItem(item: PaletteItem): boolean {
 export function quickAddSections(sections: readonly PaletteSection[], mode: QuickAddMode, recent: readonly string[] = []): PaletteSection[] {
   const allowed = (item: PaletteItem) => (mode === 'trigger') === isTriggerItem(item);
   const filtered = sections
-    .map((s) => ({ ...s, items: s.items.filter(allowed) }))
+    .map((s) => ({ ...s, items: s.items.flatMap((i) => forMode(i, mode, allowed)) }))
     .filter((s) => s.items.length > 0);
 
-  // Дії конекторів (F3-55) не показуються окремо, але потрапляють в «Останні», якщо їх обирали.
-  const byKey = new Map(filtered.flatMap((s) => s.items).flatMap((i) => [i, ...(i.actions ?? [])]).map((i) => [i.key, i]));
+  // Дії й події конекторів (F3-55, F3-96) відкриваються сторінкою конектора, але потрапляють в «Останні», якщо їх обирали.
+  const byKey = new Map(filtered.flatMap((s) => s.items).flatMap((i) => [i, ...(i.actions ?? []), ...(i.events ?? [])]).map((i) => [i.key, i]));
   const recentItems = recent.map((k) => byKey.get(k)).filter((i): i is PaletteItem => !!i);
   if (recentItems.length === 0) return filtered;
   const label = $localize`:@@canvas.quickAdd.recent:Останні`;
   return [{ id: RECENT_SECTION_ID, label, kind: 'core', items: recentItems }, ...filtered];
+}
+
+/**
+ * Елемент для режиму: звичайний — як є, якщо дозволений. Конектор — з подіями для тригера й з діями для кроку; без
+ * потрібного в режимі (подій чи дій) він не показується.
+ */
+function forMode(item: PaletteItem, mode: QuickAddMode, allowed: (item: PaletteItem) => boolean): PaletteItem[] {
+  const connector = item.connector;
+  if (!connector) return allowed(item) ? [item] : [];
+  if (mode === 'trigger') {
+    return connector.events.length === 0 ? [] : [{ ...item, actions: [], connector: { ...connector, actionGroups: [] } }];
+  }
+  return (item.actions ?? []).length === 0 ? [] : [{ ...item, events: [], connector: { ...connector, events: [] } }];
 }
 
 /** Ключ на початок списку «Останні» без повторів, не більше {@link RECENT_LIMIT}. */

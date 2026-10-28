@@ -783,6 +783,8 @@ export class WorkflowEditorComponent implements OnInit {
   private readonly servers = signal<PaletteServer[]>([]);
   /** Усі підключення зі списку (і без tools): поле «Підключення» панелі вузла. */
   private readonly connectionList = signal<ConnectorSummary[]>([]);
+  /** Каталог конекторів для палітри (F3-96): записи показуються й без підключення. */
+  private readonly catalog = signal<ConnectorCatalogEntry[]>([]);
   /** Облікові дані для вибору у вузлах (F4-03); `null` — недоступні (немає прав або помилка), поля лишаються текстовими. */
   protected readonly credentialOptions = signal<CredentialOption[] | null>(null);
   protected readonly selection = signal<CanvasSelection>(EMPTY_SELECTION);
@@ -833,7 +835,7 @@ export class WorkflowEditorComponent implements OnInit {
     (e) => this.failed.emit({ code: apiErrorCode(e), message: apiErrorMessage(e) }),
   );
 
-  protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers(), this.recent()));
+  protected readonly palette = computed(() => buildPalette(this.descriptors(), this.servers(), this.recent(), this.catalog()));
   protected readonly quickAddSections = computed(() => quickAddSections(this.palette(), this.quickAdd()?.mode ?? 'step', this.recent()));
   private readonly descriptorIndex = computed(() => new DescriptorIndex(this.descriptors()));
 
@@ -1136,10 +1138,50 @@ export class WorkflowEditorComponent implements OnInit {
   }
 
   protected add(item: PaletteItem): void {
-    const def = this.definition();
-    if (!def) return;
-    this.remember(item);
-    this.changed(addNode(def, item));
+    if (!this.definition()) return;
+    this.withConnection(item, (resolved) => {
+      const def = this.definition();
+      if (!def) return;
+      this.remember(resolved);
+      this.changed(addNode(def, resolved));
+    });
+  }
+
+  /**
+   * Дія чи подія конектора з каталогу (F3-96) отримує підключення: єдине; з кількох — останнє використане в цьому
+   * сценарії, інакше перше за назвою; без підключень — діалог «Нове підключення» (скасування — вузол не додається).
+   */
+  private withConnection(item: PaletteItem, then: (resolved: PaletteItem) => void): void {
+    if (item.serverId || !item.connectorId) {
+      then(item);
+      return;
+    }
+    const connections = this.connectionList()
+      .filter((c) => c.catalogId === item.connectorId)
+      .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+    if (connections.length > 0) {
+      const ids = new Set(connections.map((c) => c.id));
+      const used = [...(this.definition()?.nodes ?? [])].reverse().map((n) => n.parameters?.['serverId']).find((id): id is string => typeof id === 'string' && ids.has(id));
+      then({ ...item, serverId: used ?? connections[0].id });
+      return;
+    }
+    this.dialog
+      .open<NewConnectionDialogComponent, NewConnectionDialogData, ConnectorDetail>(NewConnectionDialogComponent, {
+        width: '720px',
+        maxWidth: '95vw',
+        data: { catalogId: item.connectorId },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((detail) => {
+        if (!detail) return;
+        this.loadServers()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe((servers) => {
+            this.servers.set(servers);
+            then({ ...item, serverId: detail.summary.id });
+          });
+      });
   }
 
   /** Канвас просить спливаючу палітру: «+» біля порту чи на ребрі, з'єднання відпущено в порожньому місці. */
@@ -1155,14 +1197,17 @@ export class WorkflowEditorComponent implements OnInit {
   /** Вибір у спливаючій палітрі: вузол туди, куди вказує ціль, і виділення на ньому. */
   protected quickPick(item: PaletteItem): void {
     const state = this.quickAdd();
-    const def = this.definition();
     this.closeQuickAdd();
-    if (!state || !def) return;
-    const result = applyQuickAdd(def, item, state.target);
-    if (!result) return;
-    this.remember(item);
-    this.changed(result.definition);
-    this.selection.set({ nodes: [result.nodeId], edges: [] });
+    if (!state || !this.definition()) return;
+    this.withConnection(item, (resolved) => {
+      const def = this.definition();
+      if (!def) return;
+      const result = applyQuickAdd(def, resolved, state.target);
+      if (!result) return;
+      this.remember(resolved);
+      this.changed(result.definition);
+      this.selection.set({ nodes: [result.nodeId], edges: [] });
+    });
   }
 
   /**
@@ -1547,7 +1592,13 @@ export class WorkflowEditorComponent implements OnInit {
     const serverId = String(node.parameters?.['serverId'] ?? '');
     const previous = this.servers().find((s) => s.id === serverId)?.tools.find((t) => t.name === node.parameters?.['toolName']) ?? null;
     this.changed(changeNodeTool(def, nodeId, tool, previous));
-    this.remember({ key: actionKey(serverId, tool.name) });
+    this.remember({ key: actionKey(this.connectorIdOf(serverId), tool.name) });
+  }
+
+  /** Id конектора підключення в палітрі: запис каталогу, якщо він є в каталозі, інакше id підключення. */
+  private connectorIdOf(serverId: string): string {
+    const catalogId = this.connectionList().find((c) => c.id === serverId)?.catalogId;
+    return catalogId && this.catalog().some((e) => e.manifest.id === catalogId) ? catalogId : serverId;
   }
 
   /** Інше підключення з панелі (F3-95): дія й `arguments` лишаються, якщо така дія є в новому підключенні. */
@@ -2047,27 +2098,23 @@ export class WorkflowEditorComponent implements OnInit {
       .subscribe((servers) => this.servers.set(servers));
   }
 
-  /** Конектори з закешованими tools; помилка не ламає редактор — палітра лишається з `core.*`. */
+  /**
+   * Конектори з закешованими tools і каталог (F3-96); помилка не ламає редактор — палітра лишається з `core.*`.
+   * Каталог недоступний (немає прав) — палітра показує лише встановлені конектори.
+   */
   private loadServers(): Observable<PaletteServer[]> {
-    return this.connectors.list().pipe(
-      switchMap((page): Observable<PaletteServer[]> => {
+    const catalog$ = this.connectors.catalog().pipe(
+      catchError(() => of([] as ConnectorCatalogEntry[])),
+      tap((catalog) => this.catalog.set(catalog)),
+    );
+    return forkJoin([this.connectors.list(), catalog$]).pipe(
+      switchMap(([page]): Observable<PaletteServer[]> => {
         this.noConnectors.set(page.items.length === 0);
         this.connectionList.set(page.items);
         const withTools = page.items.filter((c) => c.toolCount > 0);
         if (withTools.length === 0) return of([]);
-        // Пресети тригерів (F6-21) — з каталогу; запит лише коли є конектори, встановлені з нього. Без каталогу — палітра без пресетів.
-        const presets$ = withTools.some((c) => c.catalogId)
-          ? this.connectors.catalog().pipe(catchError(() => of([] as ConnectorCatalogEntry[])))
-          : of([] as ConnectorCatalogEntry[]);
-        return forkJoin([forkJoin(withTools.map((c) => this.connectors.get(c.id))), presets$]).pipe(
-          map(([details, catalog]) =>
-            details.map((d) => ({
-              id: d.summary.id,
-              name: d.summary.name,
-              tools: d.tools,
-              triggers: catalog.find((e) => e.manifest.id === d.summary.catalogId)?.manifest.triggers ?? [],
-            })),
-          ),
+        return forkJoin(withTools.map((c) => this.connectors.get(c.id))).pipe(
+          map((details) => details.map((d): PaletteServer => ({ id: d.summary.id, name: d.summary.name, tools: d.tools, catalogId: d.summary.catalogId ?? null }))),
         );
       }),
       catchError((e: unknown) => {

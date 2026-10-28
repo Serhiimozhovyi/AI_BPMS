@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { PaletteItem, PaletteSection, filterPalette, itemHint, itemTitle } from './palette';
+import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, itemHint, itemTitle } from './palette';
 
 /** Ключ `localStorage` зі станом згортання секцій: `{ [sectionId]: true — згорнута, false — розгорнута }`. */
 export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
@@ -17,12 +17,30 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
   imports: [MatFormFieldModule, MatInputModule],
   template: `
     <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
-      <mat-label i18n="@@canvas.palette.search">Пошук вузла</mat-label>
+      <mat-label>{{ page() ? searchActionLabel : searchLabel }}</mat-label>
       <input matInput type="search" data-testid="palette-search" [value]="query()" (input)="search($event)" />
     </mat-form-field>
+    @if (page(); as p) {
+      <div class="palette__page" data-testid="palette-page" [attr.data-connector]="p.connectorId">
+        <button type="button" class="palette__back" data-testid="palette-back" (click)="back()">
+          <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+          <span i18n="@@canvas.palette.back">Назад</span>
+        </button>
+        <h2 class="palette__page-title">
+          @if (p.connector?.icon) {
+            <span aria-hidden="true">{{ p.connector?.icon }}</span>
+          }
+          <span>{{ p.label }}</span>
+        </h2>
+        <p class="palette__page-note" data-testid="palette-page-state">{{ hint(p) }}</p>
+        @if (!p.connector?.connected) {
+          <p class="palette__page-note" data-testid="palette-page-connect" i18n="@@canvas.palette.connectOnAdd">Підключення створиться, коли ви додасте дію чи подію.</p>
+        }
+      </div>
+    }
     @for (section of visible(); track section.id) {
       <section class="palette__section" [attr.data-section]="section.id">
-        @let open = query().trim() !== '' || !isCollapsed(section);
+        @let open = !!page() || query().trim() !== '' || !isCollapsed(section);
         <h2 class="palette__heading">
           <button
             type="button"
@@ -44,16 +62,16 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
             class="palette__item"
             [attr.data-item]="item.key"
             [title]="tip(item)"
-            (click)="pick.emit(item)"
+            (click)="choose(item)"
           >
-            <span class="palette__label">{{ item.label }}</span>
+            <span class="palette__label">{{ page() ? (item.nodeName ?? item.label) : item.label }}</span>
             <span class="palette__type">{{ hint(item) }}</span>
           </button>
         }
         </div>
       </section>
     } @empty {
-      <p class="palette__empty" data-testid="palette-empty" i18n="@@canvas.palette.empty">Нічого не знайдено</p>
+      <p class="palette__empty" data-testid="palette-empty">{{ page() && query().trim() === '' ? noActions : nothingFound }}</p>
     }
   `,
   styles: `
@@ -142,6 +160,40 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
       opacity: 0.6;
     }
 
+    .palette__page {
+      margin-top: 8px;
+    }
+
+    .palette__back {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px 2px 0;
+      border: 0;
+      background: none;
+      color: var(--ac-kit);
+      font: 500 13px/20px Ubuntu, sans-serif;
+      cursor: pointer;
+    }
+
+    .palette__back .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    .palette__page-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 0 0;
+      font: 500 16px/24px Ubuntu, sans-serif;
+    }
+
+    .palette__page-note {
+      margin: 2px 0 0;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
     .palette__empty {
       margin-top: 12px;
       opacity: 0.7;
@@ -157,7 +209,21 @@ export class PaletteComponent {
 
   protected readonly query = signal('');
 
-  protected readonly visible = computed(() => filterPalette(this.sections(), this.query()));
+  /** Відкрита сторінка конектора (F3-96); `null` — корінь палітри. */
+  protected readonly page = computed(() => {
+    const key = this.pageKey();
+    return key ? (this.sections().flatMap((s) => s.items).find((i) => i.key === key && i.connector) ?? null) : null;
+  });
+  private readonly pageKey = signal<string | null>(null);
+
+  protected readonly visible = computed(() => {
+    const page = this.page();
+    return page ? filterPalette(connectorPageSections(page), this.query()) : filterPalette(this.sections(), this.query());
+  });
+  protected readonly searchLabel = $localize`:@@canvas.palette.search:Пошук вузла`;
+  protected readonly searchActionLabel = $localize`:@@canvas.palette.searchAction:Пошук дії`;
+  protected readonly nothingFound = $localize`:@@canvas.palette.empty:Нічого не знайдено`;
+  protected readonly noActions = $localize`:@@canvas.palette.noActions:Дій і подій поки немає: вони з'являться після підключення конектора.`;
   protected readonly hint = itemHint;
   protected readonly tip = itemTitle;
 
@@ -177,6 +243,21 @@ export class PaletteComponent {
     } catch {
       // Сховище недоступне (приватний режим) — стан живе до перезавантаження.
     }
+  }
+
+  /** Конектор відкриває свою сторінку, дія чи подія додається вузлом. */
+  protected choose(item: PaletteItem): void {
+    if (item.connector) {
+      this.pageKey.set(item.key);
+      this.query.set('');
+      return;
+    }
+    this.pick.emit(item);
+  }
+
+  protected back(): void {
+    this.pageKey.set(null);
+    this.query.set('');
   }
 
   protected search(event: Event): void {

@@ -1,6 +1,7 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpInterceptorFn, HttpResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { provideRouter } from '@angular/router';
 import { CanvasComponent } from '../canvas/canvas.component';
 import { SAMPLE_DESCRIPTORS } from '../canvas/sample-workflows';
@@ -37,11 +38,18 @@ const detail1c: ConnectorDetail = {
   tools: [{ name: 'create_order', inputSchema: { type: 'object' } }],
 };
 
+/** Каталог конекторів палітри (F3-96) тестам редактора зазвичай не цікавий: відповідь підставляє перехоплювач. */
+let catalogBody: unknown[] = [];
+const catalogStub: HttpInterceptorFn = (req, next) =>
+  req.url === '/api/v1/connectors/catalog' ? of(new HttpResponse({ status: 200, body: catalogBody })) : next(req);
+
 describe('WorkflowEditorComponent', () => {
+  beforeEach(() => (catalogBody = []));
+
   function setup() {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withInterceptors([catalogStub])),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: EVENT_SOURCE_FACTORY, useValue: (url: string) => new FakeEventSource(url) },
@@ -105,27 +113,31 @@ describe('WorkflowEditorComponent', () => {
     await vi.waitFor(() => expect(document.activeElement?.closest('[data-field="customer"]')).not.toBeNull());
   });
 
-  it('палітра отримує пресети тригерів із каталогу для конекторів, встановлених з нього (F6-21)', async () => {
-    const { fixture, http } = setup();
-    http.expectOne('/api/v1/workflows/w1').flush(workflow);
-    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+  it('палітра будує конектор із каталогу: події з пресетів і дії встановленого підключення (F6-21, F3-96)', async () => {
     const installed = { ...withTools, name: 'Telegram', catalogId: 'telegram' };
-    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [installed], page: 1, pageSize: 200, total: 1 });
-    http.expectOne('/api/v1/connectors/c1').flush({ ...detail1c, summary: installed });
-    http.expectOne('/api/v1/connectors/catalog').flush([
+    catalogBody = [
       {
         manifest: {
           id: 'telegram',
+          name: 'Telegram',
+          description: 'Бот.',
+          transport: 'stdio',
           triggers: [{ id: 'new_update', title: 'Нове повідомлення Telegram', node: { type: 'mcp.poll', parameters: { toolName: 'get_updates', keyField: 'update_id', cron: '*/1 * * * *' } } }],
         },
         source: 'builtin',
         installed: [installed],
       },
-    ]);
+    ];
+    const { fixture, http } = setup();
+    http.expectOne('/api/v1/workflows/w1').flush(workflow);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    http.expectOne((r) => r.url === '/api/v1/connectors').flush({ items: [installed], page: 1, pageSize: 200, total: 1 });
+    http.expectOne('/api/v1/connectors/c1').flush({ ...detail1c, summary: installed });
     await render(fixture);
 
-    const palette = (fixture.componentInstance as unknown as { palette(): { id: string; items: { key: string }[] }[] }).palette();
-    expect(palette.find((s) => s.id === 'trigger-presets')?.items.map((i) => i.key)).toEqual(['trigger:c1/new_update']);
+    const palette = (fixture.componentInstance as unknown as { palette(): { id: string; items: { key: string; events?: { key: string }[] }[] }[] }).palette();
+    expect(palette.find((s) => s.id === 'connectors')?.items.map((i) => i.key)).toEqual(['connector:telegram']);
+    expect(palette.find((s) => s.id === 'connectors')?.items[0].events?.map((e) => e.key)).toEqual(['trigger:telegram/new_update']);
   });
 
   async function loaded(detail: WorkflowDetail = workflow) {
@@ -209,7 +221,7 @@ describe('WorkflowEditorComponent', () => {
     expect(link.getAttribute('href')).toBe('/executions?workflowId=w1');
   });
 
-  it('клік по конектору в палітрі додає вузол mcp.tool з дією за замовчуванням', async () => {
+  it('конектор у палітрі → сторінка → дія додає вузол mcp.tool з підключенням', async () => {
     const { fixture, http, host } = setup();
     http.expectOne('/api/v1/workflows/w1').flush(workflow);
     http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
@@ -217,6 +229,8 @@ describe('WorkflowEditorComponent', () => {
     await render(fixture);
 
     (host.querySelector('[data-item="connector:c1"]') as HTMLButtonElement).click();
+    await render(fixture);
+    (host.querySelector('[data-item="c1/create_order"]') as HTMLButtonElement).click();
     await render(fixture);
 
     const nodes = canvasNodes(fixture);
