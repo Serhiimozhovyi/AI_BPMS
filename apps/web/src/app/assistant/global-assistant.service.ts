@@ -45,6 +45,19 @@ export function contextFromUrl(url: string): AssistantPageContext {
   return context;
 }
 
+const WORKFLOW_UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/** Сценарій, який застосована пропозиція змінила (редактор цього сценарію має перечитати його з Api). */
+export function changedWorkflowId(proposal: AssistantProposalView): string | null {
+  if (proposal.status !== 'applied') return null;
+  if (proposal.tool !== 'update_workflow' && proposal.tool !== 'publish_workflow' && proposal.tool !== 'move_workflow') return null;
+  for (const key of ['id', 'workflowId']) {
+    const value = proposal.arguments[key];
+    if (typeof value === 'string' && WORKFLOW_UUID.test(value)) return value;
+  }
+  return null;
+}
+
 /**
  * Загальний помічник (F3-110): стан панелі на кожній сторінці — відкрита, список розмов, поточна розмова й її рядки.
  * Живе в корені, тож розмова не губиться при переході між сторінками. Повідомлення йдуть у `/assistant/conversations`
@@ -68,6 +81,9 @@ export class GlobalAssistantService {
   readonly lines = signal<GlobalChatLine[]>([]);
   readonly proposals = signal<AssistantProposalView[]>([]);
   readonly busy = signal(false);
+  /** Остання застосована пропозиція, що змінила збережений сценарій: редактор цього сценарію перечитує його (F3-115). */
+  readonly workflowChanged = signal<{ workflowId: string; seq: number } | null>(null);
+  private changeSeq = 0;
   /** Пропозиції, рішення щодо яких зараз надсилається. */
   readonly deciding = signal<string[]>([]);
   /** Api відповів, що модель не вибрана (409 `ASSISTANT_NOT_CONFIGURED`). */
@@ -195,6 +211,8 @@ export class GlobalAssistantService {
       next: (proposal) => {
         this.proposals.update((list) => list.map((p) => (p.id === proposal.id ? proposal : p)));
         this.deciding.update((list) => list.filter((p) => p !== proposalId));
+        const workflowId = changedWorkflowId(proposal);
+        if (workflowId) this.workflowChanged.set({ workflowId, seq: ++this.changeSeq });
       },
       error: (e: unknown) => {
         this.deciding.update((list) => list.filter((p) => p !== proposalId));
