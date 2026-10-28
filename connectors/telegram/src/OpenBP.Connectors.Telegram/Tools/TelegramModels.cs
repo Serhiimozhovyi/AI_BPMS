@@ -10,6 +10,9 @@ namespace OpenBP.Connectors.Telegram.Tools;
 /// <param name="Caption">Підпис до файлу.</param>
 /// <param name="Document">Надісланий документ.</param>
 /// <param name="Photo">Розміри надісланого фото (від меншого до більшого).</param>
+/// <param name="Video">Надіслане відео.</param>
+/// <param name="Audio">Надіслане аудіо (музика, подкаст).</param>
+/// <param name="Voice">Надіслане голосове повідомлення.</param>
 public sealed record TelegramMessage(
     [property: JsonPropertyName("message_id")] long MessageId,
     [property: JsonPropertyName("chat")] TelegramChat Chat,
@@ -17,7 +20,10 @@ public sealed record TelegramMessage(
     [property: JsonPropertyName("text")] string? Text = null,
     [property: JsonPropertyName("caption")] string? Caption = null,
     [property: JsonPropertyName("document")] TelegramDocument? Document = null,
-    [property: JsonPropertyName("photo")] IReadOnlyList<TelegramPhotoSize>? Photo = null);
+    [property: JsonPropertyName("photo")] IReadOnlyList<TelegramPhotoSize>? Photo = null,
+    [property: JsonPropertyName("video")] TelegramMedia? Video = null,
+    [property: JsonPropertyName("audio")] TelegramMedia? Audio = null,
+    [property: JsonPropertyName("voice")] TelegramMedia? Voice = null);
 
 /// <summary>Розмір фото в повідомленні.</summary>
 /// <param name="FileId">Ідентифікатор файлу в Telegram.</param>
@@ -53,6 +59,19 @@ public sealed record TelegramDocument(
     [property: JsonPropertyName("file_name")] string? FileName = null,
     [property: JsonPropertyName("mime_type")] string? MimeType = null,
     [property: JsonPropertyName("file_size")] long? FileSize = null);
+
+/// <summary>Відео, аудіо чи голосове в повідомленні.</summary>
+/// <param name="FileId">Id файлу в Telegram (годиться для повторного надсилання).</param>
+/// <param name="FileName">Назва (є не завжди: у голосових немає).</param>
+/// <param name="MimeType">MIME-тип.</param>
+/// <param name="FileSize">Розмір, байт.</param>
+/// <param name="Duration">Тривалість, секунд.</param>
+public sealed record TelegramMedia(
+    [property: JsonPropertyName("file_id")] string FileId,
+    [property: JsonPropertyName("file_name")] string? FileName = null,
+    [property: JsonPropertyName("mime_type")] string? MimeType = null,
+    [property: JsonPropertyName("file_size")] long? FileSize = null,
+    [property: JsonPropertyName("duration")] int? Duration = null);
 
 /// <summary>Результат методів Bot API, що повертають <c>true</c>.</summary>
 /// <param name="Ok">Завжди <c>true</c> (помилка — <c>isError</c>).</param>

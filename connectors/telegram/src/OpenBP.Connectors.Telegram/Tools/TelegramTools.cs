@@ -237,63 +237,6 @@ public sealed partial class TelegramTools(BotApiClient api)
             _ => false,
         };
 
-    /// <summary><c>send_document</c> → <c>sendDocument</c>: за URL або вмістом base64.</summary>
-    /// <param name="chat_id">Чат.</param>
-    /// <param name="document_url">URL файлу (Telegram завантажить його сам).</param>
-    /// <param name="document_base64">Вміст файлу в base64.</param>
-    /// <param name="file_name">Назва файлу для base64.</param>
-    /// <param name="caption">Підпис.</param>
-    /// <param name="ct">Скасування.</param>
-    [McpServerTool(Name = "send_document", Title = "Send document", UseStructuredContent = true, Destructive = false, OpenWorld = true)]
-    [Description("Sends a file to a Telegram chat, either by public URL (document_url) or as base64 content (document_base64). Returns the sent message.")]
-    public Task<TelegramMessage> SendDocument(
-        [Description(ChatIdDescription)] JsonElement chat_id,
-        [Description("Public HTTP URL of the file; Telegram downloads it. Use this or document_base64.")] string? document_url = null,
-        [Description("File content in base64 (up to 50 MB). Use this or document_url.")] string? document_base64 = null,
-        [Description("File name for document_base64, e.g. report.pdf.")] string? file_name = null,
-        [Description("Optional caption, 0-1024 characters.")] string? caption = null,
-        CancellationToken ct = default) =>
-        Call(() =>
-        {
-            var chat = ChatId(chat_id);
-            if (string.IsNullOrWhiteSpace(document_url) == string.IsNullOrWhiteSpace(document_base64))
-            {
-                throw new ConnectorException("Задайте рівно один з аргументів document_url або document_base64.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(document_url))
-            {
-                return api.CallAsync<TelegramMessage>(
-                    "sendDocument",
-                    new Dictionary<string, object?> { ["chat_id"] = chat, ["document"] = document_url, ["caption"] = caption },
-                    ct);
-            }
-
-            byte[] bytes;
-            try
-            {
-                bytes = Convert.FromBase64String(document_base64!);
-            }
-            catch (FormatException)
-            {
-                throw new ConnectorException("document_base64 — некоректний base64.");
-            }
-
-            var form = new MultipartFormDataContent
-            {
-                { new StringContent(chat is string s ? s : ((JsonElement)chat).GetRawText()), "chat_id" },
-            };
-            var file = new ByteArrayContent(bytes);
-            file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            form.Add(file, "document", string.IsNullOrWhiteSpace(file_name) ? "document" : file_name);
-            if (!string.IsNullOrEmpty(caption))
-            {
-                form.Add(new StringContent(caption), "caption");
-            }
-
-            return api.CallAsync<TelegramMessage>("sendDocument", form, ct);
-        });
-
     /// <summary>Найбільший розмір фото в base64 після розкодування (ліміт Bot API для <c>sendPhoto</c>), байтів.</summary>
     public const int MaxPhotoBytes = 10 * 1024 * 1024;
 

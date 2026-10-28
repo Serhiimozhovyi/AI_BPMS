@@ -93,6 +93,10 @@ public class ConnectorCatalogTests(ApiFactory api)
         var photo = Assert.Single(telegram, a => a.GetProperty("name").GetString() == "send_photo");
         Assert.Equal("Надіслати фото", photo.GetProperty("title").GetString());
         Assert.Contains(telegram, a => a.GetProperty("name").GetString() == "send_message");
+        foreach (var name in new[] { "send_document", "send_video", "send_audio", "send_voice" })
+        {
+            Assert.Contains(telegram, a => a.GetProperty("name").GetString() == name);
+        }
     }
 
     [Theory]
