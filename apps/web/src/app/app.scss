@@ -166,6 +166,19 @@
   margin-left: auto;
 }
 
+// Кнопка загального помічника (F3-110): на десктопі після блоку користувача; на телефоні — перед бургером.
+.shell-top .shell-assistant--mobile {
+  margin-left: auto;
+
+  + .shell-burger {
+    margin-left: 0;
+  }
+}
+
+.shell-assistant[aria-pressed='true'] {
+  background: var(--ac-kit);
+}
+
 // Банер «Немає зв'язку із сервером» (F3-84).
 .shell-offline {
   display: flex;

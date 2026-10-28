@@ -271,6 +271,33 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     expect(host.querySelector('.shell-nav')).not.toBeNull();
   });
 
+  it('кнопка загального помічника в шапці (F3-110): відкриває панель; для viewer і на публічній формі її немає', async () => {
+    configureMobile(false);
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="global-assistant"]')).toBeNull();
+    host.querySelector<HTMLButtonElement>('[data-testid="global-assistant-toggle"]')!.click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="global-assistant"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="global-assistant-toggle"]')?.getAttribute('aria-pressed')).toBe('true');
+
+    TestBed.inject(AuthService).user.set({ id: 'u2', email: 'v@firma.ua', role: 'viewer' });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="global-assistant-toggle"]')).toBeNull();
+    expect(host.querySelector('[data-testid="global-assistant"]')).toBeNull();
+  });
+
+  it('на телефоні кнопка помічника — поруч із бургером', async () => {
+    configureMobile(true);
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const toggle = host.querySelector<HTMLButtonElement>('[data-testid="global-assistant-toggle"]')!;
+    expect(toggle.classList).toContain('shell-assistant--mobile');
+    expect(toggle.nextElementSibling?.getAttribute('data-testid')).toBe('nav-burger');
+  });
+
   it('банер «Немає зв’язку» з «Повторити» з’являється, коли Api недоступний', async () => {
     configure();
     const fixture = TestBed.createComponent(App);

@@ -50,6 +50,23 @@
         </button>
       </div>
 </ng-template>
+<ng-template #assistantButton let-mobile="mobile">
+  @if (assistant.available()) {
+    <button
+      type="button"
+      class="shell-icon-button shell-assistant"
+      [class.shell-assistant--mobile]="mobile"
+      data-testid="global-assistant-toggle"
+      [attr.aria-pressed]="assistant.open()"
+      title="Помічник"
+      i18n-title="@@app.assistant.title"
+      (click)="assistant.toggle()"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+      <span class="sr-only" i18n="@@app.assistant">Помічник</span>
+    </button>
+  }
+</ng-template>
 <ng-template #navLinks>
 @if (appOnly(); as ap) {
       <a class="shell-nav__link" data-testid="nav-app" [routerLink]="['/projects', ap.id, 'app']" routerLinkActive="active">
@@ -103,6 +120,7 @@
     </a>
     @if (user()) {
       @if (mobile()) {
+        <ng-container *ngTemplateOutlet="assistantButton; context: { mobile: true }" />
         <button type="button" class="shell-icon-button shell-burger" data-testid="nav-burger" aria-controls="shell-drawer" [attr.aria-expanded]="drawerOpen()" title="Меню" i18n-title="@@app.menu" (click)="toggleDrawer()">
           <span class="material-symbols-outlined" aria-hidden="true">menu</span>
           <span class="sr-only" i18n="@@app.menu">Меню</span>
@@ -110,6 +128,7 @@
       } @else {
         <ng-container *ngTemplateOutlet="projectBlock" />
         <ng-container *ngTemplateOutlet="userBlock" />
+        <ng-container *ngTemplateOutlet="assistantButton; context: { mobile: false }" />
       }
     }
   </mat-toolbar>
@@ -137,3 +156,6 @@
 <main>
   <router-outlet />
 </main>
+@if (!bare()) {
+  <app-global-assistant />
+}
