@@ -7,22 +7,29 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using OpenBP.Application.Assistant;
+using OpenBP.Application.Auth;
 
 namespace OpenBP.Mcp.Server;
 
 /// <summary>
 /// Інструменти загального помічника (F3-108) — MCP-сервер OpenBP у процесі: той самий набір tools, фільтр помилок і права,
 /// що й <c>/mcp</c>, через пару каналів у пам'яті. Сервер отримує провайдер сервісів запиту, тож tools діють від імені
-/// користувача, який говорить з помічником.
+/// користувача, який говорить з помічником. Сервер запускається з позначкою <see cref="AssistantCall"/> (F3-113): сервіси
+/// не віддають значень чутливих колонок, аудит позначає зміни «через помічника». Помічнику дістаються лише інструменти,
+/// доступні ролі користувача (<see cref="AssistantCall.MinimumRole"/>); інші не видно й не викликаються.
 /// </summary>
 /// <param name="options">Налаштування MCP-сервера з <see cref="McpServerSetup.AddOpenBpMcpServer"/>.</param>
 /// <param name="services">Сервіси поточного запиту.</param>
 /// <param name="loggers">Логи.</param>
-public sealed class McpAssistantToolbox(IOptions<McpServerOptions> options, IServiceProvider services, ILoggerFactory loggers) : IAssistantToolbox
+/// <param name="currentUser">Користувач запиту.</param>
+public sealed class McpAssistantToolbox(IOptions<McpServerOptions> options, IServiceProvider services, ILoggerFactory loggers, ICurrentUser currentUser)
+    : IAssistantToolbox
 {
     /// <inheritdoc />
     public async Task<IAssistantToolSession> OpenAsync(CancellationToken ct)
     {
+        // Позначка до створення транспорту й сервера: їхні задачі успадковують її, а потік запиту — ні (повертається в Dispose).
+        using var via = AssistantCall.Enter();
         var toServer = new Pipe();
         var toClient = new Pipe();
         var stop = new CancellationTokenSource();
@@ -37,7 +44,8 @@ public sealed class McpAssistantToolbox(IOptions<McpServerOptions> options, ISer
                 loggers,
                 ct).ConfigureAwait(false);
             var tools = await client.ListToolsAsync(cancellationToken: ct).ConfigureAwait(false);
-            return new Session(client, server, running, stop, [.. tools.Select(ToInfo)]);
+            var role = currentUser.Role;
+            return new Session(client, server, running, stop, [.. tools.Select(ToInfo).Where(t => role >= AssistantCall.MinimumRole(t))]);
         }
         catch
         {
@@ -62,6 +70,13 @@ public sealed class McpAssistantToolbox(IOptions<McpServerOptions> options, ISer
         public async Task<AssistantToolResult> CallAsync(string name, JsonObject arguments, CancellationToken ct)
         {
             ArgumentNullException.ThrowIfNull(arguments);
+            if (!tools.Any(t => t.Name == name))
+            {
+                // Недоступний за роллю інструмент не викликається навіть з уже збереженої пропозиції.
+                var refused = new JsonObject { ["error"] = "unknown_tool", ["message"] = $"Інструмент «{name}» помічнику недоступний." };
+                return new AssistantToolResult(true, refused, refused.ToJsonString(McpJson.Options));
+            }
+
             var request = new CallToolRequestParams
             {
                 Name = name,

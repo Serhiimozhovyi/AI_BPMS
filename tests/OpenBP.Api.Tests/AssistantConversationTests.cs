@@ -235,4 +235,68 @@ public class AssistantConversationTests(ApiFactory api)
         Assert.Equal(HttpStatusCode.NoContent, (await author.DeleteAsync($"{Conversations}/{id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await author.GetAsync($"{Conversations}/{id}")).StatusCode);
     }
+
+    [Fact]
+    public async Task Sensitive_values_and_secrets_never_reach_the_model_and_changes_are_audited_as_assistant()
+    {
+        const string Phone = "+380501112233";
+        const string Secret = "sk-very-secret-token-113";
+        var editor = await LoginAsync(api, UserRole.Editor);
+        var admin = await LoginAsync(api, ApiFactory.AdminEmail, ApiFactory.AdminPassword);
+        await api.CreateCredentialAsync("bearer", new JsonObject { ["token"] = Secret });
+        var created = await editor.PostAsJsonAsync("/api/v1/tables", new
+        {
+            name = $"Клієнти {Guid.NewGuid():N}",
+            columns = new object[] { new { name = "name", type = "string" }, new { name = "phone", type = "string", sensitive = true } },
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var tableId = (await JsonAsync(created)).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.Created, (await editor.PostAsJsonAsync($"/api/v1/tables/{tableId}/rows", new { values = new { name = "Олена", phone = Phone } })).StatusCode);
+
+        var newTable = $"Нотатки {Guid.NewGuid():N}";
+        var provider = new FakeProvider(i => i switch
+        {
+            1 => ToolCall("query_table", new JsonObject { ["table"] = tableId.ToString() }, i),
+            2 => ToolCall("describe_connectors", [], i),
+            3 => ToolCall("create_table", new JsonObject { ["name"] = newTable, ["columns"] = new JsonArray(new JsonObject { ["name"] = "text", ["type"] = "string" }) }, i),
+            _ => Text("Готово."),
+        });
+        var factory = WithProvider(provider);
+        await ConfigureAsync(factory);
+        var client = await LoginAsync(factory, (await api.CreateUserAsync(UserRole.Editor, Pass)).Email, Pass);
+        var id = await CreateConversationAsync(client);
+        var events = await SendAsync(client, id, new { message = "Покажи клієнтів і створи таблицю нотаток" });
+        Assert.True(events[0].Data.GetProperty("ok").GetBoolean());
+
+        // Значення чутливої колонки — null у результаті інструмента; ні його, ні секретів немає в жодному запиті до моделі.
+        var toolResult = JsonNode.Parse(provider.Requests.ElementAt(1))!["messages"]!.AsArray().Last()!["content"]!.ToString();
+        var row = JsonNode.Parse(toolResult)!["rows"]![0]!["data"]!;
+        Assert.Equal("Олена", (string?)row["name"]);
+        Assert.Null(row["phone"]);
+        Assert.All(provider.Requests, body =>
+        {
+            Assert.DoesNotContain(Phone, body, StringComparison.Ordinal);
+            Assert.DoesNotContain(Secret, body, StringComparison.Ordinal);
+            Assert.DoesNotContain("sk-test", body, StringComparison.Ordinal);
+        });
+        Assert.DoesNotContain(Phone, await client.GetStringAsync($"{Conversations}/{id}"), StringComparison.Ordinal);
+
+        // Читання через помічника не пише dataTable.sensitiveRead — значень він не отримав.
+        var reads = await JsonAsync(await admin.GetAsync($"/api/v1/audit?action=dataTable.sensitiveRead&entityId={tableId}"));
+        Assert.Equal(0, reads.GetProperty("items").GetArrayLength());
+
+        // Застосована пропозиція — в аудиті з позначкою «через помічника»; зміна з REST — без неї.
+        var conversation = JsonDocument.Parse(await client.GetStringAsync($"{Conversations}/{id}")).RootElement;
+        var proposalId = conversation.GetProperty("proposals")[0].GetProperty("id").GetGuid();
+        var applied = await JsonAsync(await client.PostAsJsonAsync($"{Conversations}/{id}/proposals/{proposalId}", new { apply = true }));
+        Assert.Equal("applied", applied.GetProperty("status").GetString());
+        var newId = JsonNode.Parse(applied.GetProperty("result").GetString()!)!["table"]!["id"]!.ToString();
+        var viaAssistant = await JsonAsync(await admin.GetAsync($"/api/v1/audit?action=dataTable.created&entityId={newId}"));
+        Assert.Equal("assistant", viaAssistant.GetProperty("items")[0].GetProperty("details").GetProperty("via").GetString());
+        var direct = await JsonAsync(await admin.GetAsync($"/api/v1/audit?action=dataTable.created&entityId={tableId}"));
+        Assert.False(direct.GetProperty("items")[0].GetProperty("details").TryGetProperty("via", out _));
+
+        // Поза помічником editor і далі бачить значення.
+        Assert.Contains(Phone, await editor.GetStringAsync($"/api/v1/tables/{tableId}/rows"), StringComparison.Ordinal);
+    }
 }

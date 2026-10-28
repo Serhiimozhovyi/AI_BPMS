@@ -273,6 +273,16 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
   `cooldown_sec` на ключ `подія:subject`. Пошта й Telegram ідуть через `ConnectorService.CallToolAsync` від імені
   системи, вебхук — POST JSON з заголовками з credential (`headers`). У `details` — лише назви, id, статус і текст
   помилки (вже після scrubbing'у). Розіслані сповіщення старші за `OPENBP_EXECUTION_RETENTION_DAYS` видаляє job F4-07.
+- Загальний помічник (F3-113, §10.9): інструменти MCP у процесі працюють з позначкою `AssistantCall` (AsyncLocal, ставить
+  `McpAssistantToolbox` до запуску сервера). За нею `ProjectScope.CanReadSensitive` — `false`, тож значення колонок
+  `sensitive` у відповіді інструментів `null` для будь-якої ролі й `dataTable.sensitiveRead` не пишеться: модель їх не
+  отримує. Credentials помічник бачить лише як назви й типи (значень не віддає жоден tool), ключ моделі — лише в заголовку
+  запиту до провайдера. Кожна зміна, застосована з пропозиції, пишеться в `audit_log` від імені автора з `details.via =
+  "assistant"` (у «Налаштування → Журнал» — «через помічника»). Інструменти за роллю: читання — viewer, зміни — editor
+  (`AssistantCall.MinimumRole`); недоступний tool моделі не показується, і виклик його (зокрема зі старої пропозиції)
+  повертає `unknown_tool` без виконання. Дій лише для admin (конектори, credentials, користувачі, ключі, змінні) серед
+  tools немає. Ліміти: 20 кроків інструментів і 120 с на повідомлення, 8000 символів повідомлення, 12 000 символів
+  результату інструмента для моделі, 300 збережених і 40 переданих моделі реплік.
 - `GET /metrics` (Prometheus text 0.0.4) в Api і на порту health воркера: без `OPENBP_METRICS_ALLOW_ANONYMOUS=true`
   лише з API-ключем admin'а (або сесією admin'а в Api); у метриках лише лічильники, id і назви сценаріїв.
 

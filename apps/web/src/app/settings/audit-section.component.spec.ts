@@ -33,6 +33,7 @@ describe('auditSummary і auditActionLabel', () => {
     expect(auditSummary(saved)).toBe('«Звіт» · версія 3');
     expect(auditSummary({ details: { name: 'Ключ', fields: ['apiKey'] } })).toBe('«Ключ» · поля: apiKey');
     expect(auditSummary(breaker)).toContain('5');
+    expect(auditSummary({ details: { name: 'Нотатки', via: 'assistant' } })).toBe('«Нотатки» · через помічника');
     expect(auditActionLabel('credential.replaced')).toBe('значення замінено');
     expect(auditActionLabel('custom')).toBe('custom');
   });

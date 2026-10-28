@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpenBP.Application.Assistant;
 using OpenBP.Application.Errors;
 using OpenBP.Data;
 
@@ -166,8 +167,12 @@ public sealed record ProjectScope(bool All, IReadOnlyDictionary<Guid, UserRole> 
     /// <param name="projectId">Проєкт.</param>
     public string? AppRoleIn(Guid projectId) => AppRoles.TryGetValue(projectId, out var role) ? role : null;
 
-    /// <summary>Чи видно значення чутливих колонок таблиці проєкту: admin, editor проєкту або роль застосунку в ньому.</summary>
+    /// <summary>
+    /// Чи видно значення чутливих колонок таблиці проєкту: admin, editor проєкту або роль застосунку в ньому. Інструментам
+    /// загального помічника — ніколи (<see cref="AssistantCall"/>, F3-113): значення не йдуть у модель.
+    /// </summary>
     /// <param name="projectId">Проєкт таблиці; <c>null</c> — спільна.</param>
     public bool CanReadSensitive(Guid? projectId) =>
-        RoleIn(projectId) >= UserRole.Editor || (projectId is { } id && RoleIn(id) is not null && AppRoleIn(id) is not null);
+        !AssistantCall.Active
+        && (RoleIn(projectId) >= UserRole.Editor || (projectId is { } id && RoleIn(id) is not null && AppRoleIn(id) is not null));
 }
