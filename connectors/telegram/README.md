@@ -12,7 +12,10 @@ MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), 
 | `set_my_commands` | `setMyCommands` | `commands` (`[{ command, description }]`), `scope?`, `language_code?` | `{ "ok": true }` |
 | `set_webhook` | `setWebhook` | `url` (https), `secret_token?`, `allowed_updates?`, `drop_pending_updates?` | `{ "ok": true }` |
 | `delete_webhook` | `deleteWebhook` | `drop_pending_updates?` | `{ "ok": true }` |
-| `send_document` | `sendDocument` | `chat_id`, `document_url` **або** `document_base64` + `file_name?`, `caption?` | надіслане повідомлення з `document` |
+| `send_document` | `sendDocument` | `chat_id`, один з `document_url` / `file_id` / `document_base64` (до 50 МБ) + `file_name?`, `caption?` (до 1024 символів), `parse_mode?`, `reply_markup?` | надіслане повідомлення з `document` |
+| `send_video` | `sendVideo` | як `send_document` (`video_url` / `file_id` / `video_base64`) + `duration?`, `width?`, `height?`, `supports_streaming?` | надіслане повідомлення з `video` |
+| `send_audio` | `sendAudio` | як `send_document` (`audio_url` / `file_id` / `audio_base64`) + `duration?`, `performer?`, `title?` | надіслане повідомлення з `audio` |
+| `send_voice` | `sendVoice` | як `send_document` (`voice_url` / `file_id` / `voice_base64`; OGG/OPUS, MP3 чи M4A) + `duration?` | надіслане повідомлення з `voice` |
 | `send_photo` | `sendPhoto` | `chat_id`, `photo_url` **або** `photo_base64` (до 10 МБ, JPEG/PNG) + `file_name?`, `caption?` (до 1024 символів), `parse_mode?`, `reply_markup?` | надіслане повідомлення з `photo` (розміри з `file_id`); задовгий підпис чи завелика картинка — `isError` з поясненням, без запиту до Bot API |
 | `send_approval` | `sendMessage` з кнопками | `chat_id`, `text`, `approve_label?` (типово «✅ Погодити»), `reject_label?` (типово «❌ Відхилити»), `parse_mode?` | `{ message_id, chat_id, token }` |
 | `get_approval` | `getUpdates` без `offset` | `chat_id`, `message_id`, `token` (з `send_approval`) | `{ answered: false }` або `{ answered: true, approved, decision: "approve" \| "reject", by: { id, username, first_name, last_name } }` |
@@ -149,3 +152,11 @@ Telegram доставляє оновлення **або** на webhook, **або
 - Telegram тримає непідтверджені оновлення 24 години і віддає не більше 100: погодження чекайте не довше доби й не
   на боті з великим потоком повідомлень без споживача.
 - У групі натиснути кнопку може будь-хто з учасників; хто саме — у `by`.
+
+## Файли: `file_id`, посилання чи вміст
+
+`send_document`, `send_video`, `send_audio` і `send_voice` приймають рівно один спосіб передати файл: посилання (Telegram
+сам його завантажує), `file_id` (файл, який у Telegram уже є: його надіслав користувач або бот раніше) чи вміст у base64
+(до 50 МБ — ліміт Bot API на завантаження). Вхідне повідомлення з файлом у події
+`telegram://updates` (і в `get_updates`) має `document` / `video` / `audio` / `voice` з `file_id`, `mime_type` і (для
+документів) `file_name`. Помилки (невідомий чат, закритий бот, завеликий файл) повертаються текстом без токена.

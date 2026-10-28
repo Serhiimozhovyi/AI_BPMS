@@ -443,7 +443,7 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
 
 - `connectors/telegram` — Telegram Bot API (F3-13, F3-27): `send_message` (з `reply_markup`: `inline_keyboard`,
   `keyboard` з `request_contact`, `remove_keyboard`; `disable_link_preview`), `send_messages` (до 100 повідомлень
-  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document` (URL або base64), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26), `send_approval`/`get_approval` (погодження кнопками, F6-27, §3.1),
+  без зупинки на помилці → `{ results: [{ index, ok, message_id?, error?, permanent }] }`, F3-38), `send_document`, `send_video`, `send_audio`, `send_voice` (URL, `file_id` Telegram або base64 до 50 МБ, `caption` до 1024, `parse_mode`, `reply_markup`; вхідні файли в події `message` віддають `file_id`, `file_name`, `mime_type`, F8-07), `send_photo` (URL або base64 до 10 МБ, підпис до 1024 символів, F6-26), `send_approval`/`get_approval` (погодження кнопками, F6-27, §3.1),
   `edit_message_text`, `answer_callback_query`, `set_my_commands`, `set_webhook`/`delete_webhook` (методи, що в Bot API
   повертають `true`, → `{ ok: true }`), `get_updates` (`{ result }`, для `mcp.poll` — `keyField = update_id`),
   `get_chat`; `chat_id` має `x-openbp-options` на `get_updates`, `reply_markup` — `x-openbp-widget: keyboard`, `commands` — `commands`, `parse_mode` — `enum`, `text`/`caption` — `maxLength` 4096/1024 (§2, F6-30; в `edit_message_text` Telegram приймає лише інлайн-кнопки); токен — лише змінна
