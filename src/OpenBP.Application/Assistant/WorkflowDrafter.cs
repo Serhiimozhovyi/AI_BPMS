@@ -441,6 +441,11 @@ internal static class DrafterPrompt
         referenced with expressions: "{{ $json.field }}" is a field of the item from the previous node,
         "{{ $node["Node name"].json.field }}" — of an earlier node. Do not invent ids, e-mails or phone numbers that are not in
         the description: prefer a role or an expression. Never write secrets, passwords, API keys or credentialId.
+        Rules for fields that point to something else: never invent a value for credentialId, provider, model, workflowId or
+        any other id — leave such a field out. Options that require credentials must stay off: for core.formTrigger use
+        auth "none" (or "login"), never "token". Take every value from the description of the step itself, not from examples.
+        Do not leave the parameters empty when the step has a meaning: core.wait needs the duration from the description,
+        core.set needs the fields it sets. Field names in "{{ $json.field }}" must be latin, without spaces.
         """;
 
     private const string PlanRules =
@@ -457,6 +462,10 @@ internal static class DrafterPrompt
         - links connect steps from → to. Every step except the trigger has an incoming link. For a node with several outputs
           set branch to the output name from the catalogue: core.if → "true"/"false"; core.approval → "decision0" (approved),
           "decision1" (rejected), "timeout"; core.wait (v3) → "main"/"timeout". Omit branch for single-output nodes.
+        - Every output of a branching step that the description mentions needs its own link: for core.approval connect both
+          decision0 and decision1 (what happens on approval and on rejection); for core.if connect "true" and "false".
+        - Do not add filler steps: a step the description names must be a real action (use "none" if no node fits), and a
+          pause step must say how long to wait in hint.
         - hint: what data the step needs, briefly.
         - Keep it short: only the steps the description mentions. Step titles in the user's language.
 
