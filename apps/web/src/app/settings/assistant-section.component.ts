@@ -12,7 +12,7 @@ import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 
 /**
- * Блок «Помічник» у `/settings` (F3-60, лише admin): credential моделі (anthropic, openai, openai-compatible) і модель для
+ * Блок «Помічник» у `/settings` (F3-60, лише admin): credential моделі (anthropic, openai, openai-compatible, ollama) і модель для
  * ШІ-помічника в редакторі. Без credential'а помічник вимкнений.
  */
 @Component({
@@ -22,8 +22,8 @@ import { CredentialOption, CredentialsApiService } from '../credentials/credenti
   template: `
     <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.assistant.title">Помічник</h2>
     <p class="mb-4 max-w-3xl opacity-70" i18n="@@settings.assistant.hint">
-      ШІ-помічник у редакторі будує й виправляє сценарії за описом. Оберіть облікові дані моделі (Anthropic, OpenAI або
-      OpenAI-сумісний сервер) і назву моделі. Значень облікових даних і журналу виконань помічник не бачить.
+      ШІ-помічник у редакторі будує й виправляє сценарії за описом. Оберіть облікові дані моделі (Anthropic, OpenAI,
+      OpenAI-сумісний сервер або локальна Ollama) і назву моделі. Значень облікових даних і журналу виконань помічник не бачить.
     </p>
     @if (error()) {
       <p role="alert" class="mb-4 text-red-700" data-testid="assistant-error">{{ error() }}</p>
@@ -40,7 +40,12 @@ import { CredentialOption, CredentialsApiService } from '../credentials/credenti
       </mat-form-field>
       <mat-form-field appearance="outline" class="w-72">
         <mat-label i18n="@@settings.assistant.model">Модель</mat-label>
-        <input matInput [formControl]="model" name="model" data-testid="assistant-model" placeholder="claude-sonnet-5-5" />
+        <input matInput [formControl]="model" name="model" data-testid="assistant-model" placeholder="claude-sonnet-5-5" list="assistant-models" />
+        <datalist id="assistant-models" data-testid="assistant-models">
+          @for (m of models(); track m) {
+            <option [value]="m"></option>
+          }
+        </datalist>
       </mat-form-field>
       <button mat-flat-button type="button" data-testid="assistant-save" [disabled]="saving()" (click)="save()" i18n="@@settings.assistant.save">Зберегти</button>
       @if (saved()) {
@@ -56,6 +61,8 @@ export class AssistantSection implements OnInit {
   private readonly notify = inject(NotifyService);
 
   protected readonly options = signal<CredentialOption[]>([]);
+  /** Модель із списку встановлених в Ollama (F3-101); для інших провайдерів порожньо — модель вводять вручну. */
+  protected readonly models = signal<string[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly saved = signal(false);
@@ -63,6 +70,7 @@ export class AssistantSection implements OnInit {
   protected readonly model = new FormControl('', { nonNullable: true });
 
   ngOnInit(): void {
+    this.credential.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id) => this.loadModels(id));
     forkJoin({ settings: this.api.settings(), options: this.credentials.options() })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -71,6 +79,18 @@ export class AssistantSection implements OnInit {
           this.credential.setValue(settings.credentialId);
           this.model.setValue(settings.model ?? '');
         },
+        error: (e: unknown) => this.error.set(apiErrorMessage(e)),
+      });
+  }
+
+  private loadModels(id: string | null): void {
+    this.models.set([]);
+    if (!id || this.options().find((o) => o.id === id)?.type !== 'ollama') return;
+    this.api
+      .models(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (models) => this.models.set(models),
         error: (e: unknown) => this.error.set(apiErrorMessage(e)),
       });
   }

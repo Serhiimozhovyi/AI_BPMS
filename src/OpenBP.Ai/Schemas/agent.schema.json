@@ -15,7 +15,8 @@
       "enum": [
         "anthropic",
         "openai",
-        "openai-compatible"
+        "openai-compatible",
+        "ollama"
       ]
     },
     "model": {

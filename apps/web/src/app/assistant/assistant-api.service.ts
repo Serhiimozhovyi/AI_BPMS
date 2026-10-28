@@ -48,7 +48,7 @@ export interface WorkflowExplanation {
 }
 
 /** Типи credential'ів, з якими працює помічник. */
-export const ASSISTANT_PROVIDERS = ['anthropic', 'openai', 'openai-compatible'];
+export const ASSISTANT_PROVIDERS = ['anthropic', 'openai', 'openai-compatible', 'ollama'];
 
 /**
  * Розбирає накопичений текст `text/event-stream` на події; повертає події з повних блоків і довжину розібраного префікса.
@@ -85,6 +85,13 @@ export class AssistantApiService {
       credentialId,
       model,
     });
+  }
+
+  /** Моделі credential'а: для Ollama — встановлені (`GET /api/tags`), для інших типів — порожній список. */
+  models(credentialId: string): Observable<string[]> {
+    return this.http
+      .get<{ name: string }[]>(`${API_BASE}/settings/assistant/models`, { params: { credentialId } })
+      .pipe(map((models) => models.map((m) => m.name)));
   }
 
   explanation(workflowId: string): Observable<WorkflowExplanation> {

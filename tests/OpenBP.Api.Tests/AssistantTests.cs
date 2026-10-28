@@ -235,4 +235,50 @@ public class AssistantTests(ApiFactory api)
         Assert.Equal(["error", "done"], events.Select(e => e.Type));
         Assert.Equal("ASSISTANT_PROVIDER_ERROR", events[0].Data.GetProperty("code").GetString());
     }
+
+    /// <summary>Фейкова Ollama: <c>/api/tags</c> віддає список моделей або помилку.</summary>
+    private sealed class FakeOllama(HttpStatusCode status, string body) : HttpMessageHandler
+    {
+        public ConcurrentQueue<string> Uris { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Uris.Enqueue(request.RequestUri!.ToString());
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+        }
+    }
+
+    [Fact]
+    public async Task Models_ollama_lists_installed_models_and_other_types_are_empty()
+    {
+        var ollama = new FakeOllama(HttpStatusCode.OK, """{"models":[{"name":"qwen3:8b"},{"name":"qwen3:14b"}]}""");
+        var factory = api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(new LlmChat(new HttpClient(ollama)))));
+        var admin = await LoginAsync(factory, ApiFactory.AdminEmail, ApiFactory.AdminPassword);
+        var editor = await LoginAsync(factory, UserRole.Editor);
+        var local = await api.CreateCredentialAsync("ollama", new JsonObject { ["baseUrl"] = "http://mac.test:11434" });
+        var cloud = await api.CreateCredentialAsync("openai-compatible", new JsonObject { ["baseUrl"] = "http://llm.test/v1" });
+
+        var models = await admin.GetFromJsonAsync<JsonArray>($"{Settings}/models?credentialId={local}");
+        Assert.Equal(["qwen3:14b", "qwen3:8b"], models!.Select(m => m!["name"]!.GetValue<string>()));
+        Assert.Equal("http://mac.test:11434/api/tags", Assert.Single(ollama.Uris));
+
+        Assert.Empty((await admin.GetFromJsonAsync<JsonArray>($"{Settings}/models?credentialId={cloud}"))!);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync(Settings, new { credentialId = local, model = "qwen3:14b" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await editor.GetAsync($"{Settings}/models?credentialId={local}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"{Settings}/models?credentialId={Guid.NewGuid()}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Models_ollama_unreachable_is_a_readable_502()
+    {
+        var ollama = new FakeOllama(HttpStatusCode.InternalServerError, """{"error":"boom"}""");
+        var factory = api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(new LlmChat(new HttpClient(ollama)))));
+        var admin = await LoginAsync(factory, ApiFactory.AdminEmail, ApiFactory.AdminPassword);
+        var local = await api.CreateCredentialAsync("ollama", new JsonObject());
+
+        var response = await admin.GetAsync($"{Settings}/models?credentialId={local}");
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.Contains("ASSISTANT_PROVIDER_ERROR", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
 }

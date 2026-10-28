@@ -12,7 +12,7 @@ namespace OpenBP.Ai;
 /// <summary>
 /// <c>ai.llm</c> — запит до мовної моделі для кожного вхідного item'а (docs/connectors.md §4).
 /// Без <c>outputSchema</c> віддає <c>{ "text": … }</c>; з нею вимагає structured output і валідує відповідь схемою,
-/// item = розібраний JSON. Провайдери: <c>openai-compatible</c> (Ollama…), <c>openai</c>, <c>anthropic</c>.
+/// item = розібраний JSON. Провайдери: <c>ollama</c>, <c>openai-compatible</c> (vLLM, LM Studio…), <c>openai</c>, <c>anthropic</c>.
 /// Таймаут — <c>timeoutSec</c> вузла або <see cref="DefaultTimeout"/>.
 /// </summary>
 public sealed class AiLlmNode : INode
@@ -21,6 +21,7 @@ public sealed class AiLlmNode : INode
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
     private readonly OpenAiCompatibleProvider _openAiCompatible;
+    private readonly OllamaProvider _ollama;
     private readonly OpenAiProvider _openAi;
     private readonly AnthropicProvider _anthropic;
 
@@ -33,6 +34,7 @@ public sealed class AiLlmNode : INode
     {
         http ??= new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _openAiCompatible = new OpenAiCompatibleProvider(http);
+        _ollama = new OllamaProvider(http);
         _openAi = new OpenAiProvider(_openAiCompatible);
         _anthropic = new AnthropicProvider(http);
     }
@@ -130,9 +132,10 @@ public sealed class AiLlmNode : INode
         ILlmProvider provider = p.Provider switch
         {
             "openai-compatible" => _openAiCompatible,
+            "ollama" => _ollama,
             "openai" => _openAi,
             "anthropic" => _anthropic,
-            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai або openai-compatible."),
+            _ => throw new LlmException($"Невідомий провайдер «{p.Provider}». Оберіть anthropic, openai, openai-compatible або ollama."),
         };
 
         if (string.IsNullOrWhiteSpace(p.Model) || string.IsNullOrWhiteSpace(p.Prompt))
