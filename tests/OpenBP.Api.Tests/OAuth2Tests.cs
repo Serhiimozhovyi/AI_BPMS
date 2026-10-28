@@ -275,7 +275,7 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
 
         // Токен і секрет не повертаються API, поля токена не задаються вручну.
         var body = await (await admin.GetAsync($"/api/v1/credentials/{id}")).Content.ReadAsStringAsync();
-        Assert.DoesNotContain("cc-", body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\bcc-\d+", body); // токен має вигляд cc-N; випадковий GUID може містити "cc-"
         Assert.DoesNotContain(ClientSecret, body, StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PatchAsJsonAsync($"/api/v1/credentials/{id}", new { data = new { accessToken = "x" } })).StatusCode);
 
@@ -316,7 +316,7 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, good.StatusCode);
         Assert.Equal(before + 1, _server.ClientCalls);
         Assert.True(JsonDocument.Parse(body).RootElement.GetProperty("ok").GetBoolean());
-        Assert.DoesNotContain("cc-", body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\bcc-\d+", body); // токен має вигляд cc-N; випадковий GUID може містити "cc-"
         Assert.DoesNotContain(ClientSecret, body, StringComparison.Ordinal);
 
         var bad = JsonDocument.Parse(await (await admin.PostAsJsonAsync("/api/v1/credentials/check", new
@@ -368,7 +368,7 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("cc-", body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\bcc-\d+", body); // токен має вигляд cc-N; випадковий GUID може містити "cc-"
         var detail = JsonDocument.Parse(body).RootElement;
         Assert.Equal("ok", detail.GetProperty("summary").GetProperty("status").GetString());
         Assert.Equal("SERVICE_TOKEN", detail.GetProperty("config").GetProperty("credentialMap").GetProperty("$accessToken").GetString());
