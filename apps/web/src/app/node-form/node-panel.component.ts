@@ -4,6 +4,7 @@ import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/ma
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelect, MatSelectModule } from '@angular/material/select';
 import { FormlyFieldConfig, FormlyForm, FormlyFormOptions } from '@ngx-formly/core';
 import { actionLabel, filterActions, groupActions } from '../canvas/connector-actions';
 import { McpToolInfo } from '../connectors/connectors-api.service';
@@ -15,6 +16,25 @@ import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext } from './expression-sugges
 import { NodeFormState, provideNodeForm } from './node-form-fields';
 import { OptionsConnector, ToolOptionsService } from './tool-options.service';
 import { SubscribeSourceComponent } from './subscribe-source.component';
+
+/** Підключення в полі «Підключення» панелі вузла (F3-95). */
+export interface NodeConnection {
+  id: string;
+  name: string;
+  /** Запис каталогу, з якого встановлено; `null` — додано вручну. */
+  catalogId?: string | null;
+  tools: readonly McpToolInfo[];
+}
+
+/** Зміна підключення вузла: `tool` — заміна дії, коли поточної в новому підключенні немає. */
+export interface ConnectionChange {
+  serverId: string;
+  tool: McpToolInfo | null;
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
 
 /** Стан форм для одного вузла: моделі (копії) і поля formly. Новий стан — нові екземпляри форм. */
 interface PanelState {
@@ -44,7 +64,7 @@ interface PanelState {
 @Component({
   selector: 'app-node-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormlyForm, ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, SubscribeSourceComponent],
+  imports: [FormlyForm, ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SubscribeSourceComponent],
   // Кеш списків з конекторів (F3-54) — у межах панелі.
   providers: [provideNodeForm(), ToolOptionsService],
   template: `
@@ -62,11 +82,38 @@ interface PanelState {
           </div>
           <span class="panel__type" [title]="s.node.type">{{ descriptor()?.displayName ?? s.node.type }}</span>
         }
-        @if (isMcp(s.node)) {
-          <span class="panel__type" data-testid="node-panel-tool">{{ s.node.parameters['serverId'] }} · {{ s.node.parameters['toolName'] }}</span>
-        }
       </header>
       <ng-content select="[panelPinned]" />
+
+      @if (isMcp(s.node) && connections() !== null) {
+        <div class="panel__action" data-testid="node-connection" [attr.inert]="readonly() ? '' : null">
+          <mat-form-field appearance="outline" class="panel__action-field" subscriptSizing="dynamic">
+            <mat-label i18n="@@nodeform.connection">Підключення</mat-label>
+            <mat-select
+              #connectionSelect
+              data-testid="connection-select"
+              [value]="pendingConnection()?.connection?.id ?? serverId()"
+              [attr.title]="serverId() + ' · ' + toolName()"
+              (selectionChange)="connectionPicked($event.value, connectionSelect)"
+            >
+              @for (c of connectionChoices(); track c.id) {
+                <mat-option [value]="c.id" data-testid="connection-option" [attr.data-connection]="c.id">{{ c.name }}</mat-option>
+              }
+              @if (serverId() && !knownConnection()) {
+                <mat-option [value]="serverId()">{{ serverId() }} — <span i18n="@@nodeform.connection.missing">не знайдено</span></mat-option>
+              }
+              <mat-option value="__new__" data-testid="connection-new" i18n="@@nodeform.connection.new">+ Нове підключення…</mat-option>
+            </mat-select>
+          </mat-form-field>
+          @if (pendingConnection(); as pending) {
+            <div class="panel__warning" role="alert" data-testid="connection-reset-warning">
+              <span i18n="@@nodeform.connection.reset">У підключенні «{{ pending.connection.name }}» немає дії «{{ label(pending.tool) }}»: аргументи буде скинуто. Змінити підключення?</span>
+              <button mat-flat-button type="button" data-testid="connection-confirm" (click)="confirmConnection()" i18n="@@nodeform.action.confirm">Змінити</button>
+              <button mat-button type="button" data-testid="connection-cancel" (click)="pendingConnection.set(null)" i18n="@@nodeform.action.cancel">Скасувати</button>
+            </div>
+          }
+        </div>
+      }
 
       @if (isMcp(s.node) && actionGroups().length > 0) {
         <div class="panel__action" data-testid="node-action" [attr.inert]="readonly() ? '' : null">
@@ -121,7 +168,7 @@ interface PanelState {
           </p>
         }
         @if (isSubscribe(s.node)) {
-          <app-subscribe-source [node]="s.node" [readonly]="readonly()" (nodeChange)="sourceChanged($event)" />
+          <app-subscribe-source [node]="s.node" [readonly]="readonly()" (nodeChange)="sourceChanged($event)" (newConnection)="newConnection.emit()" />
         }
         @if (s.paramsFields.length === 0) {
           <p class="panel__note" i18n="@@nodeform.noParameters">Параметрів немає.</p>
@@ -271,6 +318,12 @@ export class NodePanelComponent {
   /** Для `mcp.tool`/`mcp.poll`: усі tools конектора вузла — списки `x-openbp-options` (F3-54); `null` — без списків. */
   readonly serverTools = input<readonly McpToolInfo[] | null>(null);
 
+  /**
+   * Усі підключення для поля «Підключення» (F3-95); `null` — поле не показується. `tools` — з кешу: порожні, коли
+   * tools підключення ще не завантажено.
+   */
+  readonly connections = input<readonly NodeConnection[] | null>(null);
+
   /** Облікові дані для вибору в параметрах з `credentials` дескриптора (F4-03); `null` — недоступні, поле текстове. */
   readonly credentials = input<readonly CredentialOption[] | null>(null);
 
@@ -289,9 +342,27 @@ export class NodePanelComponent {
   /** Обрано іншу дію конектора (F3-55): редактор змінює `toolName` і скидає `arguments` (`changeNodeTool`). */
   readonly toolChange = output<McpToolInfo>();
 
+  /** Обрано інше підключення: `tool` — дія на заміну (в новому підключенні немає поточної), інакше дія лишається. */
+  readonly connectionChange = output<ConnectionChange>();
+
+  /** «+ Нове підключення…»: редактор відкриває діалог встановлення з каталогу. */
+  readonly newConnection = output<void>();
+
   /** Секція «Додатково» (тайм-аут, повтори, пауза, нотатки): за замовчуванням згорнута; позначка — якщо щось не стандартне. */
   protected readonly extraOpen = signal(false);
   protected readonly hasCustomCommon = computed(() => hasCustomCommon(this.state().node));
+
+  protected readonly serverId = computed(() => text(this.state().node.parameters?.['serverId']));
+  protected readonly toolName = computed(() => text(this.state().node.parameters?.['toolName']));
+  protected readonly knownConnection = computed(() => (this.connections() ?? []).some((c) => c.id === this.serverId()));
+  /** Підключення того самого запису каталогу; без запису каталогу — усі. */
+  protected readonly connectionChoices = computed(() => {
+    const all = this.connections() ?? [];
+    const catalogId = all.find((c) => c.id === this.serverId())?.catalogId;
+    return catalogId ? all.filter((c) => c.catalogId === catalogId) : all;
+  });
+  /** Підключення, чекає підтвердження: у ньому немає поточної дії. */
+  protected readonly pendingConnection = signal<{ connection: NodeConnection; tool: McpToolInfo } | null>(null);
 
   /** Дії конектора вузла, згруповані «Ресурс → Операція». */
   protected readonly actionGroups = computed(() => groupActions(this.serverTools() ?? []));
@@ -314,6 +385,7 @@ export class NodePanelComponent {
     effect(() => {
       this.state();
       this.pendingTool.set(null);
+      this.pendingConnection.set(null);
       this.restoreAction(0);
     });
   }
@@ -355,6 +427,37 @@ export class NodePanelComponent {
       return;
     }
     this.toolChange.emit(tool);
+  }
+
+  protected connectionPicked(value: string, select: MatSelect): void {
+    select.value = this.serverId();
+    if (this.readonly()) return;
+    if (value === '__new__') {
+      this.newConnection.emit();
+      return;
+    }
+    const target = (this.connections() ?? []).find((c) => c.id === value);
+    if (!target || target.id === this.serverId()) return;
+    const name = this.toolName();
+    const args = this.state().node.parameters?.['arguments'];
+    const hasArguments = !!args && typeof args === 'object' && Object.keys(args).length > 0;
+    // Tools нового підключення невідомі або дія в ньому є — лишаємо дію й аргументи.
+    if (!name || target.tools.length === 0 || target.tools.some((t) => t.name === name)) {
+      this.connectionChange.emit({ serverId: target.id, tool: null });
+      return;
+    }
+    const replacement = target.tools[0];
+    if (hasArguments) {
+      this.pendingConnection.set({ connection: target, tool: replacement });
+      return;
+    }
+    this.connectionChange.emit({ serverId: target.id, tool: replacement });
+  }
+
+  protected confirmConnection(): void {
+    const pending = this.pendingConnection();
+    this.pendingConnection.set(null);
+    if (pending) this.connectionChange.emit({ serverId: pending.connection.id, tool: pending.tool });
   }
 
   protected confirmTool(): void {

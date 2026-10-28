@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
@@ -21,7 +21,7 @@ import { WorkflowNode } from '../workflows/workflows-api.service';
   template: `
     <div class="source" data-testid="subscribe-source" [attr.inert]="readonly() ? '' : null">
       <mat-form-field appearance="outline" class="source__field" subscriptSizing="dynamic">
-        <mat-label i18n="@@subscribe.connector">Конектор</mat-label>
+        <mat-label i18n="@@subscribe.connector">Підключення</mat-label>
         <mat-select data-testid="subscribe-connector" [value]="serverId()" (selectionChange)="connectorPicked($event.value)">
           @for (c of connectors(); track c.id) {
             <mat-option [value]="c.id">{{ c.name }}</mat-option>
@@ -29,6 +29,7 @@ import { WorkflowNode } from '../workflows/workflows-api.service';
           @if (serverId() && !known()) {
             <mat-option [value]="serverId()">{{ serverId() }} — <span i18n="@@subscribe.connector.missing">не знайдено</span></mat-option>
           }
+          <mat-option value="__new__" data-testid="subscribe-connection-new" i18n="@@nodeform.connection.new">+ Нове підключення…</mat-option>
         </mat-select>
       </mat-form-field>
 
@@ -125,6 +126,9 @@ export class SubscribeSourceComponent implements OnInit {
   /** Змінений вузол (`serverId`/`resourceUri`). */
   readonly nodeChange = output<WorkflowNode>();
 
+  /** «+ Нове підключення…»: редактор відкриває діалог встановлення. */
+  readonly newConnection = output<void>();
+
   protected readonly connectors = signal<ConnectorSummary[]>([]);
   protected readonly resources = signal<ConnectorResource[]>([]);
   protected readonly loading = signal(false);
@@ -140,13 +144,36 @@ export class SubscribeSourceComponent implements OnInit {
   });
 
   private loadedFor = '';
+  private listedFor = '';
+  private readonly listed = signal(false);
+
+  constructor() {
+    // Підключення, створене з панелі (F3-95), ще не у списку: перечитати його один раз для цього `serverId`.
+    effect(() => {
+      const id = this.serverId();
+      if (!id || !this.listed() || this.listedFor === id || this.known()) return;
+      untracked(() => {
+        this.listedFor = id;
+        this.api
+          .list()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({ next: (page) => this.connectors.set(page.items), error: () => undefined });
+      });
+    });
+  }
 
   ngOnInit(): void {
     this.resource.setValue(text(this.node().parameters?.['resourceUri']), { emitEvent: false });
     this.api
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (page) => this.connectors.set(page.items), error: (e: unknown) => this.error.set(apiErrorMessage(e)) });
+      .subscribe({
+        next: (page) => {
+          this.connectors.set(page.items);
+          this.listed.set(true);
+        },
+        error: (e: unknown) => this.error.set(apiErrorMessage(e)),
+      });
     this.load(false);
   }
 
@@ -178,7 +205,12 @@ export class SubscribeSourceComponent implements OnInit {
   }
 
   protected connectorPicked(id: string): void {
-    if (this.readonly() || id === this.serverId()) return;
+    if (this.readonly()) return;
+    if (id === '__new__') {
+      this.newConnection.emit();
+      return;
+    }
+    if (id === this.serverId()) return;
     this.resource.setValue('', { emitEvent: false });
     this.loaded.set(false);
     this.emit({ serverId: id, resourceUri: undefined });

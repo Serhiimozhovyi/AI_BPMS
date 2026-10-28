@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -255,6 +255,15 @@ export class CredentialFormComponent implements OnInit {
   });
 
   readonly checkable = computed(() => CHECKABLE_TYPES.includes(this.typeName() ?? ''));
+
+  constructor() {
+    // Типи можуть надійти вже після створення форми (діалог «Нове підключення»): тип, який однозначний, обирається тоді.
+    effect(() => {
+      const available = this.availableTypes();
+      if (this.credential() || this.typeName() || available.length === 0) return;
+      if (available.length === 1 || this.allowedTypes()) untracked(() => this.selectType(available[0].type));
+    });
+  }
 
   ngOnInit(): void {
     const fixed = this.fixedProjectId();

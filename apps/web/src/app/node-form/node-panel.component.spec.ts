@@ -231,7 +231,7 @@ describe('NodePanelComponent', () => {
       parameters: { serverId: 'fake', toolName: 'order', arguments: { id: 7 } },
     };
     const { fixture, host, last } = await setup(toolNode, MCP_TOOL_DESCRIPTOR, FAKE_ORDER_TOOL);
-    expect(el(host, 'node-panel-tool').textContent).toContain('fake · order');
+    expect(host.textContent).not.toContain('fake · order');
     expect(host.querySelector('[data-testid="field-serverId"]')).toBeNull();
     expect(el<HTMLInputElement>(host, 'field-id').value).toBe('7');
 
