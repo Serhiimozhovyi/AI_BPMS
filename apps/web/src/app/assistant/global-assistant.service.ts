@@ -13,11 +13,13 @@ import {
   GlobalAssistantApiService,
 } from './global-assistant-api.service';
 
-/** Рядок розмови: репліка, крок інструмента, примітка про рішення або помилка. */
+/** Рядок розмови: репліка, крок інструмента, картка пропозиції змін або помилка. */
 export interface GlobalChatLine {
-  kind: 'user' | 'assistant' | 'step' | 'note' | 'error';
+  kind: 'user' | 'assistant' | 'step' | 'proposal' | 'error';
   text: string;
   ok?: boolean;
+  /** Для `proposal` — пропозиція змін, яку показує картка (`GlobalAssistantService.proposals`). */
+  proposalId?: string;
 }
 
 /** Запит до панелі ззовні (швидкі дії вузла): підставити в поле чи одразу надіслати. */
@@ -66,6 +68,8 @@ export class GlobalAssistantService {
   readonly lines = signal<GlobalChatLine[]>([]);
   readonly proposals = signal<AssistantProposalView[]>([]);
   readonly busy = signal(false);
+  /** Пропозиції, рішення щодо яких зараз надсилається. */
+  readonly deciding = signal<string[]>([]);
   /** Api відповів, що модель не вибрана (409 `ASSISTANT_NOT_CONFIGURED`). */
   readonly notConfigured = signal(false);
   readonly draft = signal('');
@@ -177,6 +181,25 @@ export class GlobalAssistantService {
     });
   }
 
+  /** Рішення людини щодо картки: застосувати чи скасувати. Стан картки оновлюється відповіддю Api. */
+  decide(proposalId: string, apply: boolean): void {
+    const id = this.currentId();
+    if (!id || this.deciding().includes(proposalId)) return;
+    this.deciding.update((list) => [...list, proposalId]);
+    this.api.decide(id, proposalId, apply).subscribe({
+      next: (proposal) => {
+        this.proposals.update((list) => list.map((p) => (p.id === proposal.id ? proposal : p)));
+        this.deciding.update((list) => list.filter((p) => p !== proposalId));
+      },
+      error: (e: unknown) => {
+        this.deciding.update((list) => list.filter((p) => p !== proposalId));
+        // Уже вирішено (в іншій вкладці): підтягуємо актуальний стан замість помилки.
+        if (apiErrorCode(e) === 'ASSISTANT_PROPOSAL_DECIDED') this.select(id);
+        else this.pushError(apiErrorMessage(e));
+      },
+    });
+  }
+
   private ask(id: string, message: string, context: AssistantPageContext): void {
     this.request = this.api.send(id, message, context).subscribe({
       next: (e) => {
@@ -185,8 +208,11 @@ export class GlobalAssistantService {
             ...lines,
             { kind: 'step', text: `${toolLabel(e.tool)}: ${e.text ?? ''}`, ok: e.ok ?? true },
           ]);
-        else if (e.type === 'proposal' && e.proposal)
-          this.proposals.update((list) => [...list.filter((p) => p.id !== e.proposal!.id), e.proposal!]);
+        else if (e.type === 'proposal' && e.proposal) {
+          const proposal = e.proposal;
+          this.proposals.update((list) => [...list.filter((p) => p.id !== proposal.id), proposal]);
+          this.lines.update((lines) => [...lines, { kind: 'proposal', text: proposal.tool, proposalId: proposal.id }]);
+        }
         else if (e.type === 'message' && e.text) this.lines.update((lines) => [...lines, { kind: 'assistant', text: e.text! }]);
         else if (e.type === 'error') this.pushError(e.text ?? '');
       },
@@ -215,7 +241,7 @@ export class GlobalAssistantService {
 
   private load(conversation: AssistantConversation): void {
     this.currentId.set(conversation.id);
-    this.lines.set(conversation.messages.map(toLine));
+    this.lines.set(conversation.messages.flatMap(toLines));
     this.proposals.set(conversation.proposals);
     this.notConfigured.set(false);
     this.historyOpen.set(false);
@@ -248,13 +274,17 @@ export function toolLabel(tool: string | null | undefined): string {
   return (tool && TOOL_LABELS[tool]) || tool || '';
 }
 
-function toLine(message: AssistantMessageView): GlobalChatLine {
+/** Репліки для показу: рішення щодо пропозицій (`note`) призначені моделі — людина бачить стан на картці. */
+function toLines(message: AssistantMessageView): GlobalChatLine[] {
   switch (message.role) {
-    case 'tool':
-      return { kind: 'step', text: `${toolLabel(message.tool)}: ${message.text ?? ''}`, ok: message.ok ?? true };
+    case 'tool': {
+      const step: GlobalChatLine = { kind: 'step', text: `${toolLabel(message.tool)}: ${message.text ?? ''}`, ok: message.ok ?? true };
+      return message.proposalId ? [step, { kind: 'proposal', text: message.tool ?? '', proposalId: message.proposalId }] : [step];
+    }
     case 'assistant':
-    case 'note':
     case 'user':
-      return { kind: message.role, text: message.text ?? '' };
+      return [{ kind: message.role, text: message.text ?? '' }];
+    default:
+      return [];
   }
 }

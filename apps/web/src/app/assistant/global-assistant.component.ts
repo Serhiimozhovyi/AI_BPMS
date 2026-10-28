@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, untracked, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { GlobalAssistantService } from './global-assistant.service';
+import { ProposalCardComponent } from './proposal-card.component';
 
 /**
  * Загальний помічник (F3-110): бічна панель справа на кожній сторінці — розмова, історія, контекст сторінки. Відкриває її
@@ -10,7 +11,7 @@ import { GlobalAssistantService } from './global-assistant.service';
 @Component({
   selector: 'app-global-assistant',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, RouterLink, ProposalCardComponent],
   template: `
     @if (assistant.available()) {
       @if (assistant.open()) {
@@ -47,7 +48,20 @@ import { GlobalAssistantService } from './global-assistant.service';
           } @else {
             <ol class="ga__log" #log data-testid="global-assistant-log">
               @for (line of assistant.lines(); track $index) {
-                <li class="ga__line ga__line--{{ line.kind }}" [attr.data-kind]="line.kind" [class.ga__line--failed]="line.ok === false">{{ line.text }}</li>
+                @if (line.kind === 'proposal') {
+                  @if (proposalOf(line.proposalId); as proposal) {
+                    <li class="ga__card" data-kind="proposal">
+                      <app-proposal-card
+                        [proposal]="proposal"
+                        [busy]="assistant.deciding().includes(proposal.id)"
+                        (approved)="assistant.decide(proposal.id, true)"
+                        (rejected)="assistant.decide(proposal.id, false)"
+                      />
+                    </li>
+                  }
+                } @else {
+                  <li class="ga__line ga__line--{{ line.kind }}" [attr.data-kind]="line.kind" [class.ga__line--failed]="line.ok === false">{{ line.text }}</li>
+                }
               } @empty {
                 <li class="ga__hint" i18n="@@globalassistant.empty">
                   Спитайте про процес, попросіть створити таблицю чи сценарій або розібрати помилку виконання. Зміни помічник
@@ -179,7 +193,6 @@ import { GlobalAssistantService } from './global-assistant.service';
     }
 
     .ga__line--step,
-    .ga__line--note,
     .ga__hint {
       padding: 0 10px;
       color: var(--ac-cool-grey-4);
@@ -189,6 +202,10 @@ import { GlobalAssistantService } from './global-assistant.service';
     .ga__line--error,
     .ga__line--failed {
       color: var(--ac-red);
+    }
+
+    .ga__card {
+      list-style: none;
     }
 
     .ga__item {
@@ -280,6 +297,11 @@ export class GlobalAssistantComponent {
     if (context.nodeId) parts.push($localize`:@@globalassistant.context.node:вузол ${context.nodeId}:node:`);
     return $localize`:@@globalassistant.context:Контекст: ${parts.join(' · ')}:context:`;
   });
+
+  /** Пропозиція за id — картка живе, поки відповідь Api змінює її стан. */
+  protected proposalOf(id: string | undefined) {
+    return id ? this.assistant.proposals().find((p) => p.id === id) : undefined;
+  }
 
   constructor() {
     // Запит ззовні (швидка дія вузла без надсилання) — фокус у полі.
