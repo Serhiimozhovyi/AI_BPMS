@@ -14,7 +14,16 @@ public sealed record DataTableList(IReadOnlyList<DataTableSummary> Items);
 /// <param name="Rows">Знайдені рядки в порядку створення.</param>
 public sealed record DataTableQueryResult(DataTableSummary Table, IReadOnlyList<DataRowDto> Rows);
 
-/// <summary>Tools таблиць даних (F6-11) поверх <see cref="IDataTableService"/>: лише читання, права — ті самі, що в REST.</summary>
+/// <summary>Результат <c>create_table</c> і <c>alter_table</c>.</summary>
+/// <param name="Applied"><c>false</c> — повернуто план, нічого не змінено; <c>true</c> — зміну застосовано.</param>
+/// <param name="Plan">План (коли <paramref name="Applied"/> = <c>false</c>).</param>
+/// <param name="Table">Таблиця після зміни (коли <paramref name="Applied"/> = <c>true</c>).</param>
+public sealed record DataTableChangeResult(bool Applied, DataTablePlan? Plan, DataTableSummary? Table);
+
+/// <summary>
+/// Tools таблиць даних (F6-11) поверх <see cref="IDataTableService"/>, права — ті самі, що в REST. Читання — одразу; зміна
+/// структури (F3-109) — у два виклики: без <c>planId</c> повертає план, з <c>planId</c> того плану — застосовує.
+/// </summary>
 [McpServerToolType]
 public sealed class DataTableTools
 {
@@ -63,5 +72,82 @@ public sealed class DataTableTools
         var rows = await tables.QueryRowsAsync(summary.Id.ToString(), where ?? [], Math.Clamp(limit, 1, MaxQueryLimit), ct, includeSensitive: includeSensitive)
             .ConfigureAwait(false);
         return new(summary, rows);
+    }
+
+    private const string PlanFlow =
+        "Two calls: without planId nothing is changed and you get a plan (planId, what is added/removed/changed, warnings) — " +
+        "show it to the user in plain words and wait for their confirmation; then call again with exactly the same arguments plus planId to apply. " +
+        "If the table changed in between, the apply fails with DATA_TABLE_PLAN_STALE — make a new plan. Requires editor rights on the table's project.";
+
+    private const string ColumnsHelp =
+        "Columns: [{ name (latin letters, digits, _), type: string|number|boolean|date|datetime|enum|ref|user|json, key?: true for at most one column " +
+        "whose value is the row key, values?: [..] for enum, table?: target table name for ref, sensitive?: true for personal data }].";
+
+    /// <summary><c>create_table</c>.</summary>
+    /// <param name="tables">Сервіс таблиць.</param>
+    /// <param name="name">Назва.</param>
+    /// <param name="columns">Колонки.</param>
+    /// <param name="constraints">Обмеження цілісності.</param>
+    /// <param name="projectId">Проєкт; <c>null</c> — спільна таблиця.</param>
+    /// <param name="planId">Id плану з попереднього виклику; <c>null</c> — лише план.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "create_table", Title = "Create data table", Destructive = false, UseStructuredContent = true)]
+    [Description("Creates a data table that workflows read and write with the core.dataTable node. " + PlanFlow + " " + ColumnsHelp +
+                 " Errors: DATA_TABLE_NAME_TAKEN, DATA_TABLE_COLUMNS_INVALID, DATA_TABLE_REF_INVALID.")]
+    public static async Task<DataTableChangeResult> CreateTable(
+        IDataTableService tables,
+        [Description("Table name, unique within the project (case-insensitive), up to 100 characters.")] string name,
+        [Description("Columns in display order.")] IReadOnlyList<DataColumn> columns,
+        [Description("Optional integrity rules: { required: [column], unique: [{ columns: [column], where?: [{ column, operator, value }] }] }.")]
+        DataTableConstraints? constraints = null,
+        [Description("Project id (workflow group) the table belongs to; omit for a shared table.")] Guid? projectId = null,
+        [Description("planId from the plan the user confirmed; omit to get a plan.")] string? planId = null,
+        CancellationToken ct = default)
+    {
+        var definition = new DataTableDefinition(name, columns) { Constraints = constraints, ProjectId = projectId };
+        return string.IsNullOrWhiteSpace(planId)
+            ? new(false, await tables.PlanCreateAsync(definition, ct).ConfigureAwait(false), null)
+            : new(true, null, await tables.ApplyCreateAsync(definition, planId, ct).ConfigureAwait(false));
+    }
+
+    /// <summary><c>alter_table</c>.</summary>
+    /// <param name="tables">Сервіс таблиць.</param>
+    /// <param name="table">Id або назва таблиці.</param>
+    /// <param name="rename">Нова назва.</param>
+    /// <param name="addColumns">Нові колонки.</param>
+    /// <param name="removeColumns">Колонки, що видаляються.</param>
+    /// <param name="changeColumns">Колонки, що замінюють наявні з тією самою назвою.</param>
+    /// <param name="constraints">Нові обмеження замість наявних.</param>
+    /// <param name="projectId">Проєкт, у якому шукати назву таблиці.</param>
+    /// <param name="planId">Id плану з попереднього виклику; <c>null</c> — лише план.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "alter_table", Title = "Alter data table", Destructive = true, UseStructuredContent = true)]
+    [Description("Changes the structure of an existing data table: rename it, add, remove or change columns, replace constraints; " +
+                 "anything not mentioned stays as is. Removing a column deletes its values from all rows; a column cannot be renamed (remove it and add a new one); " +
+                 "the key column of a table with rows cannot change (DATA_TABLE_KEY_CHANGE); new constraints must hold for existing rows. " +
+                 PlanFlow + " " + ColumnsHelp)]
+    public static async Task<DataTableChangeResult> AlterTable(
+        IDataTableService tables,
+        [Description("Table id or name from list_tables.")] string table,
+        [Description("New table name.")] string? rename = null,
+        [Description("Columns to append.")] IReadOnlyList<DataColumn>? addColumns = null,
+        [Description("Names of columns to remove.")] IReadOnlyList<string>? removeColumns = null,
+        [Description("Full new definitions of existing columns, matched by name (type, values, sensitive, key).")] IReadOnlyList<DataColumn>? changeColumns = null,
+        [Description("New integrity rules replacing the current ones; omit to keep them.")] DataTableConstraints? constraints = null,
+        [Description("Optional project id: a table name is looked up in this project first, then among shared tables.")] Guid? projectId = null,
+        [Description("planId from the plan the user confirmed; omit to get a plan.")] string? planId = null,
+        CancellationToken ct = default)
+    {
+        var alteration = new DataTableAlteration
+        {
+            Rename = rename,
+            AddColumns = addColumns,
+            RemoveColumns = removeColumns,
+            ChangeColumns = changeColumns,
+            Constraints = constraints,
+        };
+        return string.IsNullOrWhiteSpace(planId)
+            ? new(false, await tables.PlanAlterAsync(table, alteration, ct, projectId).ConfigureAwait(false), null)
+            : new(true, null, await tables.ApplyAlterAsync(table, alteration, planId, ct, projectId).ConfigureAwait(false));
     }
 }

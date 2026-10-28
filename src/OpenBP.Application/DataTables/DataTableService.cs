@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -23,11 +25,16 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
     /// <summary>Код помилки: колонка <c>ref</c> посилається на таблицю, якої немає в проєкті чи серед спільних (F8-02).</summary>
     public const string RefInvalidCode = "DATA_TABLE_REF_INVALID";
 
+    /// <summary>Код конфлікту: план зміни застарів — таблицю змінили після нього або аргументи інші (F3-109).</summary>
+    public const string PlanStaleCode = "DATA_TABLE_PLAN_STALE";
+
     /// <summary>Найдовша назва таблиці.</summary>
     public const int MaxNameLength = 100;
 
     private const string Entity = "data-table";
     private const string RowEntity = "data-row";
+
+    private static readonly JsonSerializerOptions PlanJson = new(JsonSerializerDefaults.Web);
 
     private readonly ProjectAccess _access = new(db, currentUser);
 
@@ -139,6 +146,152 @@ public sealed class DataTableService(OpenBpDbContext db, PostgresDataTableStore 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
+
+    /// <inheritdoc />
+    public async Task<DataTablePlan> PlanCreateAsync(DataTableDefinition definition, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var projectId = definition.ProjectId;
+        await _access.RequireAsync(projectId, UserRole.Editor, "project", projectId ?? Guid.Empty, ct);
+        var trimmed = ValidName(definition.Name);
+        var columns = definition.Columns ?? [];
+        Validate(columns, definition.Constraints);
+        await ValidateRefsAsync(trimmed, columns, projectId, ct);
+        await EnsureNameFreeAsync(trimmed, projectId, null, ct);
+        return new DataTablePlan(PlanIdOf("create", null, null, definition), "create", definition with { Name = trimmed, Columns = columns })
+        {
+            AddedColumns = columns,
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<DataTableSummary> ApplyCreateAsync(DataTableDefinition definition, string planId, CancellationToken ct)
+    {
+        var plan = await PlanCreateAsync(definition, ct);
+        EnsureSamePlan(plan, planId);
+        return await CreateAsync(definition, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<DataTablePlan> PlanAlterAsync(string reference, DataTableAlteration alteration, CancellationToken ct, Guid? projectId = null)
+    {
+        ArgumentNullException.ThrowIfNull(alteration);
+        var table = await FindAsync(reference, projectId, ct);
+        await _access.RequireAsync(table.ProjectId, UserRole.Editor, Entity, table.Id, ct);
+        var before = PostgresDataTableStore.ParseColumns(table.Columns);
+        var current = PostgresDataTableStore.ParseConstraints(table.Constraints);
+        var (columns, added, removed, changed) = Resolve(before, alteration);
+        var trimmed = ValidName(alteration.Rename ?? table.Name);
+        var constraints = Validate(columns, alteration.Constraints ?? current);
+        await ValidateRefsAsync(trimmed, columns, table.ProjectId, ct);
+        if (!string.Equals(trimmed, table.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            await EnsureNameFreeAsync(trimmed, table.ProjectId, table.Id, ct);
+        }
+
+        var rows = await db.DataRows.CountAsync(r => r.TableId == table.Id, ct);
+        var oldKey = before.FirstOrDefault(c => c.Key);
+        var newKey = columns.FirstOrDefault(c => c.Key);
+        if (rows > 0 && !string.Equals(oldKey?.Name, newKey?.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ConflictException(KeyChangeCode, "Ключову колонку таблиці з рядками змінити не можна — створіть нову таблицю й імпортуйте дані.");
+        }
+
+        if (rows > 0 && !constraints.IsEmpty)
+        {
+            await CheckExistingRowsAsync(new DataTableInfo(table.Id, trimmed, columns) { Constraints = constraints }, removed, ct);
+        }
+
+        var warnings = new List<string>();
+        foreach (var column in removed)
+        {
+            var filled = await db.Database
+                .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM data_rows WHERE table_id = {table.Id} AND jsonb_exists(data, {column.Name})")
+                .SingleAsync(ct);
+            if (filled > 0)
+            {
+                warnings.Add($"Колонка «{column.Name}» видаляється: її значення зникнуть із рядків — {filled}.");
+            }
+        }
+
+        if (rows > 0)
+        {
+            warnings.AddRange(changed.Where(c => c.Before.Type != c.After.Type).Select(c =>
+                $"Тип колонки «{c.After.Name}» змінюється з {TypeName(c.Before.Type)} на {TypeName(c.After.Type)}: наявні значення не перетворюються."));
+        }
+
+        var definition = new DataTableDefinition(trimmed, columns) { Constraints = constraints, ProjectId = table.ProjectId };
+        return new DataTablePlan(PlanIdOf("alter", table.Id, table.UpdatedAt, definition), "alter", definition)
+        {
+            TableId = table.Id,
+            RenamedFrom = string.Equals(trimmed, table.Name, StringComparison.Ordinal) ? null : table.Name,
+            AddedColumns = added,
+            RemovedColumns = removed,
+            ChangedColumns = changed,
+            ConstraintsChanged = PostgresDataTableStore.SerializeConstraints(constraints) != PostgresDataTableStore.SerializeConstraints(current),
+            RowCount = rows,
+            Warnings = warnings,
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<DataTableSummary> ApplyAlterAsync(string reference, DataTableAlteration alteration, string planId, CancellationToken ct, Guid? projectId = null)
+    {
+        var plan = await PlanAlterAsync(reference, alteration, ct, projectId);
+        EnsureSamePlan(plan, planId);
+        return await UpdateAsync(plan.TableId!.Value, plan.Definition, ct);
+    }
+
+    /// <summary>Колонки після зміни: без видалених, змінені на місці, нові в кінці.</summary>
+    private static (List<DataColumn> Columns, List<DataColumn> Added, List<DataColumn> Removed, List<DataColumnChange> Changed) Resolve(
+        IReadOnlyList<DataColumn> before, DataTableAlteration alteration)
+    {
+        DataColumn Existing(string name) =>
+            before.FirstOrDefault(c => string.Equals(c.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? throw new DataTableValidationException(new DataTableException(DataTableRules.Codes.ColumnUnknown,
+                $"Колонки «{name}» у таблиці немає; є {string.Join(", ", before.Select(c => c.Name))}."));
+
+        var removed = (alteration.RemoveColumns ?? []).Select(Existing).Distinct().ToList();
+        var changes = (alteration.ChangeColumns ?? []).Select(c => new DataColumnChange(Existing(c.Name), c)).ToList();
+        if (changes.FirstOrDefault(c => removed.Contains(c.Before)) is { } both)
+        {
+            throw new ArgumentException($"Колонка «{both.Before.Name}» і видаляється, і змінюється — оберіть щось одне.", nameof(alteration));
+        }
+
+        var added = (alteration.AddColumns ?? []).ToList();
+        var columns = before.Where(c => !removed.Contains(c))
+            .Select(c => changes.LastOrDefault(x => x.Before == c)?.After ?? c)
+            .Concat(added)
+            .ToList();
+        return (columns, added, removed, [.. changes.Where(c => c.Before != c.After)]);
+    }
+
+    private async Task EnsureNameFreeAsync(string name, Guid? projectId, Guid? except, CancellationToken ct)
+    {
+        var normalized = name.ToUpperInvariant();
+        if (await db.DataTables.AnyAsync(t => t.NormalizedName == normalized && t.ProjectId == projectId && t.Id != except, ct))
+        {
+            throw new ConflictException(NameTakenCode, $"Таблиця «{name}» уже є.");
+        }
+    }
+
+    private static void EnsureSamePlan(DataTablePlan plan, string planId)
+    {
+        if (!string.Equals(plan.PlanId, planId?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ConflictException(PlanStaleCode,
+                "План застарів: таблицю змінили після нього або аргументи інші. Складіть план ще раз і покажіть його людині.");
+        }
+    }
+
+    /// <summary>Відбиток плану: дія, таблиця з версією і структура — той самий виклик на тій самій таблиці дає той самий id.</summary>
+    private static string PlanIdOf(string action, Guid? tableId, DateTimeOffset? version, DataTableDefinition definition)
+    {
+        var payload = JsonSerializer.Serialize(new { action, tableId, version, definition }, PlanJson);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)))[..32];
+    }
+
+    private static string TypeName(DataColumnType type) => type.ToString().ToLowerInvariant();
 
     /// <summary>Подробиці для журналу аудиту: назва, проєкт, колонки й обмеження (рядки не пишуться).</summary>
     private static JsonObject AuditDetails(DataTableEntity table, IReadOnlyList<DataColumn> columns) => new()
