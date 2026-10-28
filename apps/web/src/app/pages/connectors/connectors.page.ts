@@ -3,9 +3,11 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { CredentialsApiService } from '../../credentials/credentials-api.service';
 import { NotifyService } from '../../shared/notify.service';
 import { ConnectorCatalogComponent } from '../../connectors/connector-catalog.component';
 import { ConnectorFormComponent } from '../../connectors/connector-form.component';
@@ -16,6 +18,7 @@ import {
   ConnectorStatus,
   ConnectorSummary,
   ConnectorsApiService,
+  apiErrorCode,
   apiErrorMessage,
 } from '../../connectors/connectors-api.service';
 
@@ -26,7 +29,7 @@ import {
 @Component({
   selector: 'app-connectors-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
+  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatCheckboxModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-4 flex items-center gap-4">
@@ -82,6 +85,7 @@ import {
               <th class="p-2" i18n="@@connectors.col.status">Стан</th>
               <th class="p-2" i18n="@@connectors.col.tools">Tools</th>
               <th class="p-2" i18n="@@connectors.col.cachedAt">Оновлено</th>
+              <th class="p-2"><span class="sr-only" i18n="@@connectors.col.actions">Дії</span></th>
             </tr>
           </thead>
           <tbody>
@@ -94,6 +98,9 @@ import {
                 <td class="p-2" [class]="statusClass(c.status)" data-testid="status">{{ statusLabel(c.status) }}</td>
                 <td class="p-2">{{ c.toolCount }}</td>
                 <td class="p-2">{{ c.toolsCachedAt ? (c.toolsCachedAt | date: 'short') : '—' }}</td>
+                <td class="p-2">
+                  <button mat-button type="button" color="warn" data-testid="row-delete" (click)="startDelete(c.id)" i18n="@@connectors.delete">Видалити</button>
+                </td>
               </tr>
             }
           </tbody>
@@ -115,7 +122,24 @@ import {
             >
               Оновити tools
             </button>
+            <button mat-button type="button" color="warn" data-testid="delete-button" [disabled]="deleting()" (click)="confirmingDelete.set(true)" i18n="@@connectors.delete">
+              Видалити
+            </button>
           </div>
+          @if (confirmingDelete()) {
+            <div class="mb-3 max-w-2xl rounded-md border border-red-300 p-3" role="alertdialog" data-testid="delete-confirm-box">
+              <p class="mb-2" i18n="@@connectors.delete.confirm">Видалити підключення «{{ d.summary.name }}»? Сценарії, що його використовують, перестануть працювати.</p>
+              @if (d.credentialId) {
+                <mat-checkbox [checked]="deleteCredential()" (change)="deleteCredential.set($event.checked)" data-testid="delete-credential" i18n="@@connectors.delete.credential">
+                  Видалити також облікові дані (якщо їх більше ніхто не використовує)
+                </mat-checkbox>
+              }
+              <div class="mt-2 flex gap-2">
+                <button mat-flat-button type="button" color="warn" data-testid="delete-confirm" [disabled]="deleting()" (click)="confirmDelete(d)" i18n="@@connectors.delete.yes">Так, видалити</button>
+                <button mat-button type="button" data-testid="delete-cancel" (click)="confirmingDelete.set(false)" i18n="@@connectors.delete.no">Ні</button>
+              </div>
+            </div>
+          }
           <p class="mb-2 font-mono text-sm opacity-70" data-testid="connector-endpoint">
             @if (d.summary.transport === 'stdio') {
               {{ d.config.command }} {{ (d.config.arguments ?? []).join(' ') }}
@@ -139,6 +163,7 @@ export class ConnectorsPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly notify = inject(NotifyService);
+  private readonly credentials = inject(CredentialsApiService);
 
   /** Вкладка: встановлені конектори або каталог (F6-16). */
   readonly view = signal<'installed' | 'catalog'>('installed');
@@ -148,6 +173,9 @@ export class ConnectorsPage implements OnInit {
   readonly selected = signal<ConnectorDetail | null>(null);
   readonly loading = signal(false);
   readonly refreshing = signal(false);
+  readonly confirmingDelete = signal(false);
+  readonly deleting = signal(false);
+  readonly deleteCredential = signal(true);
   readonly adding = signal(false);
   readonly error = signal<string | null>(null);
   readonly detailError = signal<string | null>(null);
@@ -204,6 +232,52 @@ export class ConnectorsPage implements OnInit {
       .subscribe({
         next: (detail) => this.selected.set(detail),
         error: (e: unknown) => this.error.set(apiErrorMessage(e)),
+      });
+  }
+
+  /** «Видалити» в рядку: відкрити підключення й одразу запитати підтвердження. */
+  startDelete(id: string): void {
+    this.detailError.set(null);
+    this.confirmingDelete.set(true);
+    this.reloadDetail(id);
+  }
+
+  /**
+   * Видалення підключення. 409 (використовують активні сценарії) показується текстом Api зі списком сценаріїв.
+   * Облікові дані видаляються окремо й лише на вимогу: якщо їх ще хтось використовує, Api відмовить — підключення
+   * при цьому вже видалене, про це повідомляємо окремо.
+   */
+  confirmDelete(detail: ConnectorDetail): void {
+    this.deleting.set(true);
+    this.detailError.set(null);
+    const { id, name } = detail.summary;
+    this.api
+      .delete(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.deleting.set(false);
+          this.confirmingDelete.set(false);
+          this.selected.set(null);
+          this.connectors.update((list) => list.filter((c) => c.id !== id));
+          this.notify.success($localize`:@@connectors.deleted:Підключення «${name}:name:» видалено.`);
+          if (detail.credentialId && this.deleteCredential()) this.removeCredential(detail.credentialId);
+        },
+        error: (e: unknown) => {
+          this.deleting.set(false);
+          const hint = apiErrorCode(e) === 'CONNECTOR_IN_USE' ? ' ' + $localize`:@@connectors.delete.inUseHint:Деактивуйте ці сценарії або приберіть із них це підключення — тоді його можна видалити.` : '';
+          this.detailError.set(apiErrorMessage(e) + hint);
+        },
+      });
+  }
+
+  private removeCredential(id: string): void {
+    this.credentials
+      .delete(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => this.notify.success($localize`:@@connectors.credentialDeleted:Облікові дані видалено.`),
+        error: (e: unknown) => this.notify.error($localize`:@@connectors.credentialKept:Облікові дані лишилися: ${apiErrorMessage(e)}:reason:`),
       });
   }
 
