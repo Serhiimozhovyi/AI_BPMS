@@ -6114,6 +6114,318 @@
         ]
       }
     },
+    "/api/v1/assistant/conversations": {
+      "get": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Розмови загального помічника",
+        "description": "Мої розмови, новіші першими. Admin з `userId` бачить розмови іншого користувача. Лише editor і admin.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssistantConversationSummary"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Нова розмова",
+        "description": "Порожня розмова; `title` необов'язковий — без нього назвою стане перше повідомлення.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantConversationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConversation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assistant/conversations/{id}": {
+      "get": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Розмова",
+        "description": "Репліки (`user`, `assistant`, `tool` — крок інструмента з підсумком, `note` — рішення щодо пропозиції) і пропозиції змін. Бачать автор і admin; для інших — 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConversation"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Видалити розмову",
+        "description": "Автор або admin.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assistant/conversations/{id}/messages": {
+      "post": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Повідомлення помічнику (SSE)",
+        "description": "Тіло: `message` (до 8000 символів) і `context` — де користувач (`page`, `workflowId`, `nodeId`, `executionId`, `projectId`, `table`). Інструменти — tools `/mcp` з правами користувача: читання виконується одразу, зміни стають пропозиціями (`create_table`/`alter_table` — з планом) і чекають рішення. Відповідь — `text/event-stream`: `step`, `proposal`, `message`, `error`, `done`; розмова зберігається. Ліміт — 20 кроків інструментів і 120 с. Пише лише автор. Не налаштовано — 409 ASSISTANT_NOT_CONFIGURED.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assistant/conversations/{id}/proposals/{proposalId}": {
+      "post": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Застосувати чи скасувати пропозицію",
+        "description": "`apply: true` викликає інструмент з аргументами пропозиції (для плану — з його `planId`) від імені користувача; `false` — скасовує. Рішення стає приміткою для наступного повідомлення моделі. Вже вирішена — 409 ASSISTANT_PROPOSAL_DECIDED. Лише автор розмови.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantProposalView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/evaluations/{id}": {
       "get": {
         "tags": [
@@ -6677,6 +6989,174 @@
           }
         }
       },
+      "AssistantChatRequest": {
+        "required": [
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "context": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AssistantPageContext"
+              }
+            ]
+          }
+        }
+      },
+      "AssistantConversation": {
+        "required": [
+          "id",
+          "title",
+          "userId",
+          "messages",
+          "proposals",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantMessageView"
+            }
+          },
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantProposalView"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AssistantConversationInput": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AssistantConversationSummary": {
+        "required": [
+          "id",
+          "title",
+          "userId",
+          "messageCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AssistantDecision": {
+        "required": [
+          "apply"
+        ],
+        "type": "object",
+        "properties": {
+          "apply": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AssistantMessageView": {
+        "required": [
+          "role",
+          "text",
+          "tool",
+          "ok",
+          "at"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tool": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ok": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "AssistantModel": {
         "required": [
           "name"
@@ -6685,6 +7165,50 @@
         "properties": {
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "AssistantPageContext": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workflowId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "nodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "executionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "table": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6734,6 +7258,61 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "AssistantProposalView": {
+        "required": [
+          "id",
+          "tool",
+          "arguments",
+          "plan",
+          "status",
+          "result",
+          "createdAt",
+          "decidedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "arguments": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "plan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -6806,9 +7385,6 @@
               "string"
             ]
           },
-          "configured": {
-            "type": "boolean"
-          },
           "profiles": {
             "type": [
               "null",
@@ -6819,13 +7395,16 @@
             }
           },
           "primaryIndex": {
-            "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
               "integer",
               "string"
-            ]
+            ],
+            "format": "int32"
+          },
+          "configured": {
+            "type": "boolean"
           }
         }
       },
@@ -6859,13 +7438,13 @@
             }
           },
           "primaryIndex": {
-            "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
               "integer",
               "string"
-            ]
+            ],
+            "format": "int32"
           }
         }
       },
