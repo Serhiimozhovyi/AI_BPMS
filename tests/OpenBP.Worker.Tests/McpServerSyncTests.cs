@@ -81,6 +81,69 @@ public sealed class McpServerSyncTests(PostgresFixture postgres)
         Assert.False(worker.Mcp.TryGetServer(server.Id.ToString(), out _));
     }
 
+    [Fact]
+    public async Task StdioConnector_GenericCredential_FieldsMappedToEnv_ComputedValuesScrubbed()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var credentialId = await worker.Credentials.CreateAsync(
+            "db", "database",
+            new JsonObject { ["engine"] = "postgres", ["host"] = "db.local", ["database"] = "crm", ["username"] = "reader", ["password"] = "pw-secret-1", ["ssl"] = "require" },
+            null, default);
+        var server = await AddServerAsync(
+            worker,
+            "stdio",
+            new JsonObject
+            {
+                ["command"] = "dotnet",
+                ["environment"] = new JsonObject { ["SQL_MAX_ROWS"] = "10" },
+                ["credentialMap"] = new JsonObject { ["engine"] = "SQL_PROVIDER", ["$connectionString"] = "SQL_CONNECTION_STRING" },
+            },
+            credentialId);
+        var scrubber = new SecretScrubber();
+
+        await worker.Servers.SyncAsync(Workflow(server.Id.ToString()), scrubber, default);
+
+        Assert.True(worker.Mcp.TryGetServer(server.Id.ToString(), out var config));
+        Assert.Equal("10", config.Environment!["SQL_MAX_ROWS"]);
+        Assert.Equal("postgres", config.Environment["SQL_PROVIDER"]);
+        var connectionString = config.Environment["SQL_CONNECTION_STRING"]!;
+        Assert.Contains("Password=pw-secret-1", connectionString, StringComparison.Ordinal);
+        Assert.Equal("помилка: ***", scrubber.Scrub($"помилка: {connectionString}"));
+        // Значення-перемикачі (рушій, SSL) не секретні й не маскуються в тексті кроків.
+        Assert.Equal("postgres require", scrubber.Scrub("postgres require"));
+    }
+
+    [Fact]
+    public async Task HttpConnector_GenericCredential_HeaderMapWithPrefix_LegacyCredentialStillWorks()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var map = new JsonObject { ["$authorization"] = "Authorization", ["apiKey"] = "X-API-Key" };
+        var basic = await worker.Credentials.CreateAsync("basic", "basic", new JsonObject { ["username"] = "u", ["password"] = "p-secret" }, null, default);
+        var keyed = await worker.Credentials.CreateAsync("key", "apiKey", new JsonObject { ["apiKey"] = "k-secret-1" }, null, default);
+        var legacy = await worker.Credentials.CreateAsync(
+            "legacy", "mcp.http", new JsonObject { ["headers"] = new JsonObject { ["Authorization"] = "Bearer legacy-token" } }, null, default);
+        var config = new JsonObject { ["url"] = "http://127.0.0.1:1/mcp", ["credentialMap"] = map };
+        var servers = new[]
+        {
+            await AddServerAsync(worker, "http", config.DeepClone(), basic),
+            await AddServerAsync(worker, "http", config.DeepClone(), keyed),
+            await AddServerAsync(worker, "http", config.DeepClone(), legacy),
+        };
+        var scrubber = new SecretScrubber();
+
+        foreach (var server in servers)
+        {
+            await worker.Servers.SyncAsync(Workflow(server.Id.ToString()), scrubber, default);
+        }
+
+        var headers = servers.Select(s => worker.Mcp.TryGetServer(s.Id.ToString(), out var c) ? c.Headers! : throw new InvalidOperationException()).ToList();
+        Assert.Equal("Basic " + Convert.ToBase64String("u:p-secret"u8.ToArray()), headers[0]["Authorization"]);
+        Assert.Equal("k-secret-1", headers[1]["X-API-Key"]);
+        Assert.False(headers[1].ContainsKey("Authorization"));
+        Assert.Equal("Bearer legacy-token", headers[2]["Authorization"]);
+        Assert.Equal("***", scrubber.Scrub(headers[0]["Authorization"]));
+    }
+
     [Theory]
     [InlineData("http", """{ "command": "x" }""", "url")]
     [InlineData("stdio", """{ "url": "http://x/mcp" }""", "command")]

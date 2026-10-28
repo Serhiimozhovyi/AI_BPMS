@@ -15,6 +15,11 @@
     "url": "http://sql:8080/mcp"
   },
   "credential": {
+    "type": "database",
+    "map": {
+      "engine": "SQL_PROVIDER",
+      "$connectionString": "SQL_CONNECTION_STRING"
+    },
     "env": [
       {
         "name": "SQL_PROVIDER",
@@ -49,6 +54,29 @@
     ],
     "headers": []
   },
+  "settings": [
+    {
+      "name": "allowWrite",
+      "title": "Дозволити запис",
+      "description": "true — дозволити insert, update, upsert, delete, execute; порожньо — лише читання.",
+      "placeholder": "true",
+      "env": "SQL_ALLOW_WRITE"
+    },
+    {
+      "name": "maxRows",
+      "title": "Найбільше рядків у відповіді",
+      "description": "Порожньо — 1000.",
+      "placeholder": "1000",
+      "env": "SQL_MAX_ROWS"
+    },
+    {
+      "name": "timeoutSec",
+      "title": "Таймаут запиту, секунд",
+      "description": "Порожньо — 30.",
+      "placeholder": "30",
+      "env": "SQL_TIMEOUT_SEC"
+    }
+  ],
   "actions": [
     {
       "name": "changes_since",

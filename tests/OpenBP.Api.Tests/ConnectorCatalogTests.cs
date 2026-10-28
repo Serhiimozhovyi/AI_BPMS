@@ -155,6 +155,87 @@ public class ConnectorCatalogTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Builtin_manifests_match_the_schema_and_use_generic_credential_types()
+    {
+        var schema = Json.Schema.JsonSchema.FromText(File.ReadAllText(Path.Combine(RepoRoot(), "tools", "connector-template", "schemas", "connector.schema.json")));
+        var files = Directory.GetFiles(Path.Combine(RepoRoot(), "connectors"), "connector.json", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Append(Path.Combine(RepoRoot(), "tools", "connector-template", "connector.json"));
+        foreach (var file in files)
+        {
+            var result = schema.Evaluate(JsonDocument.Parse(File.ReadAllText(file)).RootElement, new Json.Schema.EvaluationOptions { OutputFormat = Json.Schema.OutputFormat.List });
+            Assert.True(result.IsValid, $"{file}: {string.Join("; ", (result.Details ?? []).Where(d => d.Errors is not null).SelectMany(d => d.Errors!.Select(e => $"{d.InstanceLocation} {e.Value}")))}");
+        }
+
+        var types = (await ListAsync(await LoginAsync(UserRole.Viewer)))
+            .Where(e => e.GetProperty("source").GetString() == "builtin")
+            .ToDictionary(IdOf, e => e.GetProperty("manifest").GetProperty("credential") is { ValueKind: JsonValueKind.Object } c && c.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null);
+        Assert.Equal("telegram.bot", types["telegram"]);
+        Assert.Equal("oauth2.clientCredentials", types["kit-crm"]);
+        Assert.Equal("database", types["sql"]);
+        Assert.Equal("google.serviceAccount", types["gsheets"]);
+        Assert.Equal("basic", types["onec"]);
+        Assert.Null(types["http"]);
+    }
+
+    [Fact]
+    public void Kit_crm_manifest_asks_for_odata_address_as_a_setting_not_a_secret()
+    {
+        var manifest = ConnectorCatalog.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "connectors", "kit-crm", "connector.json")), "kit-crm");
+
+        var baseUrl = Assert.Single(manifest.Settings!, s => s.Name == "baseUrl");
+        Assert.True(baseUrl.Required);
+        Assert.Equal("Connector__BaseUrl", baseUrl.Env);
+        Assert.Equal(new Dictionary<string, string> { ["tokenUrl"] = "KIT_TOKEN_URL", ["clientId"] = "KIT_CLIENT_ID", ["clientSecret"] = "KIT_CLIENT_SECRET" }, manifest.Credential!.Map);
+        var config = manifest.ConfigFor(Mcp.Client.McpTransportKind.Stdio, new Dictionary<string, string> { ["baseUrl"] = "https://crm/odata/" });
+        Assert.Equal("https://crm/odata/", config.Environment!["Connector__BaseUrl"]);
+        Assert.Equal("KIT_CLIENT_SECRET", config.CredentialMap!["clientSecret"]);
+    }
+
+    [Fact]
+    public async Task Install_with_generic_credential_and_settings_maps_them_without_returning_secrets()
+    {
+        var admin = await LoginAsync(UserRole.Admin);
+        var credential = await admin.PostAsJsonAsync("/api/v1/credentials", new { name = $"Bot {Guid.NewGuid():N}", type = "telegram.bot", data = new { token = "123:bot-secret" } });
+        Assert.Equal(HttpStatusCode.Created, credential.StatusCode);
+        var credentialId = (await JsonAsync(credential)).GetProperty("id").GetGuid();
+
+        // Тип не той, що очікує маніфест, — зрозуміла помилка.
+        var wrong = await admin.PostAsJsonAsync("/api/v1/credentials", new { name = $"Key {Guid.NewGuid():N}", type = "bearer", data = new { token = "t" } });
+        var wrongId = (await JsonAsync(wrong)).GetProperty("id").GetGuid();
+        var rejected = await admin.PostAsJsonAsync($"{Catalog}/telegram/install", new { credentialId = wrongId });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Contains("Telegram: бот", await rejected.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"{Catalog}/telegram/install", new { settings = new { nope = "x" } })).StatusCode);
+
+        // Один credential — у двох підключеннях.
+        var first = await admin.PostAsJsonAsync($"{Catalog}/telegram/install", new { name = $"Бот {Guid.NewGuid():N}", credentialId });
+        var second = await admin.PostAsJsonAsync($"{Catalog}/telegram/install", new { name = $"Бот {Guid.NewGuid():N}", credentialId });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var body = await first.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("bot-secret", body, StringComparison.Ordinal);
+        var detail = JsonDocument.Parse(body).RootElement;
+        Assert.Equal(credentialId, detail.GetProperty("credentialId").GetGuid());
+        Assert.Equal("TELEGRAM_BOT_TOKEN", detail.GetProperty("config").GetProperty("credentialMap").GetProperty("token").GetString());
+        var usedBy = (await JsonAsync(await admin.GetAsync($"/api/v1/credentials/{credentialId}"))).GetProperty("usedBy").GetProperty("connectors");
+        Assert.Equal(2, usedBy.GetArrayLength());
+
+        // Налаштування — у config, не серед секретів; PUT без credentialMap його не прибирає.
+        var sql = await JsonAsync(await admin.PostAsJsonAsync($"{Catalog}/sql/install", new { name = $"SQL {Guid.NewGuid():N}", settings = new { maxRows = "50" } }));
+        var config = sql.GetProperty("config");
+        Assert.Equal("50", config.GetProperty("environment").GetProperty("SQL_MAX_ROWS").GetString());
+        var id = sql.GetProperty("summary").GetProperty("id").GetGuid();
+        var put = await admin.PutAsJsonAsync($"/api/v1/connectors/{id}", new
+        {
+            name = sql.GetProperty("summary").GetProperty("name").GetString(),
+            transport = "stdio",
+            config = new { command = config.GetProperty("command").GetString(), arguments = config.GetProperty("arguments") },
+        });
+        Assert.Equal("SQL_CONNECTION_STRING", (await JsonAsync(put)).GetProperty("config").GetProperty("credentialMap").GetProperty("$connectionString").GetString());
+    }
+
+    [Fact]
     public async Task Install_checks_roles_entry_and_transport()
     {
         Assert.Equal(HttpStatusCode.Forbidden, (await (await LoginAsync(UserRole.Editor)).PostAsJsonAsync($"{Catalog}/fake/install", new { })).StatusCode);

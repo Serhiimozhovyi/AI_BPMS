@@ -151,10 +151,10 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
             var current = await store.GetDataAsync(id, ct) ?? throw new NotFoundException(Entity, id);
             RejectManaged(row.Type, input.Data);
             var merged = CredentialTypes.Merge(current, input.Data);
-            if (row.Type == OAuth2Credential.Type && OAuth2Credential.ClientFields.Any(input.Data.ContainsKey))
+            if (OAuth2Credential.IsOAuth(row.Type) && OAuth2Credential.ClientFields.Any(input.Data.ContainsKey))
             {
                 // Інший клієнт чи scopes — отримані токени вже не відповідають налаштуванням.
-                foreach (var managed in OAuth2Credential.ManagedFields)
+                foreach (var managed in OAuth2Credential.ManagedFields.Append("oauthErrorAt"))
                 {
                     merged.Remove(managed);
                 }
@@ -238,15 +238,17 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
 
     private static void RejectManaged(string type, JsonObject data)
     {
-        if (type != OAuth2Credential.Type)
+        if (!OAuth2Credential.IsOAuth(type))
         {
             return;
         }
 
-        var managed = data.Select(p => p.Key).Where(OAuth2Credential.ManagedFields.Contains).ToList();
+        var fields = type == OAuth2Credential.Type ? OAuth2Credential.ManagedFields : OAuth2Credential.ClientCredentialsManagedFields;
+        var managed = data.Select(p => p.Key).Where(fields.Contains).ToList();
         if (managed.Count > 0)
         {
-            throw new CredentialValidationException([.. managed.Select(f => new CredentialFieldError(f, "Поле заповнює OpenBP після «Підключити»."))]);
+            var hint = type == OAuth2Credential.Type ? "Поле заповнює OpenBP після «Підключити»." : "Поле заповнює OpenBP, коли отримує токен.";
+            throw new CredentialValidationException([.. managed.Select(f => new CredentialFieldError(f, hint))]);
         }
     }
 

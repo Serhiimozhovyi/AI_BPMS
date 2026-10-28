@@ -105,7 +105,13 @@ public sealed class ConnectorService(
 
         var (name, config) = await ValidateAsync(input, ct);
         // Прив'язка до запису каталогу (F6-16) зберігається, якщо PUT її не передав.
-        config = config with { Catalog = config.Catalog ?? ConnectorRegistration.ReadConfig(row).Catalog };
+        var previous = ConnectorRegistration.ReadConfig(row);
+        config = config with
+        {
+            Catalog = config.Catalog ?? previous.Catalog,
+            // Відображення полів credential'а (F3-93) — теж; при зміні транспорту цілі (змінні/заголовки) вже не підходять.
+            CredentialMap = config.CredentialMap ?? (row.Transport == ConnectorRegistration.TransportValue(input.Transport) ? previous.CredentialMap : null),
+        };
         row.ProjectId = input.ProjectId;
         row.Name = name;
         row.Transport = ConnectorRegistration.TransportValue(input.Transport);
@@ -397,7 +403,11 @@ public sealed class ConnectorService(
             JsonObject? credential = null;
             if (row.CredentialId is { } credentialId)
             {
-                credential = await credentials().GetAsync(credentialId.ToString(), ct);
+                var provider = credentials();
+                credential = provider is IAccessTokenCredentialProvider tokens
+                             && ConnectorCredentialMap.UsesAccessToken(ConnectorRegistration.ReadConfig(row).CredentialMap)
+                    ? await tokens.GetAsync(credentialId.ToString(), issueAccessToken: true, ct)
+                    : await provider.GetAsync(credentialId.ToString(), ct);
             }
 
             config = ConnectorRegistration.Build(row, credential);

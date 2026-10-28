@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Connectors;
+using OpenBP.Application.Credentials;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
 using OpenBP.Engine.Expressions;
@@ -22,7 +23,8 @@ public sealed class ConnectorConfigurationException(string message) : Exception(
 /// реєструє відсутні й перереєстровує змінені за <c>transport</c>/<c>config</c>/<c>credential_id</c>/даними credential'а.
 /// <list type="bullet">
 /// <item>Credential конектора — <c>{ "headers": { … } }</c> (http) або <c>{ "env": { … } }</c> (stdio) — зливається в
-/// <see cref="McpServerConfig"/>; його значення реєструються в <see cref="SecretScrubber"/> виконання.</item>
+/// <see cref="McpServerConfig"/>, поля credential'а загального типу — за <c>config.credentialMap</c> (F3-93,
+/// <see cref="ConnectorCredentialMap"/>); значення реєструються в <see cref="SecretScrubber"/> виконання.</item>
 /// <item><c>config</c> — JSON <see cref="ConnectorConfig"/> у camelCase; <c>tools_cache</c> (масив <see cref="McpToolInfo"/>),
 /// якщо є, стає кешем tools сервера — за ним <c>mcp.tool</c> приводить типи аргументів.</item>
 /// <item>Сервер, якого немає в <c>mcp_servers</c>, знімається з реєстру: вузол завершиться помилкою «сервер невідомий».</item>
@@ -121,7 +123,8 @@ public sealed class McpServerSync(
                 }
 
                 var credential = await LoadCredentialAsync(row, ct).ConfigureAwait(false);
-                scrubber.Add(credential);
+                scrubber.Add(CredentialTypes.ForScrubber(credential));
+                scrubber.Add(Computed(row, credential));
                 var fingerprint = Fingerprint(row, credential);
                 if (_fingerprints.TryGetValue(serverId, out var known) && known == fingerprint && registry.TryGetServer(serverId, out _))
                 {
@@ -151,12 +154,55 @@ public sealed class McpServerSync(
 
         try
         {
-            return await credentials.GetDataAsync(credentialId, ct).ConfigureAwait(false)
+            // Сервер, якому OpenBP передає токен OAuth2 (F3-93), отримує вже чинний токен.
+            return await credentials.GetDataAsync(credentialId, ConnectorCredentialMap.UsesAccessToken(ReadMap(row)), ct).ConfigureAwait(false)
                 ?? throw new ConnectorConfigurationException($"Конектор «{row.Name}»: credential {credentialId} не знайдено.");
         }
         catch (CredentialDecryptionException)
         {
             throw new ConnectorConfigurationException($"Конектор «{row.Name}»: credential {credentialId} не розшифровується.");
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string>? ReadMap(McpServerEntity row)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ConnectorConfig>(row.Config, ConfigJson)?.CredentialMap;
+        }
+        catch (JsonException)
+        {
+            // Некоректний config повідомить Build.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Обчислювані значення за <c>config.credentialMap</c> (<c>Basic …</c>, рядок підключення) — їх немає серед даних
+    /// credential'а дослівно, тож scrubber отримує їх окремо.
+    /// </summary>
+    private static JsonArray? Computed(McpServerEntity row, JsonObject? credential)
+    {
+        var map = ReadMap(row);
+        if (credential is null || map is null)
+        {
+            return null;
+        }
+
+        var computed = map.Where(p => p.Key.StartsWith('$')).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        var values = Mapped(row, () => ConnectorCredentialMap.Environment(computed, credential));
+        return [.. values.Select(v => (JsonNode?)JsonValue.Create(v.Value))];
+    }
+
+    private static List<KeyValuePair<string, string>> Mapped(McpServerEntity row, Func<IEnumerable<KeyValuePair<string, string>>> values)
+    {
+        try
+        {
+            return [.. values()];
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ConnectorConfigurationException($"Конектор «{row.Name}»: {ex.Message}");
         }
     }
 
@@ -181,7 +227,7 @@ public sealed class McpServerSync(
                     env[key] = value;
                 }
 
-                foreach (var (key, value) in Section(row, credential, "env"))
+                foreach (var (key, value) in Section(row, credential, "env").Concat(Mapped(row, () => ConnectorCredentialMap.Environment(config.CredentialMap, credential))))
                 {
                     env[key] = value;
                 }
@@ -212,6 +258,11 @@ public sealed class McpServerSync(
                 if (OAuth2Credential.AuthorizationHeader(credential) is { } authorization)
                 {
                     headers["Authorization"] = authorization;
+                }
+
+                foreach (var (key, value) in Mapped(row, () => ConnectorCredentialMap.Headers(config.CredentialMap, credential)))
+                {
+                    headers[key] = value;
                 }
 
                 return new McpServerConfig

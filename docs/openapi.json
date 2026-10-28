@@ -6164,6 +6164,15 @@
               "null",
               "string"
             ]
+          },
+          "credentialMap": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6265,6 +6274,22 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "credentialId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "settings": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6348,6 +6373,15 @@
             "items": {
               "$ref": "#/components/schemas/ConnectorManifestAction"
             }
+          },
+          "settings": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConnectorManifestSetting"
+            }
           }
         }
       },
@@ -6391,6 +6425,30 @@
             ],
             "items": {
               "$ref": "#/components/schemas/ConnectorManifestKey"
+            }
+          },
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "map": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "headerMap": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
             }
           }
         }
@@ -6438,6 +6496,49 @@
           "secret": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "ConnectorManifestSetting": {
+        "required": [
+          "name",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "placeholder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "env": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "header": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6639,6 +6740,27 @@
           },
           "required": {
             "type": "boolean"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "placeholder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "options": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

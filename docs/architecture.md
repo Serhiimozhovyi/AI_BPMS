@@ -245,8 +245,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ## 8. Безпека
 
-- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів, credential'а моделі помічника (F3-60, §10.8) і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`.
-- Secret scrubbing: значення credentials, що потрапили у вихід вузла, замінюються на `***` перед записом у `execution_steps` і перед віддачею через SSE/MCP.
+- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів, credential'а моделі помічника (F3-60, §10.8) і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`. Загальні типи (F3-93: `telegram.bot`, `apiKey`, `bearer`, `basic`, `oauth2.clientCredentials`, `database`, `google.serviceAccount`) описують доступ до системи; у змінні середовища чи заголовки MCP-сервера їх перетворює `ConnectorCredentialMap` за `config.credentialMap` конектора (лише назви) — однаково в Api і воркері, значення живуть тільки в реєстрі MCP-серверів процесу (docs/connectors.md §5.2). Токен `oauth2.clientCredentials` OpenBP отримує сам лише для конектора, якому його передає (`$accessToken`), під блокуванням рядка `credentials`.
+- Secret scrubbing: значення credentials, що потрапили у вихід вузла, замінюються на `***` перед записом у `execution_steps` і перед віддачею через SSE/MCP. Для конекторів — також обчислювані значення відображення (`Basic …`, рядок підключення), але не поля-перемикачі загальних типів (`engine`, `ssl`, `in`, `port`).
 - Jint: без CLR-interop, без мережі, з лімітами. stdio MCP-сервери — з таймаутами і лімітами пам'яті.
 - Webhook: опційна автентифікація (header-токен / Basic).
 - Ролі перевіряються в application-шарі, тобто однаково для REST, MCP і UI.

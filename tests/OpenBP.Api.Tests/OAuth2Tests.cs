@@ -8,10 +8,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Credentials;
 using OpenBP.Data;
 using OpenBP.Data.Credentials;
+using OpenBP.Mcp.Client;
 
 namespace OpenBP.Api.Tests;
 
@@ -231,6 +233,105 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
         Assert.Null(OAuth2Credential.AuthorizationHeader(new JsonObject { ["clientId"] = "x" }));
     }
 
+    private async Task<Guid> CreateClientCredentialsAsync(HttpClient admin, string secret = ClientSecret)
+    {
+        var response = await admin.PostAsJsonAsync("/api/v1/credentials", new
+        {
+            name = $"Service {Guid.NewGuid():N}",
+            type = "oauth2.clientCredentials",
+            data = new { tokenUrl = OAuthUrl("/token").ToString(), clientId = "svc", clientSecret = secret, scopes = "crm.read", audience = "crm" },
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    [Fact]
+    public async Task Client_credentials_token_is_issued_only_on_request_once_and_renewed_when_expiring()
+    {
+        var (admin, _) = await LoginAsync();
+        var id = await CreateClientCredentialsAsync(admin);
+        var store = Store();
+        var before = _server.ClientCalls;
+
+        // Звичайне читання (конектор сам ходить по токен) — без запиту до провайдера.
+        Assert.Null((await store.GetDataAsync(id, CancellationToken.None))!["accessToken"]);
+        Assert.Equal(before, _server.ClientCalls);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => store.GetDataAsync(id, issueAccessToken: true, CancellationToken.None)));
+        Assert.Equal(before + 1, _server.ClientCalls);
+        Assert.All(results, r => Assert.Equal($"cc-{before + 1}", (string?)r!["accessToken"]));
+        Assert.Equal("crm.read", _server.LastScope);
+        Assert.Equal("crm", _server.LastAudience);
+
+        // Чинний токен не перевидається; той, що спливає, — так.
+        await store.GetDataAsync(id, issueAccessToken: true, CancellationToken.None);
+        Assert.Equal(before + 1, _server.ClientCalls);
+        var data = await Store(refresh: false).GetDataAsync(id, CancellationToken.None);
+        data!["expiresAt"] = DateTimeOffset.UtcNow.AddSeconds(10).ToString("O");
+        await store.UpdateDataAsync(id, data, CancellationToken.None);
+        var renewed = await store.GetDataAsync(id, issueAccessToken: true, CancellationToken.None);
+        Assert.Equal(before + 2, _server.ClientCalls);
+        Assert.Equal($"cc-{before + 2}", (string?)renewed!["accessToken"]);
+
+        // Токен і секрет не повертаються API, поля токена не задаються вручну.
+        var body = await (await admin.GetAsync($"/api/v1/credentials/{id}")).Content.ReadAsStringAsync();
+        Assert.DoesNotContain("cc-", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(ClientSecret, body, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PatchAsJsonAsync($"/api/v1/credentials/{id}", new { data = new { accessToken = "x" } })).StatusCode);
+
+        // Новий секрет скидає отриманий токен.
+        await admin.PatchAsJsonAsync($"/api/v1/credentials/{id}", new { data = new { clientSecret = ClientSecret } });
+        Assert.Null((await Store(refresh: false).GetDataAsync(id, CancellationToken.None))!["accessToken"]);
+    }
+
+    [Fact]
+    public async Task Client_credentials_failure_is_recorded_without_details_and_not_retried_immediately()
+    {
+        var (admin, _) = await LoginAsync();
+        var id = await CreateClientCredentialsAsync(admin, secret: "wrong-secret");
+        var store = Store();
+        var before = _server.ClientCalls;
+
+        var data = await store.GetDataAsync(id, issueAccessToken: true, CancellationToken.None);
+        Assert.Equal("invalid_client", (string?)data!["oauthError"]);
+        Assert.Null(data["accessToken"]);
+
+        await store.GetDataAsync(id, issueAccessToken: true, CancellationToken.None);
+        Assert.Equal(before + 1, _server.ClientCalls);
+    }
+
+    [Fact]
+    public async Task Connector_receives_client_credentials_token_through_the_map()
+    {
+        var (admin, _) = await LoginAsync();
+        var id = await CreateClientCredentialsAsync(admin);
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } h && File.Exists(h) ? h : "dotnet";
+
+        var response = await admin.PostAsJsonAsync("/api/v1/connectors", new
+        {
+            name = $"Token {Guid.NewGuid():N}",
+            transport = "stdio",
+            config = new
+            {
+                command = host,
+                arguments = new[] { Path.Combine(AppContext.BaseDirectory, "OpenBP.Mcp.FakeServer.dll") },
+                credentialMap = new Dictionary<string, string> { ["$accessToken"] = "SERVICE_TOKEN", ["clientId"] = "SERVICE_CLIENT" },
+            },
+            credentialId = id,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("cc-", body, StringComparison.Ordinal);
+        var detail = JsonDocument.Parse(body).RootElement;
+        Assert.Equal("ok", detail.GetProperty("summary").GetProperty("status").GetString());
+        Assert.Equal("SERVICE_TOKEN", detail.GetProperty("config").GetProperty("credentialMap").GetProperty("$accessToken").GetString());
+        var registry = api.Services.GetRequiredService<IMcpServerRegistry>();
+        Assert.True(registry.TryGetServer(detail.GetProperty("summary").GetProperty("id").GetString()!, out var config));
+        Assert.StartsWith("cc-", config.Environment!["SERVICE_TOKEN"], StringComparison.Ordinal);
+        Assert.Equal("svc", config.Environment["SERVICE_CLIENT"]);
+    }
+
     private async Task SeedTokensAsync(Guid id, DateTimeOffset expiresAt, string refreshToken)
     {
         var store = Store(refresh: false);
@@ -248,7 +349,15 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
         private readonly ConcurrentDictionary<string, string> _challenges = new();
         private int _refreshCalls;
 
+        private int _clientCalls;
+
         public int RefreshCalls => Volatile.Read(ref _refreshCalls);
+
+        public int ClientCalls => Volatile.Read(ref _clientCalls);
+
+        public string? LastScope { get; private set; }
+
+        public string? LastAudience { get; private set; }
 
         public string? LastClientSecret { get; private set; }
 
@@ -284,6 +393,17 @@ public sealed class OAuth2Tests(ApiFactory api) : IAsyncLifetime
                         }
 
                         return Results.Json(new { access_token = $"at-r{RefreshCalls}", expires_in = 3600, token_type = "Bearer" });
+                    case "client_credentials":
+                        Interlocked.Increment(ref _clientCalls);
+                        LastScope = form["scope"];
+                        LastAudience = form["audience"];
+                        await Task.Delay(200);
+                        if (form["client_id"] != "svc" || form["client_secret"] != ClientSecret)
+                        {
+                            return Results.Json(new { error = "invalid_client", error_description = "super secret detail" }, statusCode: 401);
+                        }
+
+                        return Results.Json(new { access_token = $"cc-{ClientCalls}", expires_in = 3600, token_type = "Bearer" });
                     default:
                         return Results.Json(new { error = "unsupported_grant_type" }, statusCode: 400);
                 }

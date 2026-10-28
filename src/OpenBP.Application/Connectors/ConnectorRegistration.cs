@@ -9,7 +9,8 @@ namespace OpenBP.Application.Connectors;
 /// <summary>
 /// Перетворення рядка <c>mcp_servers</c> на <see cref="McpServerConfig"/> для реєстру процесу Api
 /// (docs/architecture.md §10.7): <c>config</c> (<see cref="ConnectorConfig"/>, camelCase) + credential
-/// <c>{ "headers": { … } }</c> (http) або <c>{ "env": { … } }</c> (stdio). Значення credential'а живуть лише в реєстрі.
+/// <c>{ "headers": { … } }</c> (http) або <c>{ "env": { … } }</c> (stdio) або поля загального типу за
+/// <see cref="ConnectorConfig.CredentialMap"/> (F3-93). Значення credential'а живуть лише в реєстрі.
 /// </summary>
 internal static class ConnectorRegistration
 {
@@ -64,6 +65,7 @@ internal static class ConnectorRegistration
                 Environment = config.Environment,
                 WorkingDirectory = string.IsNullOrWhiteSpace(config.WorkingDirectory) ? null : config.WorkingDirectory,
                 Catalog = CatalogId(config.Catalog),
+                CredentialMap = Map(config.CredentialMap, http: false),
             },
             McpTransportKind.Stdio => throw new ArgumentException("Для stdio потрібне поле config.command.", nameof(config)),
             McpTransportKind.Http when config.Url is { IsAbsoluteUri: true } url
@@ -72,6 +74,7 @@ internal static class ConnectorRegistration
                                            Url = url,
                                            Headers = config.Headers,
                                            Catalog = CatalogId(config.Catalog),
+                                           CredentialMap = Map(config.CredentialMap, http: true),
                                        },
             McpTransportKind.Http => throw new ArgumentException("Для http потрібне поле config.url з абсолютною http(s)-адресою.", nameof(config)),
             _ => throw new ArgumentException($"Невідомий транспорт «{transport}».", nameof(transport)),
@@ -79,6 +82,12 @@ internal static class ConnectorRegistration
     }
 
     private static string? CatalogId(string? catalog) => string.IsNullOrWhiteSpace(catalog) ? null : catalog.Trim();
+
+    private static IReadOnlyDictionary<string, string>? Map(IReadOnlyDictionary<string, string>? map, bool http)
+    {
+        ConnectorCredentialMap.Validate(map, http);
+        return map is { Count: > 0 } ? map : null;
+    }
 
     /// <summary><c>config</c> з рядка; некоректний JSON — порожні налаштування.</summary>
     public static ConnectorConfig ReadConfig(McpServerEntity row)
@@ -137,7 +146,7 @@ internal static class ConnectorRegistration
                 env[key] = value;
             }
 
-            foreach (var (key, value) in Section(row, credential, "env"))
+            foreach (var (key, value) in Section(row, credential, "env").Concat(Mapped(row, () => ConnectorCredentialMap.Environment(config.CredentialMap, credential))))
             {
                 env[key] = value;
             }
@@ -171,6 +180,11 @@ internal static class ConnectorRegistration
             headers["Authorization"] = authorization;
         }
 
+        foreach (var (key, value) in Mapped(row, () => ConnectorCredentialMap.Headers(config.CredentialMap, credential)))
+        {
+            headers[key] = value;
+        }
+
         return new McpServerConfig
         {
             Id = id,
@@ -179,6 +193,19 @@ internal static class ConnectorRegistration
             Url = config.Url,
             Headers = headers.Count == 0 ? null : headers,
         };
+    }
+
+    /// <summary>Значення за <see cref="ConnectorConfig.CredentialMap"/>; помилка — з назвою конектора, без значень.</summary>
+    private static List<KeyValuePair<string, string>> Mapped(McpServerEntity row, Func<IEnumerable<KeyValuePair<string, string>>> values)
+    {
+        try
+        {
+            return [.. values()];
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException($"Конектор «{row.Name}»: {ex.Message}", ex);
+        }
     }
 
     private static IEnumerable<KeyValuePair<string, string>> Section(McpServerEntity row, JsonObject? credential, string name)

@@ -322,9 +322,12 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
   "stdio": { "command": "dotnet", "arguments": ["/opt/openbp/connectors/telegram/OpenBP.Connectors.Telegram.dll"] },
   "http": { "url": "http://telegram:8080/mcp" },
   "credential": {
+    "type": "telegram.bot",
+    "map": { "token": "TELEGRAM_BOT_TOKEN" },
     "env": [{ "name": "TELEGRAM_BOT_TOKEN", "title": "Токен бота від @BotFather", "required": true, "secret": true }],
     "headers": []
   },
+  "settings": [],
   "triggers": []
 }
 ```
@@ -333,8 +336,14 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
   (`config.catalog`, у списку — `catalogId`), а шаблони сценаріїв посилаються на потрібні конектори.
 - `transport` — типовий транспорт; для нього обов'язкові налаштування `stdio` (`command`, `arguments`, `environment`,
   `workingDirectory`) або `http` (`url`, `headers`). Можна описати обидва — користувач обирає при встановленні.
-- `credential.env` / `credential.headers` — ключі credential'а `mcp.stdio` / `mcp.http`: після встановлення форма
-  облікових даних відкривається з цими назвами, лишається вписати значення. Секретів у маніфесті немає.
+- `credential.type` + `credential.map` / `credential.headerMap` — загальний тип облікових даних і як його поля стають
+  змінними середовища (stdio) чи заголовками (http), §5.2 (F3-93). Користувач заповнює підписані поля типу («Токен бота»,
+  «Client secret»), а не назви змінних; один credential можна вибрати в кількох підключеннях.
+- `credential.env` / `credential.headers` — старий спосіб: ключі credential'а `mcp.stdio` / `mcp.http` (форма з парами
+  «назва → значення»). Такі credentials працюють і з маніфестом загального типу. Секретів у маніфесті немає.
+- `settings` — несекретні налаштування підключення (F3-93): `[{ name, title, description?, placeholder?, required?, env?,
+  header? }]`, напр. адреса OData Кіт CRM. Значення з запиту встановлення (`settings: { <name>: значення }`) лягають у
+  `config.environment` (ціль `env`, stdio) чи `config.headers` (`header`, http), а не серед секретів; порожні пропускаються.
 - `actions` — дії (tools) конектора для палітри ще до підключення (F3-92): `[{ name, title, description? }]`; `name` — ім'я
   tool'а в `tools/list`, `title` — назва для людини (українською). Схеми аргументів тут немає: її дає discovery підключення.
   Контрактний тест кожного конектора звіряє `actions` з `tools/list` (новий tool без запису — червоний тест;
@@ -357,9 +366,60 @@ Push-події (ресурс подій + `resources/subscribe`) — контр
 Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }` за адресою `OPENBP_CONNECTOR_CATALOG_URL` (http(s) або шлях
 до файлу; читається не частіше ніж раз на 5 хв, недоступний — лише вбудовані з попередженням у журналі; запис з id
 вбудованого ігнорується). Кожен запис має `source` (`builtin` | `external`) і `installed` — видимі користувачу
-конектори з нього. `POST /api/v1/connectors/catalog/{id}/install { name?, transport?, projectId? }` створює конектор з
-типовими налаштуваннями (права й discovery — як у `POST /connectors`) і повертає `ConnectorDetail`; транспорт без
-налаштувань у маніфесті — 400.
+конектори з нього. `POST /api/v1/connectors/catalog/{id}/install { name?, transport?, projectId?, credentialId?, settings? }`
+створює конектор з типовими налаштуваннями, значеннями `settings` і відображенням `credential.map`/`headerMap` у
+`config.credentialMap` (права й discovery — як у `POST /connectors`) і повертає `ConnectorDetail`; транспорт без
+налаштувань у маніфесті, невідоме налаштування чи credential іншого типу (крім старих `mcp.stdio`/`mcp.http`/`generic`) — 400.
+
+### 5.2. Типи облікових даних і відображення на конектор (F3-93)
+
+Облікові дані описують **доступ до системи**, а не змінні конкретного MCP-сервера. Каталог типів — `GET
+/api/v1/credentials/types` (`CredentialTypes`): кожне поле має підпис, підказку (`description`), приклад (`placeholder`,
+у JSON Schema — `examples`), для вибору зі списку — `options` (`enum`), секретні поля — `writeOnly`.
+
+| Тип | Поля | Для чого |
+|---|---|---|
+| `telegram.bot` | `token` | Telegram |
+| `apiKey` | `apiKey`, `name?` (заголовок/параметр, типово `X-API-Key`), `in?` (`header` \| `query`) | REST-сервіси з ключем |
+| `bearer` | `token` | API-токен у `Authorization: Bearer` |
+| `basic` | `username`, `password?` | 1С, REST з Basic |
+| `oauth2.clientCredentials` | `tokenUrl`, `clientId`, `clientSecret`, `scopes?`, `audience?` | Keycloak (Кіт CRM), Entra ID (Microsoft Graph) |
+| `oauth2` | authorization code з PKCE, §7 | вхід від імені користувача |
+| `database` | `engine` (`postgres` \| `mysql`), `host`, `port?`, `database`, `username`, `password?`, `ssl?` (`disable` \| `prefer` \| `require`) | SQL |
+| `google.serviceAccount` | `serviceAccountJson` (вміст файлу ключа; перевіряються `client_email` і `private_key`) | Google Sheets |
+
+`mcp.stdio`, `mcp.http`, `generic` і LLM-типи лишаються як були.
+
+**Відображення.** `credential.map` (stdio) і `credential.headerMap` (http) у маніфесті — `{ <поле>: <ціль> }`; при
+встановленні вони копіюються в `config.credentialMap` підключення (лише назви, без значень; PUT без `credentialMap`
+його не прибирає, зміна транспорту — прибирає). Api і воркер, запускаючи MCP-сервер, беруть поле з даних credential'а й
+кладуть у змінну середовища `<ціль>` (`KIT_CLIENT_SECRET`) або в заголовок: `Назва` — значення як є,
+`Назва: префікс` — `префікс значення` (`"$accessToken": "Authorization: Bearer"`). Обчислювані поля:
+
+- `$accessToken` — токен `oauth2`/`oauth2.clientCredentials`. Для `oauth2.clientCredentials` OpenBP **сам отримує** токен
+  (`grant_type=client_credentials` з `scope`/`audience`) перед реєстрацією сервера і перевидає його, коли до `expiresAt`
+  лишається менше 60 с (під блокуванням рядка, як оновлення в §7); помилка провайдера пишеться в `oauthError`
+  (лише код), нова спроба — не раніше ніж за 30 с. Без `$accessToken`/`$authorization` у відображенні токен не
+  отримується: Кіт CRM і Microsoft Graph ходять по токен самі за `tokenUrl`/`clientId`/`clientSecret`.
+- `$authorization` — повне значення `Authorization`: `Bearer <accessToken|token>` або `Basic base64(username:password)`.
+- `$connectionString` — рядок підключення типу `database` (Npgsql: `Host`/`Port`/`Database`/`Username`/`Password`/`SSL Mode`;
+  MySQL: `Server`/…/`User ID`/`SslMode`), значення екрануються.
+
+Поле, якого в credential'і немає (старий `mcp.stdio` з `env`), пропускається, а секції `env`/`headers` старого credential'а
+зливаються як раніше. Значення відображення й обчислювані значення (`Basic …`, рядок підключення) реєструються в
+scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`, `port` — ні (їхні значення не секретні). Маніфест перевіряється
+при завантаженні: тип — загальний, ключі `map` — поля цього типу або доречні обчислювані, цілі — назви змінних
+(`^[A-Za-z_][A-Za-z0-9_]*$`) чи заголовків.
+
+Вбудовані конектори: `telegram` → `telegram.bot` (`token` → `TELEGRAM_BOT_TOKEN`); `kit-crm` → `oauth2.clientCredentials`
+(`KIT_TOKEN_URL`/`KIT_CLIENT_ID`/`KIT_CLIENT_SECRET`) + налаштування «Адреса OData», «FrontPagePath», «Id автора нотаток»;
+`msgraph` → `oauth2.clientCredentials` (`CLIENT_ID`/`CLIENT_SECRET`) + налаштування «Tenant ID»; `onec` → `basic`
+(`ONEC_USERNAME`/`ONEC_PASSWORD`) + «Адреса OData»; `sql` → `database` (`engine` → `SQL_PROVIDER`, `$connectionString` →
+`SQL_CONNECTION_STRING`) + «Дозволити запис», «Найбільше рядків», «Таймаут»; `gsheets` → `google.serviceAccount`;
+`http` — без облікових даних, налаштування «Дозволені хости», «Хости з приватними адресами»; шаблон Connector Kit →
+`bearer` (`CONNECTOR_TOKEN`) + «Адреса REST API», «Спосіб входу». `psy-support` лишається на старому способі (рядок
+підключення до БД для stdio і bearer-токен для http — різні доступи). Старі `env`/`headers` у маніфестах лишаються,
+доки форма встановлення (F3-94) не перейде на поля типу.
 
 Шаблони «Почати з прикладу» оголошують залежності в `examples/templates.json` (`"connectors": ["telegram", "onec"]`,
 поле `connectors` у `GET /workflows/templates`): якщо такого конектора ще не встановлено, у списку шаблонів поруч
