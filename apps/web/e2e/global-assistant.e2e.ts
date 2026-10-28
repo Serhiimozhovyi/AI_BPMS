@@ -18,6 +18,27 @@ interface Conversation {
 
 class FakeApi {
   conversations: Conversation[] = [];
+  /** Відповідь на повідомлення «створи таблицю»: пропозиція з планом (F3-109), яку людина застосовує чи скасовує. */
+  proposal = {
+    id: 'p1',
+    tool: 'create_table',
+    arguments: { name: 'Заявки' },
+    plan: {
+      planId: 'abc',
+      action: 'create',
+      definition: { name: 'Заявки' },
+      addedColumns: [
+        { name: 'number', type: 'string', key: true },
+        { name: 'phone', type: 'string', sensitive: true },
+      ],
+      warnings: [],
+    },
+    status: 'pending',
+    result: null as string | null,
+    createdAt: '2026-10-28T10:00:00Z',
+    decidedAt: null as string | null,
+  };
+  decisions: boolean[] = [];
   sent: { id: string; body: { message: string; context: Record<string, unknown> } }[] = [];
 
   async install(page: Page, role = 'admin'): Promise<void> {
@@ -52,6 +73,17 @@ class FakeApi {
           { role: 'assistant', text: 'У вас дві таблиці.', tool: null, ok: null, at: '' },
         );
         const sse = (e: object) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`;
+        if (body.message.includes('таблицю')) {
+          return route.fulfill({
+            status: 200,
+            contentType: 'text/event-stream',
+            body:
+              sse({ type: 'step', tool: 'create_table', ok: true, text: 'план змін — чекає рішення' }) +
+              sse({ type: 'proposal', tool: 'create_table', proposal: this.proposal }) +
+              sse({ type: 'message', text: 'Пропоную створити таблицю «Заявки».' }) +
+              sse({ type: 'done' }),
+          });
+        }
         return route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
@@ -60,6 +92,18 @@ class FakeApi {
             sse({ type: 'message', text: 'У вас дві таблиці.' }) +
             sse({ type: 'done' }),
         });
+      }
+      const decide = new RegExp(`^${BASE}/([^/]+)/proposals/([^/]+)$`).exec(path);
+      if (decide && method === 'POST') {
+        const apply = (request.postDataJSON() as { apply: boolean }).apply;
+        this.decisions.push(apply);
+        this.proposal = {
+          ...this.proposal,
+          status: apply ? 'applied' : 'rejected',
+          result: apply ? '{"applied":true,"table":{"id":"t1","name":"Заявки"}}' : null,
+          decidedAt: '2026-10-28T10:01:00Z',
+        };
+        return route.fulfill({ json: this.proposal });
       }
       const one = new RegExp(`^${BASE}/([^/]+)$`).exec(path);
       if (one && method === 'GET') return route.fulfill({ json: this.conversations.find((c) => c.id === one[1]) });
@@ -121,4 +165,39 @@ test('F3-110: viewer іконки не бачить', async ({ page }) => {
   await page.goto('/workflows');
   await expect(page.getByTestId('current-user')).toBeVisible();
   await expect(page.getByTestId('global-assistant-toggle')).toHaveCount(0);
+});
+
+test('F3-111: картка підтвердження — план таблиці, «Застосувати» і «Скасувати»', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto('/workflows');
+  await page.getByTestId('global-assistant-toggle').click();
+
+  const ask = async (text: string) => {
+    await page.getByTestId('global-assistant-input').fill(text);
+    await page.getByTestId('global-assistant-send').click();
+  };
+
+  // Пропозиція: план показано, нічого не застосовано, доки людина не натисне кнопку.
+  await ask('Створи таблицю для заявок');
+  const card = page.locator('app-proposal-card');
+  await expect(card).toContainText('Створити таблицю «Заявки»');
+  await expect(card).toContainText('number (string, ключ), phone (string, чутлива)');
+  await expect(page.getByTestId('global-assistant-log')).toContainText('Пропоную створити таблицю «Заявки».');
+  expect(api.decisions).toEqual([]);
+
+  await page.getByTestId('proposal-apply').click();
+  await expect(page.getByTestId('proposal-status')).toContainText('Застосовано.');
+  await expect(page.getByTestId('proposal-apply')).toHaveCount(0);
+  await expect(page.getByTestId('proposal-link')).toHaveAttribute('href', '/tables');
+  expect(api.decisions).toEqual([true]);
+
+  // Друга пропозиція: «Скасувати» нічого не застосовує.
+  api.proposal = { ...api.proposal, status: 'pending', result: null, decidedAt: null };
+  await page.getByTestId('global-assistant-new').click();
+  await ask('Створи ще одну таблицю');
+  await expect(page.getByTestId('proposal-apply')).toBeVisible();
+  await page.getByTestId('proposal-cancel').click();
+  await expect(page.getByTestId('proposal-status')).toContainText('Скасовано');
+  expect(api.decisions).toEqual([true, false]);
 });

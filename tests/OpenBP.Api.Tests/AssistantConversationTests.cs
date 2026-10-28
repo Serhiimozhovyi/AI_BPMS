@@ -161,6 +161,11 @@ public class AssistantConversationTests(ApiFactory api)
         Assert.Equal(["user", "tool", "tool", "assistant"], conversation.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("role").GetString()));
         var proposalId = conversation.GetProperty("proposals")[0].GetProperty("id").GetGuid();
 
+        // Крок, що завершився пропозицією, посилається на неї — клієнт малює картку на цьому місці (F3-111).
+        var toolMessages = conversation.GetProperty("messages").EnumerateArray().Where(m => m.GetProperty("role").GetString() == "tool").ToList();
+        Assert.Equal(JsonValueKind.Null, toolMessages[0].GetProperty("proposalId").ValueKind);
+        Assert.Equal(proposalId, toolMessages[1].GetProperty("proposalId").GetGuid());
+
         var applied = await editor.PostAsJsonAsync($"{Conversations}/{id}/proposals/{proposalId}", new { apply = true });
         Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
         Assert.Equal("applied", (await JsonAsync(applied)).GetProperty("status").GetString());

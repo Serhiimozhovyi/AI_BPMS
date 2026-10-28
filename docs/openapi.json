@@ -7154,6 +7154,13 @@
           "at": {
             "type": "string",
             "format": "date-time"
+          },
+          "proposalId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
