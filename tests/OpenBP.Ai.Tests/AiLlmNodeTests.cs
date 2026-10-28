@@ -126,7 +126,7 @@ public sealed class AiLlmNodeTests
     }
 
     [Theory]
-    [InlineData("gemini", "Невідомий провайдер")]
+    [InlineData("cohere", "Невідомий провайдер")]
     public async Task UnsupportedProvider_Throws(string provider, string message)
     {
         var http = new FakeHandler(_ => Reply("x"));

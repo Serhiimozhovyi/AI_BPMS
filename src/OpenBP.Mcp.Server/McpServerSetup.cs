@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
+using OpenBP.Application.Assistant;
 
 namespace OpenBP.Mcp.Server;
 
@@ -15,7 +16,10 @@ public static class McpServerSetup
     /// <summary>Ім'я сервера в <c>initialize</c> (<c>serverInfo.name</c>).</summary>
     public const string ServerName = "openbp";
 
-    /// <summary>Реєструє MCP-сервер; сервіси application-шару (<c>IConnectorService</c> тощо) реєструє хост.</summary>
+    /// <summary>
+    /// Реєструє MCP-сервер і <see cref="IAssistantToolbox"/> над ним; сервіси application-шару (<c>IConnectorService</c> тощо)
+    /// реєструє хост.
+    /// </summary>
     /// <param name="services">Контейнер.</param>
     public static IServiceCollection AddOpenBpMcpServer(this IServiceCollection services)
     {
@@ -41,6 +45,8 @@ public static class McpServerSetup
             .WithTools<ExplanationTools>(McpJson.Options)
             .WithTools<TaskTools>(McpJson.Options)
             .WithResources<OpenBpResources>();
+        // Загальний помічник (F3-108) користується тими самими tools у процесі.
+        services.AddScoped<IAssistantToolbox, McpAssistantToolbox>();
         return services;
     }
 

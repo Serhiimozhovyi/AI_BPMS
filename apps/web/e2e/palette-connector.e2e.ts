@@ -137,7 +137,11 @@ test('конектор без підключення: діалог «Нове п
   await page.locator('[data-item="telegram/send_photo"]').click();
   await page.getByTestId('new-connection').getByLabel('Токен бота').fill('123:abc');
   await page.getByTestId('new-connection').getByTestId('credential-save').click();
+  // Спершу вузол на канвасі (створення облікових даних → підключення → перезавантаження списку), потім автозбереження
+  // (пауза 800 мс + PUT): на завантаженому CI обидва кроки разом перевищували 5 с очікування за замовчуванням.
+  await expect(page.getByTestId('new-connection')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('[data-node-id]').filter({ has: page.locator('.node__name', { hasText: /^Надіслати фото$/ }) })).toHaveCount(1, { timeout: 15_000 });
   await expect
-    .poll(() => api.nodes().find((n) => n['name'] === 'Надіслати фото')?.['parameters'])
+    .poll(() => api.nodes().find((n) => n['name'] === 'Надіслати фото')?.['parameters'], { timeout: 15_000 })
     .toEqual({ serverId: 'bot2', toolName: 'send_photo', arguments: {} });
 });

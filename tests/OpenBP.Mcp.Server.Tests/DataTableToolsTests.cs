@@ -9,7 +9,7 @@ using OpenBP.Application.Auth;
 
 namespace OpenBP.Mcp.Server.Tests;
 
-/// <summary>F6-11: <c>list_tables</c>, <c>query_table</c> і ресурс <c>openbp://tables/{id}</c>.</summary>
+/// <summary>F6-11: <c>list_tables</c>, <c>query_table</c> і ресурс <c>openbp://tables/{id}</c>; F3-109: <c>create_table</c>, <c>alter_table</c> з планом.</summary>
 [Collection(McpServerCollection.Name)]
 public class DataTableToolsTests(McpServerFactory mcp)
 {
@@ -87,5 +87,95 @@ public class DataTableToolsTests(McpServerFactory mcp)
         var missing = await viewer.CallToolAsync("query_table", new Dictionary<string, object?> { ["table"] = "Немає такої" });
         Assert.True(missing.IsError);
         await Assert.ThrowsAsync<McpProtocolException>(() => viewer.ReadResourceAsync("openbp://tables/Немає").AsTask());
+    }
+
+    private static async Task<string> ErrorCodeAsync(McpClient client, string tool, Dictionary<string, object?> arguments)
+    {
+        var result = await client.CallToolAsync(tool, arguments);
+        Assert.True(result.IsError, $"{tool} мав повернути помилку");
+        return (string)Structured(result)["code"]!;
+    }
+
+    private static async Task<bool> ListedAsync(McpClient client, string name) =>
+        (await CallAsync(client, "list_tables", new()))["items"]!.AsArray().Any(t => (string)t!["name"]! == name);
+
+    [Fact]
+    public async Task Create_table_returns_a_plan_first_and_creates_only_with_its_plan_id()
+    {
+        await using var editor = await mcp.ConnectAsync(UserRole.Editor);
+        var name = $"Заявки {Guid.NewGuid():N}";
+        Dictionary<string, object?> Arguments() => new()
+        {
+            ["name"] = name,
+            ["columns"] = new JsonArray(
+                new JsonObject { ["name"] = "number", ["type"] = "string", ["key"] = true },
+                new JsonObject { ["name"] = "status", ["type"] = "enum", ["values"] = new JsonArray("нова", "закрита") }),
+            ["constraints"] = new JsonObject { ["required"] = new JsonArray("status") },
+        };
+
+        var planned = await CallAsync(editor, "create_table", Arguments());
+        Assert.False((bool)planned["applied"]!);
+        Assert.Null(planned["table"]);
+        var plan = planned["plan"]!;
+        Assert.Equal("create", (string)plan["action"]!);
+        Assert.Equal(["number", "status"], plan["addedColumns"]!.AsArray().Select(c => (string)c!["name"]!));
+        Assert.False(await ListedAsync(editor, name));
+
+        var wrong = Arguments();
+        wrong["planId"] = "0123456789abcdef0123456789abcdef";
+        Assert.Equal("DATA_TABLE_PLAN_STALE", await ErrorCodeAsync(editor, "create_table", wrong));
+
+        var apply = Arguments();
+        apply["planId"] = (string)plan["planId"]!;
+        var applied = await CallAsync(editor, "create_table", apply);
+        Assert.True((bool)applied["applied"]!);
+        Assert.Equal(name, (string)applied["table"]!["name"]!);
+        Assert.Equal("enum", (string)applied["table"]!["columns"]![1]!["type"]!);
+        Assert.True(await ListedAsync(editor, name));
+
+        await using var viewer = await mcp.ConnectAsync(UserRole.Viewer);
+        Assert.Equal("FORBIDDEN", await ErrorCodeAsync(viewer, "create_table", new()
+        {
+            ["name"] = $"Чуже {Guid.NewGuid():N}",
+            ["columns"] = new JsonArray(new JsonObject { ["name"] = "a", ["type"] = "string" }),
+        }));
+    }
+
+    [Fact]
+    public async Task Alter_table_plans_with_warnings_and_applies_with_the_plan_id()
+    {
+        var (id, name) = await CreateTableAsync();
+        await using var editor = await mcp.ConnectAsync(UserRole.Editor);
+        Dictionary<string, object?> Arguments() => new()
+        {
+            ["table"] = name,
+            ["removeColumns"] = new JsonArray("visits"),
+            ["addColumns"] = new JsonArray(new JsonObject { ["name"] = "city", ["type"] = "string" }),
+        };
+
+        var plan = (await CallAsync(editor, "alter_table", Arguments()))["plan"]!;
+        Assert.Equal("alter", (string)plan["action"]!);
+        Assert.Equal(id, (string)plan["tableId"]!);
+        Assert.Equal(3, (int)plan["rowCount"]!);
+        Assert.Equal("visits", (string)plan["removedColumns"]![0]!["name"]!);
+        Assert.Contains("«visits»", (string)plan["warnings"]![0]!, StringComparison.Ordinal);
+        var rows = await CallAsync(editor, "query_table", new() { ["table"] = id });
+        Assert.All(rows["rows"]!.AsArray(), r => Assert.NotNull(r!["data"]!["visits"]));
+
+        var apply = Arguments();
+        apply["planId"] = (string)plan["planId"]!;
+        var table = (await CallAsync(editor, "alter_table", apply))["table"]!;
+        Assert.Equal(["email", "city"], table["columns"]!.AsArray().Select(c => (string)c!["name"]!));
+        rows = await CallAsync(editor, "query_table", new() { ["table"] = id });
+        Assert.All(rows["rows"]!.AsArray(), r => Assert.Null(r!["data"]!["visits"]));
+
+        Assert.Equal("DATA_TABLE_KEY_CHANGE", await ErrorCodeAsync(editor, "alter_table", new()
+        {
+            ["table"] = id,
+            ["changeColumns"] = new JsonArray(new JsonObject { ["name"] = "email", ["type"] = "string" }),
+        }));
+
+        await using var viewer = await mcp.ConnectAsync(UserRole.Viewer);
+        Assert.Equal("FORBIDDEN", await ErrorCodeAsync(viewer, "alter_table", new() { ["table"] = id, ["rename"] = "Інша" }));
     }
 }

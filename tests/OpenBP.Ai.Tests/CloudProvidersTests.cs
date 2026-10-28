@@ -119,6 +119,32 @@ public sealed class CloudProvidersTests
         Assert.Contains("outputSchema", ex.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Gemini_WithSchema_UsesOpenAiCompatibleEndpoint_WithKeyInAuthorization()
+    {
+        var http = new Fake(_ => OpenAiReply("""{"customer":"Коваль"}"""));
+        var result = await RunAsync("gemini", http, new { maxTokens = 50, outputSchema = OrderSchema });
+
+        Assert.Equal("Коваль", result[0][0].Json["customer"]!.GetValue<string>());
+        var request = Assert.Single(http.Requests);
+        Assert.Equal("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", request.Uri);
+        Assert.Equal($"Bearer {ApiKey}", request.Authorization);
+        var body = JsonNode.Parse(request.Body)!;
+        Assert.Equal(50, body["max_tokens"]!.GetValue<int>());
+        Assert.Equal("json_schema", body["response_format"]!["type"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Gemini_WithoutApiKey_Throws()
+    {
+        var http = new Fake(_ => OpenAiReply("x"));
+
+        var ex = await Assert.ThrowsAsync<LlmException>(() => RunAsync("gemini", http, new { }, new JsonObject()));
+
+        Assert.Contains("apiKey", ex.Message, StringComparison.Ordinal);
+        Assert.Empty(http.Requests);
+    }
+
     [Theory]
     [InlineData("anthropic", HttpStatusCode.Unauthorized)]
     [InlineData("anthropic", HttpStatusCode.TooManyRequests)]
@@ -128,6 +154,8 @@ public sealed class CloudProvidersTests
     [InlineData("openai", HttpStatusCode.TooManyRequests)]
     [InlineData("openai", HttpStatusCode.InternalServerError)]
     [InlineData("openai", HttpStatusCode.BadGateway)]
+    [InlineData("gemini", HttpStatusCode.TooManyRequests)]
+    [InlineData("gemini", HttpStatusCode.Unauthorized)]
     public async Task HttpError_Throws_WithoutApiKeyInMessage(string provider, HttpStatusCode status)
     {
         var http = new Fake(_ => new HttpResponseMessage(status) { Content = new StringContent($"invalid key {ApiKey}") });

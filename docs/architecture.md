@@ -178,6 +178,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
 | `workflow_versions` | id, workflow_id, version, definition (jsonb), created_by, created_at |
+| `assistant_conversations` | id, user_id (FK cascade), title, data jsonb `{ turns, proposals }`, created_at, updated_at; індекс (user_id, updated_at) — розмови загального помічника (F3-108, §10.9) |
 | `workflow_explanations` | workflow_id (PK, FK cascade), version, status (`pending`/`ready`/`failed`/`not_configured`), text, error, definition_hash, updated_at — пояснення сценарію простими словами (F3-72, §10.8) |
 | `credentials` | id, name, type, data_encrypted (bytea), nonce, created_by, project_id (→ `workflow_groups`, restrict; null — спільний; F6-14) |
 | `oauth_states` | state, credential_id, user_id, code_verifier, redirect_uri, created_at (F4-04) |
@@ -309,6 +310,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `IExecutionEventSource` | SSE `/executions/{id}/events`, MCP-ресурс `openbp://executions/{id}` | потік подій кроків виконання |
 | `IConnectorService` | REST, MCP `describe_connectors`, UI | CRUD `mcp_servers`, discovery, тестовий виклик tool'а |
 | `IAssistantService`, `IAssistantSettingsService` | REST `POST /workflows/{id}/assistant`, `/settings/assistant`, UI | помічник у редакторі (§10.8) |
+| `IAssistantSessionService` (інструменти — `IAssistantToolbox`) | REST `/assistant/conversations`, UI | розмови загального помічника (§10.9) |
 | `IWorkflowExplanationService` (+ `WorkflowExplainer` у воркері) | REST `/workflows/{id}/explanation`, UI | пояснення сценарію простими словами (§10.8, F3-72) |
 | `INodeService` | REST `GET /nodes`, UI (палітра канвасу) | дескриптори зареєстрованих вузлів (`NodeDescriptor`), viewer |
 | `IStageService` | REST `/executions/{id}/stages`, MCP `get_execution_stages`/`act_on_stage`, `<openbp-canvas view="business">` | контракт етапів (F7-05, ADR-004 §4): стан, порушення, дії поточного користувача, невиконані правила; дії — через `ITaskService`, `IExecutionService.OverrideRuleAsync`, `IWaitResumeService` |
@@ -374,10 +376,13 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
 | `POST /workflows/{id}/publish` · `/discard-draft` | editor | `WorkflowDetail`; публікація чернетки й «Скасувати зміни» (F6-10, §10.2) |
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |
+| `GET/POST /assistant/conversations` (`?userId=` — лише admin), `GET/DELETE /assistant/conversations/{id}` | editor | розмови загального помічника (§10.9): мої новіші першими; розмову бачать автор і admin, іншим — 404 |
+| `POST /assistant/conversations/{id}/messages { message, context? }` | editor, автор | SSE загального помічника (§10.9): `step`, `proposal`, `message`, `error`, `done`; розмова зберігається |
+| `POST /assistant/conversations/{id}/proposals/{proposalId} { apply }` | editor, автор | застосувати чи скасувати пропозицію змін; вже вирішена — 409 `ASSISTANT_PROPOSAL_DECIDED` |
 | `GET /workflows/{id}/explanation` | viewer | пояснення сценарію (§10.8): `status` (`none`, `pending`, `ready`, `failed`, `not_configured`), `version`, `currentVersion`, `text`, `error`, `stale` |
 | `POST /workflows/{id}/explanation` | editor | пояснити поточну версію заново, одразу |
 | `PUT /workflows/{id}/explanation { text }` | editor | зберегти пояснення, написане ззовні (агент через `/mcp`, людина), F3-73 |
-| `GET /settings/assistant`, `PUT /settings/assistant { credentialId, model }` | editor / admin | налаштування помічника: credential `anthropic`/`openai`/`openai-compatible` (назва й тип, без значень) і модель; `credentialId: null` вимикає |
+| `GET /settings/assistant`, `PUT /settings/assistant { profiles: [{ credentialId, model }], primaryIndex }` (старе тіло `{ credentialId, model }` — одна модель) | editor / admin | налаштування помічника (F3-107): список підключених моделей — credential `anthropic`/`openai`/`gemini`/`openai-compatible`/`ollama` (назва й тип, без значень) і модель — та основна (`primaryIndex`); у відповіді `credentialId`/`model` — основна, `profiles` — усі; побудова з опису, чат і пояснення використовують основну; порожній список (`credentialId: null`) вимикає |
 | `GET /workflows/templates` | viewer | `[{ id, name, description, definition, connectors }]` — шаблони «Почати з прикладу» (F3-59): файли `examples/` з каталогу `examples/templates.json`, вбудовані в збірку Api; у `definition` немає `pinData` і `settings.errorWorkflowId`, `serverId`/`credentialId` порожні; `connectors` — id записів каталогу конекторів, потрібних шаблону (F6-16) |
 | `POST /workflows/validate { definition, active }` | viewer | `{ errors: WorkflowValidationError[], warnings, isValid }` (200 навіть з помилками; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню) |
 | `GET /workflows/{id}/export` | editor | `{ definition, manifest: { connectors: [{ ref, name, transport }], credentials: [{ ref, name, type }], variables: [key], workflows: [{ ref, name }] } }` — без секретів і значень змінних (F6-09) |
@@ -742,3 +747,24 @@ credential ті самі, що в помічника; без інструмен�
 Описи `create_workflow`/`update_workflow` підказують агенту оновлювати пояснення після збереження. Відбиток рахується
 від визначення з упорядкованими ключами (jsonb їх переставляє); збереження з тим самим відбитком (пересунули вузли)
 переводить готове пояснення на нову версію одразу, без job'а — і за наявності моделі, і без неї.
+
+### 10.9. Загальний помічник (F3-108, `docs/global-assistant.md`)
+
+`IAssistantSessionService` веде розмови помічника на будь-якій сторінці (лише editor і admin). Розмова — рядок
+`assistant_conversations` користувача; `data` зберігає репліки (`user` з контекстом сторінки, `assistant` з викликами,
+`tool` — урізаний до 12 000 символів результат і короткий підсумок, `note` — рішення щодо пропозиції) і пропозиції змін;
+зберігається не більше 300 реплік, моделі йдуть останні 40, починаючи з репліки людини (`AssistantConversationLimits`).
+Розмову бачать автор і admin (чужа для інших — 404), пише в неї й вирішує пропозиції лише автор (admin — 403).
+
+**Інструменти — tools `/mcp`.** `IAssistantToolbox` реалізує `OpenBP.Mcp.Server` (`McpAssistantToolbox`): на час запиту
+піднімає MCP-сервер OpenBP у процесі з тими самими `McpServerOptions` (tools, фільтр помилок) і провайдером сервісів
+запиту, а клієнт з'єднується з ним парою каналів у пам'яті. Тож помічник має рівно ті tools і права, що й зовнішній
+ШІ-агент, без окремої логіки (правило 4). Контекст сторінки (`page`, `workflowId`, `nodeId`, `executionId`, `projectId`,
+`table`) іде моделі рядком `[Контекст: …]` перед текстом людини — лише ідентифікатори, решту модель бере tools.
+
+**Зміни лише з рішенням людини.** Tool з `readOnlyHint` виконується одразу. Tool з планом (`create_table`, `alter_table`,
+F3-109) викликається без `planId` — модель отримує план, людина — пропозицію з ним. Решта tools, що змінюють дані, не
+виконуються зовсім: модель отримує `awaiting_confirmation`, людина — пропозицію з аргументами. `POST …/proposals/{id}`
+з `apply: true` викликає tool від імені автора (для плану — з його `planId`, тож застосовується саме показане), `false`
+скасовує; рішення стає приміткою `[Примітка: …]` на початку наступного повідомлення моделі. Ліміти циклу — ті самі
+`AssistantLimits` (20 кроків, 120 с), коди помилок — як у §10.8; розмова зберігається й тоді, коли клієнт закрив з'єднання.

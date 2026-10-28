@@ -93,6 +93,8 @@ OpenBP приймає лише API-ключ у заголовку, а OAuth дл
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
 | `list_tables` | viewer | `projectId?` | `{ items: [{ id, name, projectId, columns: [{ name, type, key?, values?, table?, sensitive? }], constraints, rowCount, updatedAt, canReadSensitive }] }` — видимі таблиці даних (F6-11); з `projectId` — лише доступні сценаріям проєкту: його й спільні (F8-02) |
 | `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000), `projectId?` (назва шукається спершу в проєкті, потім серед спільних) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN`; таблиця чужого проєкту — не знайдена; чутливі колонки — `null`, якщо ви не editor проєкту таблиці, умова за ними — `DATA_TABLE_FILTER_INVALID`; прочитані чутливі значення пишуться в audit log (F8-02) |
+| `create_table` | editor | `name`, `columns` (`[{ name, type, key?, values?, table?, sensitive? }]`), `constraints?` (`{ required, unique }`), `projectId?` (без нього — спільна), `planId?` | **у два виклики** (F3-109): без `planId` — `{ applied: false, plan }`, нічого не створено; `plan` = `{ planId, action: "create", definition, addedColumns, warnings }`; той самий виклик з `planId` — `{ applied: true, table }`. Інші аргументи чи застарілий план — `DATA_TABLE_PLAN_STALE`; зайнята назва — `DATA_TABLE_NAME_TAKEN` уже на плані |
+| `alter_table` | editor | `table` (id або назва), `rename?`, `addColumns?`, `removeColumns?` (назви), `changeColumns?` (повні нові визначення за назвою), `constraints?` (замість наявних), `projectId?`, `planId?` | так само у два виклики (F3-109): план `{ planId, action: "alter", tableId, definition, renamedFrom, addedColumns, removedColumns, changedColumns: [{ before, after }], constraintsChanged, rowCount, warnings }` — у `warnings` скільки рядків утратять значення видаленої колонки й зміни типу без перетворення значень; з `planId` — `{ applied: true, table }`. Не згадане лишається; колонку не перейменувати (видалити й додати); ключ таблиці з рядками — `DATA_TABLE_KEY_CHANGE`; нові обмеження перевіряються на наявних рядках ще на плані; таблицю змінили після плану — `DATA_TABLE_PLAN_STALE` |
 | `list_project_pages` | viewer | `projectId` | `{ items: [{ id, key, name, kind, definition, roles, sortOrder, updatedAt }] }` — сторінки застосунку проєкту, які ви бачите (за `roles`; editor і admin — усі) (F8-04, `docs/projects.md` §3) |
 | `upsert_project_page` | editor | `projectId`, `key`, `name`, `kind` (`list` \| `detail` \| `form` \| `metrics`), `definition`, `roles?`, `sortOrder?` | створена чи замінена сторінка; невідома таблиця/колонка/сценарій чи сценарій іншого проєкту — 422 з кодом `PAGE_*`, у `metrics` чутлива колонка — `PAGE_METRICS_SENSITIVE`; `actions[].workflow`/`onSubmit.workflow` запускають сценарій проєкту, `actions[].roles` обмежує дію (F8-04, F8-05) |
 | `export_project` | editor | `projectId`, `rowsFor?` (назви таблиць) | шаблон проєкту `{ formatVersion, project, tables, pages, workflows[{ ref, export }], manifest }`: без секретів, учасників і значень змінних; рядки лише для `rowsFor` і без чутливих колонок (F8-06, `docs/projects.md` §5) |
@@ -153,6 +155,15 @@ resolvedAt }`; виконання, зупинене `block`-правилом, �
 | `llm` | `credentialId`, `model`, `criteria?` | модель-суддя (credential типу `anthropic`/`openai`/`openai-compatible`, спільний або з проєкту сценарію) відповіла `PASS`; її пояснення — у `reason` |
 
 `tokens` — сума `usage` підкроків вузла (F6-12); для вузла без підкроків з `usage` — `null`. У UI — розділ «Оцінки» в панелі вузлів ШІ.
+
+### Зміни з планом (F3-109)
+
+`create_table` і `alter_table` змінюють структуру даних, тому працюють у режимі «пропозиція»: перший виклик без `planId`
+лише перевіряє все те саме, що й REST (права, назву, колонки, посилання `ref`, ключ і обмеження на наявних рядках), і
+повертає план; нічого не записано. Агент показує план людині своїми словами (що з'явиться, що зникне, `warnings`) і після
+її згоди повторює виклик з **тими самими аргументами** та `planId`. `planId` — відбиток аргументів і версії таблиці, тож
+застосовується саме те, що показали: інші аргументи чи зміна таблиці між викликами — `DATA_TABLE_PLAN_STALE`, план
+складається заново. Так само працюватимуть картки «Застосувати / Скасувати» загального помічника (`docs/global-assistant.md`).
 
 ### Приклади викликів
 
