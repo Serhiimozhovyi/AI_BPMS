@@ -891,7 +891,7 @@
 - DoD: тести проти фейкового HTTP (тіло запиту з `num_ctx`/`think`/`format`/`tools`, розбір `tool_calls`, помилки), тест налаштувань помічника з `ollama`, Vitest вибору моделі; `docs/connectors.md` і `docs/guide/ai-connectors.md` (розділ «Ollama на Mac»); `dotnet build -warnaserror`, `dotnet test`, `dotnet format --verify-no-changes`, lint/test/build зелені.
 
 ### F3-102 · Компактний каталог для моделі: короткий опис вузлів і дій
-- model: `sonnet` · status: `ready` · depends: —
+- model: `sonnet` · status: `review` · depends: —
 - Проблема: `describe_nodes` віддає всі типи вузлів з повними схемами параметрів — локальній моделі це не вміщується в контекст, а в помічнику F3-60 обрізається на 12 000 символів.
 - Що: в application-шарі `ICatalogDigest` → `{ nodes: [{ type, version, title, summary, kind, outputs }], actions: [{ use: "mcp:<serverId>/<toolName>", connector, title, summary }] }`: один рядок опису, без схем; `kind` — роль вузла для плану (`trigger`, `action`, `condition`, `approval`, `wait`, `transform`, `notify`), задається в дескрипторі вузла (нове необов'язкове поле `planKind`, для `mcp.tool` — `action`); лише остання версія кожного типу; лише підключення зі статусом «підключено». Повна схема одного вузла — `describe_node(type)`. Те саме в помічнику F3-60 (`describe_nodes` → компактний список + новий інструмент `describe_node`) і в `/mcp` (параметр `compact` у `describe_nodes`, новий tool `describe_node`). Бюджет: каталог для поточного набору вузлів і всіх конекторів-прикладів ≤ 6 000 символів (тест).
 - DoD: тести каталогу (розмір, лише остання версія, лише підключені), тести `/mcp` і помічника; `docs/mcp-server.md`; build/test/format зелені.

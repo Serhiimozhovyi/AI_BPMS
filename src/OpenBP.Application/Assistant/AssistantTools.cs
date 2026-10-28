@@ -7,6 +7,7 @@ namespace OpenBP.Application.Assistant;
 internal static class AssistantTools
 {
     public const string DescribeNodes = "describe_nodes";
+    public const string DescribeNode = "describe_node";
     public const string DescribeConnectors = "describe_connectors";
     public const string GetWorkflow = "get_workflow";
     public const string UpdateWorkflow = "update_workflow";
@@ -18,9 +19,23 @@ internal static class AssistantTools
     [
         new(
             DescribeNodes,
-            "Lists node types: `type`/`version` (use as node `type`/`typeVersion`), whether it is a trigger, input/output port " +
-            "names (connection indexes) and the JSON Schema of `parameters`. Call it before adding nodes.",
+            "Short catalogue of node types: `type`/`version` (use as node `type`/`typeVersion`), title, one-line summary, kind and " +
+            "output port names (connection indexes), plus the actions of connected systems (`use` = mcp:<serverId>/<toolName>). " +
+            "No parameter schemas: call describe_node for each node type you are going to add. Call it before adding nodes.",
             Empty()),
+        new(
+            DescribeNode,
+            "Returns one node type in full: ports, credentials and the JSON Schema of `parameters`. `version` defaults to the latest.",
+            new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["type"] = new JsonObject { ["type"] = "string", ["description"] = "Node type, e.g. core.if." },
+                    ["version"] = new JsonObject { ["type"] = "integer" },
+                },
+                ["required"] = new JsonArray("type"),
+            }),
         new(
             DescribeConnectors,
             "Lists MCP connectors (external systems) with their tools and input schemas. An `mcp.tool` node calls one: " +
@@ -72,7 +87,8 @@ internal static class AssistantPrompt
         trigger node. `output`/`input` are port indexes from describe_nodes. Parameter values may be expressions "{{ … }}" with
         $json (current item), $node["Name"].json (an earlier node's item), $vars.key.
 
-        To change the workflow, call get_workflow, then describe_nodes (and describe_connectors for external systems), then
+        To change the workflow, call get_workflow, then describe_nodes (and describe_connectors for external systems), then describe_node for
+        every node type you add, then
         update_workflow with the FULL new definition — keep the nodes and connections you do not change exactly as they are.
         Integrations with external systems go only through `mcp.tool` with a connector from describe_connectors; never invent
         serverId values — leave serverId empty if there is no suitable connector and say so. Never ask for or write secrets

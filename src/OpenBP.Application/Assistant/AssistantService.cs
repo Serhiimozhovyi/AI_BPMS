@@ -247,6 +247,7 @@ public sealed class AssistantService(
                 return call.Name switch
                 {
                     AssistantTools.DescribeNodes => await DescribeNodesAsync(ct),
+                    AssistantTools.DescribeNode => await DescribeNodeAsync(call.Arguments, ct),
                     AssistantTools.DescribeConnectors => await DescribeConnectorsAsync(ct),
                     AssistantTools.GetWorkflow => new ToolOutcome(true, "визначення сценарію", Json(working)),
                     AssistantTools.UpdateWorkflow => await UpdateWorkflowAsync(call.Arguments, ct),
@@ -270,8 +271,27 @@ public sealed class AssistantService(
 
         private async Task<ToolOutcome> DescribeNodesAsync(CancellationToken ct)
         {
-            var list = await owner.nodes.ListAsync(ct);
-            var result = new JsonArray([.. list.Select(d => (JsonNode)new JsonObject
+            var digest = await new CatalogDigestBuilder(owner.nodes, owner.connectors).BuildAsync(ct);
+            return new ToolOutcome(true, $"типів вузлів: {digest.Nodes.Count}, дій: {digest.Actions.Count}", JsonSerializer.Serialize(digest, WorkflowJson.Options));
+        }
+
+        private async Task<ToolOutcome> DescribeNodeAsync(JsonObject arguments, CancellationToken ct)
+        {
+            var type = (string?)arguments["type"];
+            if (string.IsNullOrWhiteSpace(type))
+            {
+                throw new ArgumentException("Потрібен аргумент type — тип вузла.");
+            }
+
+            var version = (int?)arguments["version"];
+            var matches = (await owner.nodes.ListAsync(ct)).Where(d => d.Type == type).ToList();
+            var d = version is null ? matches.MaxBy(m => m.Version) : matches.FirstOrDefault(m => m.Version == version);
+            if (d is null)
+            {
+                return Failed($"Тип вузла «{type}» не знайдено. Типи з'являються в describe_nodes.", "NOT_FOUND");
+            }
+
+            var result = new JsonObject
             {
                 ["type"] = d.Type,
                 ["version"] = d.Version,
@@ -281,8 +301,8 @@ public sealed class AssistantService(
                 ["inputs"] = new JsonArray([.. d.Inputs.Select(i => (JsonNode)i)]),
                 ["outputs"] = new JsonArray([.. d.Outputs.Select(o => (JsonNode)o)]),
                 ["parametersSchema"] = d.ParametersSchema.DeepClone(),
-            })]);
-            return new ToolOutcome(true, $"типів вузлів: {list.Count}", result.ToJsonString());
+            };
+            return new ToolOutcome(true, $"вузол {d.Type}@{d.Version}", result.ToJsonString());
         }
 
         private async Task<ToolOutcome> DescribeConnectorsAsync(CancellationToken ct)
