@@ -32,10 +32,19 @@ public interface IProjectPageService
     /// <summary>Рядок для картки (з пов'язаними списками) чи форми зміни; рядок поза фільтром сторінки — 404.</summary>
     Task<PageRecord> RowAsync(Guid projectId, string key, string rowKey, CancellationToken ct);
 
-    /// <summary>Надсилання форми: <c>insert</c>, <c>upsert</c> чи <c>update</c> рядка <paramref name="rowKey"/>.</summary>
+    /// <summary>
+    /// Надсилання форми: <c>insert</c>, <c>upsert</c> чи <c>update</c> рядка <paramref name="rowKey"/>, або запуск сценарію
+    /// (<c>onSubmit.workflow</c>) зі значеннями; відмова сценарію (<c>ok: false</c>) — помилка форми.
+    /// </summary>
     /// <exception cref="Projects.PageFormInvalidException">422 з помилками за полями (обов'язкові, тип, унікальність).</exception>
     Task<PageSubmitResult> SubmitAsync(Guid projectId, string key, JsonObject values, string? rowKey, CancellationToken ct);
 
-    /// <summary>Серверна дія над рядком (<c>operation: delete</c>, editor проєкту таблиці).</summary>
-    Task RunActionAsync(Guid projectId, string key, string rowKey, int action, CancellationToken ct);
+    /// <summary>Показники сторінки <c>metrics</c>: плитки й діаграми по таблицях проєкту.</summary>
+    Task<PageMetrics> MetricsAsync(Guid projectId, string key, CancellationToken ct);
+
+    /// <summary>
+    /// Серверна дія над рядком: <c>operation: delete</c> (editor проєкту таблиці) або запуск сценарію проєкту з
+    /// <c>{ row, rowKey, user }</c> з очікуванням результату до 30 с (F8-05).
+    /// </summary>
+    Task<PageActionResult> RunActionAsync(Guid projectId, string key, string rowKey, int action, CancellationToken ct);
 }

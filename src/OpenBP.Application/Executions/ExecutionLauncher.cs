@@ -63,7 +63,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
             .SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("workflow", launch.WorkflowId);
         // Сценарій помилок (F4-06) теж запускається лише активним: вимкнений — як тригер неактивного сценарію.
-        if (launch.Mode is ExecutionMode.Trigger or ExecutionMode.Error && !workflow.Active)
+        if (launch.Mode is ExecutionMode.Trigger or ExecutionMode.Error && !workflow.Active && !(launch.Mode == ExecutionMode.Trigger && launch.AllowInactive))
         {
             throw new ConflictException(WorkflowInactiveCode, $"Сценарій «{launch.WorkflowId}» неактивний; тригери його не запускають.");
         }
@@ -180,6 +180,7 @@ public sealed class ExecutionLauncher(OpenBpDbContext db, TimeProvider time) : I
                     ConcurrencyKey = queueLimited ? launch.WorkflowId.ToString() : null,
                     ConcurrencyMax = queueLimited ? concurrency!.Max : null,
                     InputOverrides = launch.InputOverrides is { Count: > 0 } overrides ? overrides : null,
+                    KeepSuccessfulData = launch.KeepSuccessfulData,
                 };
                 db.Executions.Add(execution);
                 db.Jobs.Add(new JobEntity

@@ -132,6 +132,85 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
         return ([.. rows.Select(ToRow)], total);
     }
 
+    /// <summary>Найбільше груп в одній діаграмі.</summary>
+    public const int MaxAggregateGroups = 500;
+
+    /// <summary>
+    /// Агрегат по рядках таблиці за умовами (сторінка <c>metrics</c>, F8-05): <c>count</c> або <c>sum</c>/<c>avg</c>/<c>min</c>/<c>max</c>
+    /// по числовій колонці, одним значенням чи по групах колонки <paramref name="groupColumn"/>. Для <paramref name="bucket"/>
+    /// (<c>day</c>, <c>week</c>, <c>month</c>) група — початок періоду за UTC у вигляді <c>YYYY-MM-DD</c>. Групи — за зростанням, порожня — останньою.
+    /// </summary>
+    /// <param name="table">Таблиця.</param>
+    /// <param name="where">Умови, як у <see cref="PageRowsAsync"/>.</param>
+    /// <param name="aggregate">Агрегат.</param>
+    /// <param name="valueColumn">Числова колонка (не потрібна для <c>count</c>).</param>
+    /// <param name="groupColumn">Колонка групування; <c>null</c> — одна група.</param>
+    /// <param name="bucket">Період для дат; <c>null</c> — значення колонки як є.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Одне значення з групою <c>null</c> без групування, інакше групи (до <see cref="MaxAggregateGroups"/>).</returns>
+    public async Task<IReadOnlyList<DataAggregate>> AggregateAsync(
+        DataTableInfo table, IReadOnlyList<DataFilter> where, string aggregate, string? valueColumn, string? groupColumn, string? bucket, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        var (condition, parameters) = Where(table, filters);
+        string function;
+        string valueSql;
+        switch (aggregate)
+        {
+            case "count":
+                function = "count";
+                valueSql = "*";
+                break;
+            case "sum" or "avg" or "min" or "max":
+                var column = ColumnOf(table, valueColumn ?? "");
+                if (column.Type != DataColumnType.Number)
+                {
+                    throw new DataTableException(DataTableRules.Codes.TypeMismatch, $"Агрегат «{aggregate}» потребує числової колонки, а «{column.Name}» — {DataTableRules.TypeName(column.Type)}.");
+                }
+
+                parameters.Add(new NpgsqlParameter("a", column.Name));
+                function = aggregate;
+                valueSql = "(CASE WHEN jsonb_typeof(data -> @a) = 'number' THEN (data ->> @a)::numeric END)";
+                break;
+            default:
+                throw new DataTableException(DataTableRules.Codes.TypeMismatch, $"Невідомий агрегат «{aggregate}»: count, sum, avg, min або max.");
+        }
+
+        var value = $"({function}({valueSql}))::numeric";
+        string sql;
+        if (groupColumn is null)
+        {
+            sql = $"SELECT NULL::text AS \"Group\", {value} AS \"Value\" FROM data_rows WHERE {condition}";
+        }
+        else
+        {
+            parameters.Add(new NpgsqlParameter("g", ColumnOf(table, groupColumn).Name));
+            var group = bucket is null
+                ? "(data ->> @g)"
+                : $"(CASE WHEN data ->> @g ~ '^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' THEN to_char(date_trunc('{Bucket(bucket)}', (data ->> @g)::timestamptz AT TIME ZONE 'UTC'), 'YYYY-MM-DD') END)";
+            sql = $"SELECT {group} AS \"Group\", {value} AS \"Value\" FROM data_rows WHERE {condition} GROUP BY 1 ORDER BY 1 NULLS LAST LIMIT {MaxAggregateGroups}";
+        }
+
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        // Підставлені в sql — лише фіксовані фрагменти й дозволений період; значення йдуть параметрами.
+        var rows = await db.Database.SqlQueryRaw<AggregateRow>(sql, [.. parameters]).ToListAsync(ct).ConfigureAwait(false);
+        return [.. rows.Select(r => new DataAggregate(r.Group, r.Value))];
+    }
+
+    private static string Bucket(string bucket) => bucket switch
+    {
+        "day" or "week" or "month" => bucket,
+        _ => throw new DataTableException(DataTableRules.Codes.TypeMismatch, $"Невідомий період «{bucket}»: day, week або month."),
+    };
+
+    private sealed class AggregateRow
+    {
+        public string? Group { get; set; }
+
+        public decimal? Value { get; set; }
+    }
+
     private static List<NpgsqlParameter> Clone(List<NpgsqlParameter> parameters) =>
         [.. parameters.Select(p => new NpgsqlParameter(p.ParameterName, p.Value))];
 
@@ -456,3 +535,8 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
         };
     }
 }
+
+/// <summary>Група агрегату <see cref="PostgresDataTableStore.AggregateAsync"/>.</summary>
+/// <param name="Group">Значення групи; <c>null</c> — без групування або порожнє значення.</param>
+/// <param name="Value">Агрегат; <c>null</c> — немає значень (наприклад, <c>sum</c> по порожній вибірці).</param>
+public sealed record DataAggregate(string? Group, decimal? Value);

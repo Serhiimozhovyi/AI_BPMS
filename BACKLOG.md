@@ -1321,9 +1321,10 @@
 - Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §3–4): роль застосунку — у `ProjectAccess`/`ProjectScope`, а не `ICurrentUser`; учасник — `PUT /workflow-groups/{id}/members { email, role, appRole? }`, ролі проєкту — `PATCH … { appRoles }` (409 `APP_ROLE_IN_USE`); `metrics` і запуск сценаріїв з дій/`onSubmit` — F8-05 (посилання валідуються, виклик → 422 `PAGE_WORKFLOW_NOT_AVAILABLE`); `filter` діє й на `detail`/`form`; поле форми може мати фіксоване `value`; роль застосунку дає читання чутливих колонок і через `/tables`; editor і admin бачать усі сторінки.
 
 ### F8-05 · Дії сторінок → сценарії, сторінка `metrics`, конструктор сторінок
-- model: `sonnet` · status: `ready` · depends: F8-04
+- model: `sonnet` · status: `review` · depends: F8-04
 - Що: `actions[].workflow`: запуск сценарію проєкту через `IExecutionLauncher` з items `[{ row, user }]`, очікування результату до 30 с, показ `result.message`/помилки, `confirm`, `when`; `form.onSubmit.workflow`; `metrics`: `tiles` (`count`/`sum`/`avg`/`min`/`max` з `where`), `expression` між плитками, `charts` з `groupBy` (`day`/`week`/`month(column)`, значення `enum`), чутливі колонки заборонені; конструктор сторінок формою (тип, таблиця, колонки з таблиці, фільтри, дії зі списку сценаріїв проєкту) для editor; валідація — application-шар.
 - DoD: тести: дія запускає сценарій і повертає повідомлення; viewer без ролі не бачить дію; `metrics` з чутливою колонкою → 422; Vitest конструктора й `metrics`; `docs/projects.md` §3 оновлено.
+- Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §3, «Реалізовано (F8-05)»): сценарій викликається в режимі `Trigger` з `AllowInactive`/`KeepSuccessfulData` (не потрібно активувати), результат — `PageActionResult` (200 замість 204), `PAGE_WORKFLOW_NOT_AVAILABLE` прибрано; `actions[].roles`; плитки мають `key`; конструктор — `/projects/:id/app/_builder` з запасним JSON-редактором.
 
 ### F8-06 · Шаблон проєкту: експорт/імпорт через UI, REST і CLI
 - model: `sonnet` · status: `ready` · depends: F8-05

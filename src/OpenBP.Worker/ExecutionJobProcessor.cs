@@ -258,7 +258,7 @@ public sealed partial class ExecutionJobProcessor
         // Підсценарій (F6-04) теж зберігає дані: його вихід забирає батьківський вузол core.executeWorkflow.
         var store = new PostgresExecutionStore(_contexts, _time, scrubber)
         {
-            KeepSuccessfulData = workflow.Settings.SaveSuccessfulData || payload.Mode is ExecutionMode.Manual or ExecutionMode.Sub,
+            KeepSuccessfulData = workflow.Settings.SaveSuccessfulData || payload.KeepSuccessfulData || payload.Mode is ExecutionMode.Manual or ExecutionMode.Sub,
         };
         var executor = new WorkflowExecutor(
             _nodes,

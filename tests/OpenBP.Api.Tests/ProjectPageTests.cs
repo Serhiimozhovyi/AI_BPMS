@@ -1,8 +1,13 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using OpenBP.Application.Auth;
+using OpenBP.Application.Projects;
 
 namespace OpenBP.Api.Tests;
 
@@ -19,13 +24,48 @@ public class ProjectPageTests(ApiFactory api)
 
     private sealed record Member(HttpClient Client, Guid Id, string Email);
 
+    /// <summary>Замість воркера: відповідь за початком назви сценарію (<c>refuse</c>, <c>fail</c>, інакше успіх); виклики запам'ятовуються.</summary>
+    private sealed class FakePageRunner : IPageWorkflowRunner
+    {
+        public static readonly ConcurrentQueue<(string Workflow, JsonObject Input)> Calls = new();
+
+        public Task<PageActionResult> RunAsync(Guid projectId, string workflow, JsonObject input, CancellationToken ct)
+        {
+            Calls.Enqueue((workflow, (JsonObject)input.DeepClone()));
+            return Task.FromResult(workflow switch
+            {
+                _ when workflow.StartsWith("refuse", StringComparison.Ordinal) => new PageActionResult(PageActionStates.Rejected, "Слот уже зайнятий.", "slot", null, null),
+                _ when workflow.StartsWith("fail", StringComparison.Ordinal) => new PageActionResult(PageActionStates.Error, "Сценарій упав.", null, null, Guid.NewGuid()),
+                _ => new PageActionResult(PageActionStates.Success, "Готово", null, new JsonObject { ["ok"] = true }, Guid.NewGuid()),
+            });
+        }
+    }
+
+    private WebApplicationFactory<Program>? _factory;
+
+    private WebApplicationFactory<Program> Factory => _factory ?? api;
+
+    private void UseFakeRunner() => _factory = api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IPageWorkflowRunner, FakePageRunner>()));
+
+    private static async Task<string> CreateWorkflowAsync(HttpClient editor, Guid project, string prefix)
+    {
+        var name = $"{prefix}-{Guid.NewGuid():N}";
+        await Ok(await editor.PostAsync($"/api/v1/workflows?groupId={project}", new StringContent($$"""
+            { "formatVersion": 1, "name": "{{name}}",
+              "settings": { "timezone": "Europe/Kyiv", "executionTimeoutSec": 0, "errorWorkflowId": null, "saveSuccessfulData": false },
+              "nodes": [{ "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} }],
+              "connections": [], "pinData": {} }
+            """, System.Text.Encoding.UTF8, "application/json")), HttpStatusCode.Created);
+        return name;
+    }
+
     private static async Task<JsonElement> JsonAsync(HttpResponseMessage response) =>
         JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
 
     private async Task<Member> LoginAsync(UserRole role)
     {
         var user = await api.CreateUserAsync(role, Pass);
-        var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var client = Factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Pass });
         Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
         return new Member(client, user.Id, user.Email);
@@ -292,5 +332,175 @@ public class ProjectPageTests(ApiFactory api)
         var mine = (await JsonAsync(await psyA.Client.GetAsync(Groups))).EnumerateArray().Single(g => g.GetProperty("id").GetGuid() == project);
         Assert.Equal("psychologist", mine.GetProperty("appRole").GetString());
         Assert.Equal(2, mine.GetProperty("appRoles").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Workflow_action_runs_for_visible_roles_only_and_gets_row_and_user()
+    {
+        UseFakeRunner();
+        var (project, table, editor, psyA, _) = await SetupAsync();
+        var workflow = await CreateWorkflowAsync(editor.Client, project, "ok-flow");
+        await Ok(await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/my-bookings", new
+        {
+            name = "Мої записи",
+            kind = "list",
+            roles = new[] { "psychologist" },
+            definition = new
+            {
+                table,
+                columns = new object[] { new { column = "name" }, new { column = "phone" } },
+                filter = new[] { new { column = "psychologist_id", @operator = "eq", value = "{{ $user.id }}" } },
+                actions = new object[]
+                {
+                    new { label = "Підтвердити", workflow, when = "{{ $row.status === 'active' }}" },
+                    new { label = "Для координатора", workflow, roles = new[] { "coordinator" } },
+                },
+            },
+        }));
+
+        var first = (await JsonAsync(await psyA.Client.GetAsync($"/api/v1/projects/{project}/pages/my-bookings/rows"))).GetProperty("items")[0];
+        Assert.Equal([0], first.GetProperty("actions").EnumerateArray().Select(a => a.GetInt32()).ToList());
+        var key = first.GetProperty("key").GetString();
+
+        // Дія для іншої ролі для психолога не існує; своя — виконується і передає рядок та користувача.
+        Assert.Equal(HttpStatusCode.NotFound, (await psyA.Client.PostAsync($"/api/v1/projects/{project}/pages/my-bookings/rows/{key}/actions/1", null)).StatusCode);
+        var done = await JsonAsync(await psyA.Client.PostAsync($"/api/v1/projects/{project}/pages/my-bookings/rows/{key}/actions/0", null));
+        Assert.Equal("success", done.GetProperty("state").GetString());
+        Assert.Equal("Готово", done.GetProperty("message").GetString());
+        var call = FakePageRunner.Calls.Last(c => c.Workflow == workflow);
+        Assert.Equal(key, (string?)call.Input["rowKey"]);
+        Assert.Equal(psyA.Id.ToString(), (string?)call.Input["user"]!["id"]);
+        Assert.Equal("psychologist", (string?)call.Input["user"]!["appRole"]);
+        Assert.Equal("+380501", (string?)call.Input["row"]!["phone"]);
+
+        // Editor бачить обидві дії, а нечутливе значення для іншого viewer без ролі не передається.
+        var forEditor = await JsonAsync(await editor.Client.GetAsync($"/api/v1/projects/{project}/pages/my-bookings"));
+        Assert.Equal(2, forEditor.GetProperty("page").GetProperty("definition").GetProperty("actions").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Form_with_workflow_passes_values_and_turns_refusal_into_field_error()
+    {
+        UseFakeRunner();
+        var (project, table, editor, psyA, _) = await SetupAsync();
+        var ok = await CreateWorkflowAsync(editor.Client, project, "ok-flow");
+        var refuse = await CreateWorkflowAsync(editor.Client, project, "refuse-flow");
+        var fail = await CreateWorkflowAsync(editor.Client, project, "fail-flow");
+        foreach (var (key, workflow) in new[] { ("book", ok), ("book-refuse", refuse), ("book-fail", fail) })
+        {
+            await Ok(await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/{key}", new
+            {
+                name = "Запис",
+                kind = "form",
+                definition = new
+                {
+                    table,
+                    fields = new object[] { new { column = "name", required = true }, new { column = "slot" }, new { column = "psychologist_id", value = "{{ $user.id }}" } },
+                    onSubmit = new { workflow },
+                    then = new { page = "my-bookings" },
+                },
+            }));
+        }
+
+        var accepted = await JsonAsync(await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book/submit", new { values = new { name = "Нова", slot = "s9" } }));
+        Assert.Equal("my-bookings", accepted.GetProperty("then").GetString());
+        Assert.Equal("Готово", accepted.GetProperty("result").GetProperty("message").GetString());
+        var values = FakePageRunner.Calls.Last(c => c.Workflow == ok).Input["values"]!;
+        Assert.Equal("Нова", (string?)values["name"]);
+        Assert.Equal(psyA.Id.ToString(), (string?)values["psychologist_id"]);
+
+        // Порожнє обов'язкове поле до сценарію не доходить.
+        var before = FakePageRunner.Calls.Count;
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book/submit", new { values = new { slot = "s9" } })).StatusCode);
+        Assert.Equal(before, FakePageRunner.Calls.Count);
+
+        var refused = await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book-refuse/submit", new { values = new { name = "Нова", slot = "s1" } });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+        var problem = await JsonAsync(refused);
+        Assert.Equal("PAGE_FORM_INVALID", problem.GetProperty("code").GetString());
+        Assert.Equal("slot", problem.GetProperty("errors")[0].GetProperty("field").GetString());
+        Assert.Equal("Слот уже зайнятий.", problem.GetProperty("errors")[0].GetProperty("message").GetString());
+
+        var failed = await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book-fail/submit", new { values = new { name = "Нова" } });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, failed.StatusCode);
+        Assert.Equal("PAGE_WORKFLOW_FAILED", (await JsonAsync(failed)).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Metrics_page_counts_groups_and_evaluates_tile_expressions_without_sensitive_columns()
+    {
+        var (project, _, editor, psyA, _) = await SetupAsync();
+        var visits = $"visits_{Guid.NewGuid():N}";
+        await Ok(await editor.Client.PostAsJsonAsync("/api/v1/tables", new
+        {
+            name = visits,
+            projectId = project,
+            columns = new object[]
+            {
+                new { name = "day", type = "date" },
+                new { name = "kind", type = "enum", values = new[] { "online", "offline" } },
+                new { name = "minutes", type = "number" },
+                new { name = "note", type = "string", sensitive = true },
+            },
+        }), HttpStatusCode.Created);
+        var visitsId = (await JsonAsync(await editor.Client.GetAsync($"/api/v1/tables/{visits}?projectId={project}"))).GetProperty("id").GetGuid();
+        foreach (var row in new[]
+                 {
+                     new { day = "2026-09-03", kind = "online", minutes = 50, note = "a" },
+                     new { day = "2026-09-20", kind = "online", minutes = 50, note = "b" },
+                     new { day = "2026-10-02", kind = "offline", minutes = 30, note = "c" },
+                     new { day = "2026-10-04", kind = "online", minutes = 40, note = "d" },
+                 })
+        {
+            await Ok(await editor.Client.PostAsJsonAsync($"/api/v1/tables/{visitsId}/rows", new { values = row }), HttpStatusCode.Created);
+        }
+
+        var definition = new
+        {
+            table = visits,
+            tiles = new object[]
+            {
+                new { key = "all", label = "Усього", aggregate = "count" },
+                new { key = "online", label = "Онлайн", aggregate = "count", where = new[] { new { column = "kind", @operator = "eq", value = "online" } } },
+                new { key = "minutes", label = "Хвилин", aggregate = "sum", column = "minutes" },
+                new { label = "Частка онлайн", expression = "{{ $tiles.online / $tiles.all }}" },
+                new { label = "Нуль", key = "none", aggregate = "count", where = new[] { new { column = "minutes", @operator = "gt", value = 1000 } } },
+                new { label = "Ділення на нуль", expression = "{{ $tiles.all / $tiles.none }}" },
+            },
+            charts = new object[]
+            {
+                new { label = "За місяцями", groupBy = "month(day)" },
+                new { label = "Хвилини за форматом", groupBy = "kind", aggregate = "sum", column = "minutes" },
+            },
+        };
+        await Ok(await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/stats", new { name = "Статистика", kind = "metrics", definition }));
+
+        // Показники бачать усі, хто бачить сторінку (тут — без ролей, тож і психолог).
+        var metricsResponse = await psyA.Client.GetAsync($"/api/v1/projects/{project}/pages/stats/metrics");
+        await Ok(metricsResponse);
+        var metrics = await JsonAsync(metricsResponse);
+        var tiles = metrics.GetProperty("tiles").EnumerateArray().Select(t => t.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : (decimal?)null).ToList();
+        Assert.Equal<decimal?>([4m, 3m, 170m, 0.75m, 0m, null], tiles);
+        var months = metrics.GetProperty("charts")[0].GetProperty("points").EnumerateArray().Select(p => (p.GetProperty("label").GetString(), p.GetProperty("value").GetDecimal())).ToList();
+        Assert.Equal([("2026-09-01", 2m), ("2026-10-01", 2m)], months);
+        var kinds = metrics.GetProperty("charts")[1].GetProperty("points").EnumerateArray().Select(p => (p.GetProperty("label").GetString(), p.GetProperty("value").GetDecimal())).ToList();
+        Assert.Equal([("offline", 30m), ("online", 140m)], kinds);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await psyA.Client.GetAsync($"/api/v1/projects/{project}/pages/stats/rows")).StatusCode);
+
+        async Task<string?> CodeAsync(object definition)
+        {
+            var response = await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/bad", new { name = "x", kind = "metrics", definition });
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            return (await JsonAsync(response)).GetProperty("code").GetString();
+        }
+
+        // Чутливі колонки (в агрегаті, умові, групуванні) і хибні визначення відхиляються.
+        Assert.Equal("PAGE_METRICS_SENSITIVE", await CodeAsync(new { table = visits, tiles = new[] { new { label = "x", aggregate = "count", where = new[] { new { column = "note", @operator = "contains", value = "a" } } } } }));
+        Assert.Equal("PAGE_METRICS_SENSITIVE", await CodeAsync(new { table = visits, charts = new[] { new { groupBy = "note" } } }));
+        Assert.Equal("PAGE_INVALID", await CodeAsync(new { table = visits, tiles = new[] { new { label = "x", aggregate = "sum", column = "kind" } } }));
+        Assert.Equal("PAGE_INVALID", await CodeAsync(new { table = visits, charts = new[] { new { groupBy = "month(kind)" } } }));
+        Assert.Equal("PAGE_INVALID", await CodeAsync(new { table = visits, tiles = new[] { new { label = "x", expression = "{{ $tiles.nope }}" } } }));
+        Assert.Equal("PAGE_COLUMN_UNKNOWN", await CodeAsync(new { table = visits, tiles = new[] { new { label = "x", aggregate = "sum", column = "немає" } } }));
+        Assert.Equal("PAGE_INVALID", await CodeAsync(new { table = visits }));
     }
 }

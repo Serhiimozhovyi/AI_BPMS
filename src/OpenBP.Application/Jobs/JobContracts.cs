@@ -62,6 +62,12 @@ public sealed record ExecutionJobPayload
     public IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides { get; init; }
 
     /// <summary>
+    /// Зберегти дані успішних кроків незалежно від <c>settings.saveSuccessfulData</c>: результат забирає той, хто викликав
+    /// сценарій (дія сторінки застосунку, F8-05).
+    /// </summary>
+    public bool KeepSuccessfulData { get; init; }
+
+    /// <summary>
     /// Зовнішні пробудження (F6-01, <see cref="ExecutionRequest.Signals"/>): id вузла <c>core.wait</c>, що чекає, → дані,
     /// з якими його розбудили (тіло <c>POST /webhook/resume/{token}</c>). Ставить <c>IWaitResumeService</c> у job
     /// пробудження виконання в стані <c>waiting</c>; в інших job'ах відсутнє.

@@ -4017,13 +4017,71 @@
         ]
       }
     },
+    "/api/v1/projects/{projectId}/pages/{key}/metrics": {
+      "get": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Показники сторінки metrics",
+        "description": "Плитки (`count`/`sum`/`avg`/`min`/`max` з `where`, вирази над `$tiles`) і діаграми по групах (`day|week|month(колонка)` чи колонка). Чутливі колонки в такій сторінці зберегти не можна, тому показники однакові для всіх, хто бачить сторінку.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageMetrics"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/projects/{projectId}/pages/{key}/rows/{rowKey}/actions/{action}": {
       "post": {
         "tags": [
           "Сторінки застосунку"
         ],
         "summary": "Виконати дію над рядком",
-        "description": "Серверні дії: `operation: delete` (editor проєкту таблиці). `action` — індекс у `actions` сторінки.",
+        "description": "`action` — індекс у `actions` сторінки. `operation: delete` — видалення (editor проєкту таблиці); `workflow` — запуск сценарію проєкту з item `{ row, rowKey, user }` і очікування результату до 30 с. Відповідь: `state` (`success` | `rejected` — сценарій відмовив через `ok: false` | `error` | `running`), `message`, `data`, `executionId`.",
         "parameters": [
           {
             "name": "projectId",
@@ -4062,8 +4120,15 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageActionResult"
+                }
+              }
+            }
           },
           "4XX": {
             "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
@@ -9683,6 +9748,103 @@
               "null",
               "string"
             ]
+          },
+          "roles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PageActionResult": {
+        "required": [
+          "state",
+          "message",
+          "field",
+          "data",
+          "executionId"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "field": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
+          "executionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "succeeded": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PageChart": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "table": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "groupBy": {
+            "type": "string"
+          },
+          "aggregate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "column": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "where": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageFilter"
+            }
           }
         }
       },
@@ -9823,6 +9985,24 @@
                 "$ref": "#/components/schemas/PageLink"
               }
             ]
+          },
+          "tiles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageTile"
+            }
+          },
+          "charts": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageChart"
+            }
           }
         }
       },
@@ -9898,6 +10078,101 @@
         "properties": {
           "page": {
             "type": "string"
+          }
+        }
+      },
+      "PageMetricChart": {
+        "required": [
+          "label",
+          "groupBy",
+          "points"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "groupBy": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageMetricPoint"
+            }
+          }
+        }
+      },
+      "PageMetricPoint": {
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "PageMetrics": {
+        "required": [
+          "tiles",
+          "charts"
+        ],
+        "type": "object",
+        "properties": {
+          "tiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageMetricTile"
+            }
+          },
+          "charts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageMetricChart"
+            }
+          }
+        }
+      },
+      "PageMetricTile": {
+        "required": [
+          "key",
+          "label",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -10371,9 +10646,76 @@
         "type": "object",
         "properties": {
           "row": {
-            "$ref": "#/components/schemas/PageRow"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageRow"
+              }
+            ]
           },
           "then": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageActionResult"
+              }
+            ]
+          }
+        }
+      },
+      "PageTile": {
+        "required": [
+          "label"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "key": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "table": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "aggregate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "column": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "where": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageFilter"
+            }
+          },
+          "expression": {
             "type": [
               "null",
               "string"

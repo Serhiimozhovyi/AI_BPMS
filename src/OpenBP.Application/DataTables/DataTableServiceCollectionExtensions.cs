@@ -26,6 +26,7 @@ public static class DataTableServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>()));
         services.AddScoped<IDataTableService, DataTableService>();
         // Сторінки застосунку проєкту (F8-04) читають і пишуть рядки тим самим сховищем.
+        services.AddScoped<IPageWorkflowRunner, PageWorkflowRunner>();
         services.AddScoped<IProjectPageService, ProjectPageService>();
         return services;
     }

@@ -273,7 +273,17 @@ public sealed record ExecutionLaunch(
     IReadOnlyDictionary<string, IReadOnlyList<Item>>? InputOverrides = null,
     string? CorrelationKey = null,
     Guid? ParentExecutionId = null,
-    string? ParentNodeId = null);
+    string? ParentNodeId = null)
+{
+    /// <summary>
+    /// Запустити <see cref="ExecutionMode.Trigger"/> і для неактивного сценарію: дія сторінки застосунку (F8-05) викликає
+    /// сценарій проєкту, який може бути лише підсценарієм (його неможливо активувати). Решта режимів прапорець ігнорують.
+    /// </summary>
+    public bool AllowInactive { get; init; }
+
+    /// <summary>Зберегти дані успішних кроків, хоч би що казав <c>settings.saveSuccessfulData</c>: результат потрібен викликачу (F8-05).</summary>
+    public bool KeepSuccessfulData { get; init; }
+}
 
 /// <summary>Вид події SSE (<c>event:</c>).</summary>
 public enum ExecutionEventKind

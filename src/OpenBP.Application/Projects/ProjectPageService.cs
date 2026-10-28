@@ -27,6 +27,7 @@ public sealed partial class ProjectPageService(
     PostgresDataTableStore store,
     ICurrentUser currentUser,
     IExpressionEvaluator evaluator,
+    IPageWorkflowRunner workflows,
     TimeProvider time) : IProjectPageService
 {
     /// <summary>Визначення сторінки некоректне (ключ, назва, тип, ролі, поля).</summary>
@@ -47,8 +48,11 @@ public sealed partial class ProjectPageService(
     /// <summary>Запит не для цього типу сторінки (рядки — лише у списку, форма — лише у <c>form</c>).</summary>
     public const string KindMismatchCode = "PAGE_KIND_MISMATCH";
 
-    /// <summary>Запуск сценарію зі сторінки ще недоступний (F8-05).</summary>
-    public const string WorkflowNotAvailableCode = "PAGE_WORKFLOW_NOT_AVAILABLE";
+    /// <summary>Сценарій дії чи форми завершився помилкою (упав, скасований, таймаут).</summary>
+    public const string WorkflowFailedCode = "PAGE_WORKFLOW_FAILED";
+
+    /// <summary>Сторінка <c>metrics</c> звертається до чутливої колонки (умова, значення, групування).</summary>
+    public const string MetricsSensitiveCode = "PAGE_METRICS_SENSITIVE";
 
     /// <summary>Найдовша назва сторінки.</summary>
     public const int MaxNameLength = 100;
@@ -90,6 +94,11 @@ public sealed partial class ProjectPageService(
     {
         var c = await LoadAsync(projectId, key, ct);
         var def = c.Page.Definition;
+        if (c.Page.Kind == ProjectPageKinds.Metrics)
+        {
+            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, c.Scope.RoleIn(projectId) >= UserRole.Editor);
+        }
+
         var columns = c.Page.Kind == ProjectPageKinds.List
             ? (def.Columns ?? []).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format)).ToList()
             : [.. (def.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || f.Value is null)
@@ -237,11 +246,6 @@ public sealed partial class ProjectPageService(
         var c = await LoadAsync(projectId, key, ct);
         RequireKind(c, ProjectPageKinds.Form);
         var def = c.Page.Definition;
-        if (def.OnSubmit?.Workflow is not null)
-        {
-            throw new UnprocessableException(WorkflowNotAvailableCode, "Запуск сценарію з форми сторінки ще недоступний — використайте operation.");
-        }
-
         var operation = def.OnSubmit?.Operation?.ToLowerInvariant() ?? "insert";
         if (operation == "update" && string.IsNullOrEmpty(rowKey))
         {
@@ -295,6 +299,11 @@ public sealed partial class ProjectPageService(
             throw new PageFormInvalidException(errors);
         }
 
+        if (def.OnSubmit?.Workflow is { } workflow)
+        {
+            return await SubmitToWorkflowAsync(c, workflow, data, rowKey, ct);
+        }
+
         DataRow saved;
         try
         {
@@ -316,7 +325,7 @@ public sealed partial class ProjectPageService(
     }
 
     /// <inheritdoc />
-    public async Task RunActionAsync(Guid projectId, string key, string rowKey, int action, CancellationToken ct)
+    public async Task<PageActionResult> RunActionAsync(Guid projectId, string key, string rowKey, int action, CancellationToken ct)
     {
         var c = await LoadAsync(projectId, key, ct);
         var actions = c.Page.Definition.Actions ?? [];
@@ -326,29 +335,64 @@ public sealed partial class ProjectPageService(
         }
 
         var a = actions[action];
-        if (a.Operation != DeleteOperation)
+        if (a.Workflow is null && a.Operation != DeleteOperation)
         {
-            throw new ArgumentException(a.Workflow is not null
-                ? "Запуск сценарію зі сторінки ще недоступний."
-                : "Перехід на сторінку виконується в браузері, сервер для нього не потрібен.", nameof(action));
+            throw new ArgumentException("Перехід на сторінку виконується в браузері, сервер для нього не потрібен.", nameof(action));
         }
 
-        if (c.Scope.RoleIn(c.Table.ProjectId) < UserRole.Editor)
+        if (a.Operation == DeleteOperation && c.Scope.RoleIn(c.Table.ProjectId) < UserRole.Editor)
         {
             throw new ForbiddenException(UserRole.Editor);
         }
 
+        if (!ActionVisible(c, a))
+        {
+            // Дія, прихована для ролі, для неї не існує.
+            throw new NotFoundException("page-action", action);
+        }
+
         var row = await FindRowAsync(c, rowKey, ct);
-        if (a.When is not null && !Truthy(Evaluate(JsonValue.Create(a.When), c.User, Masked(c, c.Table, row.Data))))
+        var masked = Masked(c, c.Table, row.Data);
+        if (a.When is not null && !Truthy(Evaluate(JsonValue.Create(a.When), c.User, masked)))
         {
             throw new UnprocessableException(InvalidCode, $"Дія «{a.Label}» для цього рядка недоступна.");
+        }
+
+        if (a.Workflow is { } workflow)
+        {
+            var input = new JsonObject { ["row"] = masked.DeepClone(), ["rowKey"] = row.Key, ["user"] = c.User.DeepClone() };
+            return await workflows.RunAsync(c.ProjectId, workflow, input, ct);
         }
 
         if (!await store.DeleteRowAsync(c.Table, row.Key, ct))
         {
             throw new NotFoundException(RowEntity, rowKey);
         }
+
+        return new PageActionResult(PageActionStates.Success, null, null, null, null);
     }
+
+    /// <summary>Форма зі сценарієм: значення (після перевірки полів) йдуть у сценарій, відмова сценарію стає помилкою форми.</summary>
+    private async Task<PageSubmitResult> SubmitToWorkflowAsync(PageContext c, string workflow, JsonObject data, string? rowKey, CancellationToken ct)
+    {
+        var input = new JsonObject { ["values"] = data.DeepClone(), ["rowKey"] = rowKey, ["user"] = c.User.DeepClone() };
+        var result = await workflows.RunAsync(c.ProjectId, workflow, input, ct);
+        switch (result.State)
+        {
+            case PageActionStates.Rejected:
+                var field = (c.Page.Definition.Fields ?? []).FirstOrDefault(f => f.Value is null && result.Field is not null && Same(f.Column, result.Field))?.Column ?? "";
+                throw new PageFormInvalidException([new FormFieldError(field, result.Message ?? "Сценарій відхилив дані форми.")]);
+            case PageActionStates.Error:
+                throw new UnprocessableException(WorkflowFailedCode, result.Message ?? "Сценарій форми завершився помилкою.");
+            default:
+                return new PageSubmitResult(null, result.State == PageActionStates.Success ? c.Page.Definition.Then?.Page : null, result);
+        }
+    }
+
+    /// <summary>Дію бачать editor і admin проєкту та ролі з <see cref="PageAction.Roles"/> (порожньо — усі, хто бачить сторінку).</summary>
+    private static bool ActionVisible(PageContext c, PageAction action) =>
+        action.Roles is not { Count: > 0 } || c.Scope.RoleIn(c.ProjectId) >= UserRole.Editor
+        || (c.Scope.AppRoleIn(c.ProjectId) is { } role && action.Roles.Contains(role));
 
     private sealed record PageContext(ProjectScope Scope, Guid ProjectId, ProjectPageDto Page, DataTableInfo Table, JsonObject User);
 
@@ -372,6 +416,12 @@ public sealed partial class ProjectPageService(
             ["appRole"] = scope.AppRoleIn(projectId),
         };
         var context = new PageContext(scope, projectId, page, null!, user);
+        if (page.Kind == ProjectPageKinds.Metrics)
+        {
+            // Таблиці показників — у плитках і діаграмах.
+            return context;
+        }
+
         var table = await ResolveTableAsync(context, page.Definition.Table, ct) ?? throw TableUnknown(page.Definition.Table);
         return context with { Table = table };
     }
@@ -464,8 +514,8 @@ public sealed partial class ProjectPageService(
         for (var i = 0; i < (actions?.Count ?? 0); i++)
         {
             var a = actions![i];
-            // Сценарії з дій — F8-05; видалення — лише editor проєкту таблиці.
-            if (a.Workflow is not null || (a.Operation == DeleteOperation && c.Scope.RoleIn(table.ProjectId) < UserRole.Editor))
+            // Видалення — лише editor проєкту таблиці; дії з ролями — лише цим ролям.
+            if ((a.Operation == DeleteOperation && c.Scope.RoleIn(table.ProjectId) < UserRole.Editor) || !ActionVisible(c, a))
             {
                 continue;
             }
@@ -639,6 +689,12 @@ public sealed partial class ProjectPageService(
     /// <summary>Перевірка визначення: таблиці, колонки, сценарії й структура за типом.</summary>
     private async Task ValidateAsync(Guid projectId, string kind, PageDefinition def, CancellationToken ct)
     {
+        if (kind == ProjectPageKinds.Metrics)
+        {
+            await ValidateMetricsAsync(projectId, def, ct);
+            return;
+        }
+
         var table = await ResolveTableAsync(projectId, sharedVisible: true, def.Table, ct) ?? throw TableUnknown(def.Table);
         foreach (var filter in def.Filter ?? [])
         {
@@ -792,6 +848,16 @@ public sealed partial class ProjectPageService(
                 throw Invalid($"Дія «{action.Label}»: operation — лише {DeleteOperation}.");
             }
 
+            if (action.Roles is { Count: > 0 })
+            {
+                var known = Workflows.ProjectAppRoles.Parse(
+                    await db.WorkflowGroups.AsNoTracking().Where(g => g.Id == projectId).Select(g => g.AppRoles).SingleAsync(ct)).Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+                if (action.Roles.FirstOrDefault(r => !known.Contains(r)) is { } unknown)
+                {
+                    throw Invalid($"Дія «{action.Label}»: у проєкті немає ролі застосунку «{unknown}».");
+                }
+            }
+
             if (action.Workflow is not null)
             {
                 await ValidateWorkflowAsync(projectId, action.Workflow, ct);
@@ -817,7 +883,7 @@ public sealed partial class ProjectPageService(
             : $"Сценарію «{reference}» у проєкті немає.");
     }
 
-    private JsonNode? Evaluate(JsonNode? value, JsonObject user, JsonObject? row)
+    private JsonNode? Evaluate(JsonNode? value, JsonObject user, JsonObject? row, JsonObject? tiles = null)
     {
         if (value is not JsonValue v || !v.TryGetValue<string>(out var text) || !ExpressionSyntax.ContainsExpression(text))
         {
@@ -829,7 +895,7 @@ public sealed partial class ProjectPageService(
         {
             return evaluator.Evaluate(rewritten, new ExpressionScope
             {
-                Item = new Item { Json = new JsonObject { ["user"] = user.DeepClone(), ["row"] = row?.DeepClone() } },
+                Item = new Item { Json = new JsonObject { ["user"] = user.DeepClone(), ["row"] = row?.DeepClone(), ["tiles"] = tiles?.DeepClone() } },
                 Now = time.GetUtcNow(),
             });
         }
@@ -939,6 +1005,6 @@ public sealed partial class ProjectPageService(
     [GeneratedRegex(@"\{\{.*?\}\}", RegexOptions.Singleline)]
     private static partial Regex ExpressionBlock();
 
-    [GeneratedRegex(@"\$(user|row)\b")]
+    [GeneratedRegex(@"\$(user|row|tiles)\b")]
     private static partial Regex PageVariable();
 }
