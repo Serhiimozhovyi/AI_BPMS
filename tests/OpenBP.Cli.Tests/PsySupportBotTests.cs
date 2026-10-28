@@ -55,7 +55,14 @@ public sealed class PsySupportFixture : IAsyncLifetime
         // Міграції — окремим процесом до першого прогону: інакше холодний старт конектора з міграціями на завантаженому
         // CI-раннері не вкладається в таймаут підключення MCP (10 с). Далі процеси конектора стартують на готовій базі.
         await MigrateAsync(dll);
+        // Перший запуск процесу конектора на завантаженому раннері може не вкластися в 10 с підключення MCP: це прогрів
+        // (JIT, дисковий кеш), тож його повторюють, і тест падає лише якщо не вдалося й третього разу.
         var (code, stdout, stderr) = await RunAsync(Update.Message(1, "/start"));
+        for (var attempt = 2; code != CliApp.Ok && attempt <= 3; attempt++)
+        {
+            (code, stdout, stderr) = await RunAsync(Update.Message(1, "/start"));
+        }
+
         Assert.True(code == CliApp.Ok, stderr + stdout);
         PsychologistId = await ScalarAsync<long>(
             $"INSERT INTO psychologists (name, phone, active, created_at) VALUES ('Олена Коваль', '{PsychologistPhone}', true, now()) RETURNING id");
