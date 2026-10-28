@@ -857,7 +857,7 @@
 - DoD: Vitest: `buildPalette` з каталогом (підключені, непідключені, власні), сторінка конектора (події, дії, пошук), вибір підключення для нового вузла, пошук дій непідключеного конектора; Playwright: палітра → Telegram → «Надіслати фото» → на канвасі вузол «Надіслати фото» з підключенням; lint/test/build/e2e зелені.
 
 ### F3-97 · Загальний конектор OData v4 (`connectors/odata`)
-- model: `sonnet` · status: `review` · depends: F3-93
+- model: `sonnet` · status: `done` · depends: F3-93
 - Проблема: доступ до OData-систем (Кіт CRM, 1С, Dynamics…) є лише через спеціалізовані конектори з бізнес-діями; щоб прочитати чи змінити довільну сутність, треба писати новий конектор.
 - Що: конектор за Connector Kit: налаштування «Адреса сервісу OData», облікові дані `oauth2.clientCredentials`, `bearer` або `basic` (F3-93). Дії: «Список сутностей» (`$metadata` → набори), «Отримати записи» (`$filter`, `$select`, `$expand`, `$orderby`, `$top`, сторінки через `@odata.nextLink`), «Отримати запис за ключем», «Створити», «Змінити» (PATCH), «Видалити»; набір сутностей обирається зі списку (`x-openbp-options` з `$metadata`, F3-54). Помилки OData — людським текстом (401/403/404/400 з `error.message`). Маніфест з `actions` (F3-92), запис у каталозі, приклад сценарію `examples/odata-list.json`, `README.md` конектора.
 - DoD: тести на фейковому OData-сервері (метадані, фільтр і сторінки, CRUD, помилки, оновлення токена OAuth2), контрактний тест `actions`, job конектора в CI; `dotnet build -warnaserror`, `dotnet test`, `dotnet format --verify-no-changes` зелені.
