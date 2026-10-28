@@ -258,6 +258,32 @@ public class WorkflowTransferTests(ApiFactory api)
         """[{ "from": { "node": "n_hook", "output": 0 }, "to": { "node": "n_set", "input": 0 }, "business": { "label": "далі" } }]""";
 
     [Fact]
+    public async Task Server_id_from_an_expression_is_not_a_reference_and_imports_as_is()
+    {
+        // F8-08: конектор шаблону задає змінна інстансу — у маніфест вона не потрапляє і mapping не потрібен.
+        var editor = await LoginAsync(api, UserRole.Editor);
+        const string Server = "{{ $vars.psy_telegram_server }}";
+        var nodes = $$"""
+            { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+            { "id": "n_send", "name": "Надіслати", "type": "mcp.tool", "typeVersion": 1, "position": [200, 0],
+              "parameters": { "serverId": "{{Server}}", "toolName": "send_messages", "arguments": { "messages": [] } } }
+            """;
+        var created = await editor.PostAsync(Workflows,
+            Json(Definition("Конектор зі змінної", nodes, """[{ "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_send", "input": 0 } }]""")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await JsonAsync(created)).GetProperty("id").GetGuid();
+
+        var export = await JsonAsync(await editor.GetAsync($"{Workflows}/{id}/export"));
+        Assert.Empty(export.GetProperty("manifest").GetProperty("connectors").EnumerateArray());
+        Assert.Contains("psy_telegram_server", export.GetProperty("manifest").GetProperty("variables").EnumerateArray().Select(v => v.GetString()));
+
+        var imported = await editor.PostAsync($"{Workflows}/import", Json(export.GetRawText()));
+        Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
+        Assert.Equal(Server, (await JsonAsync(imported)).GetProperty("workflow").GetProperty("definition").GetProperty("nodes")[1]
+            .GetProperty("parameters").GetProperty("serverId").GetString());
+    }
+
+    [Fact]
     public async Task Import_uses_explicit_mapping_and_rejects_mapping_to_missing_object()
     {
         var name = $"Telegram {Guid.NewGuid():N}";
