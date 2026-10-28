@@ -87,7 +87,8 @@ public class NodeToolsTests(McpServerFactory mcp)
         var body = JsonNode.Parse(compact.StructuredContent!.Value.GetRawText())!;
         Assert.Empty(body["nodes"]!.AsArray());
         var digest = body["compact"]!;
-        Assert.True(digest.ToJsonString().Length <= ICatalogDigest.MaxChars);
+        var relaxed = new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+        Assert.True(digest.ToJsonString(relaxed).Length <= ICatalogDigest.MaxChars, $"{digest.ToJsonString(relaxed).Length} символів");
         var nodes = digest["nodes"]!.AsArray();
         Assert.DoesNotContain("parametersSchema", digest.ToJsonString(), StringComparison.Ordinal);
         Assert.Equal(nodes.Count, nodes.Select(n => (string?)n!["type"]).Distinct().Count());

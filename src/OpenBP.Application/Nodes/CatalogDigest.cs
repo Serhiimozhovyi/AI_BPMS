@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Paging;
@@ -49,7 +50,8 @@ public interface ICatalogDigest
 /// <param name="connectors">Сервіс конекторів.</param>
 public sealed class CatalogDigestBuilder(INodeService nodes, IConnectorService connectors) : ICatalogDigest
 {
-    private static readonly JsonSerializerOptions SizeOptions = new(JsonSerializerDefaults.Web);
+    // Розмір рахуємо в символах тексту, який читає модель: кирилицю без \uXXXX-екранування.
+    private static readonly JsonSerializerOptions SizeOptions = new(JsonSerializerDefaults.Web) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private static readonly Dictionary<string, string> KindByType = new(StringComparer.Ordinal)
     {
@@ -92,7 +94,7 @@ public sealed class CatalogDigestBuilder(INodeService nodes, IConnectorService c
     private static CatalogDigest Fit(List<NodeDescriptor> descriptors, List<DigestAction> actions)
     {
         // Спершу скорочуємо описи, потім відкидаємо зайві дії; вузли лишаються всі.
-        foreach (var limit in new[] { 100, 60, 30 })
+        foreach (var limit in new[] { 100, 60, 30, 0 })
         {
             var digest = Make(descriptors, actions, limit);
             if (Size(digest) <= ICatalogDigest.MaxChars)
@@ -102,11 +104,11 @@ public sealed class CatalogDigestBuilder(INodeService nodes, IConnectorService c
         }
 
         var kept = actions.ToList();
-        var shrunk = Make(descriptors, kept, 30);
+        var shrunk = Make(descriptors, kept, 0);
         while (kept.Count > 0 && Size(shrunk) > ICatalogDigest.MaxChars)
         {
             kept.RemoveAt(kept.Count - 1);
-            shrunk = Make(descriptors, kept, 30) with { Truncated = true };
+            shrunk = Make(descriptors, kept, 0) with { Truncated = true };
         }
 
         return shrunk;
@@ -129,7 +131,7 @@ public sealed class CatalogDigestBuilder(INodeService nodes, IConnectorService c
 
     private static string FirstLine(string? text, int limit)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        if (limit <= 0 || string.IsNullOrWhiteSpace(text))
         {
             return string.Empty;
         }

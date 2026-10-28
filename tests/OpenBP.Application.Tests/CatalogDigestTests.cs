@@ -95,7 +95,7 @@ public class CatalogDigestTests
         Assert.Equal(7, digest.Nodes.Count);
     }
 
-    private static string Json(CatalogDigest digest) => JsonSerializer.Serialize(digest, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    private static string Json(CatalogDigest digest) => JsonSerializer.Serialize(digest, new JsonSerializerOptions(JsonSerializerDefaults.Web) { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 
     private static IConnectorService Connectors(params ConnectorSummary[] summaries) => Connectors([], summaries);
 
