@@ -718,6 +718,29 @@ test('F3-61: змінити, відкрити історію, відновити
   await expect(page.getByTestId('undo')).toBeVisible();
 });
 
+test('нотатка: автозбереження під час набору не забирає фокус із поля й не прибирає нотатку', async ({ page }) => {
+  const api = new FakeApi();
+  await api.install(page);
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-item="core.set"]').click();
+  await expect(page.locator('[data-node-id]')).toHaveCount(1);
+  await waitSaved(page);
+
+  const box = (await page.locator('vflow').boundingBox())!;
+  await page.mouse.click(box.x + box.width - 320, box.y + 80, { button: 'right' });
+  await page.getByTestId('menu-add-note').click();
+  const editor = page.getByTestId('note-editor');
+  await expect(editor).toBeFocused();
+
+  // Нотатка вже збережена (порожня), а користувач ще не почав писати: збереження не має перебудувати поле.
+  await waitSaved(page);
+  await page.waitForTimeout(1200);
+  await expect(editor).toBeFocused();
+  await editor.fill('Перша думка');
+  await editor.press('Control+Enter');
+  await expect(page.locator('[data-note-id] [data-testid="note-body"]')).toContainText('Перша думка');
+});
+
 test('F3-62: ПКМ → «Додати нотатку», Markdown-текст, колір, Shift+S і Escape; після перезавантаження нотатка на місці', async ({ page }) => {
   const api = new FakeApi();
   await api.install(page);
