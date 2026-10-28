@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { contextFromUrl, GlobalAssistantService } from './global-assistant.service';
+import { changedWorkflowId, contextFromUrl, GlobalAssistantService } from './global-assistant.service';
 
 const ID = '11111111-2222-3333-4444-555555555555';
 const OTHER = '99999999-2222-3333-4444-555555555555';
@@ -33,6 +33,29 @@ describe('contextFromUrl', () => {
   it('не вважає ідентифікатором те, що ним не є', () => {
     expect(contextFromUrl('/workflows/new')).toEqual({ page: '/workflows/new' });
     expect(contextFromUrl('/')).toEqual({ page: '/' });
+  });
+});
+
+describe('changedWorkflowId', () => {
+  const applied = (tool: string, args: Record<string, unknown>, status: 'applied' | 'rejected' | 'pending' = 'applied') => ({
+    ...PROPOSAL,
+    tool,
+    arguments: args,
+    status,
+  });
+
+  it('застосована зміна сценарію віддає його id', () => {
+    expect(changedWorkflowId(applied('update_workflow', { id: ID }))).toBe(ID);
+    expect(changedWorkflowId(applied('publish_workflow', { workflowId: ID }))).toBe(ID);
+    expect(changedWorkflowId(applied('move_workflow', { id: ID, groupId: OTHER }))).toBe(ID);
+  });
+
+  it('скасована, не про сценарій чи без id — нічого', () => {
+    expect(changedWorkflowId(applied('update_workflow', { id: ID }, 'rejected'))).toBeNull();
+    expect(changedWorkflowId(applied('update_workflow', { id: ID }, 'pending'))).toBeNull();
+    expect(changedWorkflowId(applied('create_table', { name: 'Т' }))).toBeNull();
+    expect(changedWorkflowId(applied('create_workflow', { name: 'С' }))).toBeNull();
+    expect(changedWorkflowId(applied('update_workflow', { id: 'не-uuid' }))).toBeNull();
   });
 });
 
@@ -102,6 +125,20 @@ describe('GlobalAssistantService', () => {
     request.flush({ ...PROPOSAL, status: 'applied', result: '{"applied":true}' });
     expect(service.proposals()[0].status).toBe('applied');
     expect(service.deciding()).toEqual([]);
+  });
+
+  it('застосована зміна сценарію повідомляє редактор (workflowChanged), скасована — ні', async () => {
+    const { service, http } = await setup();
+    service.currentId.set('c1');
+    const update = { ...PROPOSAL, tool: 'update_workflow', arguments: { id: ID } };
+    service.proposals.set([update]);
+    service.decide('p1', false);
+    http.expectOne(`${BASE}/c1/proposals/p1`).flush({ ...update, status: 'rejected' });
+    expect(service.workflowChanged()).toBeNull();
+
+    service.decide('p1', true);
+    http.expectOne(`${BASE}/c1/proposals/p1`).flush({ ...update, status: 'applied', result: '{"id":"x"}' });
+    expect(service.workflowChanged()).toEqual({ workflowId: ID, seq: 1 });
   });
 
   it('«Скасувати» шле apply=false', async () => {

@@ -1469,6 +1469,32 @@ describe('WorkflowEditorComponent', () => {
     expect(global.context().nodeId).toBeUndefined();
   });
 
+  it('F3-115: застосована пропозиція помічника змінила цей сценарій — редактор перечитує його й не затирає зміну відкладеною правкою', async () => {
+    const { fixture, http, host } = await loaded();
+    const global = TestBed.inject(GlobalAssistantService);
+    const before = canvasNodes(fixture).map((n) => n.id);
+
+    global.workflowChanged.set({ workflowId: 'w1', seq: 1 });
+    await render(fixture);
+    const changed = { ...workflow, version: workflow.version + 1, definition: { ...workflow.definition, nodes: workflow.definition.nodes.slice(0, 1), connections: [] } };
+    http.expectOne('/api/v1/workflows/w1').flush(changed);
+    http.expectOne('/api/v1/nodes').flush(SAMPLE_DESCRIPTORS);
+    await render(fixture);
+
+    expect(canvasNodes(fixture).map((n) => n.id)).toEqual(before.slice(0, 1));
+    expect(host.querySelector('[data-testid="editor-notice"]')?.textContent).toContain('Помічник змінив сценарій');
+    http.expectNone({ method: 'PUT' });
+  });
+
+  it('F3-115: зміна іншого сценарію редактор не чіпає', async () => {
+    const { fixture } = await loaded();
+    const global = TestBed.inject(GlobalAssistantService);
+    global.workflowChanged.set({ workflowId: 'other', seq: 1 });
+    await render(fixture);
+    // `afterEach` перевіряє, що нових запитів немає.
+    expect(canvasNodes(fixture).length).toBe(workflow.definition.nodes.length);
+  });
+
   it('помічник (F3-60): «Пояснити вузол» відкриває панель замість панелі вузла; відповідь — одна правка, Ctrl+Z її скасовує', async () => {
     const { fixture, http, host } = await loaded();
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
