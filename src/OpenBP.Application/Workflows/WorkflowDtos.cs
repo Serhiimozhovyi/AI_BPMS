@@ -116,14 +116,29 @@ public sealed record WorkflowGroupSummary(Guid Id, string Name, int SortOrder, i
 
     /// <summary>Значок проєкту (F8-03): назва іконки чи emoji; порожній — типовий.</summary>
     public string Icon { get; init; } = "";
+
+    /// <summary>Ролі застосунку проєкту (F8-04).</summary>
+    public IReadOnlyList<ProjectAppRole> AppRoles { get; init; } = [];
+
+    /// <summary>Моя роль застосунку в проєкті (F8-04); <c>null</c> — немає.</summary>
+    public string? AppRole { get; init; }
 }
+
+/// <summary>Роль застосунку проєкту (F8-04, docs/projects.md §4): незалежна від ролі проєкту editor/viewer.</summary>
+/// <param name="Key">Ключ: латиниця в нижньому регістрі, цифри, <c>_</c>, <c>-</c>; унікальний у проєкті.</param>
+/// <param name="Name">Назва для людей.</param>
+public sealed record ProjectAppRole(string Key, string Name);
 
 /// <summary>Учасник проєкту (<c>GET /workflow-groups/{id}/members</c>, F6-14).</summary>
 /// <param name="UserId"><c>users.id</c>.</param>
 /// <param name="Email">Email користувача.</param>
 /// <param name="Role"><see cref="UserRole.Editor"/> або <see cref="UserRole.Viewer"/> у межах проєкту.</param>
 /// <param name="GlobalRole">Глобальна роль користувача (для довідки в UI).</param>
-public sealed record ProjectMember(Guid UserId, string Email, UserRole Role, UserRole? GlobalRole);
+public sealed record ProjectMember(Guid UserId, string Email, UserRole Role, UserRole? GlobalRole)
+{
+    /// <summary>Роль застосунку (F8-04): ключ з ролей застосунку проєкту або <c>null</c>.</summary>
+    public string? AppRole { get; init; }
+}
 
 /// <summary>Результат <c>POST /workflows/validate</c>.</summary>
 /// <param name="Errors">Помилки; порожній список — сценарій коректний.</param>

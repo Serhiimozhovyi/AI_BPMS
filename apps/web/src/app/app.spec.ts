@@ -177,6 +177,40 @@ describe('App: вибір проєкту (F6-14)', () => {
     expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe('/projects/p1/members');
     localStorage.removeItem('openbp.project');
   });
+
+  it('користувач лише з роллю застосунку: з головної — у застосунок проєкту, меню «Застосунок» і «Огляд» (F8-04)', async () => {
+    configure({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
+    const fixture = TestBed.createComponent(App);
+    const harness = await RouterTestingHarness.create();
+    const http = TestBed.inject(HttpTestingController);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    await harness.navigateByUrl('/');
+    http
+      .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
+      .flush([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 2, role: 'viewer', appRole: 'operator' }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(navigate).toHaveBeenCalledWith(['/projects', 'p1', 'app'], { replaceUrl: true });
+    const nav = (fixture.nativeElement as HTMLElement).querySelector('nav')!;
+    expect([...nav.querySelectorAll('a')].map((a) => a.textContent?.trim())).toEqual(['appsЗастосунок', 'monitoringОгляд']);
+    expect(nav.querySelector('[data-testid="nav-app"]')?.getAttribute('href')).toBe('/projects/p1/app');
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="project-select"]')).toBeNull();
+  });
+
+  it('viewer з кількома проєктами чи без ролі застосунку бачить звичайне меню', async () => {
+    configure({ id: 'u8', email: 'viewer@firma.ua', role: 'viewer' });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    TestBed.inject(HttpTestingController)
+      .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
+      .flush([{ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 1, role: 'viewer' }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect((fixture.nativeElement as HTMLElement).querySelector('nav')?.textContent).toContain('Сценарії');
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="nav-app"]')).toBeNull();
+  });
 });
 
 describe('App: телефон і зв’язок (F3-84)', () => {

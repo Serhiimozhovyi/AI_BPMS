@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
@@ -63,7 +64,7 @@ interface ProjectTab {
       }
 
       <nav class="mt-3 flex flex-wrap gap-1 border-b border-ac-line" aria-label="Вкладки проєкту" i18n-aria-label="@@project.tabs.label" data-testid="project-tabs">
-        @for (t of tabs; track t.path) {
+        @for (t of visibleTabs(); track t.path) {
           <a
             class="shell-nav__link"
             [routerLink]="t.path"
@@ -80,6 +81,7 @@ interface ProjectTab {
 export class ProjectPage implements OnInit {
   private readonly api = inject(WorkflowsApiService);
   private readonly context = inject(ProjectContextService);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly projectId = inject(ActivatedRoute).snapshot.paramMap.get('id') ?? '';
@@ -101,6 +103,13 @@ export class ProjectPage implements OnInit {
     { path: 'app', testId: 'tab-app', label: $localize`:@@project.tab.app:Застосунок` },
     { path: 'members', testId: 'tab-members', label: $localize`:@@project.tab.members:Учасники` },
   ];
+
+  /** Користувач лише застосунку (F8-04) бачить тільки «Огляд» і «Застосунок». */
+  readonly visibleTabs = computed(() =>
+    this.context.appOnlyProject(this.auth.user()?.role)?.id === this.projectId
+      ? this.tabs.filter((t) => t.path === 'overview' || t.path === 'app')
+      : this.tabs,
+  );
 
   ngOnInit(): void {
     // Вкладки-сторінки фільтруються за проєктом із шапки.

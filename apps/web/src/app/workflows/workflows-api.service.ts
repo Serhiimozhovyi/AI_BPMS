@@ -44,6 +44,16 @@ export interface WorkflowGroup {
   description?: string;
   /** Назва іконки Material Symbols; порожньо — типова (F8-03). */
   icon?: string;
+  /** Ролі застосунку проєкту (F8-04). */
+  appRoles?: ProjectAppRole[];
+  /** Моя роль застосунку (F8-04); `null` — немає. */
+  appRole?: string | null;
+}
+
+/** Роль застосунку проєкту (F8-04): незалежна від ролі проєкту editor/viewer. */
+export interface ProjectAppRole {
+  key: string;
+  name: string;
 }
 
 /** `ProjectMember` — учасник проєкту (`GET /workflow-groups/{id}/members`, F6-14). */
@@ -52,6 +62,8 @@ export interface ProjectMember {
   email: string;
   role: 'editor' | 'viewer';
   globalRole?: ProjectRole | null;
+  /** Роль застосунку (F8-04). */
+  appRole?: string | null;
 }
 
 /** Доріжка бізнес-вигляду (F3-67, docs/business-view.md): хто виконує кроки. */
@@ -382,7 +394,7 @@ export class WorkflowsApiService {
   }
 
   /** Змінює лише передані поля; `''` очищає опис чи іконку (F8-03). */
-  updateGroup(id: string, patch: { name?: string; description?: string; icon?: string }): Observable<WorkflowGroup> {
+  updateGroup(id: string, patch: { name?: string; description?: string; icon?: string; appRoles?: ProjectAppRole[] }): Observable<WorkflowGroup> {
     return this.http.patch<WorkflowGroup>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`, patch);
   }
 
@@ -402,8 +414,8 @@ export class WorkflowsApiService {
   }
 
   /** `PUT /workflow-groups/{id}/members` — додати учасника за email або змінити його роль. */
-  setMember(projectId: string, email: string, role: 'editor' | 'viewer'): Observable<ProjectMember> {
-    return this.http.put<ProjectMember>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members`, { email, role });
+  setMember(projectId: string, email: string, role: 'editor' | 'viewer', appRole: string | null = null): Observable<ProjectMember> {
+    return this.http.put<ProjectMember>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members`, { email, role, appRole });
   }
 
   /** `DELETE /workflow-groups/{id}/members/{userId}`. */

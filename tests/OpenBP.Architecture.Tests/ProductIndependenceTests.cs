@@ -78,6 +78,27 @@ public class ProductIndependenceTests
         Assert.All(GenericConnectors, id => Assert.Contains(id, ids));
     }
 
+    /// <summary>
+    /// Сторінки застосунку проєкту (F8-04, <c>project_pages</c>) — дані клієнта, як і сценарії: їхні визначення живуть у
+    /// <c>examples/</c> (шаблони проєктів) і потрапляють в інстанс через REST/MCP, а не вшиті в код продукту.
+    /// </summary>
+    [Fact]
+    public void Project_page_definitions_live_only_in_examples()
+    {
+        var root = RepositoryRoot();
+        var pages = Roots.SelectMany(r => EnumerateFiles(Path.Combine(root, r)))
+            .Where(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase) && IsPageDefinition(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+            .ToList();
+
+        Assert.True(pages.Count == 0, "Визначення сторінок застосунку в коді продукту (їм місце в examples/): " + string.Join(", ", pages));
+        Assert.True(IsPageDefinition("""{ "key": "events", "kind": "list", "definition": { "table": "events" } }"""));
+        Assert.False(IsPageDefinition("""{ "kind": "list", "items": [] }"""));
+    }
+
+    private static bool IsPageDefinition(string json) =>
+        Regex.IsMatch(json, "\"kind\"\\s*:\\s*\"(list|detail|form|metrics)\"") && Regex.IsMatch(json, "\"definition\"\\s*:\\s*\\{\\s*\"table\"");
+
     [Fact]
     public void Scanner_finds_a_deliberate_violation()
     {

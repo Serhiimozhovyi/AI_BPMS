@@ -83,6 +83,17 @@ export const routes: Routes = [
           {
             path: 'app',
             loadComponent: () => import('./pages/project/project-app.page').then((m) => m.ProjectAppPage),
+            // Сторінки застосунку (F8-04): список/картка/форма за ключем сторінки.
+            children: [
+              {
+                path: ':key',
+                loadComponent: () => import('./pages/project/app-page.page').then((m) => m.AppPagePage),
+              },
+              {
+                path: ':key/:rowKey',
+                loadComponent: () => import('./pages/project/app-page.page').then((m) => m.AppPagePage),
+              },
+            ],
           },
           {
             path: 'members',

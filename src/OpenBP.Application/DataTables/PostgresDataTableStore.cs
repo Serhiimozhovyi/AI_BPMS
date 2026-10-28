@@ -71,6 +71,74 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
         return await QueryAsync(db, table, filters, limit, offset, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Сторінка рядків для сторінок застосунку (F8-04): умови <paramref name="where"/>, пошук підрядка без урахування регістру
+    /// в <paramref name="searchColumns"/> і сортування за колонкою (порожні — в кінці), далі за часом створення.
+    /// </summary>
+    /// <param name="table">Таблиця.</param>
+    /// <param name="where">Умови (нормалізуються тут).</param>
+    /// <param name="searchColumns">Колонки пошуку; порожньо — без пошуку.</param>
+    /// <param name="search">Підрядок; порожній — без пошуку.</param>
+    /// <param name="sortColumn">Колонка сортування або <c>null</c> — у порядку створення.</param>
+    /// <param name="descending">Спадання.</param>
+    /// <param name="limit">Скільки рядків.</param>
+    /// <param name="offset">Скільки пропустити.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Рядки і загальна кількість за умовами й пошуком.</returns>
+    public async Task<(IReadOnlyList<DataRow> Rows, int Total)> PageRowsAsync(
+        DataTableInfo table, IReadOnlyList<DataFilter> where, IReadOnlyList<string> searchColumns, string? search,
+        string? sortColumn, bool descending, int limit, int offset, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(searchColumns);
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        var (condition, parameters) = Where(table, filters);
+        var sql = new StringBuilder(condition);
+        if (!string.IsNullOrWhiteSpace(search) && searchColumns.Count > 0)
+        {
+            parameters.Add(new NpgsqlParameter("search", search.Trim()));
+            var parts = new List<string>();
+            for (var i = 0; i < searchColumns.Count; i++)
+            {
+                parameters.Add(new NpgsqlParameter($"s{i}", ColumnOf(table, searchColumns[i]).Name));
+                parts.Add($"strpos(lower(coalesce(data ->> @s{i}, '')), lower(@search)) > 0");
+            }
+
+            sql.Append(" AND (").Append(string.Join(" OR ", parts)).Append(')');
+        }
+
+        var order = "created_at, key";
+        if (sortColumn is not null)
+        {
+            var column = ColumnOf(table, sortColumn);
+            parameters.Add(new NpgsqlParameter("sort", column.Name));
+            var expression = column.Type switch
+            {
+                DataColumnType.Number => "(CASE WHEN jsonb_typeof(data -> @sort) = 'number' THEN (data ->> @sort)::numeric END)",
+                DataColumnType.Boolean => "(CASE WHEN jsonb_typeof(data -> @sort) = 'boolean' THEN (data ->> @sort)::boolean END)",
+                _ => "((data ->> @sort) COLLATE \"C\")",
+            };
+            order = $"{expression} {(descending ? "DESC" : "ASC")} NULLS LAST, created_at, key";
+        }
+
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        // sql і order — лише назви параметрів і фіксовані фрагменти, значення йдуть параметрами.
+        var countSql = $"SELECT count(*)::int AS \"Value\" FROM data_rows WHERE {sql}";
+        var total = await db.Database.SqlQueryRaw<int>(countSql, [.. Clone(parameters)]).SingleAsync(ct).ConfigureAwait(false);
+        parameters.Add(new("limit", Math.Max(limit, 0)));
+        parameters.Add(new("offset", Math.Max(offset, 0)));
+        var pageSql = $"SELECT * FROM data_rows WHERE {sql} ORDER BY {order} LIMIT @limit OFFSET @offset";
+        var rows = await db.DataRows.FromSqlRaw(pageSql, [.. parameters]).AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        return ([.. rows.Select(ToRow)], total);
+    }
+
+    private static List<NpgsqlParameter> Clone(List<NpgsqlParameter> parameters) =>
+        [.. parameters.Select(p => new NpgsqlParameter(p.ParameterName, p.Value))];
+
+    private static DataColumn ColumnOf(DataTableInfo table, string name) =>
+        table.Columns.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
+        ?? throw new DataTableException(DataTableRules.Codes.ColumnUnknown, $"У таблиці «{table.Name}» немає колонки «{name}».");
+
     /// <inheritdoc />
     public async Task<int> CountRowsAsync(DataTableInfo table, IReadOnlyList<DataFilter> where, CancellationToken ct)
     {

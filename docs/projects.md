@@ -60,6 +60,27 @@ REST (`architecture.md` §10.3): `GET /workflow-groups` повертає ще `d
 `key` — латиниця, унікальний у проєкті (адреса `/projects/:id/app/<key>`). `roles` — ключі ролей застосунку (§4);
 порожній список — усі учасники проєкту.
 
+**Реалізовано (F8-04).** `IProjectPageService` (`OpenBP.Application/Projects`), REST
+`/api/v1/projects/{projectId}/pages`: `GET /` (сторінки, видимі користувачу), `GET /{key}` (сторінка, колонки з типами,
+JSON Schema форми, `canEdit`), `PUT /{key}` (створити/замінити, editor), `DELETE /{key}`, `GET /{key}/rows?search&sort&direction&page&pageSize`,
+`GET /{key}/rows/{rowKey}` (картка + `related`), `POST /{key}/submit { values, rowKey? }` (форма),
+`POST /{key}/rows/{rowKey}/actions/{index}` (дія). MCP: `list_project_pages`, `upsert_project_page`. UI — вкладка
+«Застосунок» (`/projects/:id/app/<key>[/<rowKey>]`). Уточнення й відхилення від цього розділу:
+
+- Типи сторінок — `list`, `detail`, `form`; `metrics` (§3.4) і запуск сценаріїв з дій та `onSubmit.workflow` — F8-05.
+  Посилання на сценарій валідується вже зараз (сценарій має бути в цьому проєкті), але така дія не показується, а
+  виклик повертає 422 `PAGE_WORKFLOW_NOT_AVAILABLE`.
+- `filter` діє також на `detail` і `form` (зміна запису): рядок поза фільтром — 404, як і недоступна сторінка.
+- Поле форми може мати фіксоване `value` (вираз з `$user`), яке ставить сервер, — напр. автор запису.
+- Дії в `related` — лише переходи `page`.
+- Помилки валідації сторінки — 422 з кодами `PAGE_INVALID`, `PAGE_TABLE_UNKNOWN`, `PAGE_COLUMN_UNKNOWN`,
+  `PAGE_WORKFLOW_UNKNOWN`, `PAGE_EXPRESSION_FAILED`; невідповідний тип для операції — `PAGE_KIND_MISMATCH`; помилки
+  форми (`required`, `unique`, тип) — 422 `PAGE_FORM_INVALID` з `errors: [{ field, message }]`.
+- Запис формою дозволено кожному, хто бачить сторінку (права задає `roles` сторінки); видалення дією
+  `operation: "delete"` — лише editor проєкту таблиці.
+- Пошук — підрядок без урахування регістру по колонках `search`; сортування — за будь-якою колонкою сторінки,
+  `null` в кінці.
+
 ### 3.1. `list`
 
 ```json
@@ -121,6 +142,21 @@ Editor проєкту редагує сторінки формою: тип, та
   сторінки й сценарії порівнюють її з `{{ $user.id }}`.
 - `ICurrentUser` отримує `AppRole(projectId)`; виразам доступний `$user.appRole` лише в сторінках і в сценаріях,
   запущених дією сторінки (у сценарії — `$json.user`).
+
+**Реалізовано (F8-04)**, з уточненнями:
+
+- Роль застосунку читає `ProjectAccess` (`ProjectScope.AppRoleIn(projectId)`, `AppRoleInAsync`), а не `ICurrentUser`:
+  там уже живуть ролі проєкту, і роль застосунку має той самий життєвий цикл.
+- Ролі проєкту задаються цілим списком: `PATCH /workflow-groups/{id} { appRoles: [{ key, name }] }` (ключ
+  `^[a-z][a-z0-9_-]{0,39}$`, до 20 ролей); прибрати роль, яку ще має учасник, — 409 `APP_ROLE_IN_USE`.
+- Учасник: `PUT /workflow-groups/{id}/members { email, role, appRole? }` (за email, як у F6-14, а не
+  `/members/{userId}`); невідома роль — 400. `GET /workflow-groups` повертає `appRoles` і мою `appRole`, список
+  учасників — `appRole` кожного. UI — вкладка «Учасники».
+- Editor проєкту й admin бачать усі сторінки незалежно від `roles`.
+- Роль застосунку дає право бачити чутливі колонки таблиць проєкту (і на сторінках, і через REST/MCP `/tables`) —
+  як editor; кожне таке читання пише аудит `dataTable.sensitiveRead`.
+- Користувач «лише застосунку» — глобальний `viewer` з одним проєктом, у якому він `viewer` з роллю застосунку: з
+  головної переходить на `/projects/:id/app`, меню й вкладки проєкту — лише «Застосунок» і «Огляд».
 
 ## 5. Шаблон проєкту
 

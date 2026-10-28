@@ -30,6 +30,17 @@ export class ProjectContextService {
   /** Проєкти, де можна створювати облікові дані й конектори (editor або admin). */
   readonly manageable = computed(() => this.projects().filter((p) => p.role === 'editor' || p.role === 'admin'));
 
+  /**
+   * Проєкт користувача «лише застосунку» (F8-04, `docs/projects.md` §1): глобальний viewer з одним проєктом, у якому він
+   * viewer з роллю застосунку. Такий користувач після входу потрапляє на `/projects/:id/app` і бачить урізане меню.
+   */
+  appOnlyProject(globalRole: string | null | undefined): WorkflowGroup | null {
+    const list = this.projects();
+    if (globalRole !== 'viewer' || list.length !== 1) return null;
+    const [p] = list;
+    return p.role === 'viewer' && p.appRole ? p : null;
+  }
+
   /** Перечитує список проєктів (після входу, створення чи видалення групи). */
   reload(): void {
     this.api.listGroups().subscribe({

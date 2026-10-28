@@ -8,7 +8,8 @@ namespace OpenBP.Api.Endpoints;
 /// <param name="Name">Назва групи; у <c>PATCH</c> <c>null</c> — не змінювати.</param>
 /// <param name="Description">Опис проєкту (F8-03); у <c>PATCH</c> <c>null</c> — не змінювати, порожній рядок очищає.</param>
 /// <param name="Icon">Значок проєкту (F8-03); так само.</param>
-public sealed record WorkflowGroupRequest(string? Name, string? Description = null, string? Icon = null);
+/// <param name="AppRoles">Ролі застосунку (F8-04) цілим списком; у <c>POST</c> ігноруються, у <c>PATCH</c> <c>null</c> — не змінювати.</param>
+public sealed record WorkflowGroupRequest(string? Name, string? Description = null, string? Icon = null, IReadOnlyList<ProjectAppRole>? AppRoles = null);
 
 /// <summary>Тіло <c>PUT /workflow-groups/order</c>.</summary>
 /// <param name="Ids">Id усіх видимих груп у новому порядку.</param>
@@ -17,7 +18,8 @@ public sealed record WorkflowGroupOrderRequest(IReadOnlyList<Guid>? Ids);
 /// <summary>Тіло <c>PUT /workflow-groups/{id}/members</c> (F6-14).</summary>
 /// <param name="Email">Email наявного користувача.</param>
 /// <param name="Role"><c>editor</c> або <c>viewer</c>.</param>
-public sealed record ProjectMemberRequest(string? Email, UserRole? Role);
+/// <param name="AppRole">Роль застосунку (F8-04): ключ з ролей проєкту; <c>null</c> — без неї.</param>
+public sealed record ProjectMemberRequest(string? Email, UserRole? Role, string? AppRole = null);
 
 /// <summary>Маршрути <c>/workflow-groups</c> (F3-63; групи — це проєкти, F6-14). Ролі перевіряє <see cref="IWorkflowGroupService"/>.</summary>
 public static class WorkflowGroupEndpoints
@@ -44,9 +46,10 @@ public static class WorkflowGroupEndpoints
             .Produces<WorkflowGroupSummary>(StatusCodes.Status201Created);
 
         groups.MapPatch("/{id:guid}", (Guid id, WorkflowGroupRequest body, IWorkflowGroupService service, CancellationToken ct) =>
-            service.UpdateAsync(id, body.Name, body.Description, body.Icon, ct))
-            .WithSummary("Змінити назву, опис чи значок групи")
-            .WithDescription("Лише передані поля; порожній рядок в `description` чи `icon` очищає їх. Назва — як у створенні (409 WORKFLOW_GROUP_NAME_TAKEN).");
+            service.UpdateAsync(id, body.Name, body.Description, body.Icon, ct, body.AppRoles))
+            .WithSummary("Змінити назву, опис, значок чи ролі застосунку групи")
+            .WithDescription("Лише передані поля; порожній рядок в `description` чи `icon` очищає їх. Назва — як у створенні (409 WORKFLOW_GROUP_NAME_TAKEN). " +
+                             "`appRoles` — `[{ key, name }]` цілим списком; роль, призначену учасникам, прибрати не можна (409 APP_ROLE_IN_USE).");
 
         groups.MapDelete("/{id:guid}", async (Guid id, IWorkflowGroupService service, CancellationToken ct) =>
         {
@@ -67,9 +70,10 @@ public static class WorkflowGroupEndpoints
             .WithSummary("Учасники проєкту");
 
         groups.MapPut("/{id:guid}/members", (Guid id, ProjectMemberRequest body, IWorkflowGroupService service, CancellationToken ct) =>
-            service.SetMemberAsync(id, body.Email ?? "", body.Role ?? UserRole.Viewer, ct))
+            service.SetMemberAsync(id, body.Email ?? "", body.Role ?? UserRole.Viewer, ct, body.AppRole))
             .WithSummary("Додати учасника або змінити його роль")
-            .WithDescription("Лише admin або editor проєкту; `role` — `editor` чи `viewer`.");
+            .WithDescription("Лише admin або editor проєкту; `role` — `editor` чи `viewer`; `appRole` — ключ ролі застосунку проєкту або `null` (F8-04). " +
+                             "Запит замінює обидві ролі.");
 
         groups.MapDelete("/{id:guid}/members/{userId:guid}", async (Guid id, Guid userId, IWorkflowGroupService service, CancellationToken ct) =>
         {
