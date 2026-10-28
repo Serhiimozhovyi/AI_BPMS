@@ -216,7 +216,7 @@ public class DrafterTests(ApiFactory api)
         var events = await DraftAsync(editor, workflowId, Description);
 
         Assert.Equal(2, events.Count(e => e.Type == "step" && e.Data.GetProperty("stage").GetString() == "retry"));
-        Assert.NotNull(events.Single(e => e.Type == "definition").Data.GetProperty("definition").GetProperty("nodes"));
+        Assert.Equal(4, events.Single(e => e.Type == "definition").Data.GetProperty("definition").GetProperty("nodes").GetArrayLength());
         var todo = events.Single(e => e.Type == "todo").Data.GetProperty("todo").EnumerateArray().ToList();
         Assert.Contains(todo, t => t.GetProperty("nodeId").GetString() == "n_s2");
         Assert.Equal("done", events[^1].Type);
