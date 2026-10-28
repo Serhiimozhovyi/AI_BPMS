@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using OpenBP.Ai;
 using OpenBP.Engine;
@@ -12,7 +13,7 @@ using OpenBP.Shared.Workflow;
 namespace OpenBP.Cli;
 
 /// <summary>
-/// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json] [--credentials creds.json]</c> — виконання сценарію без БД
+/// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json] [--credentials creds.json] [--now ISO-8601]</c> — виконання сценарію без БД
 /// (docs/architecture.md §1): in-memory store, <c>core.*</c> і <c>mcp.*</c> вузли, Jint-вирази.
 /// Друкує input/output кожного вузла. Коди виходу: 0 — успіх, 1 — виконання завершилось не успіхом, 2 — помилка запуску.
 /// <c>openbp export | import | activate | export-project | import-project</c> — робота з запущеним OpenBP через REST для CI/CD (<see cref="RemoteCommands"/>):
@@ -34,7 +35,7 @@ public static class CliApp
 
     private const string Usage = """
         Використання:
-          openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]
+          openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json] [--now 2026-11-01T08:00:00Z]
           openbp export <id> | --all [--out dir] [--url URL] [--api-key KEY]
           openbp import <file.json> [--map map.json] [--url URL] [--api-key KEY]
           openbp activate <id> [--url URL] [--api-key KEY]
@@ -45,6 +46,7 @@ public static class CliApp
           --pin        ручний тестовий запуск: вузли з pinData не виконуються, їхній вихід — закріплені items
           --servers    JSON з MCP-серверами, на які посилаються вузли mcp.* (serverId)
           --credentials JSON { "<credentialId>": { … } } з даними credentials для вузлів (напр. ai.llm)
+          --now        час запуску ($now, Date.now()) замість поточного — перевірка розкладів і нагадувань
           --out        export: тека для файлів експорту (<id>.json), типово поточна; export-project: файл шаблону, типово stdout
           --rows       export-project: таблиці, рядки яких додати в шаблон (чутливі колонки не експортуються)
           --project    import-project: наявний проєкт для оновлення; типово створюється новий
@@ -122,7 +124,7 @@ public static class CliApp
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         // Очікування (core.wait v2/v3, mcp.waitFor) CLI не відбуває: годинник перемотується до часу відновлення;
         // webhook/form без HTTP-сервера йдуть виходом timeout.
-        var clock = new CliClock(DateTimeOffset.UtcNow);
+        var clock = new CliClock(options.Now ?? DateTimeOffset.UtcNow);
         var registry = new InMemoryNodeRegistry();
         foreach (var node in CoreNodes.All(clock, CliDataTables.Create(workflow)).Concat(McpNodes.All(mcp, clock)).Concat(AiNodes.All(http, mcp)))
         {
@@ -198,7 +200,7 @@ public static class CliApp
     }
 
     /// <summary>Аргументи <c>openbp run</c>.</summary>
-    private sealed record RunOptions(string WorkflowPath, bool Pin, string? ServersPath, string? CredentialsPath)
+    private sealed record RunOptions(string WorkflowPath, bool Pin, string? ServersPath, string? CredentialsPath, DateTimeOffset? Now)
     {
         public static RunOptions Parse(string[] args)
         {
@@ -211,6 +213,7 @@ public static class CliApp
             string? servers = null;
             string? credentials = null;
             var pin = false;
+            DateTimeOffset? now = null;
             for (var i = 1; i < args.Length; i++)
             {
                 switch (args[i])
@@ -228,6 +231,12 @@ public static class CliApp
                         break;
                     case "--credentials":
                         throw new CliException("Після --credentials очікується шлях до файлу.", showUsage: true);
+                    case "--now" when i + 1 < args.Length && DateTimeOffset.TryParse(args[i + 1], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at):
+                        now = at;
+                        i++;
+                        break;
+                    case "--now":
+                        throw new CliException("Після --now очікується час ISO 8601, напр. 2026-11-01T08:00:00Z.", showUsage: true);
                     case var a when a.StartsWith("--", StringComparison.Ordinal):
                         throw new CliException($"Невідомий параметр «{a}».", showUsage: true);
                     case var a when file is null:
@@ -240,7 +249,7 @@ public static class CliApp
 
             return file is null
                 ? throw new CliException("Не вказано файл сценарію.", showUsage: true)
-                : new RunOptions(file, pin, servers, credentials);
+                : new RunOptions(file, pin, servers, credentials, now);
         }
     }
 }

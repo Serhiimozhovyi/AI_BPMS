@@ -35,7 +35,11 @@
         {"key": "MAX_ACTIVE_CONSULTS", "value": "2"},
         {"key": "SLOT_DURATION_MIN", "value": "50"},
         {"key": "BST_CAPACITY_DEFAULT", "value": "8"},
-        {"key": "PSY_PEER_VIEW_DAYS", "value": "14"}
+        {"key": "PSY_PEER_VIEW_DAYS", "value": "14"},
+        {"key": "timezone", "value": "Europe/Kyiv"},
+        {"key": "REMINDER_MINUTES", "value": "1440,60,10"},
+        {"key": "RETENTION_MONTHS", "value": "12"},
+        {"key": "RETENTION_HOUR", "value": "3"}
       ]
     },
     {
@@ -116,7 +120,7 @@
         {"name": "moved_from_id", "type": "ref", "table": "bookings"}
       ],
       "constraints": {
-        "required": ["slot_id", "telegram_id", "status"],
+        "required": ["slot_id", "status"],
         "unique": [{"columns": ["slot_id"], "where": [{"column": "status", "operator": "eq", "value": "active"}]}]
       }
     },
@@ -148,7 +152,7 @@
         {"name": "feedback", "type": "number"}
       ],
       "constraints": {
-        "required": ["event_id", "telegram_id", "status"],
+        "required": ["event_id", "status"],
         "unique": [{"columns": ["event_id", "telegram_id"], "where": [{"column": "status", "operator": "eq", "value": "active"}]}]
       }
     },
@@ -178,7 +182,7 @@
         {"name": "moved_from_id", "type": "ref", "table": "bst_bookings"}
       ],
       "constraints": {
-        "required": ["session_id", "telegram_id", "status"],
+        "required": ["session_id", "status"],
         "unique": [
           {
             "columns": ["session_id", "telegram_id"],
@@ -198,7 +202,7 @@
         {"name": "offered_at", "type": "datetime"}
       ],
       "constraints": {
-        "required": ["session_id", "telegram_id", "status"],
+        "required": ["session_id", "status"],
         "unique": [
           {
             "columns": ["session_id", "telegram_id"],
@@ -227,7 +231,11 @@
     {
       "name": "reminders",
       "columns": [
-        {"name": "kind", "type": "enum", "values": ["booking", "event", "bst", "feedback", "digest", "material"]},
+        {
+          "name": "kind",
+          "type": "enum",
+          "values": ["booking", "event", "bst", "feedback", "digest", "material", "slots", "retention"]
+        },
         {"name": "target_id", "type": "string"},
         {"name": "offset_min", "type": "number"},
         {"name": "sent_at", "type": "datetime"}
@@ -1233,7 +1241,11 @@
               {"json": {"_key": "MAX_ACTIVE_CONSULTS", "key": "MAX_ACTIVE_CONSULTS", "value": "2"}},
               {"json": {"_key": "SLOT_DURATION_MIN", "key": "SLOT_DURATION_MIN", "value": "50"}},
               {"json": {"_key": "BST_CAPACITY_DEFAULT", "key": "BST_CAPACITY_DEFAULT", "value": "8"}},
-              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}}
+              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}},
+              {"json": {"_key": "timezone", "key": "timezone", "value": "Europe/Kyiv"}},
+              {"json": {"_key": "REMINDER_MINUTES", "key": "REMINDER_MINUTES", "value": "1440,60,10"}},
+              {"json": {"_key": "RETENTION_MONTHS", "key": "RETENTION_MONTHS", "value": "12"}},
+              {"json": {"_key": "RETENTION_HOUR", "key": "RETENTION_HOUR", "value": "3"}}
             ],
             "n_user": [{"json": {"_key": "u1", "telegram_id": "1001", "name": "Олена", "phone": "380501112233"}}],
             "n_slot": [
@@ -1448,7 +1460,11 @@
               {"json": {"_key": "MAX_ACTIVE_CONSULTS", "key": "MAX_ACTIVE_CONSULTS", "value": "2"}},
               {"json": {"_key": "SLOT_DURATION_MIN", "key": "SLOT_DURATION_MIN", "value": "50"}},
               {"json": {"_key": "BST_CAPACITY_DEFAULT", "key": "BST_CAPACITY_DEFAULT", "value": "8"}},
-              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}}
+              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}},
+              {"json": {"_key": "timezone", "key": "timezone", "value": "Europe/Kyiv"}},
+              {"json": {"_key": "REMINDER_MINUTES", "key": "REMINDER_MINUTES", "value": "1440,60,10"}},
+              {"json": {"_key": "RETENTION_MONTHS", "key": "RETENTION_MONTHS", "value": "12"}},
+              {"json": {"_key": "RETENTION_HOUR", "key": "RETENTION_HOUR", "value": "3"}}
             ],
             "n_booking": [
               {
@@ -1769,7 +1785,11 @@
               {"json": {"_key": "MAX_ACTIVE_CONSULTS", "key": "MAX_ACTIVE_CONSULTS", "value": "2"}},
               {"json": {"_key": "SLOT_DURATION_MIN", "key": "SLOT_DURATION_MIN", "value": "50"}},
               {"json": {"_key": "BST_CAPACITY_DEFAULT", "key": "BST_CAPACITY_DEFAULT", "value": "8"}},
-              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}}
+              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}},
+              {"json": {"_key": "timezone", "key": "timezone", "value": "Europe/Kyiv"}},
+              {"json": {"_key": "REMINDER_MINUTES", "key": "REMINDER_MINUTES", "value": "1440,60,10"}},
+              {"json": {"_key": "RETENTION_MONTHS", "key": "RETENTION_MONTHS", "value": "12"}},
+              {"json": {"_key": "RETENTION_HOUR", "key": "RETENTION_HOUR", "value": "3"}}
             ],
             "n_user": [{"json": {"_key": "u1", "telegram_id": "1001", "name": "Олена", "phone": "380501112233"}}],
             "n_old": [
@@ -3414,7 +3434,11 @@
               {"json": {"_key": "MAX_ACTIVE_CONSULTS", "key": "MAX_ACTIVE_CONSULTS", "value": "2"}},
               {"json": {"_key": "SLOT_DURATION_MIN", "key": "SLOT_DURATION_MIN", "value": "50"}},
               {"json": {"_key": "BST_CAPACITY_DEFAULT", "key": "BST_CAPACITY_DEFAULT", "value": "8"}},
-              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}}
+              {"json": {"_key": "PSY_PEER_VIEW_DAYS", "key": "PSY_PEER_VIEW_DAYS", "value": "14"}},
+              {"json": {"_key": "timezone", "key": "timezone", "value": "Europe/Kyiv"}},
+              {"json": {"_key": "REMINDER_MINUTES", "key": "REMINDER_MINUTES", "value": "1440,60,10"}},
+              {"json": {"_key": "RETENTION_MONTHS", "key": "RETENTION_MONTHS", "value": "12"}},
+              {"json": {"_key": "RETENTION_HOUR", "key": "RETENTION_HOUR", "value": "3"}}
             ],
             "n_templates": [
               {
@@ -4672,6 +4696,475 @@
           "variables": ["psy_telegram_server"],
           "workflows": []
         }
+      }
+    },
+    {
+      "ref": "scheduler",
+      "export": {
+        "definition": {
+          "formatVersion": 1,
+          "name": "scheduler",
+          "description": "Шедулер психологічної підтримки (ТЗ §4, docs/psy-support.md §6): кожні 5 хв — нагадування за добу, годину й 10 хв, опитування після подій, ранковий список психологу, розсилка нового матеріалу, черга outbox; щонеділі — слоти з шаблонів, щодня — знеособлення записів старших за RETENTION_MONTHS.",
+          "settings": {
+            "timezone": "Europe/Kyiv",
+            "executionTimeoutSec": 240,
+            "errorWorkflowId": null,
+            "saveSuccessfulData": false,
+            "concurrency": {"max": 1, "onLimit": "drop"}
+          },
+          "nodes": [
+            {
+              "id": "n_tick",
+              "name": "Кожні 5 хвилин",
+              "type": "core.schedule",
+              "typeVersion": 1,
+              "position": [0, 0],
+              "parameters": {"cron": "*/5 * * * *"}
+            },
+            {
+              "id": "n_settings",
+              "name": "Налаштування",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, -500],
+              "parameters": {"table": "settings", "operation": "list", "limit": 100}
+            },
+            {
+              "id": "n_done",
+              "name": "Уже надіслано",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, -360],
+              "parameters": {
+                "table": "reminders",
+                "operation": "list",
+                "where": [
+                  {
+                    "column": "sent_at",
+                    "operator": "gte",
+                    "value": "{{ new Date($now.getTime() - 26 * 3600000).toISOString() }}"
+                  }
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_bookings",
+              "name": "Консультації",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, -220],
+              "parameters": {
+                "table": "bookings",
+                "operation": "list",
+                "where": [
+                  {"column": "status", "operator": "eq", "value": "active"},
+                  {"column": "starts_at", "operator": "gt", "value": "{{ $now.toISOString() }}"},
+                  {
+                    "column": "starts_at",
+                    "operator": "lte",
+                    "value": "{{ new Date($now.getTime() + 25 * 3600000).toISOString() }}"
+                  }
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_psys",
+              "name": "Психологи",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, -80],
+              "parameters": {"table": "psychologists", "operation": "list", "limit": 1000}
+            },
+            {
+              "id": "n_sessions",
+              "name": "Сеанси БСТ",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, 60],
+              "parameters": {
+                "table": "bst_sessions",
+                "operation": "list",
+                "where": [
+                  {"column": "starts_at", "operator": "gt", "value": "{{ $now.toISOString() }}"},
+                  {
+                    "column": "starts_at",
+                    "operator": "lte",
+                    "value": "{{ new Date($now.getTime() + 25 * 3600000).toISOString() }}"
+                  }
+                ],
+                "limit": 200
+              }
+            },
+            {
+              "id": "n_events",
+              "name": "Події",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, 200],
+              "parameters": {
+                "table": "events",
+                "operation": "list",
+                "where": [
+                  {"column": "status", "operator": "ne", "value": "draft"},
+                  {
+                    "column": "starts_at",
+                    "operator": "gte",
+                    "value": "{{ new Date($now.getTime() - 25 * 3600000).toISOString() }}"
+                  },
+                  {
+                    "column": "starts_at",
+                    "operator": "lte",
+                    "value": "{{ new Date($now.getTime() + 25 * 3600000).toISOString() }}"
+                  }
+                ],
+                "limit": 200
+              }
+            },
+            {
+              "id": "n_materials",
+              "name": "Нові матеріали",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, 340],
+              "parameters": {
+                "table": "materials",
+                "operation": "list",
+                "where": [
+                  {"column": "status", "operator": "eq", "value": "published"},
+                  {
+                    "column": "published_at",
+                    "operator": "gte",
+                    "value": "{{ new Date($now.getTime() - 24 * 3600000).toISOString() }}"
+                  }
+                ],
+                "limit": 50
+              }
+            },
+            {
+              "id": "n_outbox",
+              "name": "Черга повідомлень",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [240, 480],
+              "parameters": {
+                "table": "outbox",
+                "operation": "list",
+                "where": [{"column": "sent_at", "operator": "isEmpty"}],
+                "limit": 100
+              }
+            },
+            {
+              "id": "n_bst_people",
+              "name": "Записи на сеанси",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [480, -100],
+              "parameters": {
+                "table": "bst_bookings",
+                "operation": "list",
+                "where": [
+                  {"column": "session_id", "operator": "eq", "value": "{{ $json._key }}"},
+                  {"column": "status", "operator": "eq", "value": "active"}
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_event_people",
+              "name": "Учасники подій",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [480, 40],
+              "parameters": {
+                "table": "event_registrations",
+                "operation": "list",
+                "where": [
+                  {"column": "event_id", "operator": "eq", "value": "{{ $json._key }}"},
+                  {"column": "status", "operator": "eq", "value": "active"}
+                ],
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_any_material",
+              "name": "Є новий матеріал?",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [480, 180],
+              "parameters": {"mode": "allItems", "code": "return items.length ? [{}] : [];\n"}
+            },
+            {
+              "id": "n_users",
+              "name": "Користувачі",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [720, 180],
+              "parameters": {
+                "table": "users",
+                "operation": "list",
+                "where": [{"column": "deleted_at", "operator": "isEmpty"}],
+                "limit": 1000
+              },
+              "notes": "Розсилка нового матеріалу: до 1000 зареєстрованих за прогін."
+            },
+            {
+              "id": "n_plan",
+              "name": "План",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [960, 0],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst cfg = {};\nfor (const s of all('Налаштування')) cfg[s.key] = s.value;\nconst num = (key, fallback) => { const v = parseFloat(cfg[key]); return isNaN(v) ? fallback : v; };\nconst setting = (key, fallback) => (cfg[key] && String(cfg[key]).trim()) || fallback;\nconst TZ = setting('timezone', 'Europe/Kyiv');\nconst now = Date.now();\nconst nowIso = new Date(now).toISOString();\n// Місцевий час — у поясі settings.timezone (не в поясі сценарію): дата, година, день тижня.\nconst local = (ms) => {\n  const o = {};\n  for (const p of new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' }).formatToParts(new Date(ms))) o[p.type] = p.value;\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour) % 24, minute: o.minute, weekday: o.weekday, day: o.day, month: o.month };\n};\nconst DAYS = { Sun: 'нд', Mon: 'пн', Tue: 'вт', Wed: 'ср', Thu: 'чт', Fri: 'пт', Sat: 'сб' };\nconst pad = (n) => (n < 10 ? '0' : '') + n;\nconst hm = (iso) => { const l = local(Date.parse(iso)); return pad(l.hour) + ':' + l.minute; };\nconst when = (iso) => { const l = local(Date.parse(iso)); return DAYS[l.weekday] + ' ' + l.day + '.' + l.month + ', ' + pad(l.hour) + ':' + l.minute; };\nconst today = local(now);\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst FORMATS = { online: 'онлайн', offline: 'офлайн' };\nconst fmt = (f) => FORMATS[f] || f || '';\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst enc = (key) => {\n  const k = String(key);\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return k;\n  let bits = '';\n  for (const ch of k.replace(/-/g, '')) bits += parseInt(ch, 16).toString(2).padStart(4, '0');\n  bits += '0000';\n  let out = '';\n  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];\n  return out;\n};\nconst btn = (text, data) => ({ text: text, callback_data: data });\nconst message = (chatId, text, buttons) => ({ chat_id: Number(chatId), text: text, parse_mode: 'HTML',\n  reply_markup: buttons && buttons.length ? { inline_keyboard: buttons } : null });\n// Уже надіслане за останню добу з хвостиком — щоб не пробувати вставити ті самі рядки reminders щоп'ять хвилин.\nconst done = {};\nfor (const r of all('Уже надіслано')) done[r.kind + '|' + r.target_id + '|' + Number(r.offset_min || 0)] = true;\nconst out = [];\nconst claim = (kind, target, offset, messages, extra) => {\n  if (done[kind + '|' + target + '|' + offset]) return;\n  out.push(Object.assign({ kind: kind, target_id: String(target), offset_min: offset, sent_at: nowIso, messages: messages || [] }, extra || {}));\n};\n// Нагадування за REMINDER_MINUTES (типово доба, година, 10 хв): надсилається найближче до початку, що вже настало;\n// більші, які настали разом із ним (сервер стояв, запис зроблено пізно), позначаються без повідомлення. Запис,\n// зроблений уже всередині вікна нагадування, нагадування за це вікно не отримує — підтвердження щойно прийшло.\nconst OFFSETS = String(setting('REMINDER_MINUTES', '1440,60,10')).split(',').map((s) => parseInt(s, 10))\n  .filter((n) => n > 0).sort((a, b) => a - b);\nconst remind = (kind, target, startsIso, createdIso, chatId, text, buttons) => {\n  const left = (Date.parse(startsIso) - now) / 60000;\n  if (!(left > 0) || !chatId) return;\n  const created = createdIso ? (Date.parse(startsIso) - Date.parse(createdIso)) / 60000 : Infinity;\n  let sent = false;\n  for (const offset of OFFSETS) {\n    if (left > offset) continue;\n    claim(kind, target, offset, !sent && created > offset ? [message(chatId, text, buttons)] : []);\n    sent = true;\n  }\n};\nconst psychologists = {};\nfor (const p of all('Психологи')) psychologists[p._key] = p;\nconst psyName = (key) => (psychologists[key] || {}).name || 'психологом';\n\nfor (const b of all('Консультації')) {\n  if (b.status !== 'active') continue;\n  remind('booking', b._key, b.starts_at, b.created_at, b.telegram_id,\n    '⏰ Нагадуємо: консультація з ' + esc(psyName(b.psychologist_id)) + ' — ' + when(b.starts_at) + '.',\n    [[btn('📋 Мої записи', 'c:my')]]);\n}\nconst sessions = {};\nfor (const s of all('Сеанси БСТ')) sessions[s._key] = s;\nfor (const b of all('Записи на сеанси')) {\n  const s = sessions[b.session_id];\n  if (!s || b.status !== 'active' || s.status === 'closed') continue;\n  remind('bst', b._key, s.starts_at, b.created_at, b.telegram_id,\n    '⏰ Нагадуємо: сеанс біосугестивної терапії — ' + when(s.starts_at) + (s.format ? ', ' + fmt(s.format) : '') + '.',\n    [[btn('🧘 Мій сеанс', 'b:s:' + enc(s._key))]]);\n}\nconst events = {};\nfor (const e of all('Події')) events[e._key] = e;\nfor (const r of all('Учасники подій')) {\n  const e = events[r.event_id];\n  if (!e || r.status !== 'active') continue;\n  const started = (now - Date.parse(e.starts_at)) / 3600000;\n  if (started < 0) {\n    remind('event', r._key, e.starts_at, r.created_at, r.telegram_id,\n      '⏰ Нагадуємо: «' + esc(e.title) + '» — ' + when(e.starts_at) + '.', [[btn('📣 Деталі', 'e:' + enc(e._key))]]);\n  } else if (started >= 1 && started <= 24 && r.feedback == null && r.telegram_id) {\n    // Опитування через 1–24 год після події (ТЗ §4.4): кнопки — ті самі коди, що й в оцінці з бота.\n    claim('feedback', r._key, 0, [message(r.telegram_id, 'Дякуємо, що були на «' + esc(e.title) + '»! Оцініть, будь ласка, від 1 до 5:',\n      [[1, 2, 3, 4, 5].map((n) => btn(String(n), 'e:fb:' + enc(e._key) + ':' + n))])]);\n  }\n}\n\n// Ранковий список психологу (08:00–12:00 за settings.timezone), раз на день: сьогоднішні консультації без телефонів (§8).\nif (today.hour >= 8 && today.hour < 12) {\n  const mine = {};\n  for (const b of all('Консультації')) {\n    if (b.status !== 'active' || local(Date.parse(b.starts_at)).date !== today.date) continue;\n    (mine[b.psychologist_id] = mine[b.psychologist_id] || []).push(b);\n  }\n  for (const key of Object.keys(mine)) {\n    const p = psychologists[key];\n    if (!p || p.active === false || !p.telegram_id) continue;\n    const list = mine[key].sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));\n    const lines = list.map((b) => hm(b.starts_at) + ' — ' + esc(b.client_name || 'без імені'));\n    claim('digest', key + ':' + today.date, 0, [message(p.telegram_id,\n      '☀️ Доброго ранку! Ваші консультації сьогодні (' + list.length + '):\\n' + lines.join('\\n'), [[btn('🧑‍⚕️ Кабінет', 'p:bk')]])]);\n  }\n}\n\n// Новий матеріал — один раз кожному зареєстрованому (рядок reminders на матеріал, а не на людину).\nconst users = all('Користувачі').filter((u) => u.telegram_id && !u.deleted_at);\nfor (const m of all('Нові матеріали')) {\n  if (m.status !== 'published') continue;\n  claim('material', m._key, 0, users.map((u) => message(u.telegram_id, '📚 Новий матеріал: <b>' + esc(m.title) + '</b>',\n    [[btn('Відкрити', 'mt:r:' + enc(m._key))]])));\n}\n\n// Щонеділі — слоти з шаблонів; щодня від RETENTION_HOUR (типово 03:00) — знеособлення старих записів.\nif (today.weekday === 'Sun') claim('slots', today.date, 0, [], { run: 'slots' });\nif (today.hour >= num('RETENTION_HOUR', 3)) {\n  const months = num('RETENTION_MONTHS', 12);\n  const cutoff = new Date(now);\n  cutoff.setMonth(cutoff.getMonth() - months);\n  claim('retention', today.date, 0, [], { run: 'retention', cutoff: cutoff.toISOString() });\n}\nreturn out;\n"
+              }
+            },
+            {
+              "id": "n_claim",
+              "name": "Зайняти",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1200, 0],
+              "parameters": {
+                "table": "reminders",
+                "operation": "insert",
+                "values": {
+                  "kind": "{{ $json.kind }}",
+                  "target_id": "{{ $json.target_id }}",
+                  "offset_min": "{{ $json.offset_min }}",
+                  "sent_at": "{{ $json.sent_at }}"
+                }
+              }
+            },
+            {
+              "id": "n_outbox_mark",
+              "name": "Позначити надісланим",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [480, 320],
+              "parameters": {
+                "table": "outbox",
+                "operation": "update",
+                "key": "{{ $json._key }}",
+                "values": {"sent_at": "{{ $now.toISOString() }}"}
+              }
+            },
+            {
+              "id": "n_batches",
+              "name": "Що надіслати",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [1440, 0],
+              "parameters": {
+                "mode": "allItems",
+                "code": "// Рядок reminders, який уже був (unique), — відмова: це повідомлення пішло раніше, тож його відкидаємо.\nconst plan = $node['План'].all || [];\nconst claimed = $node['Зайняти'].all || [];\nlet messages = [];\nconst runs = [];\nplan.forEach((p, i) => {\n  if (!claimed[i] || claimed[i]._inserted === false) return;\n  messages = messages.concat(p.messages || []);\n  if (p.run) runs.push(p);\n});\nlet queued = [];\ntry { queued = $node['Черга повідомлень'].all || []; } catch (e) { queued = []; }\nfor (const q of queued) {\n  messages.push({ chat_id: Number(q.chat_id), text: q.text, parse_mode: 'HTML', reply_markup: q.reply_markup || null });\n}\nconst clean = (m) => { const o = {}; for (const k of Object.keys(m)) if (m[k] != null) o[k] = m[k]; return o; };\nconst out = [];\nfor (let i = 0; i < messages.length; i += 100) out.push({ messages: messages.slice(i, i + 100).map(clean) });\nreturn out;\n"
+              }
+            },
+            {
+              "id": "n_send",
+              "name": "Надіслати в Telegram",
+              "type": "mcp.tool",
+              "typeVersion": 1,
+              "position": [1680, 0],
+              "parameters": {
+                "serverId": "{{ $vars.psy_telegram_server }}",
+                "toolName": "send_messages",
+                "arguments": {"messages": "{{ $json.messages }}"}
+              },
+              "continueOnFail": true,
+              "notes": "Конектор Telegram тестового бота: id у змінній psy_telegram_server."
+            },
+            {
+              "id": "n_slots_due",
+              "name": "Слоти цього тижня?",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [1440, 250],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const plan = $node['План'].all || [];\nconst claimed = $node['Зайняти'].all || [];\nreturn plan.filter((p, i) => p.run === 'slots' && claimed[i] && claimed[i]._inserted !== false).map((p) => ({ cutoff: p.cutoff || null }));\n"
+              }
+            },
+            {
+              "id": "n_slots",
+              "name": "Згенерувати слоти",
+              "type": "core.executeWorkflow",
+              "typeVersion": 1,
+              "position": [1680, 250],
+              "parameters": {"workflowId": "ref:generate-slots", "mode": "wait"},
+              "continueOnFail": true
+            },
+            {
+              "id": "n_retention_due",
+              "name": "Знеособити сьогодні?",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [1440, 450],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const plan = $node['План'].all || [];\nconst claimed = $node['Зайняти'].all || [];\nreturn plan.filter((p, i) => p.run === 'retention' && claimed[i] && claimed[i]._inserted !== false).map((p) => ({ cutoff: p.cutoff || null }));\n"
+              }
+            },
+            {
+              "id": "n_old_bookings",
+              "name": "Старі консультації",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1680, 450],
+              "parameters": {
+                "table": "bookings",
+                "operation": "list",
+                "where": [
+                  {"column": "starts_at", "operator": "lt", "value": "{{ $json.cutoff }}"},
+                  {"column": "telegram_id", "operator": "isNotEmpty"}
+                ],
+                "limit": 500
+              }
+            },
+            {
+              "id": "n_old_regs",
+              "name": "Старі реєстрації",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1680, 590],
+              "parameters": {
+                "table": "event_registrations",
+                "operation": "list",
+                "where": [
+                  {"column": "created_at", "operator": "lt", "value": "{{ $json.cutoff }}"},
+                  {"column": "telegram_id", "operator": "isNotEmpty"}
+                ],
+                "limit": 500
+              }
+            },
+            {
+              "id": "n_old_bst",
+              "name": "Старі записи на БСТ",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1680, 730],
+              "parameters": {
+                "table": "bst_bookings",
+                "operation": "list",
+                "where": [
+                  {"column": "created_at", "operator": "lt", "value": "{{ $json.cutoff }}"},
+                  {"column": "telegram_id", "operator": "isNotEmpty"}
+                ],
+                "limit": 500
+              }
+            },
+            {
+              "id": "n_old_wait",
+              "name": "Стара черга БСТ",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [1680, 870],
+              "parameters": {
+                "table": "waitlist",
+                "operation": "list",
+                "where": [
+                  {"column": "added_at", "operator": "lt", "value": "{{ $json.cutoff }}"},
+                  {"column": "telegram_id", "operator": "isNotEmpty"}
+                ],
+                "limit": 500
+              }
+            },
+            {
+              "id": "n_anon",
+              "name": "Що знеособити",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [1920, 450],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const rows = (name, tbl) => { try { return ($node[name].all || []).map((r) => ({ table: tbl, _key: r._key })); } catch (e) { return []; } };\nreturn [].concat(rows('Старі консультації', 'bookings'), rows('Старі реєстрації', 'event_registrations'),\n  rows('Старі записи на БСТ', 'bst_bookings'), rows('Стара черга БСТ', 'waitlist'));\n"
+              }
+            },
+            {
+              "id": "n_anon_booking",
+              "name": "Консультація?",
+              "type": "core.if",
+              "typeVersion": 1,
+              "position": [2160, 450],
+              "parameters": {"conditions": [{"left": "{{ $json.table === 'bookings' }}", "operator": "isTrue"}]}
+            },
+            {
+              "id": "n_anon_bookings",
+              "name": "Знеособити консультацію",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2400, 400],
+              "parameters": {
+                "table": "bookings",
+                "operation": "update",
+                "key": "{{ $json._key }}",
+                "values": {"telegram_id": "{{ null }}", "client_name": "{{ null }}", "client_phone": "{{ null }}"}
+              }
+            },
+            {
+              "id": "n_anon_other",
+              "name": "Знеособити запис",
+              "type": "core.dataTable",
+              "typeVersion": 1,
+              "position": [2400, 520],
+              "parameters": {
+                "table": "{{ $json.table }}",
+                "operation": "update",
+                "key": "{{ $json._key }}",
+                "values": {"telegram_id": "{{ null }}", "client_name": "{{ null }}"}
+              }
+            }
+          ],
+          "connections": [
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_settings", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_done", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_bookings", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_psys", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_sessions", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_events", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_materials", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_outbox", "input": 0}},
+            {"from": {"node": "n_sessions", "output": 0}, "to": {"node": "n_bst_people", "input": 0}},
+            {"from": {"node": "n_events", "output": 0}, "to": {"node": "n_event_people", "input": 0}},
+            {"from": {"node": "n_materials", "output": 0}, "to": {"node": "n_any_material", "input": 0}},
+            {"from": {"node": "n_any_material", "output": 0}, "to": {"node": "n_users", "input": 0}},
+            {"from": {"node": "n_tick", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_settings", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_done", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_bookings", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_psys", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_sessions", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_events", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_bst_people", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_event_people", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_users", "output": 0}, "to": {"node": "n_plan", "input": 0}},
+            {"from": {"node": "n_plan", "output": 0}, "to": {"node": "n_claim", "input": 0}},
+            {"from": {"node": "n_outbox", "output": 0}, "to": {"node": "n_outbox_mark", "input": 0}},
+            {"from": {"node": "n_plan", "output": 0}, "to": {"node": "n_batches", "input": 0}},
+            {"from": {"node": "n_claim", "output": 0}, "to": {"node": "n_batches", "input": 0}},
+            {"from": {"node": "n_outbox", "output": 0}, "to": {"node": "n_batches", "input": 0}},
+            {"from": {"node": "n_outbox_mark", "output": 0}, "to": {"node": "n_batches", "input": 0}},
+            {"from": {"node": "n_batches", "output": 0}, "to": {"node": "n_send", "input": 0}},
+            {"from": {"node": "n_claim", "output": 0}, "to": {"node": "n_slots_due", "input": 0}},
+            {"from": {"node": "n_slots_due", "output": 0}, "to": {"node": "n_slots", "input": 0}},
+            {"from": {"node": "n_claim", "output": 0}, "to": {"node": "n_retention_due", "input": 0}},
+            {"from": {"node": "n_retention_due", "output": 0}, "to": {"node": "n_old_bookings", "input": 0}},
+            {"from": {"node": "n_retention_due", "output": 0}, "to": {"node": "n_old_regs", "input": 0}},
+            {"from": {"node": "n_retention_due", "output": 0}, "to": {"node": "n_old_bst", "input": 0}},
+            {"from": {"node": "n_retention_due", "output": 0}, "to": {"node": "n_old_wait", "input": 0}},
+            {"from": {"node": "n_retention_due", "output": 0}, "to": {"node": "n_anon", "input": 0}},
+            {"from": {"node": "n_old_bookings", "output": 0}, "to": {"node": "n_anon", "input": 0}},
+            {"from": {"node": "n_old_regs", "output": 0}, "to": {"node": "n_anon", "input": 0}},
+            {"from": {"node": "n_old_bst", "output": 0}, "to": {"node": "n_anon", "input": 0}},
+            {"from": {"node": "n_old_wait", "output": 0}, "to": {"node": "n_anon", "input": 0}},
+            {"from": {"node": "n_anon", "output": 0}, "to": {"node": "n_anon_booking", "input": 0}},
+            {"from": {"node": "n_anon_booking", "output": 0}, "to": {"node": "n_anon_bookings", "input": 0}},
+            {"from": {"node": "n_anon_booking", "output": 1}, "to": {"node": "n_anon_other", "input": 0}}
+          ],
+          "pinData": {}
+        },
+        "manifest": {"connectors": [], "credentials": [], "variables": ["psy_telegram_server"], "workflows": []}
       }
     }
   ],

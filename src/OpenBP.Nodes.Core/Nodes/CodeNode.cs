@@ -29,7 +29,7 @@ namespace OpenBP.Nodes.Core;
 /// <para>
 /// <c>$vars.key</c> — змінні інстансу (F6-09) в обох режимах.
 /// <c>$node["Назва"]</c> вузла, який не виконувався, — помилка з його назвою. <c>Date</c> працює в часовому поясі
-/// сценарію (<c>settings.timezone</c>), а не в UTC.
+/// сценарію (<c>settings.timezone</c>), а не в UTC; «зараз» — годинник рушія (<c>TimeProvider</c>).
 /// </para>
 /// </summary>
 public sealed class CodeNode : INode
@@ -44,11 +44,14 @@ public sealed class CodeNode : INode
     public const int RecursionLimit = 64;
 
     private readonly TimeSpan _timeout;
+    private readonly TimeProvider _time;
 
     /// <summary>Створює вузол.</summary>
     /// <param name="timeout">Ліміт часу на запуск; <c>null</c> — <see cref="DefaultTimeout"/>. Більший за типовий не допускається.</param>
-    public CodeNode(TimeSpan? timeout = null)
+    /// <param name="time">Годинник для <c>Date.now()</c> і <c>new Date()</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
+    public CodeNode(TimeSpan? timeout = null, TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _timeout = timeout ?? DefaultTimeout;
         if (_timeout <= TimeSpan.Zero || _timeout > DefaultTimeout)
         {
@@ -200,6 +203,7 @@ public sealed class CodeNode : INode
             options.Host.StringCompilationAllowed = false;
             options.Culture = CultureInfo.InvariantCulture;
             options.TimeZone = timeZone;
+            options.TimeSystem = new ClockTimeSystem(timeZone, _time);
         });
 
         try

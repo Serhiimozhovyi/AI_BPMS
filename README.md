@@ -102,7 +102,7 @@ OPENBP_UPDATE_OPENAPI=1 dotnet test tests/OpenBP.Api.Tests --filter OpenApi
 
 ### Запуск сценарію з CLI
 
-`openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
+`openbp run <file.json> [--pin] [--servers servers.json] [--credentials creds.json] [--now ISO-8601]` виконує сценарій без БД (in-memory store) і друкує input/output кожного вузла.
 
 `openbp export | import | activate` переносять сценарії між середовищами через REST — для CI/CD, див. [docs/guide/integrators.md §7](docs/guide/integrators.md#7-перенесення-між-середовищами-і-cicd).
 
@@ -117,6 +117,7 @@ dotnet run --project src/OpenBP.Cli -- run examples/telegram-1c.json --pin --ser
 - `--servers` — MCP-сервери для `serverId` вузлів `mcp.*`; моки 1С, Telegram і Microsoft Graph — `tests/OpenBP.Mcp.Tests/FakeServer` з `--mock 1c|telegram|msgraph`
   (стартують через `dotnet run --no-build`, тому спершу `dotnet build`).
 - `--credentials` — JSON `{ "<credentialId>": { … } }` з даними credentials для вузлів (зараз `ai.llm`). Без шифрування, лише для dev: бойові ключі в такий файл і в репо не кладіть.
+- `--now` — час запуску (`$now`, `Date.now()`, вирази й код) замість поточного, напр. `2026-11-01T08:00:00Z`; для перевірки розкладів і нагадувань. Далі час іде як звичайно.
 - `core.webhook` (F2-D) поки не реалізований: CLI підставляє заглушку, яка працює лише з `pinData`.
   Коли справжній вузол з'явиться, заглушка перестає реєструватись сама.
 - Коди виходу: `0` — успіх, `1` — виконання завершилось помилкою/скасуванням/таймаутом, `2` — помилка аргументів, файлу чи сценарію.
