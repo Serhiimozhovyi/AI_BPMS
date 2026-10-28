@@ -1283,6 +1283,79 @@
 - Що: таблиця «можливість → чим робиться в OpenBP → стан (є / частково / немає, задача) → критерій приймання (приклад у `examples/` + тест)» для п'яти груп: шедулери (cron, робочі дні, часові пояси, довге очікування), чатботи (Telegram-діалоги, клавіатури, стан діалогу, LLM-відповіді, ескалація людині), події (webhook, polling, push F6-13, дедуплікація, кореляція), обробка даних (set/code/loop/merge/decisionTable, таблиці даних, файли, бінарні дані), інтеграції (MCP-сервери, OData/OpenAPI-генератори, credentials, OAuth2). Орієнтир — реальні сценарії компанії (бот психологічної підтримки, звіти, БП продажів); паритет з n8n не є метою — відсутні можливості з реальним попитом стають задачами беклогу, без попиту — позначаються «не плануємо».
 - DoD: документ українською, кожен рядок «є» посилається на приклад і тест; рядки «немає» з попитом → нові задачі у `BACKLOG.md` (окремим PR, за рішенням власника); посилання з `docs/PRD.md` §5b.
 
+## Фаза 8 — Проєкти як робочі простори
+
+Нарізано 2026-10-28 за рішенням власника: бот психологічної підтримки і його адмінку будуємо з нуля в OpenBP за ТЗ «Розширення корпоративного Telegram-бота Астарти функціоналом психологічної підтримки» (окремий бот; у корпоративному — лише посилання), а не переносимо `connectors/psy-support`. Рішення — [ADR-005](docs/adr/ADR-005-projects.md), контракт — [docs/projects.md](docs/projects.md). Концепція і обговорення: https://claude.ai/artifact/Fpu84z8UEzkQpsmwQ4JnSp
+
+Рішення для фази:
+- Проєкт (F6-14) стає робочим простором з вкладками Огляд · Застосунок · Сценарії · Таблиці · Підключення · Учасники.
+- Таблиці належать проєкту й тримають правила цілісності (`unique where`, `required`, `insertIf` з місткістю) — рушій даних лишається `data_rows` jsonb.
+- Адмінка застосунку — сторінки з конфігурації (`project_pages`: list / detail / form / metrics), дії запускають сценарії проєкту; у `src/` і `apps/web/src` предметної області немає (тест F7-08).
+- Ролі застосунку оголошує проєкт; роль проєкту `editor`/`viewer` і роль застосунку незалежні.
+- Проєкт експортується шаблоном; бот — перший шаблон `examples/projects/psy-support/`. До перемикання продакшн-бот, n8n і Google Sheets не змінюються; psy-support працює як зараз.
+
+Порядок: F8-01 → F8-02 → F8-03 → F8-04 → F8-05 → F8-06 → F8-08 → F8-09 → F8-10 → F8-11 послідовно в одному треді; F8-07 паралельно будь-коли; F8-12 — після перемикання, за командою власника.
+
+### F8-01 · ADR-005 і контракт проєктів: `docs/projects.md`, задачі фази 8
+- model: `fable` · status: `review` · depends: —
+- Що: ADR-005 «Проєкт як робочий простір» (прийнято); `docs/projects.md` — сторінка проєкту, таблиці проєкту (типи, обмеження, операції v2), сторінки застосунку, ролі застосунку, шаблон проєкту, відповідність ТЗ бота; `architecture.md` §6 і §10.6, `roadmap.md` рядок 8; у `docs/psy-support.md` примітка про рішення; задачі F8-02…F8-12.
+- DoD: документи українською, посилання перевірені; власник погодив концепцію (тред «Додати проєкти в OpenBP», 2026-10-28).
+
+### F8-02 · Таблиці в проєкті: `project_id`, типи, обмеження, `core.dataTable` v2
+- model: `opus` · status: `ready` · depends: F8-01
+- Що: `data_tables.project_id` (null — спільна) + `constraints` jsonb, міграція (наявні таблиці — спільні), унікальність назви в межах проєкту; типи колонок `datetime`, `enum { values }`, `ref { table }`, `user` і позначка `sensitive`; обмеження `required`, `unique [{ columns, where? }]` при `insert`/`upsert`/`update`/імпорті CSV; `core.dataTable` typeVersion 2: `insertIf { values, where, maxCount }` → `{ inserted, reason?, row? }`, `increment`, `count`, `insert`/`upsert` з `unique` → `{ inserted: false, reason: "unique" }`; запис серіалізується `SELECT … FOR UPDATE` рядка `data_tables` в одній транзакції (`PostgresDataTableStore`); пошук таблиці за назвою: проєкт сценарію → спільні; валідатор: таблиця іншого проєкту → `PROJECT_REFERENCE_FORBIDDEN`; права проєкту в `IDataTableService` (viewer читає, editor пише; чутливі колонки — `null` для viewer без ролі застосунку, читання через REST/MCP → audit `table.sensitive_read`); REST `/tables` з `projectId`, MCP `list_tables`/`query_table` з `projectId`, `openbp://projects/{id}/tables`; `/tables` в UI: вибір проєкту, редактор обмежень і типів (AC-Kit); `describe_nodes` віддає v2; CLI in-memory store підтримує v2.
+- DoD: тести (Testcontainers): `unique where` відхиляє другий активний запис; 20 паралельних `insertIf` з `maxCount: 8` → рівно 8 рядків; `ref` на чужу таблицю → 422; editor проєкту A не бачить таблиць B (REST і MCP); чутлива колонка `null` для viewer і в resource; v1-сценарії зелені; Vitest сторінки; `docs/workflow-format.md`, `architecture.md` §6, `docs/mcp-server.md`, `docs/projects.md` §2 оновлено.
+
+### F8-03 · Список проєктів і сторінка проєкту з вкладками
+- model: `sonnet` · status: `ready` · depends: F8-02
+- Що: `workflow_groups` + `description`, `icon`; `GET /workflow-groups` → ще `description`, `icon`, `memberRole`; `PATCH` приймає їх; пункт меню «Проєкти» і сторінка `/projects` (картки: назва, опис, значок, сценарії, роль); `/projects/:id` з вкладками Огляд (опис, активні сценарії, помилки за добу, відкриті задачі й порушення, стан підключень — з наявних сервісів F6-07 з фільтром проєкту), Сценарії, Таблиці, Підключення (ті самі компоненти `/workflows`, `/tables`, `/connections` з фільтром проєкту), Учасники (наявна сторінка F6-14); адреса вкладки в URL; створення проєкту з картки; AC-Kit, i18n.
+- DoD: Vitest: вкладки, фільтр за проєктом, картки; тести REST нових полів; viewer не бачить «Створити»; `docs/projects.md` §1, `docs/guide/users.md` оновлено.
+
+### F8-04 · Ролі застосунку й сторінки: `project_pages`, list / detail / form
+- model: `opus` · status: `ready` · depends: F8-03
+- Що: `workflow_groups.app_roles` jsonb і `project_members.app_role`; `PUT /workflow-groups/{id}/members/{userId} { role, appRole? }`; `ICurrentUser.AppRole(projectId)`; таблиця `project_pages` і `IProjectPageService` (CRUD, валідація за `docs/projects.md` §3: невідома таблиця/колонка/сценарій, чутлива колонка в `metrics`, сценарій іншого проєкту → 422); REST `/projects/{id}/pages`, MCP `list_project_pages`, `upsert_project_page`; рендер `list` (колонки, `display` для `ref`, серверний `filter` з `$user`, пошук, сортування, пагінація), `detail` (поля + `related`), `form` (генерація полів з типів колонок рушієм форм F6-03, `onSubmit.operation`); вкладка «Застосунок» і адреси `/projects/:id/app/<key>[/<rowKey>]`; видимість сторінок за `roles`; користувач лише з роллю застосунку після входу потрапляє на `/projects/:id/app` і бачить урізане меню; дії `page` і `operation: delete`; AC-Kit, i18n. Архітектурний тест F7-08 поширюється на `project_pages` у `examples/`.
+- DoD: тести сервісу (Testcontainers): фільтр з `$user.id` не обходиться параметрами запиту; роль без доступу → 404; `form` з `required`/`unique` → 422 з полем; Vitest трьох типів сторінок і меню; `docs/projects.md` §3–4, `architecture.md` §6/§10.6, `docs/mcp-server.md` оновлено.
+
+### F8-05 · Дії сторінок → сценарії, сторінка `metrics`, конструктор сторінок
+- model: `sonnet` · status: `ready` · depends: F8-04
+- Що: `actions[].workflow`: запуск сценарію проєкту через `IExecutionLauncher` з items `[{ row, user }]`, очікування результату до 30 с, показ `result.message`/помилки, `confirm`, `when`; `form.onSubmit.workflow`; `metrics`: `tiles` (`count`/`sum`/`avg`/`min`/`max` з `where`), `expression` між плитками, `charts` з `groupBy` (`day`/`week`/`month(column)`, значення `enum`), чутливі колонки заборонені; конструктор сторінок формою (тип, таблиця, колонки з таблиці, фільтри, дії зі списку сценаріїв проєкту) для editor; валідація — application-шар.
+- DoD: тести: дія запускає сценарій і повертає повідомлення; viewer без ролі не бачить дію; `metrics` з чутливою колонкою → 422; Vitest конструктора й `metrics`; `docs/projects.md` §3 оновлено.
+
+### F8-06 · Шаблон проєкту: експорт/імпорт через UI, REST і CLI
+- model: `sonnet` · status: `ready` · depends: F8-05
+- Що: `GET /projects/{id}/export?rowsFor=` і `POST /projects/import { bundle, mapping }` за `docs/projects.md` §5 (поверх `IWorkflowTransferService` F6-09: перемапінг конекторів/credentials, пропозиція встановити відсутні з каталогу F6-16); повторний імпорт у наявний проєкт оновлює сторінки й сценарії за `ref`, таблиці лише розширює; чутливі колонки в `rows` не потрапляють; CLI `openbp export-project` / `import-project`; UI: «Експортувати проєкт» на Огляді, «Імпортувати проєкт» на `/projects`; каталог шаблонів `examples/projects/*/bundle.json` + `README.md` і CI-job, який імпортує кожен у порожній інстанс і проганяє сценарії з pinData; MCP `export_project`, `import_project`.
+- DoD: тести: експорт → імпорт у чистий інстанс → ідентичні таблиці/сторінки/сценарії; повторний імпорт не дублює; `rows` без чутливих колонок; CLI round-trip; `docs/projects.md` §5, `docs/guide/integrators.md` оновлено.
+
+### F8-07 · Telegram-конектор: `send_document`, `send_video`, `send_audio`, `send_voice`
+- model: `sonnet` · status: `ready` · depends: —
+- Що: у `connectors/telegram` tools `send_document`, `send_video`, `send_audio`, `send_voice` з `chat_id`, файл як `file_id` Telegram, URL або `$binary` (як у `send_photo` F6-26), `caption` з HTML, `reply_markup`; вхідні повідомлення з файлами віддають `file_id`, `mime`, `file_name` у події `message` (F6-22); маніфест і пресети каталогу оновлено.
+- DoD: тести tools на mock Telegram API (успіх, невідомий chat, завеликий файл → зрозуміла помилка); `connectors/telegram/README.md`, `docs/guide/users.md` §9 оновлено.
+
+### F8-08 · Шаблон «Психологічна підтримка», частина 1: таблиці, ролі, сторінки, підсценарії правил
+- model: `opus` · status: `ready` · depends: F8-06
+- Що: `examples/projects/psy-support/bundle.json`: таблиці за `docs/psy-support.md` §3 без `staff_accounts`/`invites` (типи `datetime`/`enum`/`ref`/`user`, `unique(slot_id) where status = active`, `phone` і `telegram_id` — `sensitive`), рядки `settings` з текстами й лімітами §3.1; ролі `coordinator`, `psychologist`; сторінки за ТЗ §5 і `docs/projects.md` §6 (розклад і слоти, записи, події з учасниками, сеанси БСТ з чергою, матеріали, оголошення; координатору — тексти, психологи, користувачі з пошуком, журнал, `metrics`); підсценарії правил §4 з `insertIf`: `book-slot`, `cancel-booking`, `move-booking`, `register-event`, `cancel-registration`, `rate-event`, `book-bst`, `join-waitlist`, `cancel-bst` (звільнене місце → перший `waiting` → `offered` + сповіщення), `generate-slots`, `send-notice`; кожен повертає `{ ok, reason?, message, notifications[] }`; надсилання в Telegram — вузлом у кінці кожного підсценарію через конектор проєкту.
+- DoD: CLI-тести підсценаріїв з pinData на всі правила §4 (`slot_taken`, `too_late`, ліміт активних, місткість, черга); тест одночасності `book-slot` через Testcontainers (20 паралельних → один `ok`); імпорт шаблону в CI; `README.md` шаблону з описом сторінок і ролей.
+
+### F8-09 · Шаблон, частина 2: сценарій `bot` за ТЗ §3–4
+- model: `opus` · status: `ready` · depends: F8-08, F8-07
+- Що: сценарій `bot` на основі структури F3-31 (webhook Telegram з `X-Telegram-Bot-Api-Secret-Token`, реєстрація за номером, маршрут за кодом кнопки, одна точка виходу `editMessageText`/`sendMessage`), але дані через `core.dataTable` v2 і підсценарії F8-08 (`core.executeWorkflow`): меню ТЗ §3; «Мені потрібна допомога» §4.1; консультації §4.2 з вибором формату (онлайн/офлайн), датою, часом, скасуванням і перенесенням за день, посиланнями «додати в календар»; БСТ §4.3 з чергою; події §4.4 з оцінкою 1–5; матеріали §4.5 (бібліотека по 8 на сторінку, файли через F8-07, лічильник переглядів); термінова допомога §4.6 з `settings`; кабінет психолога `/psy` за `psychologists.user_id`/`telegram_id`; лічильники §8 (`increment`).
+- DoD: CLI-прогін з pinData на кожен розділ ТЗ §9 (4 шляхи працівника + кабінет) проти FakeServer Telegram; `docs/psy-support.md` §6 замінено посиланням на шаблон; `README.md` шаблону — карта екранів.
+
+### F8-10 · Шаблон, частина 3: `scheduler` — нагадування, опитування, розсилки, слоти
+- model: `sonnet` · status: `ready` · depends: F8-09
+- Що: сценарій `scheduler` (розклад кожні 5 хв, `skipIfActive`): нагадування за добу/годину/10 хв для консультацій, БСТ і подій (таблиця `reminders`, ідемпотентно), підтвердження й повідомлення про зміну/скасування з `outbox`, опитування «Оцініть подію 1–5» через 1–24 год після події, ранковий список психологу 08:00–12:00 раз на день, розсилка нового матеріалу один раз кожному, генерація слотів на тиждень із `slot_templates` (щонеділі), знеособлення записів старших за 12 місяців (`settings.RETENTION_MONTHS`); час — `settings.timezone`.
+- DoD: CLI-тести з `TimeProvider`-фейком на кожен вид повідомлення й на ідемпотентність; тест знеособлення; `README.md` шаблону оновлено.
+
+### F8-11 · Запуск на тестовому боті: імпорт з Google Sheets, протокол перевірки, інструкція перемикання
+- model: `sonnet` · status: `ready` · depends: F8-10
+- Що: сценарій `import-sheets` у шаблоні (конектор Google Sheets `read_sheets`, лише читання; відображення листів на таблиці за `docs/psy-support.md` §9, повторний запуск ідемпотентний); протокол `docs/admin/psy-check.md` (імпорт шаблону, тестовий бот, користувачі-психологи, прохід ТЗ §9, адмінка за ролями, `metrics`); інструкція перемикання продакшну (заморозка таблиці, повторний імпорт, `setWebhook`, вимкнення n8n, відкат) — виконує власник; розділ у `docs/guide/users.md`.
+- DoD: протокол пройдено на локальному OpenBP власника з тестовим ботом, результат записано в `psy-check.md`; імпорт з копії таблиці відтворює кількість рядків по листах; продакшн-бот і n8n не торкалися.
+
+### F8-12 · Вилучити `connectors/psy-support` і приклад F3-31
+- model: `haiku` · status: `blocked (після перемикання продакшн-бота, за командою власника)` · depends: F8-11
+- Що: видалити `connectors/psy-support`, `examples/psy-support-*.json`, згадки в CI matrix, `docs/psy-support.md` → коротка примітка з посиланням на шаблон і ADR-005; `docs/admin/independence-check.md` переписати на шаблон проєкту як другий застосунок.
+- DoD: CI зелений; архітектурний тест F7-08 зелений; `docs/` без мертвих посилань.
+
 ## Постійні (раз на місяць, `haiku`)
 
 - M-01 Оновити версії NuGet/npm, зокрема `ModelContextProtocol` — перевірити changelog на breaking changes, прогнати тести.

@@ -6,6 +6,7 @@
 
 ### Додано
 
+- ADR-005 «Проєкт як робочий простір» і контракт `docs/projects.md`; фаза 8 F8-01…F8-12 у `BACKLOG.md` (F8-01, 2026-10-28).
 - Фундамент (фаза 0): скелет .NET-рішення (F0-01), скелет Angular (F0-02), Docker Compose для розробки (F0-03), CI на GitHub Actions (F0-04).
 - `OpenBP.Shared`: моделі формату workflow і JSON Schema (F1-01).
 - `OpenBP.Engine`: інтерфейси движка (`IExecutionStore`, `ICredentialProvider`, `INodeRegistry`, `IExpressionEvaluator`, `IExecutionLogger`, `IBinaryStore`), контракт вузла `INode`/`INodeContext`; `OpenBP.Engine.Testing`: in-memory реалізації для тестів і CLI (F1-03).
