@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using OpenBP.Application.Assistant;
 using OpenBP.Application.Auth;
 using OpenBP.Data;
 
@@ -74,7 +75,7 @@ public static class AuditTrail
     /// <param name="action">Одна з <see cref="AuditActions"/>.</param>
     /// <param name="entityType">Одна з <see cref="AuditEntities"/>.</param>
     /// <param name="entityId">Id сутності (або ключ змінної).</param>
-    /// <param name="details">Подробиці без секретів.</param>
+    /// <param name="details">Подробиці без секретів; зміна через загальний помічник отримує <c>via = "assistant"</c> (F3-113).</param>
     public static void Audit(
         this OpenBpDbContext db,
         ICurrentUser? user,
@@ -94,7 +95,17 @@ public static class AuditTrail
             Action = action,
             EntityType = entityType,
             EntityId = entityId,
-            Details = (details ?? []).ToJsonString(),
+            Details = WithVia(details ?? []).ToJsonString(),
         });
+    }
+
+    private static JsonObject WithVia(JsonObject details)
+    {
+        if (AssistantCall.Active)
+        {
+            details["via"] = AssistantCall.Via;
+        }
+
+        return details;
     }
 }

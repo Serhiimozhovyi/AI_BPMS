@@ -78,7 +78,7 @@ export function auditActionLabel(action: string): string {
   }
 }
 
-/** Коротко про запис: назва сутності, версія, поля, причина дії системи. */
+/** Коротко про запис: назва сутності, версія, поля, зміна через помічника (F3-113), причина дії системи. */
 export function auditSummary(entry: Pick<AuditEntry, 'details'>): string {
   const d = entry.details;
   const parts: string[] = [];
@@ -87,6 +87,7 @@ export function auditSummary(entry: Pick<AuditEntry, 'details'>): string {
   if (typeof d['previousName'] === 'string') parts.push($localize`:@@audit.summary.previous:було «${d['previousName']}:name:»`);
   if (typeof d['version'] === 'number') parts.push($localize`:@@audit.summary.version:версія ${d['version']}:version:`);
   if (Array.isArray(d['fields']) && d['fields'].length > 0) parts.push($localize`:@@audit.summary.fields:поля: ${d['fields'].join(', ')}:fields:`);
+  if (d['via'] === 'assistant') parts.push($localize`:@@audit.summary.assistant:через помічника`);
   if (d['reason'] === 'disableAfterErrors') parts.push($localize`:@@audit.summary.breaker:запобіжник після ${d['errors']}:errors: помилок поспіль`);
   return parts.join(' · ');
 }
