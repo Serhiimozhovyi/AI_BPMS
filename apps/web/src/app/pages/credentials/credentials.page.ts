@@ -76,6 +76,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
               <th class="p-2" i18n="@@credentials.col.name">Назва</th>
               <th class="p-2" i18n="@@credentials.col.type">Тип</th>
               <th class="p-2" i18n="@@credentials.col.fields">Заповнено</th>
+              <th class="p-2" i18n="@@credentials.col.connections">Підключень</th>
               <th class="p-2" i18n="@@credentials.col.usage">Де використовується</th>
               <th class="p-2"></th>
             </tr>
@@ -102,6 +103,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
                     {{ visibleFields(c).join(', ') || '—' }}
                   }
                 </td>
+                <td class="p-2 text-sm" data-testid="connection-count">{{ c.usedBy.connectors.length }}</td>
                 <td class="p-2 text-sm">{{ usage(c) }}</td>
                 <td class="p-2 text-right whitespace-nowrap">
                   @if (confirming() === c.id) {
@@ -125,7 +127,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
               </tr>
               @if (editing() === c.id) {
                 <tr>
-                  <td colspan="5" class="p-2">
+                  <td colspan="6" class="p-2">
                     <div class="max-w-2xl rounded-lg border border-ac-line p-4">
                       <app-credential-form [types]="types()" [credential]="c" (saved)="onSaved($event)" (cancelled)="editing.set(null)" />
                     </div>
@@ -209,15 +211,12 @@ export class CredentialsPage implements OnInit {
       });
   }
 
-  /** Поля без службових (токени OAuth2 показуються станом). */
+  /** Заповнені поля підписами типу (F3-94: «Токен бота», а не `token`); службові (токени OAuth2) не показуються. */
   visibleFields(c: CredentialSummary): string[] {
-    const managed = new Set(
-      this.types()
-        .find((t) => t.type === c.type)
-        ?.fields.filter((f) => f.kind === 'managed')
-        .map((f) => f.name) ?? [],
-    );
-    return c.fields.filter((f) => !managed.has(f));
+    const fields = this.types().find((t) => t.type === c.type)?.fields ?? [];
+    const managed = new Set(fields.filter((f) => f.kind === 'managed').map((f) => f.name));
+    const titles = new Map(fields.filter((f) => f.kind !== 'secretMap').map((f) => [f.name, f.title]));
+    return c.fields.filter((f) => !managed.has(f)).map((f) => titles.get(f) ?? f);
   }
 
   /** OAuth2: адреса провайдера від Api → перехід; повернення — на цю ж сторінку з `?oauth=…`. */

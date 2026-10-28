@@ -147,3 +147,22 @@ export function usageLabel(c: CredentialSummary): string {
   ];
   return parts.length > 0 ? parts.join(', ') : '—';
 }
+
+/** Типи, для яких форма має кнопку «Перевірити» (F3-94). */
+export const CHECKABLE_TYPES = ['oauth2.clientCredentials'];
+
+/** Людський текст результату перевірки доступу: код помилки провайдера без технічних деталей. */
+export function checkMessage(error: string | null | undefined): string {
+  const code = error ?? '';
+  if (code === 'invalid_client' || code === 'unauthorized_client' || code === 'http_401') {
+    return $localize`:@@credentials.check.invalidClient:Провайдер не прийняв Client ID або Client secret.`;
+  }
+  if (code === 'invalid_scope') return $localize`:@@credentials.check.invalidScope:Провайдер не знає вказаних scopes.`;
+  if (code === 'invalid_request' || code === 'http_400') {
+    return $localize`:@@credentials.check.invalidRequest:Провайдер відхилив запит: перевірте адресу токена, scopes й audience.`;
+  }
+  if (code === 'http_404') return $localize`:@@credentials.check.notFound:Адреса токена не знайдена (404): перевірте її.`;
+  if (code === 'http_403') return $localize`:@@credentials.check.forbidden:Провайдер заборонив доступ (403).`;
+  if (code.startsWith('OAuth-сервер недоступний') || code.startsWith('У облікових даних')) return code;
+  return $localize`:@@credentials.check.failed:Не вдалося отримати токен (${code}:code:).`;
+}

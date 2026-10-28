@@ -65,6 +65,17 @@ public sealed record CredentialCreateInput(string Name, string Type, JsonObject 
 /// <param name="Data">Часткова заміна даних (<see cref="CredentialTypes.Merge"/>): <c>null</c>-значення видаляє поле.</param>
 public sealed record CredentialUpdateInput(string? Name = null, JsonObject? Data = null);
 
+/// <summary>Тіло <c>POST /credentials/check</c> (F3-94): перевірка доступу без збереження.</summary>
+/// <param name="Type">Тип; перевірка підтримується для <c>oauth2.clientCredentials</c>.</param>
+/// <param name="Data">Дані форми; поле, якого немає, береться зі збереженого <paramref name="CredentialId"/>.</param>
+/// <param name="CredentialId">Збережений credential, чиї значення доповнюють <paramref name="Data"/> (редагування).</param>
+public sealed record CredentialCheckInput(string Type, JsonObject? Data = null, Guid? CredentialId = null);
+
+/// <summary>Результат перевірки: <paramref name="Ok"/> або код помилки провайдера (без деталей і секретів).</summary>
+/// <param name="Ok">Токен отримано.</param>
+/// <param name="Error">Код помилки (<c>invalid_client</c>, <c>http_404</c>…) або текст про недоступність сервера.</param>
+public sealed record CredentialCheckResult(bool Ok, string? Error = null);
+
 /// <summary>
 /// Credentials (docs/architecture.md §8, §10): REST <c>/credentials</c> і сторінка UI. Спільні (<c>project_id = null</c>)
 /// бачить і змінює лише <see cref="UserRole.Admin"/>, проєктні — editor проєкту (F6-14, <see cref="ProjectAccess"/>);
@@ -105,6 +116,15 @@ public interface ICredentialService
     /// <exception cref="NotFoundException">Немає.</exception>
     /// <exception cref="CredentialValidationException">Дані після злиття не за схемою.</exception>
     Task<CredentialSummary> UpdateAsync(Guid id, CredentialUpdateInput input, CancellationToken ct);
+
+    /// <summary>
+    /// Перевіряє доступ без збереження (F3-94): для <c>oauth2.clientCredentials</c> запитує токен у провайдера й повертає
+    /// лише результат. Токен нікуди не записується і не повертається. Потрібна роль editor.
+    /// </summary>
+    /// <param name="input">Тип і дані форми.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="CredentialValidationException">Тип не підтримує перевірку або дані не за схемою.</exception>
+    Task<CredentialCheckResult> CheckAsync(CredentialCheckInput input, CancellationToken ct);
 
     /// <summary>Видаляє credential.</summary>
     /// <param name="id">Id.</param>

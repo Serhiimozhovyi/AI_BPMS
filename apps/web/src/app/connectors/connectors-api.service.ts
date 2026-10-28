@@ -32,6 +32,8 @@ export interface ConnectorConfig {
   headers?: Record<string, string> | null;
   /** Запис каталогу (F6-16). */
   catalog?: string | null;
+  /** Поле credential'а → змінна середовища чи заголовок (F3-93); лише назви. */
+  credentialMap?: Record<string, string> | null;
 }
 
 /** Ключ credential'а з маніфесту (`ConnectorManifestKey`). */
@@ -40,6 +42,26 @@ export interface ConnectorManifestKey {
   title?: string | null;
   required: boolean;
   secret: boolean;
+}
+
+/** Облікові дані конектора: загальний тип (F3-93, `type` + `map`) або ключі старого `mcp.stdio`/`mcp.http`. */
+export interface ConnectorManifestCredential {
+  env?: ConnectorManifestKey[] | null;
+  headers?: ConnectorManifestKey[] | null;
+  type?: string | null;
+  map?: Record<string, string> | null;
+  headerMap?: Record<string, string> | null;
+}
+
+/** Несекретне налаштування підключення з маніфесту (F3-93). */
+export interface ConnectorManifestSetting {
+  name: string;
+  title: string;
+  description?: string | null;
+  placeholder?: string | null;
+  required?: boolean;
+  env?: string | null;
+  header?: string | null;
 }
 
 /** Маніфест `connector.json` (F6-16, docs/connectors.md §5.1). */
@@ -51,7 +73,9 @@ export interface ConnectorManifest {
   transport: ConnectorTransport;
   stdio?: { command: string; arguments?: string[] | null; environment?: Record<string, string> | null } | null;
   http?: { url: string; headers?: Record<string, string> | null } | null;
-  credential?: { env?: ConnectorManifestKey[] | null; headers?: ConnectorManifestKey[] | null } | null;
+  credential?: ConnectorManifestCredential | null;
+  /** Несекретні налаштування підключення: адреса сервісу тощо (F3-93). */
+  settings?: ConnectorManifestSetting[] | null;
   triggers: ConnectorTriggerPreset[];
   /** Дії конектора (F3-92): з маніфесту, а за його відсутності — з кешу tools підключення. */
   actions?: ConnectorManifestAction[] | null;
@@ -80,6 +104,16 @@ export interface ConnectorCatalogEntry {
 }
 
 /** Ключі credential'а запису для транспорту: `env` для stdio, `headers` для http. */
+/** Налаштування підключення, що застосовуються до транспорту (є ціль `env` для stdio чи `header` для http). */
+export function manifestSettings(manifest: ConnectorManifest, transport: ConnectorTransport): ConnectorManifestSetting[] {
+  return (manifest.settings ?? []).filter((s) => (transport === 'http' ? s.header : s.env));
+}
+
+/** Загальний тип облікових даних запису (F3-93); `null` — старий спосіб за ключами або без облікових даних. */
+export function manifestCredentialType(manifest: ConnectorManifest): string | null {
+  return manifest.credential?.type ?? null;
+}
+
 export function manifestKeys(manifest: ConnectorManifest, transport: ConnectorTransport): ConnectorManifestKey[] {
   return (transport === 'http' ? manifest.credential?.headers : manifest.credential?.env) ?? [];
 }
@@ -172,7 +206,18 @@ export class ConnectorsApiService {
   }
 
   /** Встановити з каталогу: сервер створює конектор з типовими налаштуваннями й читає tools. */
-  install(catalogId: string, request: { name?: string; transport?: ConnectorTransport; projectId?: string | null }): Observable<ConnectorDetail> {
+  install(
+    catalogId: string,
+    request: {
+      name?: string;
+      transport?: ConnectorTransport;
+      projectId?: string | null;
+      /** Облікові дані загального типу запису (F3-93). */
+      credentialId?: string;
+      /** Значення `settings` маніфесту за назвою. */
+      settings?: Record<string, string>;
+    },
+  ): Observable<ConnectorDetail> {
     return this.http.post<ConnectorDetail>(`${this.base}/catalog/${encodeURIComponent(catalogId)}/install`, request);
   }
 

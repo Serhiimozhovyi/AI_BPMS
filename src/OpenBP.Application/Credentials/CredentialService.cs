@@ -17,7 +17,8 @@ namespace OpenBP.Application.Credentials;
 /// <param name="currentUser">Користувач запиту.</param>
 /// <param name="store">Сховище (без оновлення oauth2-токенів: перелік полів не має звертатися до провайдера).</param>
 /// <param name="time">Годинник для стану oauth2; <c>null</c> — системний.</param>
-public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUser, CredentialStore store, TimeProvider? time = null) : ICredentialService
+/// <param name="oauth">Клієнт token-ендпойнта для <see cref="CheckAsync"/>; <c>null</c> — перевірка недоступна.</param>
+public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUser, CredentialStore store, TimeProvider? time = null, OAuth2Client? oauth = null) : ICredentialService
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
@@ -168,6 +169,43 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         }
 
         return await GetAsync(id, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<CredentialCheckResult> CheckAsync(CredentialCheckInput input, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Editor);
+        ArgumentNullException.ThrowIfNull(input);
+        if (input.Type != OAuth2Credential.ClientCredentialsType || oauth is null)
+        {
+            throw new CredentialValidationException([new("type", "Перевірка доступна лише для «OAuth2: сервісний клієнт».")]);
+        }
+
+        var data = input.Data ?? [];
+        RejectManaged(input.Type, data);
+        if (input.CredentialId is { } id)
+        {
+            var row = await db.Credentials.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new NotFoundException(Entity, id);
+            await _access.RequireManageAsync(row.ProjectId, Entity, id, ct);
+            if (row.Type != input.Type)
+            {
+                throw new CredentialValidationException([new("type", "Тип збережених облікових даних інший.")]);
+            }
+
+            data = CredentialTypes.Merge(await store.GetDataAsync(id, ct) ?? throw new NotFoundException(Entity, id), data);
+        }
+
+        CredentialTypes.Validate(input.Type, data);
+        try
+        {
+            await oauth.ClientCredentialsAsync(data, ct);
+            return new CredentialCheckResult(true);
+        }
+        catch (OAuth2Exception ex)
+        {
+            // Лише код помилки провайдера: error_description може містити що завгодно.
+            return new CredentialCheckResult(false, ex.Message);
+        }
     }
 
     /// <inheritdoc />

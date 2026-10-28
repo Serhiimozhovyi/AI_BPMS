@@ -13,6 +13,18 @@ export interface CredentialFieldInfo {
   title: string;
   kind: CredentialFieldKind;
   required: boolean;
+  /** Підказка під полем (F3-93). */
+  description?: string | null;
+  /** Приклад значення в порожньому полі (F3-93). */
+  placeholder?: string | null;
+  /** Допустимі значення — вибір зі списку (F3-93). */
+  options?: string[] | null;
+}
+
+/** Результат `POST /credentials/check` (F3-94): доступ працює або код помилки провайдера. */
+export interface CredentialCheckResult {
+  ok: boolean;
+  error?: string | null;
 }
 
 /** Тип credential'а — елемент `GET /api/v1/credentials/types`. Порожні `fields` — довільні пари (`generic`). */
@@ -90,6 +102,14 @@ export class CredentialsApiService {
 
   update(id: string, changes: { name?: string; data?: CredentialData }): Observable<CredentialSummary> {
     return this.http.patch<CredentialSummary>(`${this.base}/${encodeURIComponent(id)}`, changes);
+  }
+
+  /**
+   * Перевіряє доступ без збереження (F3-94; `oauth2.clientCredentials`: запит токена). `credentialId` — збережений
+   * credential, чиї значення доповнюють `data` (редагування).
+   */
+  check(type: string, data: CredentialData, credentialId?: string): Observable<CredentialCheckResult> {
+    return this.http.post<CredentialCheckResult>(`${this.base}/check`, credentialId ? { type, data, credentialId } : { type, data });
   }
 
   /** Починає OAuth2-підключення: адреса, куди перейти браузеру (F4-04). */
