@@ -34,6 +34,26 @@ export interface AssistantEvent {
   code?: string | null;
 }
 
+/** Що доналаштувати після побудови з опису (F3-103). */
+export interface DraftTodoItem {
+  nodeId: string;
+  text: string;
+}
+
+/** Подія побудови сценарію з опису (SSE `POST /workflows/{id}/draft`, F3-103). */
+export interface DraftEvent {
+  type: 'step' | 'definition' | 'todo' | 'error' | 'done';
+  text?: string | null;
+  /** Етап кроку: `plan`, `retry`, `compile`, `node`. */
+  stage?: string | null;
+  index?: number | null;
+  total?: number | null;
+  ok?: boolean | null;
+  definition?: WorkflowDefinition | null;
+  todo?: DraftTodoItem[] | null;
+  code?: string | null;
+}
+
 /** Пояснення сценарію простими словами (`GET /workflows/{id}/explanation`, F3-72). */
 export interface WorkflowExplanation {
   status: 'none' | 'pending' | 'ready' | 'failed' | 'not_configured';
@@ -113,9 +133,21 @@ export class AssistantApiService {
     workflowId: string,
     body: { message: string; definition: WorkflowDefinition; history: AssistantTurn[] },
   ): Observable<AssistantEvent> {
+    return this.stream<AssistantEvent>(workflowId, 'assistant', body);
+  }
+
+  /** Побудова сценарію з опису (F3-103): події прогресу, потім `definition` і `todo`. Відписка зупиняє побудову. */
+  draft(
+    workflowId: string,
+    body: { description: string; definition: WorkflowDefinition },
+  ): Observable<DraftEvent> {
+    return this.stream<DraftEvent>(workflowId, 'draft', body);
+  }
+
+  private stream<T>(workflowId: string, action: string, body: object): Observable<T> {
     let consumed = 0;
     return this.http
-      .post(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/assistant`, body, {
+      .post(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/${action}`, body, {
         observe: 'events',
         reportProgress: true,
         responseType: 'text',
@@ -132,7 +164,7 @@ export class AssistantApiService {
         mergeMap((text) => {
           const parsed = parseAssistantStream(text.slice(consumed));
           consumed += parsed.consumed;
-          return parsed.events;
+          return parsed.events as unknown as T[];
         }),
         // Тіло помилки (problem+json) прийшло текстом — розбираємо, щоб apiErrorMessage показав detail.
         catchError((e: unknown) =>

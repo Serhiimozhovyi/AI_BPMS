@@ -166,4 +166,21 @@ describe('AssistantPanelComponent', () => {
     expect(host.querySelector('[data-kind="error"]')?.textContent).toContain('Модель недоступна.');
     expect(host.querySelector('[data-testid="assistant-input"]')).not.toBeNull();
   });
+
+  it('«Описати процес» (F3-104): запит ззовні з mode=describe показує опис замість розмови; перемикач повертає розмову', () => {
+    const { fixture, host } = create();
+    const hidden = (id: string) =>
+      (host.querySelector(id === 'describe-process' ? 'app-describe-process' : `[data-testid="${id}"]`) as HTMLElement).hidden;
+    expect(hidden('describe-process')).toBe(true);
+
+    fixture.componentRef.setInput('prompt', { text: '', send: false, seq: 1, mode: 'describe' });
+    fixture.detectChanges();
+    expect(hidden('describe-process')).toBe(false);
+    expect(hidden('assistant-log')).toBe(true);
+
+    (host.querySelector('[data-testid="assistant-mode"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(hidden('describe-process')).toBe(true);
+    expect(hidden('assistant-log')).toBe(false);
+  });
 });

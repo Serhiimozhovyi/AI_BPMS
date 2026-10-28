@@ -18,6 +18,8 @@ import { Subscription } from 'rxjs';
 import { apiErrorCode, apiErrorMessage } from '../connectors/connectors-api.service';
 import { WorkflowDefinition } from '../workflows/workflows-api.service';
 import { AssistantApiService, AssistantTurn } from './assistant-api.service';
+import { DraftTodoItem } from './assistant-api.service';
+import { DescribeProcessComponent, DraftResult } from './describe-process.component';
 import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.component';
 
 /** Запит до помічника ззовні панелі (швидкі дії вузла, «Описати процес»). */
@@ -25,6 +27,8 @@ export interface AssistantPrompt {
   text: string;
   /** Надіслати одразу; інакше — лише підставити в поле. */
   send: boolean;
+  /** `describe` — відкрити «Описати процес» замість розмови. */
+  mode?: 'describe';
   /** Новий об'єкт на кожен запит — щоб однаковий текст спрацьовував знову. */
   seq: number;
 }
@@ -53,11 +57,21 @@ const TOOL_LABELS: Record<string, string> = {
 @Component({
   selector: 'app-assistant-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, ExplanationCardComponent],
+  imports: [MatButtonModule, ExplanationCardComponent, DescribeProcessComponent],
   template: `
     <section class="assistant" data-testid="assistant-panel">
       <header class="assistant__head">
         <h2 class="assistant__title" i18n="@@assistant.title">Помічник</h2>
+        @if (!notConfigured()) {
+          <button
+            mat-button
+            type="button"
+            data-testid="assistant-mode"
+            (click)="describing.set(!describing())"
+          >
+            {{ describing() ? chatLabel : describeLabel }}
+          </button>
+        }
         <button
           mat-button
           type="button"
@@ -73,7 +87,18 @@ const TOOL_LABELS: Record<string, string> = {
         [version]="version()"
         [name]="definition().name"
       />
-      <ol class="assistant__log" #log data-testid="assistant-log">
+      @if (!notConfigured()) {
+        <app-describe-process
+          [hidden]="!describing()"
+          [workflowId]="workflowId()"
+          [definition]="definition()"
+          [savedTodo]="draftTodo()"
+          (drafted)="drafted.emit($event)"
+          (todoSelected)="todoSelected.emit($event)"
+          (notConfigured)="notConfigured.set(true)"
+        />
+      }
+      <ol class="assistant__log" #log data-testid="assistant-log" [hidden]="describing() && !notConfigured()">
         @for (line of lines(); track $index) {
           <li
             class="assistant__line assistant__line--{{ line.kind }}"
@@ -106,7 +131,7 @@ const TOOL_LABELS: Record<string, string> = {
           </p>
         </div>
       } @else {
-        <form class="assistant__form" (submit)="$event.preventDefault(); send()">
+        <form class="assistant__form" [hidden]="describing()" (submit)="$event.preventDefault(); send()">
           <textarea
             #field
             class="assistant__input"
@@ -140,6 +165,10 @@ const TOOL_LABELS: Record<string, string> = {
       height: 100%;
       padding: 12px;
       color: var(--ac-vivid);
+    }
+
+    .assistant [hidden] {
+      display: none;
     }
 
     .assistant__head {
@@ -245,16 +274,26 @@ export class AssistantPanelComponent {
   readonly definition = input.required<WorkflowDefinition>();
   /** Поточна збережена версія — пояснення процесу перечитується після кожного збереження (F3-72). */
   readonly version = input<number | null>(null);
+  /** «Що доналаштувати» після останньої побудови (редактор зберігає, поки панель закрита). */
+  readonly draftTodo = input<DraftTodoItem[]>([]);
   /** Запит ззовні. */
   readonly prompt = input<AssistantPrompt | null>(null);
 
   /** Нове визначення після відповіді помічника. */
   readonly definitionChange = output<WorkflowDefinition>();
+  /** Сценарій, побудований з опису, — одна правка в історії (F3-104). */
+  readonly drafted = output<DraftResult>();
+  /** Пункт «Що доналаштувати» — редактор відкриває цей вузол. */
+  readonly todoSelected = output<string>();
   readonly closed = output<void>();
 
   protected readonly lines = signal<ChatLine[]>([]);
   protected readonly draft = signal('');
   protected readonly busy = signal(false);
+  /** Замість розмови — «Описати процес» (F3-104). */
+  protected readonly describing = signal(false);
+  protected readonly describeLabel = $localize`:@@assistant.mode.describe:Описати процес`;
+  protected readonly chatLabel = $localize`:@@assistant.mode.chat:Розмова`;
   /** Api відповів, що модель не вибрана (409 ASSISTANT_NOT_CONFIGURED) — замість поля підказка про MCP (F3-74). */
   protected readonly notConfigured = signal(false);
   protected readonly mcpPrompt = computed(() => mcpExplainPrompt(this.definition().name));
@@ -268,6 +307,8 @@ export class AssistantPanelComponent {
       const prompt = this.prompt();
       if (!prompt) return;
       untracked(() => {
+        this.describing.set(prompt.mode === 'describe');
+        if (prompt.mode === 'describe') return;
         this.draft.set(prompt.text);
         if (prompt.send) this.send();
         else queueMicrotask(() => this.field()?.nativeElement.focus());
