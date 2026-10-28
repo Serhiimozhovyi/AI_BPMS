@@ -54,17 +54,19 @@ public class CatalogDigestTests
     {
         var ok = Guid.NewGuid();
         var broken = Guid.NewGuid();
-        var connectors = Connectors(
-            new ConnectorSummary(ok, "Telegram", McpTransportKind.Http, ConnectorStatus.Ok, 1, null),
-            new ConnectorSummary(broken, "Зламаний", McpTransportKind.Http, ConnectorStatus.Error, 1, null),
-            new ConnectorSummary(Guid.NewGuid(), "Новий", McpTransportKind.Http, ConnectorStatus.New, 1, null));
+        ConnectorSummary[] summaries =
+        [
+            new(ok, "Telegram", McpTransportKind.Http, ConnectorStatus.Ok, 1, null),
+            new(broken, "Зламаний", McpTransportKind.Http, ConnectorStatus.Error, 1, null),
+            new(Guid.NewGuid(), "Новий", McpTransportKind.Http, ConnectorStatus.New, 1, null),
+        ];
         var tools = new Dictionary<Guid, McpToolInfo[]>
         {
             [ok] = [new("send_message", "Надіслати повідомлення", "Надсилає повідомлення в чат.\nДеталі.", new JsonObject())],
             [broken] = [new("lost", null, null, new JsonObject())],
         };
 
-        var digest = await new CatalogDigestBuilder(new FakeNodes(Nodes), Connectors(tools, connectors)).BuildAsync();
+        var digest = await new CatalogDigestBuilder(new FakeNodes(Nodes), Connectors(tools, summaries)).BuildAsync();
 
         var action = Assert.Single(digest.Actions);
         Assert.Equal($"mcp:{ok}/send_message", action.Use);
