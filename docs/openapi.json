@@ -6688,6 +6688,55 @@
           }
         }
       },
+      "AssistantProfile": {
+        "required": [
+          "credentialId",
+          "credentialName",
+          "provider",
+          "model"
+        ],
+        "type": "object",
+        "properties": {
+          "credentialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "credentialName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "provider": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": "string"
+          }
+        }
+      },
+      "AssistantProfileInput": {
+        "required": [
+          "credentialId",
+          "model"
+        ],
+        "type": "object",
+        "properties": {
+          "credentialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "AssistantRequest": {
         "required": [
           "message",
@@ -6759,6 +6808,24 @@
           },
           "configured": {
             "type": "boolean"
+          },
+          "profiles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AssistantProfile"
+            }
+          },
+          "primaryIndex": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
           }
         }
       },
@@ -6779,6 +6846,24 @@
           "model": {
             "type": [
               "null",
+              "string"
+            ]
+          },
+          "profiles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AssistantProfileInput"
+            }
+          },
+          "primaryIndex": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
               "string"
             ]
           }

@@ -16,6 +16,23 @@ export interface AssistantSettings {
   provider: string | null;
   model: string | null;
   configured: boolean;
+  /** Усі підключені моделі (F3-107); основна — `primaryIndex`-та. */
+  profiles?: AssistantProfile[];
+  primaryIndex?: number | null;
+}
+
+/** Підключена модель помічника. */
+export interface AssistantProfile {
+  credentialId: string;
+  credentialName: string | null;
+  provider: string | null;
+  model: string;
+}
+
+/** Модель у тілі збереження налаштувань. */
+export interface AssistantProfileInput {
+  credentialId: string;
+  model: string;
 }
 
 /** Репліка розмови. */
@@ -100,11 +117,12 @@ export class AssistantApiService {
     return this.http.get<AssistantSettings>(`${API_BASE}/settings/assistant`);
   }
 
-  saveSettings(credentialId: string | null, model: string | null): Observable<AssistantSettings> {
-    return this.http.put<AssistantSettings>(`${API_BASE}/settings/assistant`, {
-      credentialId,
-      model,
-    });
+  /** Зберігає список моделей; `primaryIndex` — основна. Порожній список вимикає помічника. */
+  saveSettings(profiles: AssistantProfileInput[], primaryIndex: number): Observable<AssistantSettings> {
+    return this.http.put<AssistantSettings>(
+      `${API_BASE}/settings/assistant`,
+      profiles.length ? { profiles, primaryIndex } : { credentialId: null, model: null },
+    );
   }
 
   /** Моделі credential'а: для Ollama — встановлені (`GET /api/tags`), для інших типів — порожній список. */
