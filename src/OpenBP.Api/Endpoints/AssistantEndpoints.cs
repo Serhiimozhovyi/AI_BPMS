@@ -8,7 +8,8 @@ using HttpJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 namespace OpenBP.Api.Endpoints;
 
 /// <summary>
-/// Маршрути помічника (F3-60): <c>/settings/assistant</c> і <c>POST /workflows/{id}/assistant</c>; пояснення сценарію
+/// Маршрути помічника (F3-60): <c>/settings/assistant</c> і <c>POST /workflows/{id}/assistant</c>; побудова з опису
+/// <c>POST /workflows/{id}/draft</c> (F3-103); пояснення сценарію
 /// <c>/workflows/{id}/explanation</c> (F3-72).
 /// </summary>
 public static class AssistantEndpoints
@@ -45,6 +46,20 @@ public static class AssistantEndpoints
             .Accepts<AssistantRequest>("application/json")
             .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
 
+        api.MapPost("/workflows/{id:guid}/draft", DraftAsync)
+            .WithTags(OpenApiSetup.Tags.Assistant)
+            .WithSummary("Побудувати сценарій з опису (SSE)")
+            .WithDescription(
+                "Тіло: `description` (опис процесу простими словами, до 4000 символів), `definition` (поточне визначення з канвасу — " +
+                "з нього беруться назва й налаштування). Модель помічника складає план за стислим каталогом вузлів і дій, сервер " +
+                "збирає з нього сценарій і просить параметри для кожного вузла окремо, з перевіркою й повторами. Відповідь — " +
+                "`text/event-stream`: `step` (`stage`: `plan`, `compile`, `node`, `retry`; `index`/`total` для вузлів), `definition` " +
+                "(побудований сценарій — редактор застосовує його як звичайну правку; нічого не зберігається), `todo` (що " +
+                "доналаштувати: облікові дані, кроки без вузла, помилки параметрів), `error`, `done`. Ліміт — 300 с. Не налаштовано — " +
+                "409 ASSISTANT_NOT_CONFIGURED. Лише editor.")
+            .Accepts<DraftRequest>("application/json")
+            .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
+
         api.MapGet("/workflows/{id:guid}/explanation", (Guid id, IWorkflowExplanationService service, CancellationToken ct) =>
             service.GetAsync(id, ct))
             .WithTags(OpenApiSetup.Tags.Assistant)
@@ -69,6 +84,25 @@ public static class AssistantEndpoints
                 "модель помічника не потрібна. `text` — до 50 000 символів. Лише editor.");
 
         return api;
+    }
+
+    /// <summary>Побудова з опису: перевірки до заголовків SSE, далі — події побудови.</summary>
+    private static async Task DraftAsync(Guid id, DraftRequest body, HttpContext http, IWorkflowDrafter drafter, IOptions<HttpJsonOptions> json)
+    {
+        var ct = http.RequestAborted;
+        var session = await drafter.StartAsync(id, body, ct);
+        var options = json.Value.SerializerOptions;
+
+        http.Response.ContentType = "text/event-stream";
+        http.Response.Headers.CacheControl = "no-cache";
+        http.Response.Headers["X-Accel-Buffering"] = "no";
+        await foreach (var e in session.RunAsync(ct))
+        {
+            var text = new StringBuilder("event: ").Append(e.Type).Append("\ndata: ")
+                .Append(JsonSerializer.Serialize(e, options)).Append("\n\n").ToString();
+            await http.Response.WriteAsync(text, ct);
+            await http.Response.Body.FlushAsync(ct);
+        }
     }
 
     /// <summary>Перевірки — до заголовків SSE (помилки йдуть як problem+json), далі — події розмови.</summary>

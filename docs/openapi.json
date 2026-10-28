@@ -1146,6 +1146,59 @@
         ]
       }
     },
+    "/api/v1/workflows/{id}/draft": {
+      "post": {
+        "tags": [
+          "Помічник"
+        ],
+        "summary": "Побудувати сценарій з опису (SSE)",
+        "description": "Тіло: `description` (опис процесу простими словами, до 4000 символів), `definition` (поточне визначення з канвасу — з нього беруться назва й налаштування). Модель помічника складає план за стислим каталогом вузлів і дій, сервер збирає з нього сценарій і просить параметри для кожного вузла окремо, з перевіркою й повторами. Відповідь — `text/event-stream`: `step` (`stage`: `plan`, `compile`, `node`, `retry`; `index`/`total` для вузлів), `definition` (побудований сценарій — редактор застосовує його як звичайну правку; нічого не зберігається), `todo` (що доналаштувати: облікові дані, кроки без вузла, помилки параметрів), `error`, `done`. Ліміт — 300 с. Не налаштовано — 409 ASSISTANT_NOT_CONFIGURED. Лише editor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflows/{id}/explanation": {
       "get": {
         "tags": [
@@ -7502,6 +7555,31 @@
           }
         },
         "description": "Часткова унікальність: значення IReadOnlyList&lt;string&gt; DataUniqueConstraint.Columns не повторюються серед рядків, що задовольняють IReadOnlyList&lt;DataFilter&gt;? DataUniqueConstraint.Where."
+      },
+      "DraftRequest": {
+        "required": [
+          "description",
+          "definition"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowDefinition"
+              }
+            ]
+          }
+        }
       },
       "EvaluateExpressionRequest": {
         "required": [

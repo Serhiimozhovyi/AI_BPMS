@@ -15,6 +15,10 @@ namespace OpenBP.Engine.Nodes;
 /// <param name="ParametersSchema">JSON Schema параметрів вузла; за нею будується форма і валідуються параметри (правило 5).</param>
 /// <param name="Credentials">Credentials, які вузол запитує через <see cref="INodeContext.GetCredentialAsync"/>.</param>
 /// <param name="Description">Опис для палітри і документації; необов'язковий.</param>
+/// <param name="PlanKind">
+/// Роль вузла в плані процесу для стислого каталогу (<c>trigger|action|condition|approval|wait|transform|notify</c>);
+/// <c>null</c> — визначається за типом. У REST/MCP-описі не віддається.
+/// </param>
 public sealed record NodeDescriptor(
     string Type,
     int Version,
@@ -24,7 +28,8 @@ public sealed record NodeDescriptor(
     IReadOnlyList<string> Outputs,
     JsonObject ParametersSchema,
     IReadOnlyList<CredentialRequirement>? Credentials = null,
-    string? Description = null)
+    string? Description = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? PlanKind = null)
 {
     /// <summary>Вузол без входів — тригер (правило 4 валідації: активний сценарій має ≥ 1 тригер).</summary>
     public bool IsTrigger => Inputs.Count == 0;

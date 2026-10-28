@@ -198,9 +198,34 @@ public class AssistantTests(ApiFactory api)
         var first = JsonNode.Parse(provider.Requests.First().Body)!;
         Assert.Equal("fake-model", first["model"]!.GetValue<string>());
         Assert.Equal(
-            ["describe_nodes", "describe_connectors", "get_workflow", "update_workflow", "test_node"],
+            ["describe_nodes", "describe_node", "describe_connectors", "get_workflow", "update_workflow", "test_node"],
             first["tools"]!.AsArray().Select(t => t!["function"]!["name"]!.GetValue<string>()));
         Assert.Contains(nodeCredential.ToString(), provider.Requests.ElementAt(1).Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Describe_nodes_is_a_short_catalogue_and_describe_node_gives_one_schema()
+    {
+        var provider = new FakeProvider(i => i switch
+        {
+            1 => ToolCall("describe_nodes", [], i),
+            2 => ToolCall("describe_node", new JsonObject { ["type"] = "core.if" }, i),
+            3 => ToolCall("describe_node", new JsonObject { ["type"] = "no.such" }, i),
+            _ => Text("Готово."),
+        });
+        await using var factory = WithProvider(provider);
+        await ConfigureAsync(await LoginAsync(factory, ApiFactory.AdminEmail, ApiFactory.AdminPassword));
+        var editor = await LoginAsync(factory, UserRole.Editor);
+        var workflowId = await CreateWorkflowAsync(editor, Definition($"Помічник {Guid.NewGuid():N}"));
+
+        var events = await AskAsync(editor, workflowId, "які є вузли");
+
+        Assert.Equal([true, true, false], events.Where(e => e.Type == "step").Select(e => e.Data.GetProperty("ok").GetBoolean()));
+        var bodies = provider.Requests.Select(r => r.Body).ToList();
+        Assert.Contains("core.manualTrigger", bodies[1], StringComparison.Ordinal);
+        Assert.DoesNotContain("parametersSchema", bodies[1], StringComparison.Ordinal);
+        Assert.Contains("parametersSchema", bodies[2], StringComparison.Ordinal);
+        Assert.Contains("NOT_FOUND", bodies[3], StringComparison.Ordinal);
     }
 
     [Fact]

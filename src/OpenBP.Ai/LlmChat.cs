@@ -84,6 +84,7 @@ public sealed class LlmChat
     /// <param name="tools">Інструменти.</param>
     /// <param name="ct">Скасування.</param>
     /// <param name="maxTokens">Ліміт токенів відповіді; <c>null</c> — 4096.</param>
+    /// <param name="outputSchema">JSON Schema відповіді (структурований вихід, F3-103): текст відповіді — JSON за нею; <c>null</c> — вільний текст.</param>
     /// <exception cref="LlmException">Невідомий провайдер, немає ключа, помилка або нерозбірлива відповідь провайдера.</exception>
     public async Task<LlmReply> SendAsync(
         string provider,
@@ -93,7 +94,8 @@ public sealed class LlmChat
         IReadOnlyList<LlmTurn> turns,
         IReadOnlyList<LlmTool> tools,
         CancellationToken ct,
-        int? maxTokens = null)
+        int? maxTokens = null,
+        JsonObject? outputSchema = null)
     {
         ArgumentNullException.ThrowIfNull(credential);
         ArgumentNullException.ThrowIfNull(turns);
@@ -115,7 +117,7 @@ public sealed class LlmChat
                 t.ToolCalls?.Select(c => new ChatToolCall(c.Id, c.Name, c.Arguments)).ToList(),
                 t.ToolCallId))],
             [.. tools.Select(t => new ChatTool(t.Name, t.Description, t.InputSchema))],
-            OutputSchema: null,
+            OutputSchema: outputSchema,
             Temperature: null,
             maxTokens ?? MaxTokens,
             credential);

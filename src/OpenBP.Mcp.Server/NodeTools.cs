@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
+using OpenBP.Application.Errors;
 using OpenBP.Application.Nodes;
 using OpenBP.Engine.Nodes;
 
@@ -36,9 +37,32 @@ public sealed record NodeTypeDescription(
 public sealed record NodeCredentialDescription(string Parameter, string Type, bool Required);
 
 /// <summary>Результат <c>describe_nodes</c>.</summary>
-/// <param name="Nodes">Зареєстровані типи вузлів за групою і типом.</param>
-public sealed record NodesDescription(IReadOnlyList<NodeTypeDescription> Nodes)
+/// <param name="Nodes">Зареєстровані типи вузлів за групою і типом; порожній у стислому режимі.</param>
+/// <param name="Compact">Стислий каталог (<c>compact: true</c>): вузли й дії конекторів без схем; інакше <c>null</c>.</param>
+public sealed record NodesDescription(IReadOnlyList<NodeTypeDescription> Nodes, CatalogDigest? Compact = null)
 {
+    /// <summary>Стислий каталог без схем параметрів (F3-102): вузли й дії підключених конекторів.</summary>
+    /// <param name="digest">Сервіс стислого каталогу.</param>
+    /// <param name="ct">Скасування.</param>
+    public static async Task<NodesDescription> BuildCompactAsync(ICatalogDigest digest, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(digest);
+        return new NodesDescription([], await digest.BuildAsync(ct).ConfigureAwait(false));
+    }
+
+    /// <summary>Повний опис однієї версії типу (остання, якщо <paramref name="version"/> не задано).</summary>
+    /// <param name="nodes">Сервіс вузлів.</param>
+    /// <param name="type">Тип вузла.</param>
+    /// <param name="version">Версія.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Такого типу чи версії немає.</exception>
+    public static async Task<NodeTypeDescription> BuildOneAsync(INodeService nodes, string type, int? version, CancellationToken ct)
+    {
+        var all = (await BuildAsync(nodes, ct).ConfigureAwait(false)).Nodes.Where(n => n.Type == type).ToList();
+        var found = version is null ? all.MaxBy(n => n.Version) : all.FirstOrDefault(n => n.Version == version);
+        return found ?? throw new NotFoundException("node", version is null ? type : $"{type}@{version}");
+    }
+
     /// <summary>Збирає опис з <see cref="INodeService"/> (права — viewer), як REST <c>GET /nodes</c>.</summary>
     /// <param name="nodes">Сервіс вузлів.</param>
     /// <param name="ct">Скасування.</param>
@@ -99,6 +123,26 @@ public sealed class NodeTools
         "transitions?: [{ to?: stage id, rules: [{ id, condition, mode: block|warn, message? }] }] }. A node belongs to at most " +
         "one stage and a stage's nodes must be connected; the engine derives stage state from the execution and checks " +
         "transition rules on edges leaving the stage. See the format schema for details.")]
-    public static Task<NodesDescription> DescribeNodes(INodeService nodes, CancellationToken ct) =>
-        NodesDescription.BuildAsync(nodes, ct);
+    public static Task<NodesDescription> DescribeNodes(
+        INodeService nodes,
+        ICatalogDigest digest,
+        [Description("true: a short catalogue instead of full schemas — node types (type, version, title, one-line summary, kind, outputs) and actions of connected systems (`use` = mcp:<serverId>/<toolName>), up to ~6000 characters. Fetch one node's schema with describe_node. Default false.")] bool compact = false,
+        CancellationToken ct = default) =>
+        compact ? NodesDescription.BuildCompactAsync(digest, ct) : NodesDescription.BuildAsync(nodes, ct);
+
+    /// <summary><c>describe_node</c>: один тип вузла з повною схемою параметрів.</summary>
+    /// <param name="nodes">Сервіс вузлів.</param>
+    /// <param name="type">Тип вузла.</param>
+    /// <param name="version">Версія; типово остання.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "describe_node", Title = "Describe one node type", ReadOnly = true, UseStructuredContent = true)]
+    [Description(
+        "Returns one node type in full: ports, credentials and the JSON Schema of `parameters` (the same entry as in describe_nodes). " +
+        "Use it after describe_nodes with compact=true. `version` defaults to the latest. Unknown type: NOT_FOUND.")]
+    public static Task<NodeTypeDescription> DescribeNode(
+        INodeService nodes,
+        [Description("Node type, e.g. core.if.")] string type,
+        [Description("Node type version; the latest when omitted.")] int? version = null,
+        CancellationToken ct = default) =>
+        NodesDescription.BuildOneAsync(nodes, type, version, ct);
 }
