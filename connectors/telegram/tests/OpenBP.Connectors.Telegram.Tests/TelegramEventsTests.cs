@@ -87,6 +87,45 @@ public sealed class TelegramEventsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Incoming_files_keep_file_id_mime_type_and_file_name_in_the_event()
+    {
+        _api.PushUpdate(new
+        {
+            update_id = 9010,
+            message = new
+            {
+                message_id = 3,
+                date = 1761200200,
+                chat = new { id = 42, type = "private" },
+                caption = "Довідка",
+                document = new { file_id = "BQACAgIAAxk-doc", file_name = "довідка.pdf", mime_type = "application/pdf", file_size = 2048 },
+            },
+        });
+        _api.PushUpdate(new
+        {
+            update_id = 9011,
+            message = new
+            {
+                message_id = 4,
+                date = 1761200201,
+                chat = new { id = 42, type = "private" },
+                voice = new { file_id = "AwACAgIAAxk-voice", mime_type = "audio/ogg", duration = 7, file_size = 4096 },
+            },
+        });
+        await using var subscription = await _client.SubscribeToResourceAsync(TelegramEvents.Uri, (_, _) => ValueTask.CompletedTask);
+        await WaitAsync(async () => (await ReadUpdateIdsAsync()).Length == 4);
+
+        var read = await _client.ReadResourceAsync(TelegramEvents.Uri);
+        var result = JsonDocument.Parse(Assert.IsType<TextResourceContents>(Assert.Single(read.Contents)).Text).RootElement.GetProperty("result");
+        var document = result.EnumerateArray().Single(u => u.GetProperty("update_id").GetInt64() == 9010).GetProperty("message").GetProperty("document");
+        var voice = result.EnumerateArray().Single(u => u.GetProperty("update_id").GetInt64() == 9011).GetProperty("message").GetProperty("voice");
+
+        Assert.Equal(("BQACAgIAAxk-doc", "довідка.pdf", "application/pdf"),
+            (document.GetProperty("file_id").GetString(), document.GetProperty("file_name").GetString(), document.GetProperty("mime_type").GetString()));
+        Assert.Equal(("AwACAgIAAxk-voice", "audio/ogg"), (voice.GetProperty("file_id").GetString(), voice.GetProperty("mime_type").GetString()));
+    }
+
+    [Fact]
     public async Task With_webhook_the_resource_is_unavailable_with_explanation()
     {
         _api.WebhookUrl = "https://openbp.example.com/webhook/tg";

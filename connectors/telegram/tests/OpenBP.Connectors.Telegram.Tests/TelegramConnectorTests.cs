@@ -60,7 +60,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         var tools = (await client.ListToolsAsync()).ToDictionary(t => t.Name, t => t.ProtocolTool);
 
         Assert.Equal(
-            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_approval", "get_chat", "get_updates", "send_approval", "send_document", "send_message", "send_messages", "send_photo", "set_my_commands", "set_webhook"],
+            ["answer_callback_query", "delete_webhook", "edit_message_text", "get_approval", "get_chat", "get_updates", "send_approval", "send_audio", "send_document", "send_message", "send_messages", "send_photo", "send_video", "send_voice", "set_my_commands", "set_webhook"],
             tools.Keys.Order());
         var send = tools["send_message"].InputSchema;
         Assert.Equal(["chat_id", "text"], send.GetProperty("required").EnumerateArray().Select(e => e.GetString()).Order());
@@ -73,7 +73,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.All(tools.Values, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 
         // chat_id → список чатів з get_updates у формі OpenBP (x-openbp-options, docs/connectors.md §2).
-        foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "send_photo", "send_approval", "get_approval", "get_chat" })
+        foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "send_video", "send_audio", "send_voice", "send_photo", "send_approval", "get_approval", "get_chat" })
         {
             var options = tools[name].InputSchema.GetProperty("properties").GetProperty("chat_id").GetProperty("x-openbp-options");
             Assert.Equal(("get_updates", "result", "message.chat.id"), (options.GetProperty("tool").GetString(), options.GetProperty("itemsPath").GetString(), options.GetProperty("valuePath").GetString()));
@@ -90,7 +90,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         JsonElement Property(string tool, string name) => tools[tool].InputSchema.GetProperty("properties").GetProperty(name);
 
         // x-openbp-widget (docs/connectors.md §2): кнопки, таблиця команд, вибір чату.
-        foreach (var name in new[] { "send_message", "edit_message_text", "send_photo" })
+        foreach (var name in new[] { "send_message", "edit_message_text", "send_photo", "send_document", "send_video", "send_audio", "send_voice" })
         {
             Assert.Equal("keyboard", Property(name, "reply_markup").GetProperty("x-openbp-widget").GetString());
         }
@@ -105,6 +105,10 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.Equal(4096, Property("send_approval", "text").GetProperty("maxLength").GetInt32());
         Assert.Equal(200, Property("answer_callback_query", "text").GetProperty("maxLength").GetInt32());
         Assert.Equal(1024, Property("send_photo", "caption").GetProperty("maxLength").GetInt32());
+        foreach (var name in new[] { "send_document", "send_video", "send_audio", "send_voice" })
+        {
+            Assert.Equal(1024, Property(name, "caption").GetProperty("maxLength").GetInt32());
+        }
         var updates = Property("set_webhook", "allowed_updates").GetProperty("items").GetProperty("enum").EnumerateArray().Select(e => e.GetString()).ToList();
         Assert.Contains("callback_query", updates);
         Assert.Contains("message", updates);
@@ -442,6 +446,143 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.All(new[] { neither, both, badBase64, longCaption, tooBig, badMarkup }, r => Assert.True(r.IsError));
         Assert.Contains("1024", string.Concat(longCaption.Content.OfType<TextContentBlock>().Select(b => b.Text)), StringComparison.Ordinal);
         Assert.Equal(count, _api.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData("send_document", "sendDocument", "document", "report.pdf")]
+    [InlineData("send_video", "sendVideo", "video", "intro.mp4")]
+    [InlineData("send_audio", "sendAudio", "audio", "meditation.mp3")]
+    [InlineData("send_voice", "sendVoice", "voice", "note.ogg")]
+    public async Task Send_file_by_url_and_file_id_goes_into_the_same_json_field(string tool, string method, string field, string name)
+    {
+        var client = await ConnectAsync();
+        var markup = new Dictionary<string, object?> { ["inline_keyboard"] = new[] { new[] { new { text = "Ок", callback_data = "ok" } } } };
+
+        var byUrl = await client.CallToolAsync(tool, new Dictionary<string, object?>
+        {
+            ["chat_id"] = 42,
+            [$"{field}_url"] = $"https://example.com/{name}",
+            ["caption"] = "<b>Матеріал</b>",
+            ["parse_mode"] = "HTML",
+            ["reply_markup"] = markup,
+        });
+        Assert.NotEqual(true, byUrl.IsError);
+        var body = _api.Requests.Last();
+        Assert.Equal(method, body.Method);
+        Assert.Equal($"https://example.com/{name}", body.Json!.Value.GetProperty(field).GetString());
+        Assert.Equal("HTML", body.Json.Value.GetProperty("parse_mode").GetString());
+        Assert.Equal("ok", body.Json.Value.GetProperty("reply_markup").GetProperty("inline_keyboard")[0][0].GetProperty("callback_data").GetString());
+
+        var byFileId = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = "@channel", ["file_id"] = "BAACAgIAAxkDAAI" });
+        Assert.NotEqual(true, byFileId.IsError);
+        body = _api.Requests.Last();
+        Assert.Equal("BAACAgIAAxkDAAI", body.Json!.Value.GetProperty(field).GetString());
+        Assert.Equal("@channel", body.Json.Value.GetProperty("chat_id").GetString());
+        Assert.NotEqual(JsonValueKind.Undefined, byFileId.StructuredContent!.Value.GetProperty("message_id").ValueKind);
+    }
+
+    [Theory]
+    [InlineData("send_video", "sendVideo", "video", "intro.mp4", "video")]
+    [InlineData("send_audio", "sendAudio", "audio", "meditation.mp3", "audio")]
+    [InlineData("send_voice", "sendVoice", "voice", "note.ogg", "voice")]
+    public async Task Send_file_by_base64_is_sent_as_multipart_with_extra_fields(string tool, string method, string field, string name, string answerField)
+    {
+        var client = await ConnectAsync();
+        var content = "abc-media"u8.ToArray();
+        var args = new Dictionary<string, object?>
+        {
+            ["chat_id"] = 42,
+            [$"{field}_base64"] = Convert.ToBase64String(content),
+            ["file_name"] = name,
+            ["caption"] = "Підпис",
+            ["duration"] = 12,
+        };
+        if (tool == "send_video")
+        {
+            args["supports_streaming"] = true;
+        }
+
+        var result = await client.CallToolAsync(tool, args);
+
+        Assert.NotEqual(true, result.IsError);
+        var request = _api.Requests.Last();
+        Assert.Equal(method, request.Method);
+        Assert.StartsWith("multipart/form-data", request.ContentType, StringComparison.Ordinal);
+        Assert.Equal("42", request.Form["chat_id"]);
+        Assert.Equal("Підпис", request.Form["caption"]);
+        Assert.Equal("12", request.Form["duration"]);
+        Assert.Equal($"{name}:{content.Length}:abc-media", request.Form[field]);
+        if (tool == "send_video")
+        {
+            Assert.Equal("true", request.Form["supports_streaming"]);
+        }
+
+        Assert.Equal($"{method}-file-id", result.StructuredContent!.Value.GetProperty(answerField).GetProperty("file_id").GetString());
+    }
+
+    [Fact]
+    public async Task Send_audio_passes_performer_and_title()
+    {
+        var client = await ConnectAsync();
+
+        await client.CallToolAsync("send_audio", new Dictionary<string, object?> { ["chat_id"] = 42, ["audio_url"] = "https://e.com/a.mp3", ["performer"] = "Астарта", ["title"] = "Дихання" });
+
+        var body = _api.Requests.Last().Json!.Value;
+        Assert.Equal("Астарта", body.GetProperty("performer").GetString());
+        Assert.Equal("Дихання", body.GetProperty("title").GetString());
+    }
+
+    [Theory]
+    [InlineData("send_document", "document")]
+    [InlineData("send_video", "video")]
+    [InlineData("send_audio", "audio")]
+    [InlineData("send_voice", "voice")]
+    public async Task Send_file_rejects_bad_arguments_without_calling_the_api(string tool, string field)
+    {
+        var client = await ConnectAsync();
+        var count = _api.Requests.Count;
+
+        var neither = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = 42 });
+        var two = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = 42, [$"{field}_url"] = "https://e.com/a", ["file_id"] = "BAAC" });
+        var badBase64 = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = 42, [$"{field}_base64"] = "not base64!" });
+        var longCaption = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = 42, ["file_id"] = "BAAC", ["caption"] = new string('я', 1025) });
+        var badChat = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = "", ["file_id"] = "BAAC" });
+        var badMarkup = await client.CallToolAsync(tool, new Dictionary<string, object?> { ["chat_id"] = 42, ["file_id"] = "BAAC", ["reply_markup"] = new Dictionary<string, object?> { ["foo"] = 1 } });
+
+        Assert.All(new[] { neither, two, badBase64, longCaption, badChat, badMarkup }, r => Assert.True(r.IsError));
+        Assert.Contains("file_id", string.Concat(two.Content.OfType<TextContentBlock>().Select(b => b.Text)), StringComparison.Ordinal);
+        Assert.Equal(count, _api.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Send_file_over_50_mb_is_rejected_with_an_explanation_and_a_50_mb_file_is_accepted()
+    {
+        var client = await ConnectAsync();
+
+        var ok = await client.CallToolAsync("send_video", new Dictionary<string, object?> { ["chat_id"] = 42, ["video_base64"] = Convert.ToBase64String(new byte[50 * 1024 * 1024]) });
+        var count = _api.Requests.Count;
+        var tooBig = await client.CallToolAsync("send_video", new Dictionary<string, object?> { ["chat_id"] = 42, ["video_base64"] = Convert.ToBase64String(new byte[50 * 1024 * 1024 + 1]) });
+
+        Assert.NotEqual(true, ok.IsError);
+        Assert.True(tooBig.IsError);
+        var text = string.Concat(tooBig.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.Contains("50 МБ", text, StringComparison.Ordinal);
+        Assert.Contains("video_url", text, StringComparison.Ordinal);
+        Assert.Equal(count, _api.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Send_file_to_unknown_chat_reports_the_api_error_without_the_token()
+    {
+        var client = await ConnectAsync();
+        _api.FailMethod["sendVoice"] = (400, """{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}""");
+
+        var result = await client.CallToolAsync("send_voice", new Dictionary<string, object?> { ["chat_id"] = 999, ["file_id"] = "AwACAgIAAxk" });
+
+        Assert.True(result.IsError);
+        var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.Contains("chat not found", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(Token, text, StringComparison.Ordinal);
     }
 
     [Fact]

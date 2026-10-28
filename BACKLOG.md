@@ -939,7 +939,7 @@
 - DoD: Vitest, Playwright з фейковим провайдером, lint/test/build зелені.
 
 ### F3-111 · UI: картки підтвердження змін
-- model: `sonnet` · status: `review` · depends: F3-110, F3-109
+- model: `sonnet` · status: `done` · depends: F3-110, F3-109
 - Що: картка «що буде створено/змінено» з кнопками «Застосувати» / «Скасувати», посилання на створене.
 - DoD: Vitest і Playwright (застосувати, скасувати), lint/test/build зелені.
 
@@ -1383,12 +1383,13 @@
 - Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §5, «Реалізовано (F8-06)»): сценарії посилаються один на одного й на таблиці мітками `ref:…`/назвами, `errorWorkflowId` ставиться другим проходом; відповідники перевіряються до першої зміни, невдалий імпорт у новий проєкт відкочується; повторний імпорт замінює чернетки сценаріїв за назвою (опубліковані версії не чіпає), у таблиці додає лише колонки; пропозиція встановити з каталогу (F6-16) — лише перелік відсутніх у формі імпорту; окремий CI-job не потрібен — каталог перевіряють тести `.NET build + test` (`ProjectTemplateCatalogTests`, `ProjectTemplatePinTests`); перший шаблон — `examples/projects/helpdesk`.
 
 ### F8-07 · Telegram-конектор: `send_document`, `send_video`, `send_audio`, `send_voice`
-- model: `sonnet` · status: `ready` · depends: —
+- model: `sonnet` · status: `done` · depends: —
 - Що: у `connectors/telegram` tools `send_document`, `send_video`, `send_audio`, `send_voice` з `chat_id`, файл як `file_id` Telegram, URL або `$binary` (як у `send_photo` F6-26), `caption` з HTML, `reply_markup`; вхідні повідомлення з файлами віддають `file_id`, `mime`, `file_name` у події `message` (F6-22); маніфест і пресети каталогу оновлено.
 - DoD: тести tools на mock Telegram API (успіх, невідомий chat, завеликий файл → зрозуміла помилка); `connectors/telegram/README.md`, `docs/guide/users.md` §9 оновлено.
+- Зроблено: як у «Що»; файл — рівно один з `<тип>_url` / `file_id` / `<тип>_base64` (URL і `file_id` йдуть у те саме поле Bot API), ліміт завантаження 50 МБ; `send_document` розширено (`file_id`, `parse_mode`, `reply_markup`); у вхідній події файли й так мають `file_id`/`file_name`/`mime_type` (сирий update Telegram) — це закріплено тестом, а `TelegramMessage` отримав `video`/`audio`/`voice`. Пресетів у `connector.json` немає — оновлено перелік `actions`.
 
 ### F8-08 · Шаблон «Психологічна підтримка», частина 1: таблиці, ролі, сторінки, підсценарії правил
-- model: `opus` · status: `done` · depends: F8-06
+- model: `opus` · status: `done (#238)` · depends: F8-06
 - Що: `examples/projects/psy-support/bundle.json`: таблиці за `docs/psy-support.md` §3 без `staff_accounts`/`invites` (типи `datetime`/`enum`/`ref`/`user`, `unique(slot_id) where status = active`, `phone` і `telegram_id` — `sensitive`), рядки `settings` з текстами й лімітами §3.1; ролі `coordinator`, `psychologist`; сторінки за ТЗ §5 і `docs/projects.md` §6 (розклад і слоти, записи, події з учасниками, сеанси БСТ з чергою, матеріали, оголошення; координатору — тексти, психологи, користувачі з пошуком, журнал, `metrics`); підсценарії правил §4 з `insertIf`: `book-slot`, `cancel-booking`, `move-booking`, `register-event`, `cancel-registration`, `rate-event`, `book-bst`, `join-waitlist`, `cancel-bst` (звільнене місце → перший `waiting` → `offered` + сповіщення), `generate-slots`, `send-notice`; кожен повертає `{ ok, reason?, message, notifications[] }`; надсилання в Telegram — вузлом у кінці кожного підсценарію через конектор проєкту.
 - DoD: CLI-тести підсценаріїв з pinData на всі правила §4 (`slot_taken`, `too_late`, ліміт активних, місткість, черга); тест одночасності `book-slot` через Testcontainers (20 паралельних → один `ok`); імпорт шаблону в CI; `README.md` шаблону з описом сторінок і ролей.
 - Зроблено: як у «Що», з відхиленнями (`docs/projects.md` §6, «Реалізовано (F8-08)»): конектор Telegram задає змінна інстансу `psy_telegram_server` (`serverId` з виразом не є посиланням імпорту — `WorkflowTransferService` його не перемаплює), надсилання — `send_messages` пакетами до 100 з `continueOnFail`; ключі рядків — згенеровані `_key`, у `bookings` копії часу, психолога, імені й телефону; реєстрації на події й БСТ унікальні серед `active` (повторна реєстрація — новий рядок); `psychologist_user` для сторінки «Мої слоти»; форми таблиць без ключа — пари `*-new`/`*-edit`; `move-booking` відкочує новий запис, якщо старий не скасувався; успішні дії пишуть `audit_log`; `openbp run` не створює таблиць з виразом у назві й без колонок. Тести: `PsySupportTemplateRuleTests` (28), `PsySupportTemplateConcurrencyTests`.

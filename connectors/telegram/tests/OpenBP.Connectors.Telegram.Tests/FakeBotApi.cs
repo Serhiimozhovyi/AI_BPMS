@@ -90,6 +90,7 @@ public sealed class FakeBotApi : IAsyncDisposable
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 80L * 1024 * 1024);
         builder.Logging.ClearProviders();
         var app = builder.Build();
         var fake = new FakeBotApi(app, token);
@@ -161,6 +162,10 @@ public sealed class FakeBotApi : IAsyncDisposable
             "sendPhoto" => PhotoMessage(
                 json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
                 json?.TryGetProperty("caption", out var pc) == true ? pc.GetString() : form.GetValueOrDefault("caption")),
+            "sendVideo" or "sendAudio" or "sendVoice" => MediaMessage(
+                method,
+                json?.GetProperty("chat_id") ?? JsonSerializer.SerializeToElement(long.Parse(form["chat_id"], System.Globalization.CultureInfo.InvariantCulture)),
+                json?.TryGetProperty("caption", out var mc) == true ? mc.GetString() : form.GetValueOrDefault("caption")),
             "getUpdates" when !Updates.IsEmpty => Updates.ToArray(),
             "getUpdates" => await UpdatesAsync(json, ctx.RequestAborted),
             "getWebhookInfo" => new { url = WebhookUrl, has_custom_certificate = false, pending_update_count = 0 },
@@ -179,6 +184,16 @@ public sealed class FakeBotApi : IAsyncDisposable
 
         await ctx.Response.WriteAsJsonAsync(new { ok = true, result });
     }
+
+    /// <summary>Повідомлення з відео, аудіо чи голосовим: поле називається за методом (<c>sendVideo</c> → <c>video</c>).</summary>
+    private static Dictionary<string, object?> MediaMessage(string method, JsonElement chat, string? caption) => new()
+    {
+        ["message_id"] = 79,
+        ["date"] = 1761200000,
+        ["chat"] = new { id = chat.ValueKind == JsonValueKind.Number ? chat.GetInt64() : -1001234567890, type = "private" },
+        ["caption"] = caption,
+        [method["send".Length..].ToLowerInvariant()] = new { file_id = $"{method}-file-id", mime_type = "application/octet-stream", file_size = 1024, duration = 12 },
+    };
 
     private static object PhotoMessage(JsonElement chat, string? caption) => new
     {

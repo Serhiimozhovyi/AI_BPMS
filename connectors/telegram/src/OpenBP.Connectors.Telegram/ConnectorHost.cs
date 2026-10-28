@@ -36,6 +36,8 @@ public static class ConnectorHost
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(url);
+        // Файл у base64 до 50 МБ (TelegramTools.MaxUploadBytes) — це понад 66 МБ JSON; типові 30 МБ Kestrel обірвали б запит.
+        builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 80L * 1024 * 1024);
         AddConnector(builder.Services, builder.Configuration, environment);
         // Сесії для клієнтів з initialize: лише в сесії сервер може сам надіслати notifications/resources/updated (EventHub).
         builder.Services.AddMcpServer(Configure)
