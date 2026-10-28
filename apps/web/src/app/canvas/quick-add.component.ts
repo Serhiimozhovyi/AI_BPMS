@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
-import { PaletteItem, PaletteSection, filterPalette, itemHint, itemTitle } from './palette';
+import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, itemHint, itemTitle } from './palette';
 
 /**
  * Спливаюча палітра біля вузла чи ребра (F3-50): пошук з фокусом одразу, секції без згортання, клавіші
@@ -24,6 +24,15 @@ import { PaletteItem, PaletteSection, filterPalette, itemHint, itemTitle } from 
       [attr.aria-activedescendant]="activeKey() ? 'quick-' + activeIndex() : null"
       (input)="search($event)"
     />
+    @if (page(); as p) {
+      <div class="quick__page" data-testid="quick-add-page" [attr.data-connector]="p.connectorId">
+        <button type="button" class="quick__back" data-testid="quick-add-back" tabindex="-1" (click)="back()">
+          <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+          <span i18n="@@canvas.palette.back">Назад</span>
+        </button>
+        <span class="quick__page-title">{{ p.label }}</span>
+      </div>
+    }
     <div class="quick__list" role="listbox">
       @for (section of visible(); track section.id) {
         <div class="quick__heading">{{ section.label }}</div>
@@ -40,9 +49,9 @@ import { PaletteItem, PaletteSection, filterPalette, itemHint, itemTitle } from 
             [attr.data-item]="item.key"
             [title]="tip(item)"
             (mouseenter)="activeIndex.set(index)"
-            (click)="pick.emit(item)"
+            (click)="choose(item)"
           >
-            <span class="quick__label">{{ item.label }}</span>
+            <span class="quick__label">{{ page() ? (item.nodeName ?? item.label) : item.label }}</span>
             <span class="quick__type">{{ hint(item) }}</span>
           </button>
         }
@@ -122,6 +131,33 @@ import { PaletteItem, PaletteSection, filterPalette, itemHint, itemTitle } from 
       opacity: 0.6;
     }
 
+    .quick__page {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .quick__back {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--ac-kit);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .quick__back .material-symbols-outlined {
+      font-size: 16px;
+    }
+
+    .quick__page-title {
+      font-weight: 500;
+    }
+
     .quick__empty {
       margin: 8px 4px;
       opacity: 0.7;
@@ -144,7 +180,17 @@ export class QuickAddComponent implements AfterViewInit {
   protected readonly query = signal('');
   protected readonly activeIndex = signal(0);
 
-  protected readonly visible = computed(() => filterPalette(this.sections(), this.query()));
+  /** Відкрита сторінка конектора (F3-96); `null` — корінь меню. */
+  protected readonly page = computed(() => {
+    const key = this.pageKey();
+    return key ? (this.sections().flatMap((s) => s.items).find((i) => i.key === key && i.connector) ?? null) : null;
+  });
+  private readonly pageKey = signal<string | null>(null);
+
+  protected readonly visible = computed(() => {
+    const page = this.page();
+    return page ? filterPalette(connectorPageSections(page), this.query()) : filterPalette(this.sections(), this.query());
+  });
   protected readonly hint = itemHint;
   protected readonly tip = itemTitle;
 
@@ -163,6 +209,24 @@ export class QuickAddComponent implements AfterViewInit {
     return this.flat().findIndex((e) => e.section === section.id && e.item === item);
   }
 
+  /** Конектор відкриває свою сторінку, дія чи подія додається вузлом. */
+  protected choose(item: PaletteItem): void {
+    if (item.connector) {
+      this.pageKey.set(item.key);
+      this.query.set('');
+      this.activeIndex.set(0);
+      return;
+    }
+    this.pick.emit(item);
+  }
+
+  protected back(): void {
+    this.pageKey.set(null);
+    this.query.set('');
+    this.activeIndex.set(0);
+    this.searchEl().nativeElement.focus();
+  }
+
   protected search(event: Event): void {
     this.query.set((event.target as HTMLInputElement).value);
     this.activeIndex.set(0);
@@ -172,11 +236,13 @@ export class QuickAddComponent implements AfterViewInit {
     const count = this.flat().length;
     switch (event.key) {
       case 'Escape':
-        this.closed.emit();
+        // На сторінці конектора `Esc` повертає до списку, а не закриває меню.
+        if (this.page()) this.back();
+        else this.closed.emit();
         break;
       case 'Enter': {
         const entry = this.flat()[this.activeIndex()];
-        if (entry) this.pick.emit(entry.item);
+        if (entry) this.choose(entry.item);
         break;
       }
       case 'ArrowDown':

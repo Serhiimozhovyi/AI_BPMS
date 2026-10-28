@@ -290,15 +290,13 @@ test('конектор одним вузлом: додати Telegram, обра�
   await page.getByTestId('port-add').click();
   await page.getByTestId('quick-add-search').fill(connectorName);
   await expect(page.getByTestId('quick-add').locator('[data-item^="connector:"]')).toHaveCount(1);
+  // Конектор відкриває свою сторінку з діями (F3-96); дія додає вузол з підключенням.
   await page.keyboard.press('Enter');
+  await expect(page.getByTestId('quick-add-page')).toBeVisible();
+  await page.locator('[data-testid="quick-add"] [data-item$="/send_message"]').click();
   await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
 
-  // Дія за замовчуванням — перша в групах (get_updates); обираємо «Надіслати повідомлення» зі списку з пошуком.
   const action = page.getByTestId('action-select');
-  await expect(action).toHaveValue('Оновлення');
-  await action.click();
-  await action.fill('надіслати');
-  await page.locator('[data-testid="action-option"][data-tool="send_message"]').click();
   await expect(action).toHaveValue('Надіслати повідомлення');
   await expect(page.getByTestId('node-panel-name')).toHaveText('Надіслати повідомлення');
 

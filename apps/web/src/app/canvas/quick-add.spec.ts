@@ -220,4 +220,35 @@ describe('quick-add', () => {
       expect(parsePosition(definition.nodes.find((n) => n.id === nodeId)!.position)).toMatchObject({ x: 900, y: 600 });
     });
   });
+
+  describe('конектори в меню (F3-96)', () => {
+    const catalog = [
+      {
+        manifest: {
+          id: 'telegram',
+          name: 'Telegram',
+          description: '',
+          transport: 'stdio' as const,
+          actions: [{ name: 'send_photo', title: 'Надіслати фото' }],
+          triggers: [{ id: 'new_update', title: 'Нове повідомлення', node: { type: 'mcp.poll' as const, parameters: { toolName: 'get_updates' } } }],
+        },
+        source: 'builtin' as const,
+        installed: [],
+      },
+      { manifest: { id: 'crm', name: 'CRM', description: '', transport: 'stdio' as const, triggers: [] }, source: 'builtin' as const, installed: [] },
+    ];
+    const palette = buildPalette(SAMPLE_DESCRIPTORS, [], [], catalog);
+    const connectorsIn = (mode: 'step' | 'trigger') => quickAddSections(palette, mode).flatMap((s) => s.items).filter((i) => i.connector);
+
+    it('крок — конектори з діями (без подій), тригер — конектори з подіями (без дій)', () => {
+      expect(connectorsIn('step').map((i) => [i.key, i.events?.length, i.actions?.length])).toEqual([['connector:telegram', 0, 1]]);
+      expect(connectorsIn('trigger').map((i) => [i.key, i.events?.length, i.actions?.length])).toEqual([['connector:telegram', 1, 0]]);
+      expect(connectorsIn('trigger')[0].connector?.actionGroups).toEqual([]);
+    });
+
+    it('«Останні» знаходять дію й подію конектора', () => {
+      expect(quickAddSections(palette, 'step', ['telegram/send_photo'])[0].items.map((i) => i.key)).toEqual(['telegram/send_photo']);
+      expect(quickAddSections(palette, 'trigger', ['trigger:telegram/new_update'])[0].items.map((i) => i.key)).toEqual(['trigger:telegram/new_update']);
+    });
+  });
 });

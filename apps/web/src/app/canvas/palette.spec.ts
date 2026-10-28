@@ -1,5 +1,6 @@
 import { emptyWorkflowDefinition } from '../workflows/workflows-api.service';
-import { CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, TRIGGER_PRESETS_SECTION, PaletteServer, addNode, buildPalette, createNode, filterPalette, itemHint, itemTitle, nextNodePosition } from './palette';
+import { ConnectorCatalogEntry } from '../connectors/connectors-api.service';
+import { CONNECTORS_SECTION, CUSTOM_CONNECTORS_SECTION, FREQUENT_SECTION, MCP_TOOL, PaletteServer, addNode, buildPalette, connectorPageSections, createNode, filterPalette, itemHint, itemTitle, nextNodePosition } from './palette';
 import { SAMPLE_DESCRIPTORS } from './sample-workflows';
 
 const servers: PaletteServer[] = [
@@ -20,55 +21,111 @@ const servers: PaletteServer[] = [
 ];
 
 describe('palette', () => {
-  it('групує core.* за групами у фіксованому порядку; конектори — по одному елементу за назвою, без узагальненого mcp.tool (F3-55)', () => {
+  it('групує core.* за групами у фіксованому порядку; власні конектори — за назвою, дії й події — на сторінці конектора, без узагальненого mcp.tool', () => {
     const sections = buildPalette(SAMPLE_DESCRIPTORS, servers);
 
     expect(sections.map((s) => s.id)).toEqual(['group:trigger', 'group:logic', 'group:transform', 'group:ai', CONNECTORS_SECTION]);
-    expect(sections.flatMap((s) => s.items).filter((i) => i.type === MCP_TOOL && !i.serverId)).toEqual([]);
+    expect(sections.flatMap((s) => s.items).filter((i) => i.type === MCP_TOOL && !i.serverId && !i.connector)).toEqual([]);
     expect(sections[0].items.map((i) => i.type)).toContain('core.webhook');
     const connectors = sections[4].items;
-    // Конектор без tools не показується; дія за замовчуванням — перша в групах «Ресурс → Операція».
-    expect(connectors.map((i) => [i.key, i.label, i.toolName, i.nodeName])).toEqual([
-      ['connector:c-1c', '1С', 'create_order', 'create_order'],
-      ['connector:c-tg', 'Telegram', 'send_message', 'Надіслати повідомлення'],
+    // Конектор без tools не показується; клік відкриває сторінку, а не додає вузол.
+    expect(connectors.map((i) => [i.key, i.label, i.toolName])).toEqual([
+      ['connector:c-1c', '1С', undefined],
+      ['connector:c-tg', 'Telegram', undefined],
     ]);
     expect(connectors[0].actions?.map((a) => a.key)).toEqual(['c-1c/create_order', 'c-1c/find_customer']);
-    expect(itemHint(connectors[0])).toBe('2 дій');
-    expect(connectors[1].actions?.[0]).toMatchObject({ label: 'Telegram → Надіслати повідомлення', type: MCP_TOOL, serverId: 'c-tg', toolName: 'send_message', group: 'integration' });
+    expect(itemHint(connectors[0])).toBe('підключено · 2');
+    expect(connectors[1].actions?.[0]).toMatchObject({ label: 'Telegram → Надіслати повідомлення', type: MCP_TOOL, serverId: 'c-tg', toolName: 'send_message', group: 'integration', connectorId: 'c-tg' });
   });
 
-  it('пресети тригерів встановлених конекторів — картки в секції «Події конекторів»; вставка підставляє serverId і параметри (F6-21)', () => {
-    const withPresets: PaletteServer[] = [
+  describe('каталог (F3-96)', () => {
+    const catalog: ConnectorCatalogEntry[] = [
       {
-        ...servers[0],
-        triggers: [
-          {
-            id: 'new_update',
-            title: 'Нове повідомлення Telegram',
-            description: 'Вхідні повідомлення бота',
-            node: { type: 'mcp.poll', parameters: { toolName: 'get_updates', arguments: {}, itemsPath: 'result', keyField: 'update_id', cron: '*/1 * * * *' } },
-          },
-          { id: 'unknown', title: 'Невідомий тип', node: { type: 'mcp.subscribe', parameters: { resourceUri: 'x://y', keyField: 'id' } } },
-        ],
+        manifest: {
+          id: 'telegram',
+          name: 'Telegram',
+          description: 'Повідомлення бота.',
+          icon: '✈️',
+          transport: 'stdio',
+          actions: [
+            { name: 'send_message', title: 'Надіслати повідомлення' },
+            { name: 'send_photo', title: 'Надіслати фото' },
+          ],
+          triggers: [
+            { id: 'new_update', title: 'Нове повідомлення Telegram', description: 'Вхідні повідомлення бота', node: { type: 'mcp.poll', parameters: { toolName: 'get_updates', arguments: {}, itemsPath: 'result', keyField: 'update_id' } } },
+            { id: 'unknown', title: 'Невідомий тип', node: { type: 'mcp.subscribe', parameters: { resourceUri: 'x://y' } } },
+          ],
+        },
+        source: 'builtin',
+        installed: [],
       },
-      servers[1],
+      { manifest: { id: 'crm', name: 'CRM', description: 'Угоди.', transport: 'stdio', triggers: [] }, source: 'builtin', installed: [] },
+    ];
+    const installed: PaletteServer[] = [
+      { id: 'bot1', name: 'Бот продажів', catalogId: 'telegram', tools: [{ name: 'send_message', title: 'Надіслати повідомлення', inputSchema: {} }, { name: 'get_updates', inputSchema: {} }] },
+      { id: 'own', name: 'Свій сервер', catalogId: null, tools: [{ name: 'ping', inputSchema: {} }] },
     ];
 
-    const sections = buildPalette(SAMPLE_DESCRIPTORS, withPresets);
+    it('записи каталогу (підключені й ні), потім «Власні конектори»', () => {
+      const sections = buildPalette(SAMPLE_DESCRIPTORS, installed, [], catalog);
+      expect(sections.map((s) => s.id)).toEqual(['group:trigger', 'group:logic', 'group:transform', 'group:ai', CONNECTORS_SECTION, CUSTOM_CONNECTORS_SECTION]);
+      const entries = sections.find((s) => s.id === CONNECTORS_SECTION)!.items;
+      expect(entries.map((i) => [i.label, i.connector?.connected, itemHint(i)])).toEqual([
+        ['CRM', false, 'не підключено'],
+        ['Telegram', true, 'підключено · 3'],
+      ]);
+      expect(entries[1].connector).toMatchObject({ icon: '✈️', description: 'Повідомлення бота.' });
+      expect(sections.find((s) => s.id === CUSTOM_CONNECTORS_SECTION)!.items.map((i) => i.label)).toEqual(['Свій сервер']);
+    });
 
-    // mcp.subscribe немає серед дескрипторів зразка — картка без дескриптора не показується.
-    const presets = sections.find((s) => s.id === TRIGGER_PRESETS_SECTION)!;
-    expect(presets.items.map((i) => [i.key, i.label, i.type, i.group, i.serverId])).toEqual([
-      ['trigger:c-tg/new_update', 'Нове повідомлення Telegram', 'mcp.poll', 'trigger', 'c-tg'],
-    ]);
-    expect(buildPalette(SAMPLE_DESCRIPTORS, servers).some((s) => s.id === TRIGGER_PRESETS_SECTION)).toBe(false);
+    it('сторінка конектора: події (пресети; невідомий тип пропущено) і дії з кешу tools підключення', () => {
+      const telegram = buildPalette(SAMPLE_DESCRIPTORS, installed, [], catalog).flatMap((s) => s.items).find((i) => i.key === 'connector:telegram')!;
+      const page = connectorPageSections(telegram);
+      expect(page[0]).toMatchObject({ label: 'Події' });
+      expect(page[0].items.map((i) => i.key)).toEqual(['trigger:telegram/new_update']);
+      // Дії згруповані, як у полі «Дія» (F3-55): кілька груп — кожна зі своєю назвою.
+      expect(page.slice(1).flatMap((s) => s.items.map((i) => i.key)).sort()).toEqual(['telegram/get_updates', 'telegram/send_message']);
+      // Єдине підключення підставляється одразу.
+      expect(page[0].items[0]).toMatchObject({ label: 'Telegram → Нове повідомлення Telegram', nodeName: 'Нове повідомлення Telegram', group: 'trigger', type: 'mcp.poll', serverId: 'bot1', connectorId: 'telegram' });
+      const node = createNode(page[0].items[0], emptyWorkflowDefinition('t'));
+      expect(node.parameters).toEqual({ serverId: 'bot1', toolName: 'get_updates', arguments: {}, itemsPath: 'result', keyField: 'update_id' });
+    });
 
-    const node = createNode(presets.items[0], emptyWorkflowDefinition('t'));
-    expect(node.type).toBe('mcp.poll');
-    expect(node.name).toBe('Нове повідомлення Telegram');
-    expect(node.parameters).toEqual({ serverId: 'c-tg', toolName: 'get_updates', arguments: {}, itemsPath: 'result', keyField: 'update_id', cron: '*/1 * * * *' });
-    // Пошук знаходить картку за назвою.
-    expect(filterPalette(sections, 'telegram').flatMap((s) => s.items).some((i) => i.key === 'trigger:c-tg/new_update')).toBe(true);
+    it('непідключений конектор: дії з маніфесту, підключення (serverId) обирає редактор', () => {
+      const telegram = buildPalette(SAMPLE_DESCRIPTORS, [], [], catalog).flatMap((s) => s.items).find((i) => i.key === 'connector:telegram')!;
+      expect(telegram.connector?.connected).toBe(false);
+      const actions = connectorPageSections(telegram).filter((s) => s.id !== 'events').flatMap((s) => s.items);
+      expect(actions.map((a) => [a.key, a.nodeName, a.serverId, a.connectorId])).toEqual([
+        ['telegram/send_message', 'Надіслати повідомлення', undefined, 'telegram'],
+        ['telegram/send_photo', 'Надіслати фото', undefined, 'telegram'],
+      ]);
+    });
+
+    it('кілька підключень одного запису: serverId не підставляється, конектор — підключено', () => {
+      const two: PaletteServer[] = [installed[0], { ...installed[0], id: 'bot2', name: 'Бот підтримки' }];
+      const telegram = buildPalette(SAMPLE_DESCRIPTORS, two, [], catalog).flatMap((s) => s.items).find((i) => i.key === 'connector:telegram')!;
+      expect(telegram.connector?.connected).toBe(true);
+      expect(telegram.actions?.every((a) => a.serverId === undefined)).toBe(true);
+    });
+
+    it('пошук у корені знаходить дії й події, зокрема непідключеного конектора', () => {
+      const sections = buildPalette(SAMPLE_DESCRIPTORS, [], [], catalog);
+      const found = (q: string) => filterPalette(sections, q).flatMap((s) => s.items.map((i) => [i.key, i.label]));
+      expect(found('надіслати фото')).toEqual([['telegram/send_photo', 'Telegram → Надіслати фото']]);
+      expect(found('нове повідомлення')).toEqual([['trigger:telegram/new_update', 'Telegram → Нове повідомлення Telegram']]);
+      // Збіг із назвою — сам конектор.
+      expect(found('crm')).toEqual([['connector:crm', 'CRM']]);
+    });
+
+    it('пошук на сторінці конектора — лише серед його дій', () => {
+      const telegram = buildPalette(SAMPLE_DESCRIPTORS, [], [], catalog).flatMap((s) => s.items).find((i) => i.key === 'connector:telegram')!;
+      expect(filterPalette(connectorPageSections(telegram), 'фото').flatMap((s) => s.items.map((i) => i.key))).toEqual(['telegram/send_photo']);
+    });
+
+    it('«Часті дії» знаходять дії конектора з каталогу за ключем запису', () => {
+      const frequent = buildPalette(SAMPLE_DESCRIPTORS, installed, ['telegram/send_message'], catalog).find((s) => s.id === FREQUENT_SECTION)!;
+      expect(frequent.items.map((i) => i.key)).toEqual(['telegram/send_message']);
+    });
   });
 
   it('«Часті дії» — до 5 дій з «Останніх» у їхньому порядку; невідомі ключі пропускаються', () => {
@@ -124,7 +181,7 @@ describe('palette', () => {
   it('новий вузол з конектора чи дії — mcp.tool з serverId, toolName, порожніми arguments і назвою дії', () => {
     const connectors = buildPalette(SAMPLE_DESCRIPTORS, servers).find((s) => s.id === CONNECTORS_SECTION)!.items;
 
-    const node = createNode(connectors[1], emptyWorkflowDefinition('С'));
+    const node = createNode(connectors[1].actions![0], emptyWorkflowDefinition('С'));
     expect(node).toMatchObject({
       type: MCP_TOOL,
       typeVersion: 1,

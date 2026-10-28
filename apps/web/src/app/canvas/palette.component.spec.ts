@@ -24,17 +24,28 @@ describe('PaletteComponent', () => {
     return fixture;
   }
 
-  it('показує секції груп і конекторів; клік по конектору віддає його з дією за замовчуванням', () => {
+  it('показує секції груп і конекторів; клік по конектору відкриває його сторінку, клік по дії віддає її', async () => {
     const fixture = create();
     const host = fixture.nativeElement as HTMLElement;
     const picked: PaletteItem[] = [];
     fixture.componentInstance.pick.subscribe((i) => picked.push(i));
 
     expect(Array.from(host.querySelectorAll('[data-section]')).map((s) => s.getAttribute('data-section'))).toContain('connectors');
-    expect(host.querySelector('[data-item="connector:c1"]')?.textContent).toContain('1 дій');
+    expect(host.querySelector('[data-item="connector:c1"]')?.textContent).toContain('підключено · 1');
     (host.querySelector('[data-item="connector:c1"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
 
+    // Сторінка конектора: «Назад», назва, дії; вузол ще не додано.
+    expect(picked).toEqual([]);
+    expect(host.querySelector('[data-testid="palette-page"]')?.textContent).toContain('1С');
+    expect(host.querySelector('[data-item="core.if"]')).toBeNull();
+    (host.querySelector('[data-item="c1/create_order"]') as HTMLButtonElement).click();
     expect(picked.map((i) => [i.type, i.serverId, i.toolName])).toEqual([['mcp.tool', 'c1', 'create_order']]);
+
+    (host.querySelector('[data-testid="palette-back"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="palette-page"]')).toBeNull();
+    expect(host.querySelector('[data-item="core.if"]')).not.toBeNull();
   });
 
   it('пошук фільтрує елементи; без збігів — повідомлення', async () => {
