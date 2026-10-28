@@ -52,9 +52,12 @@
       "enum": [
         "get",
         "list",
+        "count",
         "insert",
+        "insertIf",
         "upsert",
         "update",
+        "increment",
         "delete"
       ]
     },
@@ -63,18 +66,18 @@
         "string",
         "number"
       ],
-      "description": "Ключ рядка для get, update, delete"
+      "description": "Ключ рядка для get, update, increment, delete"
     },
     "where": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/filter"
       },
-      "description": "Умови для list (усі разом)"
+      "description": "Умови для list, count і insertIf (усі разом)"
     },
     "values": {
       "type": "object",
-      "description": "Значення колонок для insert, upsert, update"
+      "description": "Значення колонок для insert, insertIf, upsert, update"
     },
     "limit": {
       "type": "integer",
@@ -82,6 +85,21 @@
       "maximum": 1000,
       "default": 100,
       "description": "Найбільше рядків для list"
+    },
+    "maxCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "insertIf: вставити, лише якщо рядків за where менше за це число (напр. місткість події)"
+    },
+    "column": {
+      "type": "string",
+      "minLength": 1,
+      "description": "increment: числова колонка"
+    },
+    "by": {
+      "type": "number",
+      "default": 1,
+      "description": "increment: на скільки змінити (може бути від'ємним)"
     }
   }
 }

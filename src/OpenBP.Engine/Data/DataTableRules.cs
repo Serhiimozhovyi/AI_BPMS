@@ -74,7 +74,22 @@ public static partial class DataTableRules
 
         /// <summary>Некоректна умова відбору.</summary>
         public const string FilterInvalid = "DATA_TABLE_FILTER_INVALID";
+
+        /// <summary>Обмеження таблиці некоректні (F8-02).</summary>
+        public const string ConstraintsInvalid = "DATA_TABLE_CONSTRAINTS_INVALID";
+
+        /// <summary>Не заповнено обов'язкову колонку (F8-02).</summary>
+        public const string Required = "DATA_TABLE_REQUIRED";
+
+        /// <summary>Порушено правило унікальності (F8-02).</summary>
+        public const string Unique = "DATA_TABLE_UNIQUE";
     }
+
+    /// <summary>Найбільше значень у колонці <see cref="DataColumnType.Enum"/>.</summary>
+    public const int MaxEnumValues = 100;
+
+    /// <summary>Найбільше правил унікальності в таблиці.</summary>
+    public const int MaxUniqueConstraints = 20;
 
     /// <summary>Чи може рядок бути назвою колонки.</summary>
     /// <param name="name">Назва.</param>
@@ -113,6 +128,13 @@ public static partial class DataTableRules
             {
                 throw Invalid($"Ключова колонка «{column.Name}» має бути рядком або числом.");
             }
+
+            if (column.Key && column.Sensitive)
+            {
+                throw Invalid($"Ключова колонка «{column.Name}» не може бути чутливою: ключ видно всім, хто бачить рядок.");
+            }
+
+            ValidateTypeOptions(column);
         }
 
         if (columns.Count(c => c.Key) > 1)
@@ -122,6 +144,223 @@ public static partial class DataTableRules
 
         static DataTableException Invalid(string message) => new(Codes.ColumnsInvalid, message);
     }
+
+    /// <summary>
+    /// Перевіряє обмеження таблиці з колонками <paramref name="columns"/> і повертає їх з назвами колонок як у таблиці
+    /// та нормалізованими умовами.
+    /// </summary>
+    /// <param name="columns">Колонки (уже перевірені <see cref="ValidateColumns"/>).</param>
+    /// <param name="constraints">Обмеження; <c>null</c> — без обмежень.</param>
+    /// <exception cref="DataTableException">Невідома колонка, json-колонка в унікальності, некоректна умова.</exception>
+    public static DataTableConstraints ValidateConstraints(IReadOnlyList<DataColumn> columns, DataTableConstraints? constraints)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        if (constraints is null || constraints.IsEmpty)
+        {
+            return DataTableConstraints.None;
+        }
+
+        var table = new DataTableInfo(Guid.Empty, "", columns);
+        var required = new List<string>();
+        foreach (var name in constraints.Required ?? [])
+        {
+            var column = ConstraintColumn(table, name, "required");
+            if (!required.Contains(column.Name))
+            {
+                required.Add(column.Name);
+            }
+        }
+
+        var unique = constraints.Unique ?? [];
+        if (unique.Count > MaxUniqueConstraints)
+        {
+            throw new DataTableException(Codes.ConstraintsInvalid, $"Правил унікальності — не більше {MaxUniqueConstraints}.");
+        }
+
+        var rules = new List<DataUniqueConstraint>();
+        foreach (var rule in unique)
+        {
+            if (rule?.Columns is not { Count: > 0 })
+            {
+                throw new DataTableException(Codes.ConstraintsInvalid, "Правило унікальності без колонок: вкажіть хоча б одну.");
+            }
+
+            var names = new List<string>();
+            foreach (var name in rule.Columns)
+            {
+                var column = ConstraintColumn(table, name, "unique");
+                if (column.Type == DataColumnType.Json)
+                {
+                    throw new DataTableException(Codes.ConstraintsInvalid, $"Колонка «{column.Name}» типу json не може бути в правилі унікальності.");
+                }
+
+                if (!names.Contains(column.Name))
+                {
+                    names.Add(column.Name);
+                }
+            }
+
+            IReadOnlyList<DataFilter>? where;
+            try
+            {
+                where = rule.Where is { Count: > 0 } ? NormalizeFilters(table, rule.Where) : null;
+            }
+            catch (DataTableException ex)
+            {
+                throw new DataTableException(Codes.ConstraintsInvalid, $"Умова правила унікальності ({string.Join(", ", names)}): {ex.Message}");
+            }
+
+            rules.Add(new DataUniqueConstraint(names, where));
+        }
+
+        return new DataTableConstraints { Required = required, Unique = rules };
+    }
+
+    /// <summary>Перевіряє, що обов'язкові колонки рядка заповнені.</summary>
+    /// <param name="table">Таблиця.</param>
+    /// <param name="data">Повні значення рядка (після злиття зі збереженими).</param>
+    /// <exception cref="DataTableException"><see cref="Codes.Required"/>.</exception>
+    public static void CheckRequired(DataTableInfo table, JsonObject data)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(data);
+        var missing = table.Constraints.Required.Where(name => IsEmpty(data[name])).ToList();
+        if (missing.Count > 0)
+        {
+            throw new DataTableException(Codes.Required, $"У таблиці «{table.Name}» обов'язкові колонки без значення: {string.Join(", ", missing)}.");
+        }
+    }
+
+    /// <summary>
+    /// Умови пошуку рядків, з якими <paramref name="data"/> порушила б правило <paramref name="unique"/>: умова правила
+    /// плюс рівність значень його колонок. <c>null</c> — правило до рядка не застосовується (рядок не задовольняє умову
+    /// або колонка правила порожня).
+    /// </summary>
+    /// <param name="table">Таблиця.</param>
+    /// <param name="unique">Правило.</param>
+    /// <param name="data">Повні значення рядка.</param>
+    public static IReadOnlyList<DataFilter>? UniqueFilters(DataTableInfo table, DataUniqueConstraint unique, JsonObject data)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(unique);
+        ArgumentNullException.ThrowIfNull(data);
+        var where = NormalizeFilters(table, unique.Where ?? []);
+        if (!Matches(table, data, where))
+        {
+            return null;
+        }
+
+        var filters = new List<DataFilter>(where);
+        foreach (var name in unique.Columns)
+        {
+            var column = Column(table, name);
+            var value = data[column.Name];
+            if (IsEmpty(value))
+            {
+                return null;
+            }
+
+            filters.Add(new DataFilter(column.Name, DataFilterOperators.Eq, value!.DeepClone()));
+        }
+
+        return filters;
+    }
+
+    /// <summary>Помилка порушення правила унікальності.</summary>
+    public static DataTableException UniqueViolation(DataTableInfo table, DataUniqueConstraint unique)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(unique);
+        var condition = unique.Where is { Count: > 0 } ? " серед рядків за умовою правила" : "";
+        return new(Codes.Unique, $"У таблиці «{table.Name}» уже є рядок з такими значеннями {string.Join(", ", unique.Columns)}{condition}.");
+    }
+
+    /// <summary>Нове значення числової колонки для <see cref="IDataTableStore.IncrementAsync"/>: поточне (порожнє — 0) плюс <paramref name="by"/>.</summary>
+    /// <param name="table">Таблиця.</param>
+    /// <param name="data">Поточні значення рядка.</param>
+    /// <param name="column">Колонка.</param>
+    /// <param name="by">Приріст.</param>
+    /// <returns>Назва колонки, як у таблиці, і нове значення.</returns>
+    /// <exception cref="DataTableException">Колонки немає, вона не числова або значення в ній не число.</exception>
+    public static (string Column, JsonNode Value) Increment(DataTableInfo table, JsonObject data, string column, decimal by)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(data);
+        var target = Column(table, column);
+        if (target.Type != DataColumnType.Number)
+        {
+            throw new DataTableException(Codes.TypeMismatch, $"increment працює лише з числовими колонками, а «{target.Name}» — {TypeName(target.Type)}.");
+        }
+
+        var current = data[target.Name];
+        decimal value = 0;
+        if (current is not null && !TryNumber(current, out value))
+        {
+            throw new DataTableException(Codes.TypeMismatch, $"У колонці «{target.Name}» не число: {current.ToJsonString()}.");
+        }
+
+        return (target.Name, JsonValue.Create(value + by));
+    }
+
+    /// <summary>Копія значень без чутливих колонок (їхні значення — <c>null</c>).</summary>
+    /// <param name="table">Таблиця.</param>
+    /// <param name="data">Значення рядка.</param>
+    public static JsonObject MaskSensitive(DataTableInfo table, JsonObject data)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(data);
+        var copy = (JsonObject)data.DeepClone();
+        foreach (var column in table.Columns.Where(c => c.Sensitive))
+        {
+            if (copy.ContainsKey(column.Name))
+            {
+                copy[column.Name] = null;
+            }
+        }
+
+        return copy;
+    }
+
+    private static void ValidateTypeOptions(DataColumn column)
+    {
+        if (column.Type == DataColumnType.Enum)
+        {
+            var values = column.Values ?? [];
+            if (values.Count is 0 or > MaxEnumValues || values.Any(string.IsNullOrWhiteSpace))
+            {
+                throw new DataTableException(Codes.ColumnsInvalid, $"Колонка «{column.Name}» типу enum: потрібно від 1 до {MaxEnumValues} непорожніх значень.");
+            }
+
+            if (values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
+            {
+                throw new DataTableException(Codes.ColumnsInvalid, $"Колонка «{column.Name}» типу enum: значення повторюються.");
+            }
+        }
+        else if (column.Values is { Count: > 0 })
+        {
+            throw new DataTableException(Codes.ColumnsInvalid, $"Перелік значень (values) є лише в колонок типу enum, а «{column.Name}» — {TypeName(column.Type)}.");
+        }
+
+        if (column.Type == DataColumnType.Ref)
+        {
+            if (string.IsNullOrWhiteSpace(column.Table))
+            {
+                throw new DataTableException(Codes.ColumnsInvalid, $"Колонка «{column.Name}» типу ref: вкажіть таблицю (table), на рядки якої вона посилається.");
+            }
+        }
+        else if (!string.IsNullOrEmpty(column.Table))
+        {
+            throw new DataTableException(Codes.ColumnsInvalid, $"Таблиця посилання (table) є лише в колонок типу ref, а «{column.Name}» — {TypeName(column.Type)}.");
+        }
+    }
+
+    private static DataColumn ConstraintColumn(DataTableInfo table, string? name, string rule) =>
+        table.Columns.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
+        ?? throw new DataTableException(Codes.ConstraintsInvalid, $"Обмеження {rule}: у таблиці немає колонки «{name}».");
+
+    /// <summary>Назва типу колонки, як у JSON.</summary>
+    /// <param name="type">Тип.</param>
+    public static string TypeName(DataColumnType type) => type.ToString().ToLowerInvariant();
 
     /// <summary>
     /// Значення для запису: лише відомі колонки, приведені до типу (<c>null</c> дозволено, крім ключа). Для
@@ -347,7 +586,7 @@ public static partial class DataTableRules
                 }
 
                 break;
-            case DataColumnType.Date:
+            case DataColumnType.Date or DataColumnType.Datetime:
                 if (value is JsonValue dv && dv.TryGetValue<string>(out var text)
                     && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date))
                 {
@@ -355,11 +594,35 @@ public static partial class DataTableRules
                 }
 
                 break;
+            case DataColumnType.Enum:
+                if (value is JsonValue ev && ev.TryGetValue<string>(out var option)
+                    && column.Values?.FirstOrDefault(v => string.Equals(v, option.Trim(), StringComparison.OrdinalIgnoreCase)) is { } canonical)
+                {
+                    return JsonValue.Create(canonical);
+                }
+
+                throw new DataTableException(
+                    Codes.TypeMismatch,
+                    $"Колонка «{column.Name}» приймає лише {string.Join(", ", column.Values ?? [])}, а значення — {value.ToJsonString()}.");
+            case DataColumnType.Ref:
+                if (KeyText(value) is { } reference)
+                {
+                    return JsonValue.Create(reference);
+                }
+
+                break;
+            case DataColumnType.User:
+                if (value is JsonValue uv && uv.TryGetValue<string>(out var user) && Guid.TryParse(user.Trim(), out var userId))
+                {
+                    return JsonValue.Create(userId.ToString());
+                }
+
+                break;
         }
 
         throw new DataTableException(
             Codes.TypeMismatch,
-            $"Колонка «{column.Name}» має тип {column.Type.ToString().ToLowerInvariant()}, а значення — {value.ToJsonString()}.");
+            $"Колонка «{column.Name}» має тип {TypeName(column.Type)}, а значення — {value.ToJsonString()}.");
     }
 
     /// <summary>Порівняння значень колонки; <see cref="int.MinValue"/> — непорівнювані (немає значення).</summary>

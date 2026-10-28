@@ -7,13 +7,16 @@ namespace OpenBP.Application.Workflows;
 
 /// <summary>
 /// Перевірка, що сценарій проєкту посилається лише на спільні конектори й credentials або на ресурси свого проєкту
-/// (F6-14). Посилання — <c>serverId</c> і <c>credentialId</c> будь-де в параметрах вузлів (як в експорті F6-09);
-/// вирази й невідомі id тут не перевіряються — це справа решти валідатора.
+/// (F6-14). Посилання — <c>serverId</c> і <c>credentialId</c> будь-де в параметрах вузлів (як в експорті F6-09) та id
+/// таблиці в параметрі <c>table</c> вузла <c>core.dataTable</c> (F8-02); вирази, назви й невідомі id тут не
+/// перевіряються — це справа решти валідатора (таблицю за назвою з іншого проєкту вузол просто не знайде).
 /// </summary>
 internal static class ProjectReferences
 {
     private const string ServerParameter = "serverId";
     private const string CredentialParameter = "credentialId";
+    private const string TableParameter = "table";
+    private const string DataTableNode = "core.dataTable";
 
     /// <summary>Помилки <see cref="WorkflowValidationCodes.ProjectReferenceForbidden"/> для документа сценарію проєкту <paramref name="projectId"/>.</summary>
     /// <param name="db">Контекст БД.</param>
@@ -39,14 +42,29 @@ internal static class ProjectReferences
             ? []
             : await db.Credentials.AsNoTracking().Where(c => credentialIds.Contains(c.Id) && c.ProjectId != null && c.ProjectId != projectId)
                 .Select(c => new { c.Id, c.Name }).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var tableIds = references.Where(r => r.Name == TableParameter).Select(r => r.Id).Distinct().ToList();
+        var tables = tableIds.Count == 0
+            ? []
+            : await db.DataTables.AsNoTracking().Where(t => tableIds.Contains(t.Id) && t.ProjectId != null && t.ProjectId != projectId)
+                .Select(t => new { t.Id, t.Name }).ToDictionaryAsync(t => t.Id, t => t.Name, ct);
 
         var errors = new List<WorkflowValidationError>();
         foreach (var reference in references)
         {
-            var foreign = reference.Name == ServerParameter ? servers : credentials;
+            var foreign = reference.Name switch
+            {
+                ServerParameter => servers,
+                CredentialParameter => credentials,
+                _ => tables,
+            };
             if (foreign.TryGetValue(reference.Id, out var name))
             {
-                var what = reference.Name == ServerParameter ? "Конектор" : "Обліковий запис";
+                var what = reference.Name switch
+                {
+                    ServerParameter => "Конектор",
+                    CredentialParameter => "Обліковий запис",
+                    _ => "Таблиця",
+                };
                 errors.Add(new WorkflowValidationError(
                     WorkflowValidationCodes.ProjectReferenceForbidden,
                     $"{what} «{name}» належить іншому проєкту; сценарій може використовувати лише спільні ресурси і ресурси свого проєкту.",
@@ -71,6 +89,11 @@ internal static class ProjectReferences
             if (nodes[i] is JsonObject node && node["id"]?.GetValue<string>() is { } nodeId && node["parameters"] is { } parameters)
             {
                 Walk(parameters, $"/nodes/{i}/parameters", nodeId, result);
+                if (node["type"] is JsonValue type && type.TryGetValue<string>(out var typeName) && typeName == DataTableNode
+                    && parameters[TableParameter] is JsonValue table && table.TryGetValue<string>(out var tableText) && Guid.TryParse(tableText, out var tableId))
+                {
+                    result.Add(new Reference(TableParameter, tableId, nodeId, $"/nodes/{i}/parameters/{TableParameter}"));
+                }
             }
         }
 

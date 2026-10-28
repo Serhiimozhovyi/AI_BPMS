@@ -87,6 +87,10 @@ public sealed class DataTableEntity
     /// <summary>Назва у верхньому регістрі (інваріантна культура) — унікальність без урахування регістру.</summary>
     public string NormalizedName { get; set; } = "";
     public string Columns { get; set; } = "[]";
+    /// <summary>Обмеження цілісності (F8-02): <c>{ required: [..], unique: [{ columns, where? }] }</c>.</summary>
+    public string Constraints { get; set; } = "{}";
+    /// <summary>Проєкт (F8-02); <c>null</c> — спільна таблиця.</summary>
+    public Guid? ProjectId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

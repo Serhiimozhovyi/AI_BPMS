@@ -1297,14 +1297,15 @@
 Порядок: F8-01 → F8-02 → F8-03 → F8-04 → F8-05 → F8-06 → F8-08 → F8-09 → F8-10 → F8-11 послідовно в одному треді; F8-07 паралельно будь-коли; F8-12 — після перемикання, за командою власника.
 
 ### F8-01 · ADR-005 і контракт проєктів: `docs/projects.md`, задачі фази 8
-- model: `fable` · status: `review` · depends: —
+- model: `fable` · status: `done` · depends: —
 - Що: ADR-005 «Проєкт як робочий простір» (прийнято); `docs/projects.md` — сторінка проєкту, таблиці проєкту (типи, обмеження, операції v2), сторінки застосунку, ролі застосунку, шаблон проєкту, відповідність ТЗ бота; `architecture.md` §6 і §10.6, `roadmap.md` рядок 8; у `docs/psy-support.md` примітка про рішення; задачі F8-02…F8-12.
 - DoD: документи українською, посилання перевірені; власник погодив концепцію (тред «Додати проєкти в OpenBP», 2026-10-28).
 
 ### F8-02 · Таблиці в проєкті: `project_id`, типи, обмеження, `core.dataTable` v2
-- model: `opus` · status: `ready` · depends: F8-01
+- model: `opus` · status: `review` · depends: F8-01
 - Що: `data_tables.project_id` (null — спільна) + `constraints` jsonb, міграція (наявні таблиці — спільні), унікальність назви в межах проєкту; типи колонок `datetime`, `enum { values }`, `ref { table }`, `user` і позначка `sensitive`; обмеження `required`, `unique [{ columns, where? }]` при `insert`/`upsert`/`update`/імпорті CSV; `core.dataTable` typeVersion 2: `insertIf { values, where, maxCount }` → `{ inserted, reason?, row? }`, `increment`, `count`, `insert`/`upsert` з `unique` → `{ inserted: false, reason: "unique" }`; запис серіалізується `SELECT … FOR UPDATE` рядка `data_tables` в одній транзакції (`PostgresDataTableStore`); пошук таблиці за назвою: проєкт сценарію → спільні; валідатор: таблиця іншого проєкту → `PROJECT_REFERENCE_FORBIDDEN`; права проєкту в `IDataTableService` (viewer читає, editor пише; чутливі колонки — `null` для viewer без ролі застосунку, читання через REST/MCP → audit `table.sensitive_read`); REST `/tables` з `projectId`, MCP `list_tables`/`query_table` з `projectId`, `openbp://projects/{id}/tables`; `/tables` в UI: вибір проєкту, редактор обмежень і типів (AC-Kit); `describe_nodes` віддає v2; CLI in-memory store підтримує v2.
 - DoD: тести (Testcontainers): `unique where` відхиляє другий активний запис; 20 паралельних `insertIf` з `maxCount: 8` → рівно 8 рядків; `ref` на чужу таблицю → 422; editor проєкту A не бачить таблиць B (REST і MCP); чутлива колонка `null` для viewer і в resource; v1-сценарії зелені; Vitest сторінки; `docs/workflow-format.md`, `architecture.md` §6, `docs/mcp-server.md`, `docs/projects.md` §2 оновлено.
+- Зроблено: як у «Що», з уточненнями (ADR-005, `docs/projects.md` §2): нові операції додано до `core.dataTable` v1 без нової версії вузла, відповідь — `_inserted`/`_reason`; серіалізація — advisory lock таблиці; дія аудиту — `dataTable.sensitiveRead`; `ref` перевіряється при збереженні структури, а не по рядках; `user` — id без розгортання в email.
 
 ### F8-03 · Список проєктів і сторінка проєкту з вкладками
 - model: `sonnet` · status: `ready` · depends: F8-02

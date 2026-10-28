@@ -15,13 +15,24 @@ public sealed class InMemoryDataTableStore(DataTableLimits? limits = null, TimeP
     private readonly DataTableLimits _limits = limits ?? new DataTableLimits();
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
+    /// <summary>
+    /// Проєкт сценаріїв, що виконуються з цим сховищем: <see cref="FindTableAsync(string, Guid, CancellationToken)"/>
+    /// бачить таблиці цього проєкту і спільні. <c>null</c> — сценарій без проєкту (лише спільні таблиці).
+    /// </summary>
+    public Guid? ProjectId { get; set; }
+
     /// <summary>Додає таблицю.</summary>
     /// <param name="name">Назва.</param>
     /// <param name="columns">Колонки.</param>
-    public DataTableInfo AddTable(string name, params DataColumn[] columns)
+    public DataTableInfo AddTable(string name, params DataColumn[] columns) => AddTable(new DataTableInfo(Guid.NewGuid(), name, columns));
+
+    /// <summary>Додає таблицю з обмеженнями чи проєктом (F8-02); колонки й обмеження перевіряються.</summary>
+    /// <param name="table">Таблиця.</param>
+    public DataTableInfo AddTable(DataTableInfo table)
     {
-        DataTableRules.ValidateColumns(columns);
-        var table = new DataTableInfo(Guid.NewGuid(), name, columns);
+        ArgumentNullException.ThrowIfNull(table);
+        DataTableRules.ValidateColumns(table.Columns);
+        table = table with { Constraints = DataTableRules.ValidateConstraints(table.Columns, table.Constraints) };
         lock (_gate)
         {
             _tables.Add(table);
@@ -52,6 +63,21 @@ public sealed class InMemoryDataTableStore(DataTableLimits? limits = null, TimeP
     }
 
     /// <inheritdoc />
+    public Task<DataTableInfo?> FindTableAsync(string reference, Guid executionId, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var visible = _tables.Where(t => t.ProjectId is null || t.ProjectId == ProjectId).ToList();
+            var found = Guid.TryParse(reference, out var id) ? visible.FirstOrDefault(t => t.Id == id) : null;
+            found ??= visible
+                .Where(t => string.Equals(t.Name, reference.Trim(), StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => t.ProjectId is null ? 1 : 0)
+                .FirstOrDefault();
+            return Task.FromResult(found);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<DataRow?> GetRowAsync(DataTableInfo table, string key, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(table);
@@ -77,29 +103,48 @@ public sealed class InMemoryDataTableStore(DataTableLimits? limits = null, TimeP
     }
 
     /// <inheritdoc />
+    public Task<int> CountRowsAsync(DataTableInfo table, IReadOnlyList<DataFilter> where, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        lock (_gate)
+        {
+            return Task.FromResult(_rows[table.Id].Count(r => DataTableRules.Matches(table, r.Data, filters)));
+        }
+    }
+
+    /// <inheritdoc />
     public Task<DataRow> InsertRowAsync(DataTableInfo table, JsonObject values, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(table);
-        var data = DataTableRules.Normalize(table, values, requireKey: true);
-        DataTableRules.CheckSize(table, data, _limits);
-        var key = DataTableRules.KeyOf(table, data) ?? Guid.CreateVersion7().ToString();
+        var (data, key) = Prepare(table, values);
         lock (_gate)
         {
-            var rows = _rows[table.Id];
-            if (rows.Any(r => r.Key == key))
+            return Task.FromResult(InsertLocked(table, data, key));
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<DataInsertResult> InsertIfAsync(DataTableInfo table, JsonObject values, IReadOnlyList<DataFilter> where, int maxCount, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        var (data, key) = Prepare(table, values);
+        lock (_gate)
+        {
+            if (_rows[table.Id].Count(r => DataTableRules.Matches(table, r.Data, filters)) >= maxCount)
             {
-                throw DataTableRules.Duplicate(table, key);
+                return Task.FromResult(new DataInsertResult(false, DataInsertReasons.Capacity, null));
             }
 
-            if (rows.Count >= _limits.MaxRows)
+            try
             {
-                throw DataTableRules.RowLimit(table, _limits);
+                return Task.FromResult(new DataInsertResult(true, null, InsertLocked(table, data, key)));
             }
-
-            var now = _time.GetUtcNow();
-            var row = new DataRow(key, data, now, now);
-            rows.Add(row);
-            return Task.FromResult(Copy(row));
+            catch (DataTableException ex) when (ex.Code is DataTableRules.Codes.Unique or DataTableRules.Codes.KeyDuplicate)
+            {
+                return Task.FromResult(new DataInsertResult(false, DataInsertReasons.Unique, null));
+            }
         }
     }
 
@@ -112,21 +157,12 @@ public sealed class InMemoryDataTableStore(DataTableLimits? limits = null, TimeP
             throw DataTableRules.KeyColumnRequired(table);
         }
 
-        var data = DataTableRules.Normalize(table, values, requireKey: true);
-        var key = DataTableRules.KeyOf(table, data)!;
+        var (data, key) = Prepare(table, values);
         lock (_gate)
         {
             var rows = _rows[table.Id];
             var index = rows.FindIndex(r => r.Key == key);
-            if (index < 0)
-            {
-                return InsertRowAsync(table, values, ct);
-            }
-
-            var merged = Merge(rows[index].Data, data);
-            DataTableRules.CheckSize(table, merged, _limits);
-            rows[index] = rows[index] with { Data = merged, UpdatedAt = _time.GetUtcNow() };
-            return Task.FromResult(Copy(rows[index]));
+            return Task.FromResult(index < 0 ? InsertLocked(table, data, key) : ReplaceLocked(table, index, Merge(rows[index].Data, data)));
         }
     }
 
@@ -150,9 +186,26 @@ public sealed class InMemoryDataTableStore(DataTableLimits? limits = null, TimeP
                 throw new DataTableException(DataTableRules.Codes.KeyMissing, $"Ключову колонку «{keyColumn.Name}» змінити не можна — видаліть рядок і створіть новий.");
             }
 
-            DataTableRules.CheckSize(table, merged, _limits);
-            rows[index] = rows[index] with { Data = merged, UpdatedAt = _time.GetUtcNow() };
-            return Task.FromResult<DataRow?>(Copy(rows[index]));
+            return Task.FromResult<DataRow?>(ReplaceLocked(table, index, merged));
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<DataRow?> IncrementAsync(DataTableInfo table, string key, string column, decimal by, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        lock (_gate)
+        {
+            var rows = _rows[table.Id];
+            var index = rows.FindIndex(r => r.Key == key);
+            if (index < 0)
+            {
+                return Task.FromResult<DataRow?>(null);
+            }
+
+            var (name, value) = DataTableRules.Increment(table, rows[index].Data, column, by);
+            var merged = Merge(rows[index].Data, new JsonObject { [name] = value });
+            return Task.FromResult<DataRow?>(ReplaceLocked(table, index, merged));
         }
     }
 
@@ -163,6 +216,56 @@ public sealed class InMemoryDataTableStore(DataTableLimits? limits = null, TimeP
         lock (_gate)
         {
             return Task.FromResult(_rows[table.Id].RemoveAll(r => r.Key == key) > 0);
+        }
+    }
+
+    private (JsonObject Data, string Key) Prepare(DataTableInfo table, JsonObject values)
+    {
+        var data = DataTableRules.Normalize(table, values, requireKey: true);
+        DataTableRules.CheckSize(table, data, _limits);
+        return (data, DataTableRules.KeyOf(table, data) ?? Guid.CreateVersion7().ToString());
+    }
+
+    private DataRow InsertLocked(DataTableInfo table, JsonObject data, string key)
+    {
+        var rows = _rows[table.Id];
+        if (rows.Any(r => r.Key == key))
+        {
+            throw DataTableRules.Duplicate(table, key);
+        }
+
+        DataTableRules.CheckRequired(table, data);
+        CheckUniqueLocked(table, key, data);
+        if (rows.Count >= _limits.MaxRows)
+        {
+            throw DataTableRules.RowLimit(table, _limits);
+        }
+
+        var now = _time.GetUtcNow();
+        var row = new DataRow(key, data, now, now);
+        rows.Add(row);
+        return Copy(row);
+    }
+
+    private DataRow ReplaceLocked(DataTableInfo table, int index, JsonObject merged)
+    {
+        var rows = _rows[table.Id];
+        DataTableRules.CheckSize(table, merged, _limits);
+        DataTableRules.CheckRequired(table, merged);
+        CheckUniqueLocked(table, rows[index].Key, merged);
+        rows[index] = rows[index] with { Data = merged, UpdatedAt = _time.GetUtcNow() };
+        return Copy(rows[index]);
+    }
+
+    private void CheckUniqueLocked(DataTableInfo table, string key, JsonObject data)
+    {
+        foreach (var unique in table.Constraints.Unique)
+        {
+            if (DataTableRules.UniqueFilters(table, unique, data) is { } filters
+                && _rows[table.Id].Any(r => r.Key != key && DataTableRules.Matches(table, r.Data, filters)))
+            {
+                throw DataTableRules.UniqueViolation(table, unique);
+            }
         }
     }
 

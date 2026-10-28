@@ -3,25 +3,62 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE, PageResult } from '../connectors/connectors-api.service';
 
-/** Тип колонки таблиці даних — як `DataColumnType` в Api. */
-export type DataColumnType = 'string' | 'number' | 'boolean' | 'date' | 'json';
+/** Тип колонки таблиці даних — як `DataColumnType` в Api (F6-11, F8-02). */
+export type DataColumnType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'enum' | 'ref' | 'user' | 'json';
 
-export const DATA_COLUMN_TYPES: readonly DataColumnType[] = ['string', 'number', 'boolean', 'date', 'json'];
+export const DATA_COLUMN_TYPES: readonly DataColumnType[] = ['string', 'number', 'boolean', 'date', 'datetime', 'enum', 'ref', 'user', 'json'];
 
-/** Колонка: назва, тип і чи є ключем (не більше однієї, рядок або число). */
+/**
+ * Колонка: назва, тип і чи є ключем (не більше однієї, рядок або число). `values` — допустимі значення `enum`, `table` —
+ * таблиця, на рядки якої посилається `ref`, `sensitive` — значення бачать лише editor проєкту й admin.
+ */
 export interface DataColumn {
   name: string;
   type: DataColumnType;
   key?: boolean;
+  values?: string[] | null;
+  table?: string | null;
+  sensitive?: boolean;
 }
 
-/** `DataTableSummary` — таблиця у списку й деталях (F6-11). */
+/** Умова відбору рядків — як `DataFilter` в Api. */
+export interface DataFilter {
+  column: string;
+  operator: string;
+  value?: unknown;
+}
+
+/** Правило унікальності: значення `columns` не повторюються серед рядків, що задовольняють `where`. */
+export interface DataUniqueConstraint {
+  columns: string[];
+  where?: DataFilter[] | null;
+}
+
+/** Обмеження цілісності таблиці (F8-02). */
+export interface DataTableConstraints {
+  required?: string[];
+  unique?: DataUniqueConstraint[];
+}
+
+/** `DataTableSummary` — таблиця у списку й деталях (F6-11, F8-02). */
 export interface DataTableSummary {
   id: string;
   name: string;
   columns: DataColumn[];
   rowCount: number;
   updatedAt: string;
+  /** Проєкт; `null` — спільна таблиця. */
+  projectId?: string | null;
+  constraints?: DataTableConstraints;
+  /** Чи бачить поточний користувач значення чутливих колонок. */
+  canReadSensitive?: boolean;
+}
+
+/** Що ще передати при створенні чи зміні таблиці. */
+export interface DataTableOptions {
+  constraints?: DataTableConstraints;
+  /** Лише при створенні: проєкт (`null` — спільна). */
+  projectId?: string | null;
 }
 
 /** `DataRowDto` — рядок таблиці. */
@@ -75,6 +112,15 @@ export function inputValue(column: DataColumn, text: string): unknown {
   }
 }
 
+/** Поля без `null`/`undefined` і порожніх обмежень — тіло запиту лишається таким, як до F8-02, коли їх немає. */
+function withoutEmpty(options: DataTableOptions): DataTableOptions {
+  const result: DataTableOptions = {};
+  if (options.projectId) result.projectId = options.projectId;
+  const c = options.constraints;
+  if (c && ((c.required?.length ?? 0) > 0 || (c.unique?.length ?? 0) > 0)) result.constraints = c;
+  return result;
+}
+
 /** Клієнт `/api/v1/tables`: читають усі ролі, змінюють editor і admin. */
 @Injectable({ providedIn: 'root' })
 export class DataTablesApiService {
@@ -85,12 +131,12 @@ export class DataTablesApiService {
     return this.http.get<DataTableSummary[]>(this.base);
   }
 
-  create(name: string, columns: DataColumn[]): Observable<DataTableSummary> {
-    return this.http.post<DataTableSummary>(this.base, { name, columns });
+  create(name: string, columns: DataColumn[], options: DataTableOptions = {}): Observable<DataTableSummary> {
+    return this.http.post<DataTableSummary>(this.base, { name, columns, ...withoutEmpty(options) });
   }
 
-  update(id: string, name: string, columns: DataColumn[]): Observable<DataTableSummary> {
-    return this.http.put<DataTableSummary>(`${this.base}/${id}`, { name, columns });
+  update(id: string, name: string, columns: DataColumn[], options: Omit<DataTableOptions, 'projectId'> = {}): Observable<DataTableSummary> {
+    return this.http.put<DataTableSummary>(`${this.base}/${id}`, { name, columns, ...withoutEmpty(options) });
   }
 
   remove(id: string): Observable<void> {

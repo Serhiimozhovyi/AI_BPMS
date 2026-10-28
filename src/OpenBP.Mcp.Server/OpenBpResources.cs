@@ -36,6 +36,9 @@ public sealed class OpenBpResources
     /// <summary>Шаблон URI таблиці даних.</summary>
     public const string DataTableUriTemplate = "openbp://tables/{id}";
 
+    /// <summary>Шаблон URI таблиць проєкту (F8-02).</summary>
+    public const string ProjectTablesUriTemplate = "openbp://projects/{id}/tables";
+
     /// <summary>Найбільше рядків у ресурсі таблиці.</summary>
     public const int DataTableResourceRows = 100;
 
@@ -87,12 +90,25 @@ public sealed class OpenBpResources
     public static async Task<string> ExecutionStages(IStageService stages, Guid id, CancellationToken ct) =>
         JsonSerializer.Serialize(await stages.GetAsync(id, ct).ConfigureAwait(false), McpJson.Options);
 
-    /// <summary>Структура таблиці і перші <see cref="DataTableResourceRows"/> рядків (те саме, що <c>query_table</c> без умов).</summary>
+    /// <summary>
+    /// Структура таблиці і перші <see cref="DataTableResourceRows"/> рядків (те саме, що <c>query_table</c> без умов), без
+    /// значень чутливих колонок навіть для editor (F8-02).
+    /// </summary>
     /// <param name="tables">Сервіс таблиць.</param>
     /// <param name="id">Id або назва таблиці.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerResource(UriTemplate = DataTableUriTemplate, Name = "table", Title = "Data table", MimeType = "application/json")]
-    [Description("A data table with its columns and first 100 rows; same content as query_table without conditions.")]
+    [Description("A data table with its columns and first 100 rows; same content as query_table without conditions, but sensitive columns are always null.")]
     public static async Task<string> DataTable(IDataTableService tables, string id, CancellationToken ct) =>
-        JsonSerializer.Serialize(await DataTableTools.QueryTable(tables, id, null, DataTableResourceRows, ct).ConfigureAwait(false), McpJson.Options);
+        JsonSerializer.Serialize(
+            await DataTableTools.QueryAsync(tables, id, null, DataTableResourceRows, null, includeSensitive: false, ct).ConfigureAwait(false), McpJson.Options);
+
+    /// <summary>Таблиці, доступні сценаріям проєкту: його й спільні (те саме, що <c>list_tables</c> з <c>projectId</c>).</summary>
+    /// <param name="tables">Сервіс таблиць.</param>
+    /// <param name="id">Id проєкту.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerResource(UriTemplate = ProjectTablesUriTemplate, Name = "project-tables", Title = "Project data tables", MimeType = "application/json")]
+    [Description("Data tables that workflows of a project can use (the project's own and shared ones); same content as list_tables with projectId.")]
+    public static async Task<string> ProjectTables(IDataTableService tables, Guid id, CancellationToken ct) =>
+        JsonSerializer.Serialize(await DataTableTools.ListTables(tables, id, ct).ConfigureAwait(false), McpJson.Options);
 }

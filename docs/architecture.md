@@ -42,7 +42,7 @@
 | `src/OpenBP.Application` | application-шар (§10): `IWorkflowService`, `IExecutionService`, `IConnectorService`, DTO, помилки, контракти jobs — спільний для REST, UI і `/mcp` |
 | `src/OpenBP.Api` | ASP.NET Core: REST, auth, SSE, `/mcp`, webhook-маршрути, Quartz |
 | `src/OpenBP.Worker` | хост: бере job, виконує через Engine, пише кроки |
-| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести; очікування `core.wait` v2 і `mcp.waitFor` CLI не відбуває, а перемотує свій годинник до часу відновлення, F5-06; таблиці `core.dataTable` створює в пам'яті за назвами з вузлів сценарію — колонки рядкові, з полів `values`, порожні на старті, F6-29); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
+| `src/OpenBP.Cli` | `openbp run file.json` — виконання сценарію без БД (dev і тести; очікування `core.wait` v2 і `mcp.waitFor` CLI не відбуває, а перемотує свій годинник до часу відновлення, F5-06; таблиці `core.dataTable` створює в пам'яті за назвами з вузлів сценарію — колонки з полів `values` і умов `where` рядкові, колонка `increment` числова, порожні на старті, без обмежень, F6-29, F8-02); `openbp export / import / activate` — перенесення сценаріїв через REST для CI/CD (F6-09) |
 | `apps/web` | Angular SPA: список, канвас, журнал, конектори, credentials |
 | `tests/*` | xUnit на кожен src-проєкт; Testcontainers для Data/Api |
 | `tools/connector-template` | Connector Kit — шаблон MCP-сервера над REST/OData |
@@ -173,7 +173,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 | `workflow_groups` | id, name, normalized_name (unique — назва без урахування регістру), sort_order, created_at (F3-63: плоскі групи сценаріїв поза визначенням; F6-14: група — це проєкт); фаза 8 (ADR-005): + description, icon (F8-03), app_roles jsonb (F8-04) |
 | `project_members` | project_id → workflow_groups (cascade), user_id → users (cascade) — PK разом, role (`editor` \| `viewer`), created_at (F6-14); + app_role null (F8-04) |
 | `project_pages` | id, project_id → workflow_groups (cascade), key (unique у проєкті), name, kind (`list` \| `detail` \| `form` \| `metrics`), definition (jsonb), roles (jsonb), sort_order, updated_at (F8-04, `docs/projects.md` §3) |
-| `data_tables` | id, name, normalized_name (unique), columns (jsonb: `[{ name, type, key? }]`), created_at, updated_at (F6-11); фаза 8 (F8-02): + project_id (→ `workflow_groups`, restrict; null — спільна; назва унікальна в межах проєкту), constraints (jsonb: `{ required, unique: [{ columns, where? }] }`), у колонках типи `datetime` \| `enum` \| `ref` \| `user` і `sensitive` — `docs/projects.md` §2 |
+| `data_tables` | id, name, normalized_name, project_id (→ `workflow_groups`, restrict; null — спільна, F8-02), columns (jsonb: `[{ name, type, key?, values?, table?, sensitive? }]`, типи `string` \| `number` \| `boolean` \| `date` \| `datetime` \| `enum` \| `ref` \| `user` \| `json`), constraints (jsonb: `{ required, unique: [{ columns, where? }] }`, F8-02), created_at, updated_at (F6-11); унікальний індекс (project_id, normalized_name) `NULLS NOT DISTINCT` — `docs/projects.md` §2 |
 | `data_rows` | table_id → data_tables (cascade), key (PK разом з table_id), data (jsonb), created_at, updated_at; індекс (table_id, created_at) |
 | `audit_log` | id, at (індекс), user_id (null — дія системи), api_key_id (null — сесія UI), action (`workflow.saved` тощо), entity_type, entity_id (індекс разом з entity_type), details (jsonb без значень секретів) — F6-15 |
 | `variables` | key (PK: латиниця, цифри, `_`, до 64), value (до 10 000), description, updated_at (F6-09: `$vars`; читають усі, змінює admin) |
@@ -209,9 +209,12 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 
 Таблиці даних (F6-11): правила значень і фільтрів — одні на всіх (`OpenBP.Engine.Data.DataTableRules`): вузол
 `core.dataTable`, REST, UI і MCP. Сховище `PostgresDataTableStore` пише рядки під `pg_advisory_xact_lock` таблиці
-(ліміт `OPENBP_DATA_TABLE_MAX_ROWS` тримається й за паралельних вставок), `upsert` — `INSERT … ON CONFLICT (table_id, key)
-DO UPDATE SET data = data_rows.data || EXCLUDED.data`; фільтри `where` перекладаються в SQL з назвою колонки параметром.
-Видалення колонки прибирає її значення з рядків; ключову колонку таблиці з рядками змінити не можна.
+(ліміт `OPENBP_DATA_TABLE_MAX_ROWS` тримається й за паралельних вставок); з F8-02 під цим блокуванням в одній транзакції
+йде кожен запис (`insert`, `insertIf`, `upsert`, `update`, `increment`) разом із перевірками `required`, `unique` (пошук
+рядка-конфлікту тим самим SQL-фільтром) і `maxCount`. Фільтри `where` перекладаються в SQL з назвою колонки параметром.
+Видалення колонки прибирає її значення з рядків; ключову колонку таблиці з рядками змінити не можна. Таблицю для вузла
+сховище шукає за виконанням: `executions → workflows.group_id` — таблиці цього проєкту і спільні (F8-02). Права й чутливі
+колонки перевіряє `DataTableService` через `ProjectAccess` — одна перевірка для REST, UI і `/mcp`.
 
 Quartz тримає власні таблиці для розкладів. Бінарні дані — у файловому сховищі (локальна папка / S3-сумісне), в jsonb лише `BinaryRef`.
 Виняток — файли, які приймає сам Api (поля-файли форм, F6-03): файлове сховище налаштоване лише у воркера, тож Api пише

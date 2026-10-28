@@ -90,8 +90,8 @@ OpenBP приймає лише API-ключ у заголовку, а OAuth дл
 | `list_workflow_groups` | viewer | — | `{ items: [{ id, name, sortOrder, workflowCount, role }] }` — видимі групи (проєкти) у порядку показу з моєю роллю (F3-63, F6-14) |
 | `create_workflow_group` | editor | `name` | створена група в кінці списку; назва унікальна без урахування регістру (`WORKFLOW_GROUP_NAME_TAKEN`) |
 | `move_workflow` | editor | `workflowId`, `groupId?` (`null` — без групи) | сценарій після перенесення; нова версія не створюється |
-| `list_tables` | viewer | — | `{ items: [{ id, name, columns: [{ name, type, key? }], rowCount, updatedAt }] }` — таблиці даних (F6-11) |
-| `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN` |
+| `list_tables` | viewer | `projectId?` | `{ items: [{ id, name, projectId, columns: [{ name, type, key?, values?, table?, sensitive? }], constraints, rowCount, updatedAt, canReadSensitive }] }` — видимі таблиці даних (F6-11); з `projectId` — лише доступні сценаріям проєкту: його й спільні (F8-02) |
+| `query_table` | viewer | `table` (id або назва), `where?` (`[{ column, operator, value }]`, AND), `limit?` (100, ≤ 1000), `projectId?` (назва шукається спершу в проєкті, потім серед спільних) | `{ table, rows: [{ key, data, createdAt, updatedAt }] }`; оператори й приведення типів — як у вузла `core.dataTable`; невідома колонка — `DATA_TABLE_COLUMN_UNKNOWN`; таблиця чужого проєкту — не знайдена; чутливі колонки — `null`, якщо ви не editor проєкту таблиці, умова за ними — `DATA_TABLE_FILTER_INVALID`; прочитані чутливі значення пишуться в audit log (F8-02) |
 | `run_workflow` | editor | `id`, `startNodeId?`, `startItems?`, `correlationKey?` (F5-04), `wait?` (true), `timeoutSec?` (60, ≤ 600) | виконання з `summary` і `steps` (вхід/вихід кожного вузла; для `ai.agent` — ще `subSteps`, F6-12). Стан `waiting` (довге очікування `core.wait`/`mcp.waitFor`) — теж кінець очікування: `summary.resumeAt`, `summary.waitingNodeId`; виконання з `core.wait` v3 у режимі `webhook` будить зовнішній `POST /webhook/resume/{token}` (адреса — `$execution.resumeUrl` у сценарії, F6-01), агент може викликати її сам, якщо сценарій передав адресу назовні |
 | `test_node` | editor | `workflowId`, `nodeId`, `items?`, `timeoutSec?` | вхід і вихід одного вузла; помилка вузла — `NODE_FAILED` |
 | `list_evaluations` | viewer | `workflowId`, `nodeId?` | `{ items: [{ id, workflowId, nodeId, name, caseCount, lastRun }] }` — оцінки вузлів ШІ (F6-17); `lastRun` — `{ passed, total, version, … }` без результатів кейсів |
@@ -194,7 +194,8 @@ resolvedAt }`; виконання, зупинене `block`-правилом, �
 | `openbp://workflows/{id}` | визначення поточної версії сценарію |
 | `openbp://executions/{id}` | знімок виконання з кроками, як `get_execution` |
 | `openbp://executions/{id}/stages` | етапи виконання з порушеннями, діями й невиконаними правилами, як `get_execution_stages` |
-| `openbp://tables/{id}` | таблиця даних (id або назва) з першими 100 рядками, як `query_table` без умов |
+| `openbp://tables/{id}` | таблиця даних (id або назва) з першими 100 рядками, як `query_table` без умов; чутливі колонки — завжди `null` (F8-02) |
+| `openbp://projects/{id}/tables` | таблиці, доступні сценаріям проєкту (його й спільні), як `list_tables` з `projectId` (F8-02) |
 
 Невідомий id → JSON-RPC помилка `ResourceNotFound`.
 

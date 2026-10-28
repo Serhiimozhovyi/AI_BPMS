@@ -15,7 +15,7 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
     /// <summary>Код конфлікту: група з такою назвою вже є.</summary>
     public const string NameTakenCode = "WORKFLOW_GROUP_NAME_TAKEN";
 
-    /// <summary>Код конфлікту: у проєкті є credentials чи конектори — видалення зробило б їх спільними.</summary>
+    /// <summary>Код конфлікту: у проєкті є credentials, конектори чи таблиці (F8-02) — видалення зробило б їх спільними.</summary>
     public const string ProjectNotEmptyCode = "PROJECT_NOT_EMPTY";
 
     private readonly ProjectAccess _access = new(db, currentUser);
@@ -106,10 +106,11 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         var group = await FindManagedAsync(id, ct);
-        if (await db.Credentials.AnyAsync(c => c.ProjectId == id, ct) || await db.McpServers.AnyAsync(s => s.ProjectId == id, ct))
+        if (await db.Credentials.AnyAsync(c => c.ProjectId == id, ct) || await db.McpServers.AnyAsync(s => s.ProjectId == id, ct)
+            || await db.DataTables.AnyAsync(t => t.ProjectId == id, ct))
         {
             throw new ConflictException(ProjectNotEmptyCode,
-                $"У проєкті «{group.Name}» є облікові дані або конектори; видаліть або перенесіть їх перед видаленням проєкту.");
+                $"У проєкті «{group.Name}» є облікові дані, конектори або таблиці; видаліть або перенесіть їх перед видаленням проєкту.");
         }
 
         // FK `ON DELETE SET NULL` теж це робить; явне оновлення не залежить від того, чи база вже знає про зв'язок.
