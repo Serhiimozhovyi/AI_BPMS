@@ -1481,6 +1481,11 @@
 - DoD: тести шаблону зелені; Playwright психолога й координатора; знімки екранів у PR; оновлено на локальному OpenBP власника.
 - Зроблено: `examples/projects/psy-support/bundle.json` — 12 екранів у меню (`today`, `schedule`-календар, `bookings`, `events` і `bst` з учасниками під рядком, `templates`, `materials`, `psychologists`, `texts` — форма `keyValue`, `users`, `journal`, `metrics`) і 12 форм для бічної панелі замість 29 сторінок; оболонка `app` з меню за групами; фільтр «Психолог» за замовчуванням — сам психолог. Тести: `PsySupportTemplatePagesTests` (4), `ProjectTemplateCatalogTests`, Playwright `psy-cabinet.e2e.ts`; знімки екранів — `examples/projects/psy-support/screenshots/`. Оновлення на локальному OpenBP власника — після мерджу.
 
+### F8-21 · Імена замість ідентифікаторів у посиланнях сторінок
+- model: `sonnet` · status: `in progress` · depends: F8-20
+- Що: запит власника 2026-10-29 — у формі «Сеанс БСТ» психолог вибирався за id, а «Обліковий запис психолога» було окремим полем. Усюди, де сторінка показує колонку `ref` чи `user`, показується назва запису (`name`/`title`/`label` чи перша текстова нечутлива колонка) або пошта користувача; поле форми може мати `copyFrom: "<ref>.<колонка>"` — значення бере сервер з вибраного запису.
+- DoD: тести сервера й шаблону зелені; шаблон psy-support — один вибір психолога у формах слотів, шаблонів і сеансів; оновлено `docs/projects.md`.
+
 ## Постійні (раз на місяць, `haiku`)
 
 - M-01 Оновити версії NuGet/npm, зокрема `ModelContextProtocol` — перевірити changelog на breaking changes, прогнати тести.

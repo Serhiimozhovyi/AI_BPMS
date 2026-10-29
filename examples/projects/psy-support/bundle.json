@@ -1014,8 +1014,8 @@
       "definition": {
         "table": "slots",
         "fields": [
-          {"column": "psychologist_id", "label": "Психолог", "required": true},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "psychologist_id", "label": "Психолог", "required": true, "display": "psychologists.name"},
+          {"column": "psychologist_user", "copyFrom": "psychologist_id.user_id"},
           {"column": "starts_at", "label": "Початок", "required": true},
           {"column": "duration_min", "label": "Тривалість, хв"},
           {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
@@ -1035,8 +1035,8 @@
       "definition": {
         "table": "slots",
         "fields": [
-          {"column": "psychologist_id", "label": "Психолог"},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+          {"column": "psychologist_user", "copyFrom": "psychologist_id.user_id"},
           {"column": "starts_at", "label": "Початок"},
           {"column": "duration_min", "label": "Тривалість, хв"},
           {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
@@ -1056,8 +1056,8 @@
       "definition": {
         "table": "slot_templates",
         "fields": [
-          {"column": "psychologist_id", "label": "Психолог", "required": true},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "psychologist_id", "label": "Психолог", "required": true, "display": "psychologists.name"},
+          {"column": "psychologist_user", "copyFrom": "psychologist_id.user_id"},
           {"column": "weekday", "label": "День тижня (1 — пн … 7 — нд)", "required": true},
           {"column": "time", "label": "Час (ГГ:ХХ)", "required": true},
           {"column": "duration_min", "label": "Тривалість, хв"},
@@ -1078,8 +1078,8 @@
       "definition": {
         "table": "slot_templates",
         "fields": [
-          {"column": "psychologist_id", "label": "Психолог"},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+          {"column": "psychologist_user", "copyFrom": "psychologist_id.user_id"},
           {"column": "weekday", "label": "День тижня (1 — пн … 7 — нд)"},
           {"column": "time", "label": "Час (ГГ:ХХ)"},
           {"column": "duration_min", "label": "Тривалість, хв"},
@@ -1155,8 +1155,8 @@
       "definition": {
         "table": "bst_sessions",
         "fields": [
-          {"column": "psychologist_id", "label": "Психолог", "required": true},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "psychologist_id", "label": "Психолог", "required": true, "display": "psychologists.name"},
+          {"column": "psychologist_user", "copyFrom": "psychologist_id.user_id"},
           {"column": "starts_at", "label": "Початок", "required": true},
           {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
           {"column": "capacity", "label": "Місць (типово BST_CAPACITY_DEFAULT)", "format": "capacity"},
@@ -1176,8 +1176,8 @@
       "definition": {
         "table": "bst_sessions",
         "fields": [
-          {"column": "psychologist_id", "label": "Психолог"},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+          {"column": "psychologist_user", "copyFrom": "psychologist_id.user_id"},
           {"column": "starts_at", "label": "Початок"},
           {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
           {"column": "capacity", "label": "Місць (типово BST_CAPACITY_DEFAULT)", "format": "capacity"},

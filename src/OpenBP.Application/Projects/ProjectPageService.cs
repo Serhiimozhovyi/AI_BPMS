@@ -113,7 +113,7 @@ public sealed partial class ProjectPageService(
         {
             ProjectPageKinds.List => [.. (def.Columns ?? []).Where(col => !computed.Contains(col.Column)).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format))],
             ProjectPageKinds.Calendar => [.. CalendarColumns(c).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format))],
-            _ => (List<PageViewColumn>)[.. (def.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || f.Value is null)
+            _ => (List<PageViewColumn>)[.. (def.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || !f.ServerSet)
                 .Select(f => ViewColumn(c.Table, f.Column, f.Label, f.Format))],
         };
         var schema = c.Page.Kind != ProjectPageKinds.Form ? null
@@ -260,7 +260,7 @@ public sealed partial class ProjectPageService(
         }
 
         var row = await FindRowAsync(c, rowKey, ct);
-        var fields = (c.Page.Definition.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || f.Value is null).ToList();
+        var fields = (c.Page.Definition.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || !f.ServerSet).ToList();
         var actions = c.Page.Kind == ProjectPageKinds.Detail ? c.Page.Definition.Actions : null;
         var shown = (await ToRowsAsync(c, c.Table, [row], [.. fields.Select(f => (f.Column, f.Display))], actions, ct))[0];
         await AuditSensitiveAsync(c, c.Table, fields.Select(f => f.Column), 1, ct);
@@ -319,6 +319,11 @@ public sealed partial class ProjectPageService(
                 continue;
             }
 
+            if (field.CopyFrom is not null)
+            {
+                continue;
+            }
+
             var value = Lookup(values, column.Name);
             if (field.Format == PageFormats.Phone && value is JsonValue phone && phone.TryGetValue<string>(out var text))
             {
@@ -355,6 +360,11 @@ public sealed partial class ProjectPageService(
             throw new PageFormInvalidException(errors);
         }
 
+        foreach (var field in (def.Fields ?? []).Where(f => f.CopyFrom is not null))
+        {
+            data[Column(c.Table, field.Column).Name] = await CopiedValueAsync(c, field, data, ct);
+        }
+
         if (def.OnSubmit?.Workflow is { } workflow)
         {
             return await SubmitToWorkflowAsync(c, workflow, data, rowKey, ct);
@@ -375,7 +385,7 @@ public sealed partial class ProjectPageService(
             throw new PageFormInvalidException(FieldErrors(c, data, ex));
         }
 
-        var fields = (def.Fields ?? []).Where(f => f.Value is null).ToList();
+        var fields = (def.Fields ?? []).Where(f => !f.ServerSet).ToList();
         var row = (await ToRowsAsync(c, c.Table, [saved], [.. fields.Select(f => (f.Column, f.Display))], null, ct))[0];
         return new PageSubmitResult(row, def.Then?.Page);
     }
@@ -447,7 +457,7 @@ public sealed partial class ProjectPageService(
         switch (result.State)
         {
             case PageActionStates.Rejected:
-                var field = (c.Page.Definition.Fields ?? []).FirstOrDefault(f => f.Value is null && result.Field is not null && Same(f.Column, result.Field))?.Column ?? "";
+                var field = (c.Page.Definition.Fields ?? []).FirstOrDefault(f => !f.ServerSet && result.Field is not null && Same(f.Column, result.Field))?.Column ?? "";
                 throw new PageFormInvalidException([new FormFieldError(field, result.Message ?? "Сценарій відхилив дані форми.")]);
             case PageActionStates.Error:
                 throw new UnprocessableException(WorkflowFailedCode, result.Message ?? "Сценарій форми завершився помилкою.");
@@ -563,9 +573,19 @@ public sealed partial class ProjectPageService(
         IReadOnlyList<PageAction>? actions, CancellationToken ct)
     {
         var displays = new Dictionary<string, Dictionary<string, string?>>(StringComparer.Ordinal);
-        foreach (var (column, display) in columns.Where(col => col.Display is not null))
+        foreach (var (column, explicitDisplay) in columns)
         {
-            displays[Column(table, column).Name] = await DisplayValuesAsync(c, display!, rows.Select(r => DataTableRules.KeyText(r.Data[Column(table, column).Name])), ct);
+            if (Column(table, column).Type == DataColumnType.User && explicitDisplay is null)
+            {
+                displays[Column(table, column).Name] = await UserEmailsAsync(rows.Select(r => DataTableRules.KeyText(r.Data[Column(table, column).Name])), ct);
+                continue;
+            }
+
+            var display = explicitDisplay ?? await DefaultDisplayAsync(c, Column(table, column), ct);
+            if (display is not null)
+            {
+                displays[Column(table, column).Name] = await DisplayValuesAsync(c, display, rows.Select(r => DataTableRules.KeyText(r.Data[Column(table, column).Name])), ct);
+            }
         }
 
         var result = new List<PageRow>(rows.Count);
@@ -609,6 +629,40 @@ public sealed partial class ProjectPageService(
         }
 
         return allowed;
+    }
+
+    /// <summary>Показ значень <c>user</c> без <c>display</c>: пошта користувача замість його id.</summary>
+    private async Task<Dictionary<string, string?>> UserEmailsAsync(IEnumerable<string?> keys, CancellationToken ct)
+    {
+        var ids = keys.Select(k => Guid.TryParse(k, out var id) ? id : (Guid?)null).Where(id => id is not null).Select(id => id!.Value).Distinct().ToList();
+        var users = ids.Count == 0 ? [] : await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).Select(u => new { u.Id, u.Email }).ToListAsync(ct);
+        return users.ToDictionary(u => u.Id.ToString(), u => (string?)u.Email, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Колонка, яку показують замість ключа, коли <c>display</c> не вказано: <c>name</c>, <c>title</c>, <c>label</c> чи перша нечутлива текстова.</summary>
+    private static DataColumn? DefaultColumn(DataTableInfo table)
+    {
+        var text = table.Columns.Where(col => col.Type == DataColumnType.String && !col.Sensitive).ToList();
+        foreach (var preferred in new[] { "name", "title", "label" })
+        {
+            if (text.FirstOrDefault(col => string.Equals(col.Name, preferred, StringComparison.OrdinalIgnoreCase)) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return text.FirstOrDefault(col => table.KeyColumn is null || !Same(col.Name, table.KeyColumn.Name));
+    }
+
+    /// <summary>Показ за замовчуванням для колонки <c>ref</c> без <c>display</c>; для інших колонок — <c>null</c>.</summary>
+    private async Task<string?> DefaultDisplayAsync(PageContext c, DataColumn column, CancellationToken ct)
+    {
+        if (column.Type != DataColumnType.Ref || column.Table is null || await ResolveTableAsync(c, column.Table, ct) is not { } target)
+        {
+            return null;
+        }
+
+        return DefaultColumn(target) is { } shown ? $"{target.Name}.{shown.Name}" : null;
     }
 
     /// <summary>Показ значень <c>ref</c>: <c>&lt;таблиця&gt;.&lt;колонка&gt;</c> для кожного ключа.</summary>
@@ -662,7 +716,7 @@ public sealed partial class ProjectPageService(
         var properties = new JsonObject();
         var required = new JsonArray();
         var update = string.Equals(c.Page.Definition.OnSubmit?.Operation, "update", StringComparison.OrdinalIgnoreCase);
-        foreach (var field in (c.Page.Definition.Fields ?? []).Where(f => f.Value is null))
+        foreach (var field in (c.Page.Definition.Fields ?? []).Where(f => !f.ServerSet))
         {
             var column = Column(c.Table, field.Column);
             var property = new JsonObject { ["title"] = field.Label ?? column.Name };
@@ -743,6 +797,7 @@ public sealed partial class ProjectPageService(
         var rows = await db.DataRows.AsNoTracking().Where(r => r.TableId == target.Id).OrderBy(r => r.CreatedAt).ThenBy(r => r.Key)
             .Take(MaxRelatedRows).Select(r => new { r.Key, r.Data }).ToListAsync(ct);
         DataColumn? shown = null;
+        display ??= DefaultColumn(target) is { } byDefault ? $"{target.Name}.{byDefault.Name}" : null;
         if (display is not null)
         {
             var (_, name) = SplitDisplay(display);
@@ -760,6 +815,21 @@ public sealed partial class ProjectPageService(
         })];
     }
 
+    /// <summary>Значення поля <c>copyFrom</c>: колонка рядка, вибраного в колонці <c>ref</c> цієї ж форми; порожній вибір дає <c>null</c>.</summary>
+    private async Task<JsonNode?> CopiedValueAsync(PageContext c, PageField field, JsonObject data, CancellationToken ct)
+    {
+        var (refName, columnName) = SplitDisplay(field.CopyFrom!);
+        var refColumn = Column(c.Table, refName);
+        if (DataTableRules.KeyText(data[refColumn.Name]) is not { Length: > 0 } key)
+        {
+            return null;
+        }
+
+        var target = await ResolveTableAsync(c, refColumn.Table!, ct);
+        var row = target is null ? null : await store.GetRowAsync(target, key, ct);
+        return row is null ? null : row.Data[Column(target!, columnName).Name]?.DeepClone();
+    }
+
     private async Task<JsonArray> MemberOptionsAsync(Guid projectId, CancellationToken ct)
     {
         var members = await db.ProjectMembers.AsNoTracking().Where(m => m.ProjectId == projectId)
@@ -770,7 +840,7 @@ public sealed partial class ProjectPageService(
     /// <summary>Помилки за полями з помилки запису: обов'язкові колонки, унікальність, ключ.</summary>
     private static List<FormFieldError> FieldErrors(PageContext c, JsonObject data, DataTableException ex)
     {
-        var fields = (c.Page.Definition.Fields ?? []).Where(f => f.Value is null).Select(f => f.Column).ToList();
+        var fields = (c.Page.Definition.Fields ?? []).Where(f => !f.ServerSet).Select(f => f.Column).ToList();
         string Field(IEnumerable<string> candidates) => candidates.FirstOrDefault(name => fields.Any(f => Same(f, name))) ?? "";
         var field = ex.Code switch
         {
@@ -882,6 +952,7 @@ public sealed partial class ProjectPageService(
                 {
                     await ValidateColumnAsync(projectId, table, field.Column, field.Display, ct);
                     ValidateFormat(Column(table, field.Column), field.Format, field.Labels, null);
+                    await ValidateCopyFromAsync(projectId, table, def.Fields, field, ct);
                 }
 
                 ValidateLink(def.Then);
@@ -929,6 +1000,30 @@ public sealed partial class ProjectPageService(
 
         var (tableName, columnName) = SplitDisplay(display);
         var target = await ResolveTableAsync(projectId, sharedVisible: true, tableName, ct) ?? throw TableUnknown(tableName);
+        Require(target, columnName);
+    }
+
+    /// <summary>Поле <c>copyFrom</c>: колонка <c>ref</c> є в цій формі й показується користувачеві, колонка-джерело є в пов'язаній таблиці.</summary>
+    private async Task ValidateCopyFromAsync(Guid projectId, DataTableInfo table, IReadOnlyList<PageField> fields, PageField field, CancellationToken ct)
+    {
+        if (field.CopyFrom is null)
+        {
+            return;
+        }
+
+        if (field.Value is not null)
+        {
+            throw Invalid($"Поле «{field.Column}»: або value, або copyFrom.");
+        }
+
+        var (refName, columnName) = SplitDisplay(field.CopyFrom);
+        var refColumn = Require(table, refName);
+        if (refColumn.Type != DataColumnType.Ref || !fields.Any(f => !f.ServerSet && Same(f.Column, refColumn.Name)))
+        {
+            throw Invalid($"copyFrom «{field.CopyFrom}»: «{refName}» має бути колонкою ref, яка є полем цієї форми.");
+        }
+
+        var target = await ResolveTableAsync(projectId, sharedVisible: true, refColumn.Table, ct) ?? throw TableUnknown(refColumn.Table ?? "");
         Require(target, columnName);
     }
 

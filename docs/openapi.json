@@ -12144,6 +12144,12 @@
               }
             ]
           },
+          "copyFrom": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "display": {
             "type": [
               "null",

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using OpenBP.Application.Errors;
 using OpenBP.Application.Forms;
 using OpenBP.Engine.Data;
@@ -268,6 +269,16 @@ public sealed record PageField(string Column)
     /// Фіксоване значення або вираз з <c>$user</c> (<c>{{ $user.id }}</c>): поле не показується, значення ставить сервер.
     /// </summary>
     public JsonNode? Value { get; init; }
+
+    /// <summary>
+    /// Форма: <c>&lt;колонка ref&gt;.&lt;колонка&gt;</c> — поле не показується, сервер бере значення з рядка, який вибрано в колонці
+    /// <c>ref</c> цієї ж форми (наприклад, <c>psychologist_id.user_id</c> для облікового запису психолога).
+    /// </summary>
+    public string? CopyFrom { get; init; }
+
+    /// <summary>Поле форми, яке ставить сервер (<see cref="Value"/> чи <see cref="CopyFrom"/>) — користувач його не бачить.</summary>
+    [JsonIgnore]
+    public bool ServerSet => Value is not null || CopyFrom is not null;
 
     /// <summary>Для колонки <c>ref</c>: <c>&lt;таблиця&gt;.&lt;колонка&gt;</c> — що показати замість ключа (і підписи варіантів у формі).</summary>
     public string? Display { get; init; }

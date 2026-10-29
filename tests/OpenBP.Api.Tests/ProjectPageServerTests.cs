@@ -270,6 +270,22 @@ public class ProjectPageServerTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Ref_and_user_columns_show_names_without_display_in_lists_and_form_options()
+    {
+        var d = await SetupAsync();
+        await SavePage(d, "regs", "list", new { table = "regs", columns = new object[] { new { column = "name" }, new { column = "event_id" } } });
+        var rows = await GetOk(d.Psy.Client, $"/api/v1/projects/{d.Project}/pages/regs/rows");
+        var first = rows.GetProperty("items").EnumerateArray().First(r => r.GetProperty("data").GetProperty("name").GetString() == "Олена");
+        Assert.Equal("Консультація пар", first.GetProperty("display").GetProperty("event_id").GetString());
+
+        await SavePage(d, "reg-new", "form", new { table = "regs", fields = new object[] { new { column = "event_id" }, new { column = "name" } }, onSubmit = new { operation = "insert" } });
+        var view = await GetOk(d.Psy.Client, $"/api/v1/projects/{d.Project}/pages/reg-new");
+        var titles = view.GetProperty("schema").GetProperty("properties").GetProperty("event_id").GetProperty("oneOf").EnumerateArray().Select(o => o.GetProperty("title").GetString());
+        Assert.Contains("Консультація пар", titles);
+        Assert.DoesNotContain(d.Keys["E1"], titles);
+    }
+
+    [Fact]
     public async Task Expand_lists_child_rows_masks_sensitive_and_child_actions_stay_under_their_parent()
     {
         var d = await SetupAsync();

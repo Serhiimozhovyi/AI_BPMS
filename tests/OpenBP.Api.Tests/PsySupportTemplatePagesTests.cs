@@ -198,6 +198,30 @@ public class PsySupportTemplatePagesTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Session_form_picks_the_psychologist_by_name_and_fills_the_account_from_the_card()
+    {
+        var c = await ImportAsync();
+        var view = await GetOk(c.Coordinator.Client, Pages(c, "bst-new"));
+        var properties = view.GetProperty("schema").GetProperty("properties");
+        Assert.False(properties.TryGetProperty("psychologist_user", out _));
+        Assert.Equal(["Ірина", "Олена"], properties.GetProperty("psychologist_id").GetProperty("oneOf").EnumerateArray().Select(o => o.GetProperty("title").GetString()).Order());
+
+        var submit = await c.Coordinator.Client.PostAsJsonAsync(Pages(c, "bst-new") + "/submit", new
+        {
+            values = new { psychologist_id = c.Keys["P1"], starts_at = Iso(Now.AddDays(9)), format = "online", capacity = 5, status = "open" },
+        });
+        Assert.True(submit.IsSuccessStatusCode, await submit.Content.ReadAsStringAsync());
+        var rows = await GetOk(c.Coordinator.Client, Pages(c, "bst") + "/rows");
+        var created = rows.GetProperty("items").EnumerateArray().Last().GetProperty("key").GetString();
+        var tables = (await JsonAsync(await c.Editor.Client.GetAsync("/api/v1/tables"))).EnumerateArray()
+            .Single(t => t.GetProperty("name").GetString() == "bst_sessions" && t.TryGetProperty("projectId", out var id) && id.GetString() == c.Project.ToString());
+        var row = (await GetOk(c.Editor.Client, $"/api/v1/tables/{tables.GetProperty("id").GetGuid()}/rows")).GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("key").GetString() == created);
+        Assert.Equal(c.Keys["P1"], row.GetProperty("data").GetProperty("psychologist_id").GetString());
+        Assert.Equal(c.Psy.Id.ToString(), row.GetProperty("data").GetProperty("psychologist_user").GetString());
+    }
+
+    [Fact]
     public async Task Texts_form_shows_every_setting_with_a_label_and_is_for_the_coordinator_only()
     {
         var c = await ImportAsync();
