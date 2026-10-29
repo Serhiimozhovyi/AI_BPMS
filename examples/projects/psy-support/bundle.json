@@ -4,7 +4,19 @@
     "name": "Психологічна підтримка",
     "description": "Бот психологічної підтримки за ТЗ Астарти (docs/psy-support.md): таблиці, ролі, сторінки психологів і координатора, підсценарії правил запису.",
     "icon": "psychology",
-    "appRoles": [{"key": "coordinator", "name": "Координатор"}, {"key": "psychologist", "name": "Психолог"}]
+    "appRoles": [{"key": "coordinator", "name": "Координатор"}, {"key": "psychologist", "name": "Психолог"}],
+    "app": {
+      "title": "Кабінет психологічної підтримки",
+      "icon": "psychology",
+      "home": "today",
+      "timezone": "Europe/Kyiv",
+      "nav": [
+        {"label": "", "pages": ["today", "schedule"]},
+        {"label": "Записи", "pages": ["bookings", "events", "bst"]},
+        {"label": "Розклад і матеріали", "pages": ["templates", "materials"]},
+        {"label": "Керування", "pages": ["psychologists", "texts", "users", "journal", "metrics"]}
+      ]
+    }
   },
   "tables": [
     {
@@ -283,90 +295,425 @@
   ],
   "pages": [
     {
-      "key": "my-slots",
-      "name": "Мої слоти",
-      "kind": "list",
+      "key": "today",
+      "name": "Сьогодні",
+      "kind": "dashboard",
       "definition": {
-        "table": "slots",
-        "columns": [
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "duration_min", "label": "Хв"},
-          {"column": "format", "label": "Формат"},
-          {"column": "status", "label": "Стан"},
-          {"column": "source", "label": "Звідки"}
-        ],
-        "filter": [{"column": "psychologist_user", "operator": "eq", "value": "{{ $user.id }}"}],
-        "sort": {"column": "starts_at", "direction": "asc"},
-        "actions": [{"label": "Змінити", "page": "slot-edit"}],
-        "create": {"page": "slot-new"}
+        "table": "",
+        "blocks": [
+          {
+            "kind": "text",
+            "text": "Вітаємо, {{ $user.email }}! Нижче — найближче в розкладі, записах і подіях.",
+            "width": 12
+          },
+          {
+            "kind": "tiles",
+            "label": "Показники",
+            "page": "metrics",
+            "width": 12,
+            "when": "{{ $user.appRole === 'coordinator' }}"
+          },
+          {"kind": "calendar", "label": "Сьогодні в розкладі", "page": "schedule", "range": "today", "width": 6},
+          {
+            "kind": "list",
+            "label": "Мої найближчі записи",
+            "limit": 5,
+            "width": 6,
+            "when": "{{ $user.appRole === 'psychologist' }}",
+            "definition": {
+              "table": "bookings",
+              "columns": [
+                {"column": "starts_at", "label": "Час", "format": "datetime"},
+                {"column": "client_name", "label": "Ім'я"},
+                {"column": "client_phone", "label": "Телефон", "format": "phone"}
+              ],
+              "filter": [
+                {"column": "status", "operator": "eq", "value": "active"},
+                {"column": "starts_at", "operator": "gte", "value": "{{ new Date().toISOString() }}"},
+                {"column": "psychologist_user", "operator": "eq", "value": "{{ $user.id }}"}
+              ],
+              "sort": {"column": "starts_at", "direction": "asc"},
+              "empty": "Найближчих записів немає"
+            }
+          },
+          {
+            "kind": "list",
+            "label": "Найближчі записи",
+            "limit": 5,
+            "width": 6,
+            "when": "{{ $user.appRole === 'coordinator' }}",
+            "definition": {
+              "table": "bookings",
+              "columns": [
+                {"column": "starts_at", "label": "Час", "format": "datetime"},
+                {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+                {"column": "client_name", "label": "Ім'я"}
+              ],
+              "filter": [
+                {"column": "status", "operator": "eq", "value": "active"},
+                {"column": "starts_at", "operator": "gte", "value": "{{ new Date().toISOString() }}"}
+              ],
+              "sort": {"column": "starts_at", "direction": "asc"},
+              "empty": "Найближчих записів немає"
+            }
+          },
+          {
+            "kind": "list",
+            "label": "Найближчі події",
+            "limit": 3,
+            "width": 6,
+            "definition": {
+              "table": "events",
+              "columns": [
+                {"column": "starts_at", "label": "Початок", "format": "datetime"},
+                {"column": "title", "label": "Назва"},
+                {
+                  "column": "format",
+                  "label": "Формат",
+                  "format": "enum",
+                  "labels": {"online": "Онлайн", "offline": "Наживо"}
+                }
+              ],
+              "filter": [
+                {"column": "status", "operator": "eq", "value": "open"},
+                {"column": "starts_at", "operator": "gte", "value": "{{ new Date().toISOString() }}"}
+              ],
+              "sort": {"column": "starts_at", "direction": "asc"},
+              "empty": "Запланованих подій немає"
+            }
+          },
+          {
+            "kind": "list",
+            "label": "Найближчі сеанси БСТ",
+            "limit": 3,
+            "width": 6,
+            "definition": {
+              "table": "bst_sessions",
+              "columns": [
+                {"column": "starts_at", "label": "Початок", "format": "datetime"},
+                {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+                {
+                  "column": "format",
+                  "label": "Формат",
+                  "format": "enum",
+                  "labels": {"online": "Онлайн", "offline": "Наживо"}
+                }
+              ],
+              "filter": [
+                {"column": "status", "operator": "eq", "value": "open"},
+                {"column": "starts_at", "operator": "gte", "value": "{{ new Date().toISOString() }}"}
+              ],
+              "sort": {"column": "starts_at", "direction": "asc"},
+              "empty": "Запланованих сеансів немає"
+            }
+          },
+          {
+            "kind": "actions",
+            "actions": [
+              {"label": "Додати слот", "page": "slot-new", "mode": "drawer"},
+              {
+                "label": "Згенерувати слоти з шаблонів",
+                "workflow": "generate-slots",
+                "confirm": "Створити слоти з усіх шаблонів на HORIZON_DAYS днів уперед?"
+              }
+            ]
+          }
+        ]
       },
-      "roles": ["psychologist"],
+      "roles": ["coordinator", "psychologist"],
       "sortOrder": 0
     },
     {
       "key": "schedule",
-      "name": "Розклад і слоти",
-      "kind": "list",
+      "name": "Розклад",
+      "kind": "calendar",
       "definition": {
         "table": "slots",
-        "columns": [
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
-          {"column": "format", "label": "Формат"},
-          {"column": "status", "label": "Стан"},
-          {"column": "source", "label": "Звідки"}
+        "calendar": {
+          "start": "starts_at",
+          "duration": "duration_min",
+          "title": {"column": "format", "label": "Формат", "format": "enum", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          "subtitle": {"column": "psychologist_id", "display": "psychologists.name"},
+          "color": {
+            "column": "status",
+            "label": "Стан",
+            "format": "badge",
+            "labels": {"open": "Вільно", "closed": "Закрито"},
+            "colors": {"open": "green", "closed": "gray"}
+          },
+          "views": ["week", "day", "month"],
+          "default": "week",
+          "fromHour": 8,
+          "toHour": 21,
+          "open": {"page": "slot-edit", "mode": "drawer"}
+        },
+        "filters": [
+          {
+            "column": "psychologist_user",
+            "kind": "select",
+            "label": "Психолог",
+            "default": "{{ $user.appRole === 'psychologist' ? $user.id : null }}"
+          },
+          {"column": "status", "kind": "chips", "labels": {"open": "Вільно", "closed": "Закрито"}, "label": "Стан"}
         ],
-        "sort": {"column": "starts_at", "direction": "asc"},
+        "create": {"page": "slot-new", "mode": "drawer"},
         "actions": [
-          {"label": "Змінити", "page": "slot-edit"},
-          {"label": "Видалити", "operation": "delete", "confirm": "Видалити слот?"}
+          {
+            "label": "Видалити слот",
+            "operation": "delete",
+            "confirm": "Видалити слот?",
+            "when": "{{ $row.status === 'open' }}"
+          }
         ],
-        "create": {"page": "slot-new"}
+        "empty": "Слотів у цьому періоді немає. Клікніть на вільне місце, щоб додати."
       },
-      "roles": ["coordinator"],
+      "roles": ["coordinator", "psychologist"],
       "sortOrder": 1
     },
     {
-      "key": "slot-new",
-      "name": "Слот — новий запис",
-      "kind": "form",
+      "key": "bookings",
+      "name": "Записи",
+      "kind": "list",
       "definition": {
-        "table": "slots",
-        "fields": [
-          {"column": "psychologist_id", "label": "Психолог", "required": true},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
-          {"column": "starts_at", "label": "Початок", "required": true},
-          {"column": "duration_min", "label": "Тривалість, хв"},
-          {"column": "format", "label": "Формат"},
-          {"column": "status", "label": "Стан", "required": true},
-          {"column": "source", "value": "manual"}
+        "table": "bookings",
+        "columns": [
+          {"column": "starts_at", "label": "Час", "format": "datetime"},
+          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+          {"column": "client_name", "label": "Ім'я"},
+          {"column": "client_phone", "label": "Телефон", "format": "phone"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "format": "badge",
+            "labels": {"active": "Активний", "cancelled": "Скасовано", "completed": "Відбувся", "no_show": "Не з'явився"},
+            "colors": {"active": "blue", "cancelled": "gray", "completed": "green", "no_show": "red"}
+          },
+          {
+            "column": "cancelled_by",
+            "label": "Хто скасував",
+            "format": "enum",
+            "labels": {"user": "Клієнт", "psychologist": "Психолог", "coordinator": "Координатор"}
+          }
         ],
-        "onSubmit": {"operation": "insert"},
-        "then": {"page": "schedule"}
+        "filters": [
+          {
+            "column": "status",
+            "kind": "chips",
+            "labels": {"active": "Активний", "cancelled": "Скасовано", "completed": "Відбувся", "no_show": "Не з'явився"},
+            "label": "Стан",
+            "default": ["active"]
+          },
+          {"column": "starts_at", "kind": "period", "label": "Коли"},
+          {
+            "column": "psychologist_user",
+            "kind": "select",
+            "label": "Психолог",
+            "default": "{{ $user.appRole === 'psychologist' ? $user.id : null }}"
+          },
+          {"column": "client_name", "kind": "search", "label": "Пошук за ім'ям"}
+        ],
+        "sort": {"column": "starts_at", "direction": "asc"},
+        "actions": [
+          {
+            "label": "Скасувати",
+            "workflow": "cancel-booking",
+            "confirm": "Скасувати запис? Людина отримає повідомлення.",
+            "when": "{{ $row.status === 'active' }}"
+          }
+        ],
+        "empty": "Записів немає"
       },
       "roles": ["coordinator", "psychologist"],
       "sortOrder": 2
     },
     {
-      "key": "slot-edit",
-      "name": "Слот — зміна",
-      "kind": "form",
+      "key": "events",
+      "name": "Події",
+      "kind": "list",
       "definition": {
-        "table": "slots",
-        "fields": [
-          {"column": "psychologist_id", "label": "Психолог"},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "duration_min", "label": "Тривалість, хв"},
-          {"column": "format", "label": "Формат"},
-          {"column": "status", "label": "Стан"},
-          {"column": "source", "value": "manual"}
+        "table": "events",
+        "columns": [
+          {"column": "starts_at", "label": "Початок", "format": "datetime"},
+          {"column": "title", "label": "Назва"},
+          {"column": "format", "label": "Формат", "format": "enum", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "registered", "label": "Місця"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "format": "badge",
+            "labels": {"draft": "Чернетка", "open": "Відкрита", "closed": "Закрита"},
+            "colors": {"draft": "gray", "open": "green", "closed": "blue"}
+          }
         ],
-        "onSubmit": {"operation": "update"},
-        "then": {"page": "schedule"}
+        "computed": [
+          {
+            "key": "registered",
+            "label": "Місця",
+            "table": "event_registrations",
+            "by": "event_id",
+            "aggregate": "count",
+            "where": [{"column": "status", "operator": "eq", "value": "active"}],
+            "of": "capacity"
+          }
+        ],
+        "filters": [
+          {
+            "column": "status",
+            "kind": "chips",
+            "labels": {"draft": "Чернетка", "open": "Відкрита", "closed": "Закрита"},
+            "label": "Стан",
+            "default": ["open", "draft"]
+          },
+          {"column": "starts_at", "kind": "period", "label": "Коли"},
+          {"column": "title", "kind": "search", "label": "Пошук"}
+        ],
+        "sort": {"column": "starts_at", "direction": "asc"},
+        "create": {"page": "event-new", "mode": "drawer"},
+        "actions": [
+          {"label": "Змінити", "page": "event-edit", "mode": "drawer"},
+          {
+            "label": "Надіслати оголошення",
+            "workflow": "send-notice",
+            "confirm": "Надіслати оголошення всім зареєстрованим?",
+            "when": "{{ $row.status === 'open' }}"
+          }
+        ],
+        "expand": [
+          {
+            "table": "event_registrations",
+            "by": "event_id",
+            "label": "Учасники",
+            "columns": [
+              {"column": "client_name", "label": "Ім'я"},
+              {
+                "column": "status",
+                "label": "Стан",
+                "format": "badge",
+                "labels": {"active": "Зареєстровано", "cancelled": "Скасовано", "attended": "Був"},
+                "colors": {"active": "green", "cancelled": "gray", "attended": "blue"}
+              },
+              {"column": "feedback", "label": "Оцінка"},
+              {"column": "created_at", "label": "Зареєстровано", "format": "datetime"}
+            ],
+            "sort": {"column": "created_at", "direction": "asc"},
+            "actions": [
+              {
+                "label": "Скасувати",
+                "workflow": "cancel-registration",
+                "confirm": "Скасувати реєстрацію? Людина отримає повідомлення.",
+                "when": "{{ $row.status === 'active' }}"
+              }
+            ],
+            "empty": "Ще ніхто не зареєструвався"
+          }
+        ],
+        "empty": "Подій немає. Створіть першу кнопкою «Створити»."
       },
       "roles": ["coordinator", "psychologist"],
-      "sortOrder": 2
+      "sortOrder": 3
+    },
+    {
+      "key": "bst",
+      "name": "Сеанси БСТ",
+      "kind": "list",
+      "definition": {
+        "table": "bst_sessions",
+        "columns": [
+          {"column": "starts_at", "label": "Початок", "format": "datetime"},
+          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
+          {"column": "format", "label": "Формат", "format": "enum", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "registered", "label": "Місця"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "format": "badge",
+            "labels": {"open": "Відкритий", "closed": "Закритий"},
+            "colors": {"open": "green", "closed": "gray"}
+          }
+        ],
+        "computed": [
+          {
+            "key": "registered",
+            "label": "Місця",
+            "table": "bst_bookings",
+            "by": "session_id",
+            "aggregate": "count",
+            "where": [{"column": "status", "operator": "eq", "value": "active"}],
+            "of": "capacity"
+          }
+        ],
+        "filters": [
+          {
+            "column": "status",
+            "kind": "chips",
+            "labels": {"open": "Відкритий", "closed": "Закритий"},
+            "label": "Стан",
+            "default": ["open"]
+          },
+          {"column": "starts_at", "kind": "period", "label": "Коли"}
+        ],
+        "sort": {"column": "starts_at", "direction": "asc"},
+        "create": {"page": "bst-new", "mode": "drawer"},
+        "actions": [
+          {"label": "Змінити", "page": "bst-edit", "mode": "drawer"},
+          {
+            "label": "Надіслати оголошення",
+            "workflow": "send-notice",
+            "confirm": "Надіслати оголошення всім записаним?",
+            "when": "{{ $row.status === 'open' }}"
+          }
+        ],
+        "expand": [
+          {
+            "table": "bst_bookings",
+            "by": "session_id",
+            "label": "Записані",
+            "columns": [
+              {"column": "client_name", "label": "Ім'я"},
+              {
+                "column": "status",
+                "label": "Стан",
+                "format": "badge",
+                "labels": {"active": "Зареєстровано", "cancelled": "Скасовано", "attended": "Був"},
+                "colors": {"active": "green", "cancelled": "gray", "attended": "blue"}
+              },
+              {"column": "created_at", "label": "Коли", "format": "datetime"}
+            ],
+            "sort": {"column": "created_at", "direction": "asc"},
+            "actions": [
+              {
+                "label": "Скасувати",
+                "workflow": "cancel-bst",
+                "confirm": "Скасувати запис? Звільнене місце отримає перший у черзі.",
+                "when": "{{ $row.status === 'active' }}"
+              }
+            ],
+            "empty": "Ще ніхто не записався"
+          },
+          {
+            "table": "waitlist",
+            "by": "session_id",
+            "label": "Лист очікування",
+            "columns": [
+              {"column": "client_name", "label": "Ім'я"},
+              {
+                "column": "status",
+                "label": "Стан",
+                "format": "badge",
+                "labels": {"waiting": "Очікує", "offered": "Запропоновано", "cancelled": "Скасовано", "booked": "Записано"},
+                "colors": {"waiting": "yellow", "offered": "blue", "cancelled": "gray", "booked": "green"}
+              },
+              {"column": "added_at", "label": "Додано", "format": "datetime"},
+              {"column": "offered_at", "label": "Запропоновано", "format": "datetime"}
+            ],
+            "sort": {"column": "added_at", "direction": "asc"},
+            "empty": "Черги немає"
+          }
+        ],
+        "empty": "Сеансів немає. Створіть перший кнопкою «Створити»."
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 4
     },
     {
       "key": "templates",
@@ -376,369 +723,35 @@
         "table": "slot_templates",
         "columns": [
           {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
-          {"column": "weekday", "label": "День (1 — пн)"},
+          {"column": "weekday", "label": "День", "format": "weekday"},
           {"column": "time", "label": "Час"},
           {"column": "duration_min", "label": "Хв"},
-          {"column": "format", "label": "Формат"},
-          {"column": "valid_from", "label": "З"},
-          {"column": "valid_to", "label": "По"}
+          {"column": "format", "label": "Формат", "format": "enum", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "valid_from", "label": "Діє з", "format": "date"},
+          {"column": "valid_to", "label": "Діє по", "format": "date"}
         ],
+        "filters": [
+          {
+            "column": "psychologist_user",
+            "kind": "select",
+            "label": "Психолог",
+            "default": "{{ $user.appRole === 'psychologist' ? $user.id : null }}"
+          }
+        ],
+        "sort": {"column": "weekday", "direction": "asc"},
+        "create": {"page": "template-new", "mode": "drawer"},
         "actions": [
-          {"label": "Змінити", "page": "template-edit"},
+          {"label": "Змінити", "page": "template-edit", "mode": "drawer"},
           {
             "label": "Згенерувати слоти",
             "workflow": "generate-slots",
             "confirm": "Створити слоти з усіх шаблонів на HORIZON_DAYS днів уперед?"
           }
         ],
-        "create": {"page": "template-new"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 3
-    },
-    {
-      "key": "template-new",
-      "name": "Шаблон розкладу — новий запис",
-      "kind": "form",
-      "definition": {
-        "table": "slot_templates",
-        "fields": [
-          {"column": "psychologist_id", "label": "Психолог", "required": true},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
-          {"column": "weekday", "label": "День тижня (1 — пн … 7 — нд)", "required": true},
-          {"column": "time", "label": "Час (ГГ:ХХ)", "required": true},
-          {"column": "duration_min", "label": "Тривалість, хв"},
-          {"column": "format", "label": "Формат"},
-          {"column": "valid_from", "label": "Діє з"},
-          {"column": "valid_to", "label": "Діє по"}
-        ],
-        "onSubmit": {"operation": "insert"},
-        "then": {"page": "templates"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 4
-    },
-    {
-      "key": "template-edit",
-      "name": "Шаблон розкладу — зміна",
-      "kind": "form",
-      "definition": {
-        "table": "slot_templates",
-        "fields": [
-          {"column": "psychologist_id", "label": "Психолог"},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
-          {"column": "weekday", "label": "День тижня (1 — пн … 7 — нд)"},
-          {"column": "time", "label": "Час (ГГ:ХХ)"},
-          {"column": "duration_min", "label": "Тривалість, хв"},
-          {"column": "format", "label": "Формат"},
-          {"column": "valid_from", "label": "Діє з"},
-          {"column": "valid_to", "label": "Діє по"}
-        ],
-        "onSubmit": {"operation": "update"},
-        "then": {"page": "templates"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 4
-    },
-    {
-      "key": "bookings",
-      "name": "Записи на консультації",
-      "kind": "list",
-      "definition": {
-        "table": "bookings",
-        "columns": [
-          {"column": "starts_at", "label": "Час"},
-          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
-          {"column": "client_name", "label": "Ім'я"},
-          {"column": "client_phone", "label": "Телефон"},
-          {"column": "status", "label": "Стан"},
-          {"column": "cancelled_by", "label": "Хто скасував"}
-        ],
-        "search": ["client_name"],
-        "sort": {"column": "starts_at", "direction": "asc"},
-        "actions": [
-          {
-            "label": "Скасувати",
-            "workflow": "cancel-booking",
-            "confirm": "Скасувати запис? Людина отримає повідомлення.",
-            "when": "{{ $row.status === 'active' }}"
-          }
-        ]
+        "empty": "Шаблонів немає. Додайте повторюваний час прийому, і слоти створюватимуться самі."
       },
       "roles": ["coordinator", "psychologist"],
       "sortOrder": 5
-    },
-    {
-      "key": "events",
-      "name": "Події",
-      "kind": "list",
-      "definition": {
-        "table": "events",
-        "columns": [
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "title", "label": "Назва"},
-          {"column": "format", "label": "Формат"},
-          {"column": "capacity", "label": "Місць (0 — без ліміту)"},
-          {"column": "status", "label": "Стан"}
-        ],
-        "search": ["title"],
-        "sort": {"column": "starts_at", "direction": "desc"},
-        "actions": [{"label": "Відкрити", "page": "event"}, {"label": "Змінити", "page": "event-edit"}],
-        "create": {"page": "event-new"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 6
-    },
-    {
-      "key": "event",
-      "name": "Подія",
-      "kind": "detail",
-      "definition": {
-        "table": "events",
-        "fields": [
-          {"column": "title", "label": "Назва"},
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "description", "label": "Опис"},
-          {"column": "format", "label": "Формат"},
-          {"column": "host", "label": "Веде"},
-          {"column": "contact", "label": "Контакт"},
-          {"column": "capacity", "label": "Місць"},
-          {"column": "status", "label": "Стан"},
-          {"column": "notice", "label": "Оголошення"},
-          {"column": "notice_sent_at", "label": "Надіслано"}
-        ],
-        "related": [
-          {
-            "table": "event_registrations",
-            "by": "event_id",
-            "label": "Учасники",
-            "columns": [
-              {"column": "client_name", "label": "Ім'я"},
-              {"column": "status", "label": "Стан"},
-              {"column": "feedback", "label": "Оцінка"},
-              {"column": "created_at", "label": "Зареєстровано"}
-            ]
-          }
-        ],
-        "actions": [
-          {"label": "Змінити", "page": "event-edit"},
-          {
-            "label": "Надіслати оголошення",
-            "workflow": "send-notice",
-            "confirm": "Надіслати оголошення всім зареєстрованим?"
-          }
-        ]
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 7
-    },
-    {
-      "key": "event-new",
-      "name": "Подія — новий запис",
-      "kind": "form",
-      "definition": {
-        "table": "events",
-        "fields": [
-          {"column": "title", "label": "Назва", "required": true},
-          {"column": "description", "label": "Опис"},
-          {"column": "starts_at", "label": "Початок", "required": true},
-          {"column": "format", "label": "Формат"},
-          {"column": "host", "label": "Веде"},
-          {"column": "contact", "label": "Контакт"},
-          {"column": "capacity", "label": "Місць (0 — без ліміту)"},
-          {"column": "status", "label": "Стан", "required": true},
-          {"column": "notice", "label": "Оголошення учасникам"}
-        ],
-        "onSubmit": {"operation": "insert"},
-        "then": {"page": "events"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 8
-    },
-    {
-      "key": "event-edit",
-      "name": "Подія — зміна",
-      "kind": "form",
-      "definition": {
-        "table": "events",
-        "fields": [
-          {"column": "title", "label": "Назва"},
-          {"column": "description", "label": "Опис"},
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "format", "label": "Формат"},
-          {"column": "host", "label": "Веде"},
-          {"column": "contact", "label": "Контакт"},
-          {"column": "capacity", "label": "Місць (0 — без ліміту)"},
-          {"column": "status", "label": "Стан"},
-          {"column": "notice", "label": "Оголошення учасникам"}
-        ],
-        "onSubmit": {"operation": "update"},
-        "then": {"page": "events"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 8
-    },
-    {
-      "key": "registrations",
-      "name": "Реєстрації на події",
-      "kind": "list",
-      "definition": {
-        "table": "event_registrations",
-        "columns": [
-          {"column": "event_id", "label": "Подія", "display": "events.title"},
-          {"column": "client_name", "label": "Ім'я"},
-          {"column": "status", "label": "Стан"},
-          {"column": "feedback", "label": "Оцінка"}
-        ],
-        "search": ["client_name"],
-        "actions": [
-          {
-            "label": "Скасувати",
-            "workflow": "cancel-registration",
-            "confirm": "Скасувати реєстрацію? Людина отримає повідомлення.",
-            "when": "{{ $row.status === 'active' }}"
-          }
-        ]
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 9
-    },
-    {
-      "key": "bst",
-      "name": "Сеанси БСТ",
-      "kind": "list",
-      "definition": {
-        "table": "bst_sessions",
-        "columns": [
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
-          {"column": "format", "label": "Формат"},
-          {"column": "capacity", "label": "Місць"},
-          {"column": "status", "label": "Стан"}
-        ],
-        "sort": {"column": "starts_at", "direction": "desc"},
-        "actions": [{"label": "Відкрити", "page": "bst-session"}, {"label": "Змінити", "page": "bst-edit"}],
-        "create": {"page": "bst-new"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 10
-    },
-    {
-      "key": "bst-session",
-      "name": "Сеанс БСТ",
-      "kind": "detail",
-      "definition": {
-        "table": "bst_sessions",
-        "fields": [
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "psychologist_id", "label": "Психолог", "display": "psychologists.name"},
-          {"column": "format", "label": "Формат"},
-          {"column": "capacity", "label": "Місць"},
-          {"column": "status", "label": "Стан"},
-          {"column": "notice", "label": "Оголошення"},
-          {"column": "notice_sent_at", "label": "Надіслано"}
-        ],
-        "related": [
-          {
-            "table": "bst_bookings",
-            "by": "session_id",
-            "label": "Записані",
-            "columns": [
-              {"column": "client_name", "label": "Ім'я"},
-              {"column": "status", "label": "Стан"},
-              {"column": "created_at", "label": "Коли"}
-            ]
-          },
-          {
-            "table": "waitlist",
-            "by": "session_id",
-            "label": "Лист очікування",
-            "columns": [
-              {"column": "client_name", "label": "Ім'я"},
-              {"column": "status", "label": "Стан"},
-              {"column": "added_at", "label": "Додано"},
-              {"column": "offered_at", "label": "Запропоновано"}
-            ]
-          }
-        ],
-        "actions": [
-          {"label": "Змінити", "page": "bst-edit"},
-          {
-            "label": "Надіслати оголошення",
-            "workflow": "send-notice",
-            "confirm": "Надіслати оголошення всім записаним?"
-          }
-        ]
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 11
-    },
-    {
-      "key": "bst-new",
-      "name": "Сеанс БСТ — новий запис",
-      "kind": "form",
-      "definition": {
-        "table": "bst_sessions",
-        "fields": [
-          {"column": "psychologist_id", "label": "Психолог", "required": true},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
-          {"column": "starts_at", "label": "Початок", "required": true},
-          {"column": "format", "label": "Формат"},
-          {"column": "capacity", "label": "Місць (типово BST_CAPACITY_DEFAULT)"},
-          {"column": "status", "label": "Стан", "required": true},
-          {"column": "notice", "label": "Оголошення учасникам"}
-        ],
-        "onSubmit": {"operation": "insert"},
-        "then": {"page": "bst"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 12
-    },
-    {
-      "key": "bst-edit",
-      "name": "Сеанс БСТ — зміна",
-      "kind": "form",
-      "definition": {
-        "table": "bst_sessions",
-        "fields": [
-          {"column": "psychologist_id", "label": "Психолог"},
-          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
-          {"column": "starts_at", "label": "Початок"},
-          {"column": "format", "label": "Формат"},
-          {"column": "capacity", "label": "Місць (типово BST_CAPACITY_DEFAULT)"},
-          {"column": "status", "label": "Стан"},
-          {"column": "notice", "label": "Оголошення учасникам"}
-        ],
-        "onSubmit": {"operation": "update"},
-        "then": {"page": "bst"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 12
-    },
-    {
-      "key": "bst-bookings",
-      "name": "Записи на БСТ",
-      "kind": "list",
-      "definition": {
-        "table": "bst_bookings",
-        "columns": [
-          {"column": "session_id", "label": "Сеанс", "display": "bst_sessions.starts_at"},
-          {"column": "client_name", "label": "Ім'я"},
-          {"column": "status", "label": "Стан"},
-          {"column": "created_at", "label": "Коли"}
-        ],
-        "search": ["client_name"],
-        "actions": [
-          {
-            "label": "Скасувати",
-            "workflow": "cancel-bst",
-            "confirm": "Скасувати запис? Звільнене місце отримає перший у черзі.",
-            "when": "{{ $row.status === 'active' }}"
-          }
-        ]
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 13
     },
     {
       "key": "materials",
@@ -748,94 +761,38 @@
         "table": "materials",
         "columns": [
           {"column": "title", "label": "Назва"},
-          {"column": "status", "label": "Стан"},
-          {"column": "published_at", "label": "Опубліковано"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "format": "badge",
+            "labels": {"draft": "Чернетка", "published": "Опубліковано", "archived": "В архіві"},
+            "colors": {"draft": "gray", "published": "green", "archived": "gray"}
+          },
+          {
+            "column": "file_type",
+            "label": "Файл",
+            "format": "enum",
+            "labels": {"document": "Документ", "video": "Відео", "audio": "Аудіо", "voice": "Голосове"}
+          },
+          {"column": "published_at", "label": "Опубліковано", "format": "datetime"},
           {"column": "views", "label": "Переглядів"}
         ],
-        "search": ["title"],
+        "filters": [
+          {
+            "column": "status",
+            "kind": "chips",
+            "labels": {"draft": "Чернетка", "published": "Опубліковано", "archived": "В архіві"},
+            "label": "Стан"
+          },
+          {"column": "title", "kind": "search", "label": "Пошук"}
+        ],
         "sort": {"column": "published_at", "direction": "desc"},
-        "actions": [{"label": "Змінити", "page": "material-edit"}],
-        "create": {"page": "material-new"}
+        "create": {"page": "material-new", "mode": "drawer"},
+        "actions": [{"label": "Змінити", "page": "material-edit", "mode": "drawer"}],
+        "empty": "Матеріалів немає"
       },
       "roles": ["coordinator", "psychologist"],
-      "sortOrder": 14
-    },
-    {
-      "key": "material-new",
-      "name": "Матеріал — новий запис",
-      "kind": "form",
-      "definition": {
-        "table": "materials",
-        "fields": [
-          {"column": "title", "label": "Назва", "required": true},
-          {"column": "body", "label": "Текст"},
-          {"column": "link", "label": "Посилання (стаття, відео, аудіо)"},
-          {"column": "file_type", "label": "Файл у боті: вид"},
-          {"column": "file", "label": "Файл у боті: посилання або file_id Telegram"},
-          {"column": "status", "label": "Стан", "required": true},
-          {"column": "published_at", "label": "Опубліковано"}
-        ],
-        "onSubmit": {"operation": "insert"},
-        "then": {"page": "materials"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 15
-    },
-    {
-      "key": "material-edit",
-      "name": "Матеріал — зміна",
-      "kind": "form",
-      "definition": {
-        "table": "materials",
-        "fields": [
-          {"column": "title", "label": "Назва"},
-          {"column": "body", "label": "Текст"},
-          {"column": "link", "label": "Посилання (стаття, відео, аудіо)"},
-          {"column": "file_type", "label": "Файл у боті: вид"},
-          {"column": "file", "label": "Файл у боті: посилання або file_id Telegram"},
-          {"column": "status", "label": "Стан"},
-          {"column": "published_at", "label": "Опубліковано"}
-        ],
-        "onSubmit": {"operation": "update"},
-        "then": {"page": "materials"}
-      },
-      "roles": ["coordinator", "psychologist"],
-      "sortOrder": 15
-    },
-    {
-      "key": "texts",
-      "name": "Тексти бота",
-      "kind": "list",
-      "definition": {
-        "table": "settings",
-        "columns": [
-          {"column": "key", "label": "Ключ"},
-          {"column": "value", "label": "Значення"},
-          {"column": "updated_at", "label": "Змінено"}
-        ],
-        "search": ["key", "value"],
-        "sort": {"column": "key", "direction": "asc"},
-        "actions": [{"label": "Змінити", "page": "text-form"}]
-      },
-      "roles": ["coordinator"],
-      "sortOrder": 16
-    },
-    {
-      "key": "text-form",
-      "name": "Текст чи налаштування",
-      "kind": "form",
-      "definition": {
-        "table": "settings",
-        "fields": [
-          {"column": "key", "label": "Ключ", "required": true},
-          {"column": "value", "label": "Значення"},
-          {"column": "updated_at", "value": "{{ new Date().toISOString() }}"}
-        ],
-        "onSubmit": {"operation": "upsert"},
-        "then": {"page": "texts"}
-      },
-      "roles": ["coordinator"],
-      "sortOrder": 17
+      "sortOrder": 6
     },
     {
       "key": "psychologists",
@@ -846,55 +803,92 @@
         "columns": [
           {"column": "name", "label": "Ім'я"},
           {"column": "email", "label": "Пошта"},
-          {"column": "phone", "label": "Телефон"},
+          {"column": "phone", "label": "Телефон", "format": "phone"},
           {"column": "user_id", "label": "Обліковий запис"},
-          {"column": "active", "label": "Працює"}
+          {"column": "active", "label": "Працює", "format": "boolean"}
         ],
-        "search": ["name", "email"],
+        "filters": [
+          {"column": "active", "kind": "select", "label": "Працює"},
+          {"column": "name", "kind": "search", "label": "Пошук"}
+        ],
         "sort": {"column": "name", "direction": "asc"},
-        "actions": [{"label": "Змінити", "page": "psychologist-edit"}],
-        "create": {"page": "psychologist-new"}
+        "create": {"page": "psychologist-new", "mode": "drawer"},
+        "actions": [{"label": "Змінити", "page": "psychologist-edit", "mode": "drawer"}],
+        "expand": [
+          {
+            "table": "slot_templates",
+            "by": "psychologist_id",
+            "label": "Шаблони розкладу",
+            "columns": [
+              {"column": "weekday", "label": "День", "format": "weekday"},
+              {"column": "time", "label": "Час"},
+              {"column": "duration_min", "label": "Хв"},
+              {
+                "column": "format",
+                "label": "Формат",
+                "format": "enum",
+                "labels": {"online": "Онлайн", "offline": "Наживо"}
+              }
+            ],
+            "sort": {"column": "weekday", "direction": "asc"},
+            "create": {"page": "template-new", "mode": "drawer"},
+            "empty": "Шаблонів немає"
+          }
+        ],
+        "empty": "Психологів немає"
       },
       "roles": ["coordinator"],
-      "sortOrder": 18
+      "sortOrder": 7
     },
     {
-      "key": "psychologist-new",
-      "name": "Психолог — новий запис",
+      "key": "texts",
+      "name": "Тексти й налаштування",
       "kind": "form",
       "definition": {
-        "table": "psychologists",
-        "fields": [
-          {"column": "name", "label": "Ім'я", "required": true},
-          {"column": "email", "label": "Пошта"},
-          {"column": "phone", "label": "Телефон (380XXXXXXXXX)"},
-          {"column": "user_id", "label": "Обліковий запис OpenBP"},
-          {"column": "active", "label": "Працює"}
-        ],
-        "onSubmit": {"operation": "insert"},
-        "then": {"page": "psychologists"}
+        "table": "settings",
+        "keyValue": {
+          "key": "key",
+          "value": "value",
+          "keys": [
+            "TEXT_WELCOME",
+            "TEXT_MENU",
+            "TEXT_HELP",
+            "TEXT_SOS",
+            "TEXT_BST_INFO",
+            "MIN_HOURS_BEFORE",
+            "MAX_ACTIVE_CONSULTS",
+            "HORIZON_DAYS",
+            "SLOT_DURATION_MIN",
+            "BST_CAPACITY_DEFAULT",
+            "PSY_PEER_VIEW_DAYS",
+            "REMINDER_MINUTES",
+            "RETENTION_MONTHS",
+            "RETENTION_HOUR",
+            "timezone"
+          ],
+          "labels": {
+            "TEXT_WELCOME": "Привітання",
+            "TEXT_MENU": "Текст головного меню",
+            "TEXT_HELP": "Текст допомоги",
+            "TEXT_SOS": "Текст «Мені дуже важко»",
+            "TEXT_BST_INFO": "Про сеанси БСТ",
+            "MIN_HOURS_BEFORE": "Запис не пізніше ніж за … годин",
+            "MAX_ACTIVE_CONSULTS": "Ліміт активних записів на людину",
+            "HORIZON_DAYS": "Скільки днів уперед показувати слоти",
+            "SLOT_DURATION_MIN": "Тривалість слота за замовчуванням, хв",
+            "BST_CAPACITY_DEFAULT": "Місць на сеансі БСТ за замовчуванням",
+            "PSY_PEER_VIEW_DAYS": "Скільки днів уперед психолог бачить записи колег",
+            "REMINDER_MINUTES": "Нагадування за … хвилин (через кому)",
+            "RETENTION_MONTHS": "Зберігати дані клієнтів, місяців",
+            "RETENTION_HOUR": "Година знеособлення (за місцевим часом)",
+            "timezone": "Часовий пояс"
+          },
+          "multiline": ["TEXT_WELCOME", "TEXT_MENU", "TEXT_HELP", "TEXT_SOS", "TEXT_BST_INFO"]
+        },
+        "onSubmit": {"operation": "upsert"}
       },
       "roles": ["coordinator"],
-      "sortOrder": 19
-    },
-    {
-      "key": "psychologist-edit",
-      "name": "Психолог — зміна",
-      "kind": "form",
-      "definition": {
-        "table": "psychologists",
-        "fields": [
-          {"column": "name", "label": "Ім'я"},
-          {"column": "email", "label": "Пошта"},
-          {"column": "phone", "label": "Телефон (380XXXXXXXXX)"},
-          {"column": "user_id", "label": "Обліковий запис OpenBP"},
-          {"column": "active", "label": "Працює"}
-        ],
-        "onSubmit": {"operation": "update"},
-        "then": {"page": "psychologists"}
-      },
-      "roles": ["coordinator"],
-      "sortOrder": 19
+      "sortOrder": 8
     },
     {
       "key": "users",
@@ -904,15 +898,19 @@
         "table": "users",
         "columns": [
           {"column": "name", "label": "Ім'я"},
-          {"column": "phone", "label": "Телефон"},
-          {"column": "registered_at", "label": "Зареєстровано"},
-          {"column": "deleted_at", "label": "Видалено"}
+          {"column": "phone", "label": "Телефон", "format": "phone"},
+          {"column": "registered_at", "label": "Зареєстровано", "format": "datetime"},
+          {"column": "deleted_at", "label": "Видалено", "format": "datetime"}
         ],
-        "search": ["name", "phone"],
-        "sort": {"column": "registered_at", "direction": "desc"}
+        "filters": [
+          {"column": "registered_at", "kind": "period", "label": "Зареєстровано"},
+          {"column": "name", "kind": "search", "label": "Пошук за ім'ям"}
+        ],
+        "sort": {"column": "registered_at", "direction": "desc"},
+        "empty": "Користувачів немає"
       },
       "roles": ["coordinator"],
-      "sortOrder": 20
+      "sortOrder": 9
     },
     {
       "key": "journal",
@@ -921,17 +919,21 @@
       "definition": {
         "table": "audit_log",
         "columns": [
-          {"column": "at", "label": "Коли"},
+          {"column": "at", "label": "Коли", "format": "datetime"},
           {"column": "actor", "label": "Хто"},
           {"column": "action", "label": "Дія"},
           {"column": "entity", "label": "Об'єкт"},
           {"column": "entity_id", "label": "Id"}
         ],
-        "search": ["action", "actor"],
-        "sort": {"column": "at", "direction": "desc"}
+        "filters": [
+          {"column": "at", "kind": "period", "label": "Коли", "default": "week"},
+          {"column": "action", "kind": "search", "label": "Пошук за дією"}
+        ],
+        "sort": {"column": "at", "direction": "desc"},
+        "empty": "За цей період записів немає"
       },
       "roles": ["coordinator"],
-      "sortOrder": 21
+      "sortOrder": 10
     },
     {
       "key": "metrics",
@@ -1003,7 +1005,287 @@
         ]
       },
       "roles": ["coordinator"],
+      "sortOrder": 11
+    },
+    {
+      "key": "slot-new",
+      "name": "Слот — новий запис",
+      "kind": "form",
+      "definition": {
+        "table": "slots",
+        "fields": [
+          {"column": "psychologist_id", "label": "Психолог", "required": true},
+          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "starts_at", "label": "Початок", "required": true},
+          {"column": "duration_min", "label": "Тривалість, хв"},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "status", "label": "Стан", "required": true, "labels": {"open": "Вільно", "closed": "Закрито"}},
+          {"column": "source", "value": "manual"}
+        ],
+        "onSubmit": {"operation": "insert"},
+        "then": {"page": "schedule"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 20
+    },
+    {
+      "key": "slot-edit",
+      "name": "Слот — зміна",
+      "kind": "form",
+      "definition": {
+        "table": "slots",
+        "fields": [
+          {"column": "psychologist_id", "label": "Психолог"},
+          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "starts_at", "label": "Початок"},
+          {"column": "duration_min", "label": "Тривалість, хв"},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "status", "label": "Стан", "labels": {"open": "Вільно", "closed": "Закрито"}},
+          {"column": "source", "value": "manual"}
+        ],
+        "onSubmit": {"operation": "update"},
+        "then": {"page": "schedule"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 21
+    },
+    {
+      "key": "template-new",
+      "name": "Шаблон розкладу — новий запис",
+      "kind": "form",
+      "definition": {
+        "table": "slot_templates",
+        "fields": [
+          {"column": "psychologist_id", "label": "Психолог", "required": true},
+          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "weekday", "label": "День тижня (1 — пн … 7 — нд)", "required": true},
+          {"column": "time", "label": "Час (ГГ:ХХ)", "required": true},
+          {"column": "duration_min", "label": "Тривалість, хв"},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "valid_from", "label": "Діє з"},
+          {"column": "valid_to", "label": "Діє по"}
+        ],
+        "onSubmit": {"operation": "insert"},
+        "then": {"page": "templates"}
+      },
+      "roles": ["coordinator", "psychologist"],
       "sortOrder": 22
+    },
+    {
+      "key": "template-edit",
+      "name": "Шаблон розкладу — зміна",
+      "kind": "form",
+      "definition": {
+        "table": "slot_templates",
+        "fields": [
+          {"column": "psychologist_id", "label": "Психолог"},
+          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "weekday", "label": "День тижня (1 — пн … 7 — нд)"},
+          {"column": "time", "label": "Час (ГГ:ХХ)"},
+          {"column": "duration_min", "label": "Тривалість, хв"},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "valid_from", "label": "Діє з"},
+          {"column": "valid_to", "label": "Діє по"}
+        ],
+        "onSubmit": {"operation": "update"},
+        "then": {"page": "templates"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 23
+    },
+    {
+      "key": "event-new",
+      "name": "Подія — новий запис",
+      "kind": "form",
+      "definition": {
+        "table": "events",
+        "fields": [
+          {"column": "title", "label": "Назва", "required": true},
+          {"column": "description", "label": "Опис"},
+          {"column": "starts_at", "label": "Початок", "required": true},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "host", "label": "Веде"},
+          {"column": "contact", "label": "Контакт"},
+          {"column": "capacity", "label": "Місць (0 — без ліміту)", "format": "capacity"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "required": true,
+            "labels": {"draft": "Чернетка", "open": "Відкрита", "closed": "Закрита"}
+          },
+          {"column": "notice", "label": "Оголошення учасникам"}
+        ],
+        "onSubmit": {"operation": "insert"},
+        "then": {"page": "events"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 24
+    },
+    {
+      "key": "event-edit",
+      "name": "Подія — зміна",
+      "kind": "form",
+      "definition": {
+        "table": "events",
+        "fields": [
+          {"column": "title", "label": "Назва"},
+          {"column": "description", "label": "Опис"},
+          {"column": "starts_at", "label": "Початок"},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "host", "label": "Веде"},
+          {"column": "contact", "label": "Контакт"},
+          {"column": "capacity", "label": "Місць (0 — без ліміту)", "format": "capacity"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "labels": {"draft": "Чернетка", "open": "Відкрита", "closed": "Закрита"}
+          },
+          {"column": "notice", "label": "Оголошення учасникам"}
+        ],
+        "onSubmit": {"operation": "update"},
+        "then": {"page": "events"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 25
+    },
+    {
+      "key": "bst-new",
+      "name": "Сеанс БСТ — новий запис",
+      "kind": "form",
+      "definition": {
+        "table": "bst_sessions",
+        "fields": [
+          {"column": "psychologist_id", "label": "Психолог", "required": true},
+          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "starts_at", "label": "Початок", "required": true},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "capacity", "label": "Місць (типово BST_CAPACITY_DEFAULT)", "format": "capacity"},
+          {"column": "status", "label": "Стан", "required": true, "labels": {"open": "Відкритий", "closed": "Закритий"}},
+          {"column": "notice", "label": "Оголошення учасникам"}
+        ],
+        "onSubmit": {"operation": "insert"},
+        "then": {"page": "bst"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 26
+    },
+    {
+      "key": "bst-edit",
+      "name": "Сеанс БСТ — зміна",
+      "kind": "form",
+      "definition": {
+        "table": "bst_sessions",
+        "fields": [
+          {"column": "psychologist_id", "label": "Психолог"},
+          {"column": "psychologist_user", "label": "Обліковий запис психолога"},
+          {"column": "starts_at", "label": "Початок"},
+          {"column": "format", "label": "Формат", "labels": {"online": "Онлайн", "offline": "Наживо"}},
+          {"column": "capacity", "label": "Місць (типово BST_CAPACITY_DEFAULT)", "format": "capacity"},
+          {"column": "status", "label": "Стан", "labels": {"open": "Відкритий", "closed": "Закритий"}},
+          {"column": "notice", "label": "Оголошення учасникам"}
+        ],
+        "onSubmit": {"operation": "update"},
+        "then": {"page": "bst"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 27
+    },
+    {
+      "key": "material-new",
+      "name": "Матеріал — новий запис",
+      "kind": "form",
+      "definition": {
+        "table": "materials",
+        "fields": [
+          {"column": "title", "label": "Назва", "required": true},
+          {"column": "body", "label": "Текст"},
+          {"column": "link", "label": "Посилання (стаття, відео, аудіо)"},
+          {
+            "column": "file_type",
+            "label": "Файл у боті: вид",
+            "labels": {"document": "Документ", "video": "Відео", "audio": "Аудіо", "voice": "Голосове"}
+          },
+          {"column": "file", "label": "Файл у боті: посилання або file_id Telegram"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "required": true,
+            "labels": {"draft": "Чернетка", "published": "Опубліковано", "archived": "В архіві"}
+          },
+          {"column": "published_at", "label": "Опубліковано"}
+        ],
+        "onSubmit": {"operation": "insert"},
+        "then": {"page": "materials"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 28
+    },
+    {
+      "key": "material-edit",
+      "name": "Матеріал — зміна",
+      "kind": "form",
+      "definition": {
+        "table": "materials",
+        "fields": [
+          {"column": "title", "label": "Назва"},
+          {"column": "body", "label": "Текст"},
+          {"column": "link", "label": "Посилання (стаття, відео, аудіо)"},
+          {
+            "column": "file_type",
+            "label": "Файл у боті: вид",
+            "labels": {"document": "Документ", "video": "Відео", "audio": "Аудіо", "voice": "Голосове"}
+          },
+          {"column": "file", "label": "Файл у боті: посилання або file_id Telegram"},
+          {
+            "column": "status",
+            "label": "Стан",
+            "labels": {"draft": "Чернетка", "published": "Опубліковано", "archived": "В архіві"}
+          },
+          {"column": "published_at", "label": "Опубліковано"}
+        ],
+        "onSubmit": {"operation": "update"},
+        "then": {"page": "materials"}
+      },
+      "roles": ["coordinator", "psychologist"],
+      "sortOrder": 29
+    },
+    {
+      "key": "psychologist-new",
+      "name": "Психолог — новий запис",
+      "kind": "form",
+      "definition": {
+        "table": "psychologists",
+        "fields": [
+          {"column": "name", "label": "Ім'я", "required": true},
+          {"column": "email", "label": "Пошта"},
+          {"column": "phone", "label": "Телефон (380XXXXXXXXX)", "format": "phone"},
+          {"column": "user_id", "label": "Обліковий запис OpenBP"},
+          {"column": "active", "label": "Працює"}
+        ],
+        "onSubmit": {"operation": "insert"},
+        "then": {"page": "psychologists"}
+      },
+      "roles": ["coordinator"],
+      "sortOrder": 30
+    },
+    {
+      "key": "psychologist-edit",
+      "name": "Психолог — зміна",
+      "kind": "form",
+      "definition": {
+        "table": "psychologists",
+        "fields": [
+          {"column": "name", "label": "Ім'я"},
+          {"column": "email", "label": "Пошта"},
+          {"column": "phone", "label": "Телефон (380XXXXXXXXX)", "format": "phone"},
+          {"column": "user_id", "label": "Обліковий запис OpenBP"},
+          {"column": "active", "label": "Працює"}
+        ],
+        "onSubmit": {"operation": "update"},
+        "then": {"page": "psychologists"}
+      },
+      "roles": ["coordinator"],
+      "sortOrder": 31
     }
   ],
   "workflows": [
