@@ -1,44 +1,61 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { FormlyFieldConfig, FormlyForm } from '@ngx-formly/core';
+import { ActivatedRoute, Router, RouterLink, convertToParamMap } from '@angular/router';
+import { combineLatest, of } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
-import { providePublicForm } from '../../forms/form-field-types';
-import { formFields, toPayload } from '../../forms/form-fields';
+import { BADGE_CLASSES, CellView, DisplayColumn, cellView } from '../../projects/page-format';
 import {
   PageAction,
   PageActionResult,
+  PageFilterValue,
   PageMetrics,
+  PageOpenMode,
   PageRecord,
   PageRow,
   PageRows,
-  PageViewColumn,
+  PageSubmitResult,
   ProjectPageView,
   ProjectPagesApiService,
-  cellText,
 } from '../../projects/project-pages-api.service';
+import { ExpandOpen, PageExpandComponent } from './page-expand.component';
+import { PageDrawerComponent } from './page-drawer.component';
+import { PageFiltersComponent, emptyFilters } from './page-filters.component';
+import { PageFormComponent } from './page-form.component';
 
-interface FieldError {
-  field: string;
-  message: string;
+/** Бокова панель форми: сторінка-форма, рядок для зміни і початкові значення. */
+interface DrawerState {
+  page: string;
+  rowKey: string | null;
+  prefill: Record<string, unknown>;
 }
 
 /**
  * `/projects/:id/app/<key>[/<rowKey>]` — сторінка застосунку (F8-04): список (пошук, сортування, сторінки, дії), картка
  * рядка з пов'язаними списками або форма (поля з типів колонок тим самим рушієм форм, що й публічні форми F6-03).
- * Фільтри сторінки й права застосовує Api; тут — лише показ і переходи.
+ * Фільтри сторінки й права застосовує Api; тут — лише показ і переходи. Список (F8-16): панель фільтрів користувача, мітки й
+ * формати колонок, обчислювані колонки, показ таблицею чи картками, підлеглі списки під рядком і форма в боковій панелі.
  */
 @Component({
   selector: 'app-app-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, FormlyForm],
-  providers: [providePublicForm()],
+  imports: [
+    NgTemplateOutlet,
+    RouterLink,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+    PageFiltersComponent,
+    PageExpandComponent,
+    PageFormComponent,
+    PageDrawerComponent,
+  ],
   template: `
     <section class="px-6 pb-6">
       @if (loading()) {
@@ -57,12 +74,15 @@ interface FieldError {
             <a mat-button data-testid="app-edit-page" [routerLink]="['/projects', projectId, 'app', '_builder', v.page.key]" i18n="@@app.page.edit">Налаштувати</a>
           }
           @if (v.page.kind === 'list' && v.page.definition.create; as create) {
-            <button mat-flat-button type="button" data-testid="app-create" (click)="open(create.page)" i18n="@@app.page.create">Створити</button>
+            <button mat-flat-button type="button" data-testid="app-create" (click)="open(create.page, undefined, create.mode)" i18n="@@app.page.create">Створити</button>
           }
         </div>
 
         @switch (v.page.kind) {
           @case ('list') {
+            @if (v.page.definition.filters?.length) {
+              <app-page-filters [filters]="v.page.definition.filters!" [options]="v.filterOptions" [values]="filterState()" (changed)="filtersChanged($event)" />
+            }
             @if (v.page.definition.search?.length) {
               <mat-form-field appearance="outline" class="w-72">
                 <mat-label i18n="@@app.page.search">Пошук</mat-label>
@@ -71,20 +91,85 @@ interface FieldError {
             }
             @if (rows(); as r) {
               @if (r.items.length === 0) {
-                <p class="opacity-70" data-testid="app-rows-empty" i18n="@@app.page.empty">Записів немає.</p>
+                <p class="opacity-70" data-testid="app-rows-empty">{{ v.page.definition.empty ?? emptyText }}</p>
+              } @else if (v.page.definition.layout === 'cards') {
+                <ul class="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3" data-testid="app-cards">
+                  @for (row of r.items; track row.key) {
+                    <li class="rounded border border-ac-line p-4" [attr.data-row]="row.key">
+                      <div class="flex items-start gap-2">
+                        <div class="grow">
+                          @let title = cardCell(row, v.page.definition.card?.title);
+                          <div class="font-semibold" data-testid="card-title">{{ title.text }}</div>
+                          @if (v.page.definition.card?.subtitle; as sub) {
+                            <div class="opacity-70" data-testid="card-subtitle">{{ cardCell(row, sub).text }}</div>
+                          }
+                        </div>
+                        @if (v.page.definition.expand?.length) {
+                          <button type="button" class="rounded px-2" [attr.aria-expanded]="isExpanded(row.key)" [attr.data-expand-toggle]="row.key" [attr.aria-label]="expandLabel" (click)="toggle(row.key)">
+                            {{ isExpanded(row.key) ? '▾' : '▸' }}
+                          </button>
+                        }
+                      </div>
+                      <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                        @for (c of cardColumns(); track c.column) {
+                          @let cell = cellOf(row, c);
+                          <dt class="opacity-70">{{ c.label }}</dt>
+                          <dd [attr.data-field]="c.column">
+                            @if (cell.color) {
+                              <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)">{{ cell.text }}</span>
+                            } @else {
+                              {{ cell.text }}
+                            }
+                          </dd>
+                        }
+                      </dl>
+                      @if (row.actions.length) {
+                        <div class="mt-2 flex flex-wrap gap-1">
+                          @for (i of row.actions; track i) {
+                            <button mat-button type="button" [attr.data-action]="i" (click)="act(v.page.definition.actions![i], i, row)">
+                              {{ v.page.definition.actions![i].label }}
+                            </button>
+                          }
+                        </div>
+                      }
+                      @if (isExpanded(row.key)) {
+                        <div class="mt-3 border-t border-ac-line pt-3">
+                          <app-page-expand
+                            [projectId]="projectId"
+                            [pageKey]="v.page.key"
+                            [rowKey]="row.key"
+                            [expand]="v.page.definition.expand!"
+                            [timezone]="v.timezone ?? 'UTC'"
+                            [version]="expandVersion()"
+                            (open)="openFromExpand($event)"
+                            (result)="expandResult($event.action, $event.result)"
+                          />
+                        </div>
+                      }
+                    </li>
+                  }
+                </ul>
+                <ng-container *ngTemplateOutlet="pager" />
               } @else {
                 <div class="overflow-x-auto">
                   <table class="w-full max-w-5xl text-left" data-testid="app-rows">
                     <thead>
                       <tr>
-                        @for (c of v.columns; track c.column) {
+                        @if (v.page.definition.expand?.length) {
+                          <th class="w-8 p-2"></th>
+                        }
+                        @for (c of columns(); track c.column) {
                           <th class="p-2">
-                            <button type="button" class="font-semibold" [attr.data-sort]="c.column" (click)="sortBy(c.column)">
-                              {{ c.label }}
-                              @if (sort() === c.column) {
-                                <span aria-hidden="true">{{ descending() ? '↓' : '↑' }}</span>
-                              }
-                            </button>
+                            @if (c.computed) {
+                              <span class="font-semibold">{{ c.label }}</span>
+                            } @else {
+                              <button type="button" class="font-semibold" [attr.data-sort]="c.column" (click)="sortBy(c.column)">
+                                {{ c.label }}
+                                @if (sort() === c.column) {
+                                  <span aria-hidden="true">{{ descending() ? '↓' : '↑' }}</span>
+                                }
+                              </button>
+                            }
                           </th>
                         }
                         <th class="p-2"></th>
@@ -93,8 +178,22 @@ interface FieldError {
                     <tbody>
                       @for (row of r.items; track row.key) {
                         <tr [attr.data-row]="row.key">
-                          @for (c of v.columns; track c.column) {
-                            <td class="p-2">{{ cell(row, c) }}</td>
+                          @if (v.page.definition.expand?.length) {
+                            <td class="p-2">
+                              <button type="button" class="rounded px-1" [attr.aria-expanded]="isExpanded(row.key)" [attr.data-expand-toggle]="row.key" [attr.aria-label]="expandLabel" (click)="toggle(row.key)">
+                                {{ isExpanded(row.key) ? '▾' : '▸' }}
+                              </button>
+                            </td>
+                          }
+                          @for (c of columns(); track c.column) {
+                            @let cell = cellOf(row, c);
+                            <td class="p-2">
+                              @if (cell.color) {
+                                <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)" [attr.data-badge]="cell.color">{{ cell.text }}</span>
+                              } @else {
+                                {{ cell.text }}
+                              }
+                            </td>
                           }
                           <td class="whitespace-nowrap p-2 text-right">
                             @for (i of row.actions; track i) {
@@ -104,10 +203,29 @@ interface FieldError {
                             }
                           </td>
                         </tr>
+                        @if (isExpanded(row.key)) {
+                          <tr [attr.data-expand-row]="row.key">
+                            <td class="bg-ac-stone p-3" [attr.colspan]="columns().length + 2">
+                              <app-page-expand
+                                [projectId]="projectId"
+                                [pageKey]="v.page.key"
+                                [rowKey]="row.key"
+                                [expand]="v.page.definition.expand!"
+                                [timezone]="v.timezone ?? 'UTC'"
+                                [version]="expandVersion()"
+                                (open)="openFromExpand($event)"
+                                (result)="expandResult($event.action, $event.result)"
+                              />
+                            </td>
+                          </tr>
+                        }
                       }
                     </tbody>
                   </table>
                 </div>
+                <ng-container *ngTemplateOutlet="pager" />
+              }
+              <ng-template #pager>
                 @if (r.total > r.pageSize) {
                   <div class="mt-2 flex items-center gap-2" data-testid="app-pager">
                     <button mat-button type="button" [disabled]="r.page <= 1" (click)="go(r.page - 1)" i18n="@@app.page.prev">Назад</button>
@@ -115,15 +233,22 @@ interface FieldError {
                     <button mat-button type="button" [disabled]="r.page >= pages(r)" (click)="go(r.page + 1)" i18n="@@app.page.next">Далі</button>
                   </div>
                 }
-              }
+              </ng-template>
             }
           }
           @case ('detail') {
             @if (record(); as rec) {
               <dl class="mb-4 grid max-w-3xl grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-2" data-testid="app-detail">
-                @for (c of v.columns; track c.column) {
+                @for (c of columns(); track c.column) {
+                  @let cell = cellOf(rec.row, c);
                   <dt class="opacity-70">{{ c.label }}</dt>
-                  <dd [attr.data-field]="c.column">{{ cell(rec.row, c) }}</dd>
+                  <dd [attr.data-field]="c.column">
+                    @if (cell.color) {
+                      <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)">{{ cell.text }}</span>
+                    } @else {
+                      {{ cell.text }}
+                    }
+                  </dd>
                 }
               </dl>
               @if (rec.row.actions.length) {
@@ -153,7 +278,7 @@ interface FieldError {
                       @for (row of rel.rows; track row.key) {
                         <tr [attr.data-row]="row.key">
                           @for (c of rel.columns; track c.column) {
-                            <td class="p-2">{{ cell(row, c) }}</td>
+                            <td class="p-2">{{ cellOf(row, c).text }}</td>
                           }
                           <td class="whitespace-nowrap p-2 text-right">
                             @for (i of row.actions; track i) {
@@ -201,20 +326,22 @@ interface FieldError {
             }
           }
           @case ('form') {
-            <form class="max-w-xl" [formGroup]="form" (submit)="$event.preventDefault(); submit()" novalidate data-testid="app-form">
-              <formly-form [form]="form" [fields]="fields()" [model]="model" />
-              @if (submitError()) {
-                <p role="alert" class="mb-2 text-red-700" data-testid="app-form-error">{{ submitError() }}</p>
-              }
-              @if (saved()) {
-                <p role="status" class="mb-2" data-testid="app-form-saved" i18n="@@app.page.saved">Збережено.</p>
-              }
-              <button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting()" i18n="@@app.page.submit">Зберегти</button>
-            </form>
+            <app-page-form [projectId]="projectId" [view]="v" [rowKey]="rowKey" [prefill]="prefill" (submitted)="formDone($event)" />
           }
         }
       }
     </section>
+    @if (drawer(); as d) {
+      <app-page-drawer
+        [projectId]="projectId"
+        [pageKey]="d.page"
+        [rowKey]="d.rowKey"
+        [prefill]="d.prefill"
+        (closed)="drawer.set(null)"
+        (saved)="drawerSaved($event)"
+        (unsupported)="drawerUnsupported(d)"
+      />
+    }
   `,
 })
 export class AppPagePage implements OnInit {
@@ -238,27 +365,77 @@ export class AppPagePage implements OnInit {
   readonly descending = signal(false);
   readonly page = signal(1);
 
-  readonly form = new FormGroup({});
-  readonly fields = signal<FormlyFieldConfig[]>([]);
-  model: Record<string, unknown> = {};
-  readonly submitting = signal(false);
-  readonly submitError = signal('');
-  readonly saved = signal(false);
+  /** Значення фільтрів користувача: з відповіді Api (зі значеннями за замовчуванням), далі — вибір людини. */
+  readonly filterState = signal<Record<string, PageFilterValue>>({});
+  /** Розгорнуті рядки списку (підлеглі списки). */
+  readonly expanded = signal<ReadonlySet<string>>(new Set());
+  /** Змінюється, коли підлеглі списки треба перечитати. */
+  readonly expandVersion = signal(0);
+  /** Відкрита бокова панель форми. */
+  readonly drawer = signal<DrawerState | null>(null);
+
+  /** Колонки списку чи полів картки: підписи й типи з Api, формат, мітки й кольори — з визначення, обчислювані — з `computed`. */
+  readonly columns = computed<DisplayColumn[]>(() => {
+    const v = this.view();
+    if (!v) return [];
+    const def = v.page.definition;
+    if (v.page.kind === 'list') {
+      return (def.columns ?? []).map((dc) => {
+        const computedColumn = def.computed?.find((x) => x.key === dc.column);
+        if (computedColumn) {
+          return { column: computedColumn.key, label: dc.label ?? computedColumn.label, type: 'number', format: dc.format, labels: dc.labels, computed: computedColumn };
+        }
+        const vc = v.columns.find((c) => c.column === dc.column);
+        return { column: dc.column, label: vc?.label ?? dc.label ?? dc.column, type: vc?.type ?? 'string', format: dc.format ?? vc?.format, labels: dc.labels, colors: dc.colors };
+      });
+    }
+    return v.columns.map((vc) => {
+      const field = def.fields?.find((f) => f.column === vc.column);
+      return { column: vc.column, label: vc.label, type: vc.type, format: field?.format ?? vc.format, labels: field?.labels, colors: field?.colors };
+    });
+  });
+
+  /** Колонки картки без заголовка й підзаголовка. */
+  readonly cardColumns = computed(() => {
+    const card = this.view()?.page.definition.card;
+    const title = card?.title ?? this.columns()[0]?.column;
+    return this.columns().filter((c) => c.column !== title && c.column !== card?.subtitle);
+  });
+
+  /** Початкові значення форми з адреси (`?колонка=значення`): так підлеглий список передає ключ батьківського рядка. */
+  prefill: Record<string, unknown> = {};
+  rowKey: string | null = null;
+
+  protected readonly emptyText = $localize`:@@app.page.empty:Записів немає.`;
+  protected readonly expandLabel = $localize`:@@app.page.expandToggle:Підлеглі записи`;
 
   private key = '';
-  private rowKey: string | null = null;
+  private filtersTouched = false;
 
   ngOnInit(): void {
     // Перехід між сторінками застосунку перевикористовує компонент — слухаємо параметри.
-    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
-      this.key = params.get('key') ?? '';
-      this.rowKey = params.get('rowKey');
-      this.load();
-    });
+    combineLatest([this.route.paramMap, this.route.queryParamMap ?? of(convertToParamMap({}))])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([params, query]) => {
+        this.key = params.get('key') ?? '';
+        this.rowKey = params.get('rowKey');
+        this.prefill = Object.fromEntries(query.keys.map((k) => [k, query.get(k)]));
+        this.load();
+      });
   }
 
-  cell(row: PageRow, column: PageViewColumn): string {
-    return cellText(row, column.column, column.type, column.format);
+  cellOf(row: PageRow, column: DisplayColumn): CellView {
+    return cellView(row, column, this.view()?.timezone ?? 'UTC');
+  }
+
+  /** Комірка заголовка чи підзаголовка картки: колонка з визначення або перша колонка списку. */
+  cardCell(row: PageRow, name: string | undefined): CellView {
+    const column = this.columns().find((c) => c.column === name) ?? (name ? { column: name, label: name, type: 'string' } : this.columns()[0]);
+    return column ? this.cellOf(row, column) : { text: '—' };
+  }
+
+  badge(color: keyof typeof BADGE_CLASSES): string {
+    return BADGE_CLASSES[color];
   }
 
   number(value: number | null): string {
@@ -296,14 +473,73 @@ export class AppPagePage implements OnInit {
     this.loadRows();
   }
 
-  /** Сторінка застосунку з ключем рядка (картка, форма зміни). */
-  open(page: string, rowKey?: string): void {
-    void this.router.navigate(['/projects', this.projectId, 'app', page, ...(rowKey ? [rowKey] : [])]);
+  filtersChanged(state: Record<string, PageFilterValue>): void {
+    this.filterState.set(state);
+    this.filtersTouched = true;
+    this.page.set(1);
+    this.loadRows();
+  }
+
+  isExpanded(rowKey: string): boolean {
+    return this.expanded().has(rowKey);
+  }
+
+  toggle(rowKey: string): void {
+    this.expanded.update((set) => {
+      const next = new Set(set);
+      if (!next.delete(rowKey)) next.add(rowKey);
+      return next;
+    });
+  }
+
+  /**
+   * Сторінка застосунку з ключем рядка (картка, форма зміни): переходом чи боковою панеллю (`mode: drawer`).
+   * `prefill` — початкові значення форми створення; у переході йдуть у адресу.
+   */
+  open(page: string, rowKey?: string, mode?: PageOpenMode, prefill?: Record<string, unknown>): void {
+    if (mode === 'drawer') {
+      this.drawer.set({ page, rowKey: rowKey ?? null, prefill: prefill ?? {} });
+      return;
+    }
+    const commands = ['/projects', this.projectId, 'app', page, ...(rowKey ? [rowKey] : [])];
+    if (prefill && Object.keys(prefill).length > 0) void this.router.navigate(commands, { queryParams: prefill });
+    else void this.router.navigate(commands);
+  }
+
+  openFromExpand(request: ExpandOpen): void {
+    this.open(request.page, request.rowKey, request.mode, request.prefill);
+  }
+
+  /** Результат дії над підлеглим рядком: повідомлення сценарію; підлеглі списки вже перечитані. */
+  expandResult(action: PageAction, result: PageActionResult): void {
+    this.showResult(result, action.workflow ? $localize`:@@app.page.done:Готово.` : '');
+    this.loadRows();
+  }
+
+  /** Форму в панелі збережено: панель закривається, список і підлеглі списки перечитуються. */
+  drawerSaved(result: PageSubmitResult): void {
+    this.drawer.set(null);
+    if (result.result) this.showResult(result.result, '');
+    this.expandVersion.update((n) => n + 1);
+    if (this.view()?.page.kind === 'list') this.loadRows();
+    else if (this.view()?.page.kind === 'detail') this.loadRecord();
+  }
+
+  /** Сторінка не форма: панель для неї не годиться — відкриваємо переходом. */
+  drawerUnsupported(state: DrawerState): void {
+    this.drawer.set(null);
+    this.open(state.page, state.rowKey ?? undefined, 'navigate', state.prefill);
+  }
+
+  /** Форму сторінки збережено: повідомлення сценарію і перехід `then`. */
+  formDone(result: PageSubmitResult): void {
+    if (result.result) this.showResult(result.result, '');
+    if (result.then) this.open(result.then);
   }
 
   act(action: PageAction, index: number, row: PageRow): void {
     if (action.page) {
-      this.open(action.page, row.key);
+      this.open(action.page, row.key, action.mode);
       return;
     }
     if (action.confirm && !window.confirm(action.confirm)) return;
@@ -317,6 +553,7 @@ export class AppPagePage implements OnInit {
           if (action.workflow) this.loadRecord();
           else this.open(this.view()!.page.definition.create?.page ?? this.key);
         } else {
+          this.expandVersion.update((n) => n + 1);
           this.loadRows();
         }
       },
@@ -324,45 +561,18 @@ export class AppPagePage implements OnInit {
     });
   }
 
-  submit(): void {
-    const view = this.view();
-    if (!view || this.submitting()) return;
-    this.submitError.set('');
-    this.saved.set(false);
-    this.form.markAllAsTouched();
-    if (this.form.invalid) {
-      this.submitError.set($localize`:@@form.invalid:Перевірте позначені поля.`);
-      return;
-    }
-    this.submitting.set(true);
-    this.api.submit(this.projectId, this.key, toPayload(view.schema, this.model).fields, this.rowKey).subscribe({
-      next: (result) => {
-        this.submitting.set(false);
-        if (result.result) this.showResult(result.result, '');
-        if (result.then) this.open(result.then);
-        else if (!result.result?.message) this.saved.set(true);
-      },
-      error: (e: unknown) => {
-        this.submitting.set(false);
-        const problem = e instanceof HttpErrorResponse && typeof e.error === 'object' && e.error ? (e.error as { code?: string; errors?: FieldError[] }) : null;
-        if (problem?.code === 'PAGE_FORM_INVALID' && problem.errors?.length) {
-          this.showFieldErrors(problem.errors);
-          return;
-        }
-        this.submitError.set(apiErrorMessage(e));
-      },
-    });
-  }
-
   private load(): void {
     this.loading.set(true);
     this.error.set(null);
+    this.view.set(null);
     this.rows.set(null);
     this.record.set(null);
     this.metrics.set(null);
     this.notice.set(null);
-    this.saved.set(false);
-    this.submitError.set('');
+    this.drawer.set(null);
+    this.expanded.set(new Set());
+    this.filterState.set({});
+    this.filtersTouched = false;
     this.api.get(this.projectId, this.key).subscribe({
       next: (view) => {
         this.view.set(view);
@@ -371,10 +581,11 @@ export class AppPagePage implements OnInit {
         this.descending.set(view.page.definition.sort?.direction === 'desc');
         this.search.set('');
         this.page.set(1);
+        this.filterState.set(emptyFilters(view.page.definition.filters ?? []));
         if (view.page.kind === 'list') this.loadRows();
         else if (view.page.kind === 'detail') this.loadRecord();
         else if (view.page.kind === 'metrics') this.loadMetrics();
-        else this.prepareForm(view);
+        else this.loading.set(false);
       },
       error: (e: unknown) => this.fail(e),
     });
@@ -388,11 +599,16 @@ export class AppPagePage implements OnInit {
         sort: this.sort() ?? undefined,
         direction: this.sort() ? (this.descending() ? 'desc' : 'asc') : undefined,
         page: this.page(),
+        filters: this.filtersTouched ? this.filterState() : undefined,
       })
       .subscribe({
         next: (rows) => {
           this.rows.set(rows);
           this.loading.set(false);
+          // Значення за замовчуванням (`default`) діяли на сервері — панель показує їх, поки людина не змінила фільтри.
+          if (!this.filtersTouched) {
+            this.filterState.set({ ...emptyFilters(this.view()?.page.definition.filters ?? []), ...(rows.filters ?? {}) });
+          }
         },
         error: (e: unknown) => this.fail(e),
       });
@@ -433,37 +649,6 @@ export class AppPagePage implements OnInit {
       },
       error: (e: unknown) => this.fail(e),
     });
-  }
-
-  private prepareForm(view: ProjectPageView): void {
-    this.form.reset();
-    this.model = {};
-    this.fields.set(formFields(view.schema));
-    if (!this.rowKey) return;
-    this.loading.set(true);
-    this.api.row(this.projectId, this.key, this.rowKey).subscribe({
-      next: (record) => {
-        this.model = { ...record.row.data };
-        this.fields.set(formFields(view.schema));
-        this.loading.set(false);
-      },
-      error: (e: unknown) => this.fail(e),
-    });
-  }
-
-  /** Помилки полів з Api — під полями; без поля — над кнопкою. */
-  private showFieldErrors(errors: FieldError[]): void {
-    const general: string[] = [];
-    for (const { field, message } of errors) {
-      const control = field ? this.form.get(field) : null;
-      if (control) {
-        control.setErrors({ ...(control.errors ?? {}), server: message });
-        control.markAsTouched();
-      } else {
-        general.push(message);
-      }
-    }
-    this.submitError.set(general.length ? general.join(' ') : $localize`:@@form.invalid:Перевірте позначені поля.`);
   }
 
   private fail(e: unknown): void {

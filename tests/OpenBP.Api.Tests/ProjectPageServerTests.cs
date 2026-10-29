@@ -162,6 +162,18 @@ public class ProjectPageServerTests(ApiFactory api)
         });
         var url = $"/api/v1/projects/{d.Project}/pages/events/rows";
 
+        // Панель: варіанти фільтрів у сторінці, діючі значення (з default) у відповіді рядків.
+        var view = await GetOk(d.Psy.Client, $"/api/v1/projects/{d.Project}/pages/events");
+        var options = view.GetProperty("filterOptions");
+        Assert.Equal(["planned", "done", "cancelled"], options.GetProperty("status").EnumerateArray().Select(o => o.GetProperty("value").GetString()));
+        Assert.Contains(options.GetProperty("host").EnumerateArray(), o => o.GetProperty("value").GetString() == d.Psy.Id.ToString());
+        Assert.Equal("UTC", view.GetProperty("timezone").GetString());
+        var shown = (await GetOk(d.Psy.Client, url)).GetProperty("filters");
+        Assert.Equal(d.Psy.Id.ToString(), shown.GetProperty("host").GetProperty("values")[0].GetString());
+        Assert.False((await GetOk(d.Psy.Client, $"{url}?filters[host]=")).GetProperty("filters").TryGetProperty("host", out _));
+        var plainView = await GetOk(d.Plain.Client, $"/api/v1/projects/{d.Project}/pages/events");
+        Assert.False(plainView.GetProperty("filterOptions").TryGetProperty("contact", out _));
+
         // За замовчуванням — події, які веде сам психолог; порожнє значення знімає фільтр.
         Assert.Equal(["Група підтримки", "Консультація пар"], Titles(await GetOk(d.Psy.Client, url)));
         Assert.Equal(3, (await GetOk(d.Psy.Client, $"{url}?filters[host]=")).GetProperty("total").GetInt32());
@@ -237,12 +249,16 @@ public class ProjectPageServerTests(ApiFactory api)
                 new { key = "seats", label = "Місць", table = "regs", by = "event_id", aggregate = "sum", column = "seats" },
             },
             sort = new { column = "title" },
+            layout = "cards",
+            card = new { title = "title", subtitle = "status" },
         });
         var view = await GetOk(d.Psy.Client, $"/api/v1/projects/{d.Project}/pages/events");
         Assert.Equal(["title"], view.GetProperty("columns").EnumerateArray().Select(c => c.GetProperty("column").GetString()));
 
         var rows = (await GetOk(d.Psy.Client, $"/api/v1/projects/{d.Project}/pages/events/rows")).GetProperty("items").EnumerateArray()
             .ToDictionary(r => r.GetProperty("data").GetProperty("title").GetString()!, r => r.GetProperty("data"));
+        // Підзаголовок картки — колонка поза columns, її значення теж у рядку.
+        Assert.Equal("planned", rows["Консультація пар"].GetProperty("status").GetString());
         Assert.Equal(2, rows["Консультація пар"].GetProperty("registered").GetDecimal());
         Assert.Equal(3, rows["Консультація пар"].GetProperty("capacity").GetDecimal());
         Assert.Equal(7, rows["Консультація пар"].GetProperty("seats").GetDecimal());

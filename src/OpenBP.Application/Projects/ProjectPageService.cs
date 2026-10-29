@@ -102,7 +102,7 @@ public sealed partial class ProjectPageService(
         var canEdit = c.Scope.RoleIn(c.ProjectId) >= UserRole.Editor;
         if (c.Page.Kind is ProjectPageKinds.Metrics or ProjectPageKinds.Dashboard)
         {
-            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, canEdit);
+            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, canEdit) { Timezone = (await TimeZoneAsync(c.ProjectId, ct)).Id };
         }
 
         // Обчислювані колонки списку — не колонки таблиці: їх значення в рядках під ключем computed (F8-15).
@@ -116,7 +116,11 @@ public sealed partial class ProjectPageService(
         };
         var schema = c.Page.Kind != ProjectPageKinds.Form ? null
             : def.KeyValue is null ? await FormSchemaAsync(c, ct) : await KeyValueSchemaAsync(c, ct);
-        return new ProjectPageView(c.Page, c.Table.Id, columns, schema, canEdit);
+        return new ProjectPageView(c.Page, c.Table.Id, columns, schema, canEdit)
+        {
+            FilterOptions = c.Page.Kind is ProjectPageKinds.List or ProjectPageKinds.Calendar ? await FilterOptionsAsync(c, ct) : null,
+            Timezone = (await TimeZoneAsync(c.ProjectId, ct)).Id,
+        };
     }
 
     /// <inheritdoc />
@@ -217,12 +221,22 @@ public sealed partial class ProjectPageService(
         var search = (def.Search ?? []).Where(s => canRead || !IsSensitive(c.Table, s)).ToList();
         var size = Math.Clamp(query.PageSize ?? def.PageSize ?? DefaultPageSize, 1, MaxPageSize);
         var page = Math.Max(query.Page, 1);
-        var (filters, anyOf) = await UserFiltersAsync(c, query.Filters, ct);
+        var (filters, anyOf, applied) = await UserFiltersAsync(c, query.Filters, ct);
         var (rows, total) = await Wrap(() => store.PageRowsAsync(c.Table, filters, search, query.Search, sort, descending, size, (page - 1) * size, ct, anyOf));
-        var items = await ToRowsAsync(c, c.Table, rows, [.. columns.Select(col => (col.Column, col.Display))], def.Actions, ct);
+        // Заголовок і підзаголовок картки можуть бути колонками таблиці поза переліком columns — їх значення теж віддаються.
+        var shown = columns.Select(col => (col.Column, col.Display)).ToList();
+        foreach (var name in new[] { def.Card?.Title, def.Card?.Subtitle })
+        {
+            if (name is not null && !computed.Any(x => x.Key == name) && !shown.Any(x => Same(x.Column, name)))
+            {
+                shown.Add((name, null));
+            }
+        }
+
+        var items = await ToRowsAsync(c, c.Table, rows, shown, def.Actions, ct);
         await AddComputedAsync(c, items, rows, ct);
-        await AuditSensitiveAsync(c, c.Table, columns.Select(col => col.Column), rows.Count, ct);
-        return new PageRows(items, page, size, total);
+        await AuditSensitiveAsync(c, c.Table, shown.Select(col => col.Column), rows.Count, ct);
+        return new PageRows(items, page, size, total) { Filters = applied };
     }
 
     /// <inheritdoc />

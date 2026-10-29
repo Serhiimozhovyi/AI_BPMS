@@ -201,7 +201,7 @@ public sealed partial class ProjectPageService
     /// Умови фільтрів користувача поверх фільтра сторінки: <c>select</c> — рівність, <c>chips</c> — група «або», <c>period</c>
     /// — межі в поясі застосунку, <c>search</c> — підрядок. Фільтр за чутливою колонкою без права читати її не діє.
     /// </summary>
-    private async Task<(IReadOnlyList<DataFilter> Where, IReadOnlyList<IReadOnlyList<DataFilter>> AnyOf)> UserFiltersAsync(
+    private async Task<(IReadOnlyList<DataFilter> Where, IReadOnlyList<IReadOnlyList<DataFilter>> AnyOf, IReadOnlyDictionary<string, PageFilterInput> Applied)> UserFiltersAsync(
         PageContext c, IReadOnlyDictionary<string, PageFilterInput>? input, CancellationToken ct)
     {
         var defined = c.Page.Definition.Filters ?? [];
@@ -212,6 +212,7 @@ public sealed partial class ProjectPageService
 
         var where = new List<DataFilter>(Filters(c));
         var anyOf = new List<IReadOnlyList<DataFilter>>();
+        var applied = new Dictionary<string, PageFilterInput>(StringComparer.Ordinal);
         var canRead = c.Scope.CanReadSensitive(c.Table.ProjectId);
         foreach (var filter in defined)
         {
@@ -228,6 +229,7 @@ public sealed partial class ProjectPageService
             }
 
             var values = value.Values.Where(v => !string.IsNullOrEmpty(v)).Distinct(StringComparer.Ordinal).ToList();
+            applied[column.Name] = value with { Values = values };
             switch (filter.Kind)
             {
                 case PageUserFilterKinds.Select or PageUserFilterKinds.Chips when values.Count > 0:
@@ -255,7 +257,43 @@ public sealed partial class ProjectPageService
             }
         }
 
-        return (where, anyOf);
+        return (where, anyOf, applied);
+    }
+
+    /// <summary>Варіанти фільтрів <c>select</c> і <c>chips</c> для панелі над списком.</summary>
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<PageOption>>?> FilterOptionsAsync(PageContext c, CancellationToken ct)
+    {
+        var result = new Dictionary<string, IReadOnlyList<PageOption>>(StringComparer.Ordinal);
+        var canRead = c.Scope.CanReadSensitive(c.Table.ProjectId);
+        foreach (var filter in c.Page.Definition.Filters ?? [])
+        {
+            var column = Column(c.Table, filter.Column);
+            if (filter.Kind is not (PageUserFilterKinds.Select or PageUserFilterKinds.Chips) || (column.Sensitive && !canRead))
+            {
+                continue;
+            }
+
+            string Label(string value, string fallback) => filter.Labels?.GetValueOrDefault(value) ?? fallback;
+            switch (column.Type)
+            {
+                case DataColumnType.Enum:
+                    result[column.Name] = [.. (column.Values ?? []).Select(v => new PageOption(v, Label(v, v)))];
+                    break;
+                case DataColumnType.Boolean:
+                    result[column.Name] = [new PageOption("true", Label("true", "так")), new PageOption("false", Label("false", "ні"))];
+                    break;
+                case DataColumnType.Ref:
+                    result[column.Name] = [.. (await RefOptionsAsync(c, column, filter.Display, ct)).OfType<JsonObject>()
+                        .Select(o => new PageOption(o["const"]!.GetValue<string>(), o["title"]!.GetValue<string>()))];
+                    break;
+                case DataColumnType.User:
+                    result[column.Name] = [.. (await MemberOptionsAsync(c.ProjectId, ct)).OfType<JsonObject>()
+                        .Select(o => new PageOption(o["const"]!.GetValue<string>(), o["title"]!.GetValue<string>()))];
+                    break;
+            }
+        }
+
+        return result.Count == 0 ? null : result;
     }
 
     private static bool Fits(DataTableInfo table, DataFilter filter)
@@ -447,7 +485,7 @@ public sealed partial class ProjectPageService
         var start = Column(c.Table, calendar.Start).Name;
         var minutes = calendar.DefaultMinutes ?? DefaultEventMinutes;
         var lookBack = calendar.End is null && calendar.Duration is null ? TimeSpan.FromMinutes(minutes) : TimeSpan.FromDays(1);
-        var (where, anyOf) = await UserFiltersAsync(c, filters, ct);
+        var (where, anyOf, _) = await UserFiltersAsync(c, filters, ct);
         List<DataFilter> range =
         [
             .. where,
