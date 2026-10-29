@@ -146,6 +146,7 @@ public sealed partial class ProjectTransferService(
                 ["description"] = group.Description,
                 ["icon"] = group.Icon,
                 ["appRoles"] = JsonSerializer.SerializeToNode(ProjectAppRoles.Parse(group.AppRoles), Json),
+                ["app"] = JsonSerializer.SerializeToNode(ProjectApps.Parse(group.App), Json),
             },
             ["tables"] = tableNodes,
             ["pages"] = pageNodes,
@@ -320,6 +321,12 @@ public sealed partial class ProjectTransferService(
         {
             await pages.UpsertAsync(projectId, page.Key, new ProjectPageInput(page.Name, page.Kind, page.Definition, page.Roles, page.SortOrder), ct);
             (existingPages.Contains(page.Key) ? result.PagesUpdated : result.PagesCreated).Add(page.Key);
+        }
+
+        // Оболонка — після сторінок: її меню й головна посилаються на них.
+        if (bundle.Project.App is { } app)
+        {
+            await groups.SetAppAsync(projectId, app, ct);
         }
     }
 
@@ -622,7 +629,7 @@ public sealed partial class ProjectTransferService(
         public List<Guid> CreatedTableIds { get; } = [];
     }
 
-    private sealed record BundleProject(string Name, string Description, string Icon, IReadOnlyList<ProjectAppRole> AppRoles);
+    private sealed record BundleProject(string Name, string Description, string Icon, IReadOnlyList<ProjectAppRole> AppRoles, ProjectApp? App = null);
 
     private sealed record BundleTable(string Name, IReadOnlyList<DataColumn> Columns, DataTableConstraints? Constraints, IReadOnlyList<JsonObject> Rows);
 
@@ -748,7 +755,8 @@ public sealed partial class ProjectTransferService(
                 }
 
                 return new Bundle(
-                    new BundleProject(name.Trim(), project["description"]?.GetValue<string>() ?? "", project["icon"]?.GetValue<string>() ?? "", roles),
+                    new BundleProject(name.Trim(), project["description"]?.GetValue<string>() ?? "", project["icon"]?.GetValue<string>() ?? "", roles,
+                        project["app"]?.Deserialize<ProjectApp>(Json)),
                     parsedTables,
                     parsedPages,
                     parsedWorkflows);

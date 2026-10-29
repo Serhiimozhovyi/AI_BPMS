@@ -44,6 +44,14 @@ public interface IWorkflowGroupService
     /// <exception cref="ConflictException">Інша група з такою назвою вже є; прибрана роль застосунку ще в когось є (<c>APP_ROLE_IN_USE</c>).</exception>
     Task<WorkflowGroupSummary> UpdateAsync(Guid id, string? name, string? description, string? icon, CancellationToken ct, IReadOnlyList<ProjectAppRole>? appRoles = null);
 
+    /// <summary>Задає або прибирає оболонку застосунку проєкту (F8-15, docs/projects.md §3.9); лише editor проєкту.</summary>
+    /// <param name="id"><c>workflow_groups.id</c>.</param>
+    /// <param name="app">Оболонка; <c>null</c> — прибрати.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Групи немає.</exception>
+    /// <exception cref="ArgumentException">Оболонка некоректна: назва, пояс, сторінки меню чи головна не з проєкту.</exception>
+    Task<WorkflowGroupSummary> SetAppAsync(Guid id, Projects.ProjectApp? app, CancellationToken ct);
+
     /// <summary>Видаляє групу; її сценарії лишаються без групи.</summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>
     /// <param name="ct">Скасування.</param>

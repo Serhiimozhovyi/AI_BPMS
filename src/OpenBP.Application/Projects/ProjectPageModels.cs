@@ -621,7 +621,74 @@ public sealed record PageRecord(PageRow Row, IReadOnlyList<PageRelatedRows> Rela
 /// <param name="Descending">Спадання.</param>
 /// <param name="Page">Номер сторінки від 1.</param>
 /// <param name="PageSize">Розмір; <c>null</c> — з визначення.</param>
-public sealed record PageRowsQuery(string? Search = null, string? Sort = null, bool? Descending = null, int Page = 1, int? PageSize = null);
+public sealed record PageRowsQuery(string? Search = null, string? Sort = null, bool? Descending = null, int Page = 1, int? PageSize = null)
+{
+    /// <summary>
+    /// Значення фільтрів користувача (<see cref="PageDefinition.Filters"/>) за колонкою (F8-15). Колонки немає — діє
+    /// <see cref="PageUserFilter.Default"/>; колонка з порожнім значенням — фільтр знято.
+    /// </summary>
+    public IReadOnlyDictionary<string, PageFilterInput>? Filters { get; init; }
+}
+
+/// <summary>Значення фільтра користувача з запиту: <c>filters[колонка]=…</c> і <c>filters[колонка][from|to]</c>.</summary>
+/// <param name="Values">
+/// Значення: одне для <c>select</c> і <c>search</c>, кілька для <c>chips</c>, назва періоду (<c>today</c>, <c>week</c>,
+/// <c>month</c>) для <c>period</c>.
+/// </param>
+/// <param name="From">Початок періоду (дата чи дата й час), включно.</param>
+/// <param name="To">Кінець періоду: дата — включно, дата й час — не включно.</param>
+public sealed record PageFilterInput(IReadOnlyList<string> Values, string? From = null, string? To = null)
+{
+    /// <summary>Порожнє значення — фільтр знято.</summary>
+    public bool IsEmpty => Values.All(string.IsNullOrEmpty) && string.IsNullOrEmpty(From) && string.IsNullOrEmpty(To);
+}
+
+/// <summary>Подія календаря (<c>GET …/calendar</c>, F8-15).</summary>
+/// <param name="Start">Початок.</param>
+/// <param name="End">Кінець (з тривалості, колонки кінця чи <see cref="PageCalendar.DefaultMinutes"/>).</param>
+/// <param name="Row">Рядок: колонки заголовка, підзаголовка, кольору й часу, показ <c>ref</c>, доступні дії.</param>
+public sealed record PageCalendarEvent(DateTimeOffset Start, DateTimeOffset End, PageRow Row);
+
+/// <summary>Події календаря за діапазоном.</summary>
+/// <param name="From">Початок діапазону.</param>
+/// <param name="To">Кінець діапазону (не включно).</param>
+/// <param name="Events">Події за часом початку.</param>
+/// <param name="Truncated">Подій більше за ліміт — показано перші.</param>
+public sealed record PageCalendarEvents(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<PageCalendarEvent> Events, bool Truncated);
+
+/// <summary>Блок сторінки <c>dashboard</c> з даними (<c>GET …/dashboard</c>, F8-15).</summary>
+/// <param name="Index">Індекс блоку у визначенні.</param>
+/// <param name="Kind"><see cref="PageBlockKinds"/>.</param>
+/// <param name="Label">Заголовок.</param>
+/// <param name="Width">Ширина з 12.</param>
+/// <param name="Source">
+/// Ключ сторінки, до якої звертатися за рядками, формою й діями блоку: <see cref="PageBlock.Page"/> або
+/// <c>&lt;dashboard&gt;.&lt;індекс&gt;</c> для власного визначення; <c>null</c> — для <c>text</c> і <c>actions</c>.
+/// </param>
+public sealed record PageDashboardBlock(int Index, string Kind, string? Label, int Width, string? Source)
+{
+    /// <summary>Сторінка блоку для показу (колонки, схема форми) — для <c>list</c>, <c>calendar</c>, <c>form</c>, <c>tiles</c>.</summary>
+    public ProjectPageView? View { get; init; }
+
+    /// <summary>Плитки й діаграми блоку <c>tiles</c>.</summary>
+    public PageMetrics? Metrics { get; init; }
+
+    /// <summary>Перші рядки блоку <c>list</c> (до <see cref="PageBlock.Limit"/>).</summary>
+    public PageRows? Rows { get; init; }
+
+    /// <summary>Події блоку <c>calendar</c> за сьогодні чи тиждень.</summary>
+    public PageCalendarEvents? Events { get; init; }
+
+    /// <summary>Текст блоку <c>text</c> з обчисленими виразами.</summary>
+    public string? Text { get; init; }
+
+    /// <summary>Індекси доступних кнопок блоку <c>actions</c>.</summary>
+    public IReadOnlyList<int>? Actions { get; init; }
+}
+
+/// <summary>Сторінка <c>dashboard</c> з даними блоків.</summary>
+/// <param name="Blocks">Видимі блоки в порядку визначення (блоки з хибним <c>when</c> і недоступними сторінками пропущено).</param>
+public sealed record PageDashboard(IReadOnlyList<PageDashboardBlock> Blocks);
 
 /// <summary>Результат форми.</summary>
 /// <param name="Row">Збережений рядок; для форми зі сценарієм (<c>onSubmit.workflow</c>) — <c>null</c>.</param>

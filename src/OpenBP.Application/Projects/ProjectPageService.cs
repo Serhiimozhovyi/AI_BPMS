@@ -93,20 +93,30 @@ public sealed partial class ProjectPageService(
     public async Task<ProjectPageView> GetAsync(Guid projectId, string key, CancellationToken ct)
     {
         var c = await LoadAsync(projectId, key, ct);
+        return await GetCoreAsync(c, ct);
+    }
+
+    private async Task<ProjectPageView> GetCoreAsync(PageContext c, CancellationToken ct)
+    {
         var def = c.Page.Definition;
+        var canEdit = c.Scope.RoleIn(c.ProjectId) >= UserRole.Editor;
         if (c.Page.Kind is ProjectPageKinds.Metrics or ProjectPageKinds.Dashboard)
         {
-            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, c.Scope.RoleIn(projectId) >= UserRole.Editor);
+            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, canEdit);
         }
 
-        // Обчислювані колонки списку й форма «ключ — значення» — дані сервера F8-15; тут вони не в колонках і без схеми.
+        // Обчислювані колонки списку — не колонки таблиці: їх значення в рядках під ключем computed (F8-15).
         var computed = (def.Computed ?? []).Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
-        var columns = c.Page.Kind == ProjectPageKinds.List
-            ? (def.Columns ?? []).Where(col => !computed.Contains(col.Column)).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format)).ToList()
-            : [.. (def.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || f.Value is null)
-                .Select(f => ViewColumn(c.Table, f.Column, f.Label, f.Format))];
-        var schema = c.Page.Kind == ProjectPageKinds.Form && def.KeyValue is null ? await FormSchemaAsync(c, ct) : null;
-        return new ProjectPageView(c.Page, c.Table.Id, columns, schema, c.Scope.RoleIn(projectId) >= UserRole.Editor);
+        var columns = c.Page.Kind switch
+        {
+            ProjectPageKinds.List => [.. (def.Columns ?? []).Where(col => !computed.Contains(col.Column)).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format))],
+            ProjectPageKinds.Calendar => [.. CalendarColumns(c).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format))],
+            _ => (List<PageViewColumn>)[.. (def.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || f.Value is null)
+                .Select(f => ViewColumn(c.Table, f.Column, f.Label, f.Format))],
+        };
+        var schema = c.Page.Kind != ProjectPageKinds.Form ? null
+            : def.KeyValue is null ? await FormSchemaAsync(c, ct) : await KeyValueSchemaAsync(c, ct);
+        return new ProjectPageView(c.Page, c.Table.Id, columns, schema, canEdit);
     }
 
     /// <inheritdoc />
@@ -184,8 +194,15 @@ public sealed partial class ProjectPageService(
         ArgumentNullException.ThrowIfNull(query);
         var c = await LoadAsync(projectId, key, ct);
         RequireKind(c, ProjectPageKinds.List);
+        return await RowsCoreAsync(c, query, ct);
+    }
+
+    /// <summary>Рядки списку: фільтр сторінки, фільтри користувача, пошук, сортування, обчислювані колонки.</summary>
+    private async Task<PageRows> RowsCoreAsync(PageContext c, PageRowsQuery query, CancellationToken ct)
+    {
         var def = c.Page.Definition;
-        var columns = def.Columns ?? [];
+        var computed = def.Computed ?? [];
+        var columns = (def.Columns ?? []).Where(col => !computed.Any(x => x.Key == col.Column)).ToList();
         var canRead = c.Scope.CanReadSensitive(c.Table.ProjectId);
 
         var sort = query.Sort is null ? def.Sort?.Column : columns.FirstOrDefault(col => Same(col.Column, query.Sort))?.Column
@@ -200,9 +217,10 @@ public sealed partial class ProjectPageService(
         var search = (def.Search ?? []).Where(s => canRead || !IsSensitive(c.Table, s)).ToList();
         var size = Math.Clamp(query.PageSize ?? def.PageSize ?? DefaultPageSize, 1, MaxPageSize);
         var page = Math.Max(query.Page, 1);
-        var filters = Filters(c);
-        var (rows, total) = await Wrap(() => store.PageRowsAsync(c.Table, filters, search, query.Search, sort, descending, size, (page - 1) * size, ct));
+        var (filters, anyOf) = await UserFiltersAsync(c, query.Filters, ct);
+        var (rows, total) = await Wrap(() => store.PageRowsAsync(c.Table, filters, search, query.Search, sort, descending, size, (page - 1) * size, ct, anyOf));
         var items = await ToRowsAsync(c, c.Table, rows, [.. columns.Select(col => (col.Column, col.Display))], def.Actions, ct);
+        await AddComputedAsync(c, items, rows, ct);
         await AuditSensitiveAsync(c, c.Table, columns.Select(col => col.Column), rows.Count, ct);
         return new PageRows(items, page, size, total);
     }
@@ -248,6 +266,11 @@ public sealed partial class ProjectPageService(
         var c = await LoadAsync(projectId, key, ct);
         RequireKind(c, ProjectPageKinds.Form);
         var def = c.Page.Definition;
+        if (def.KeyValue is not null)
+        {
+            return await SubmitKeyValueAsync(c, values, ct);
+        }
+
         var operation = def.OnSubmit?.Operation?.ToLowerInvariant() ?? "insert";
         if (operation == "update" && string.IsNullOrEmpty(rowKey))
         {
@@ -272,6 +295,12 @@ public sealed partial class ProjectPageService(
             }
 
             var value = Lookup(values, column.Name);
+            if (field.Format == PageFormats.Phone && value is JsonValue phone && phone.TryGetValue<string>(out var text))
+            {
+                // «+38 (067) 123-45-67» зберігається цифрами.
+                value = JsonValue.Create(new string([.. text.Where(char.IsAsciiDigit)]));
+            }
+
             if (IsEmpty(value))
             {
                 if (operation != "update" && (field.Required || c.Table.Constraints.Required.Any(r => Same(r, column.Name))))
@@ -336,13 +365,19 @@ public sealed partial class ProjectPageService(
             throw new NotFoundException("page-action", action);
         }
 
-        var a = actions[action];
+        return await RunRowActionAsync(c, c.Table, actions[action], action, () => FindRowAsync(c, rowKey, ct), null, ct);
+    }
+
+    /// <summary>Дія над рядком таблиці <paramref name="table"/>: видалення чи сценарій з <c>{ row, rowKey, user }</c>.</summary>
+    private async Task<PageActionResult> RunRowActionAsync(
+        PageContext c, DataTableInfo table, PageAction a, int action, Func<Task<DataRow>> find, string? parentKey, CancellationToken ct)
+    {
         if (a.Workflow is null && a.Operation != DeleteOperation)
         {
             throw new ArgumentException("Перехід на сторінку виконується в браузері, сервер для нього не потрібен.", nameof(action));
         }
 
-        if (a.Operation == DeleteOperation && c.Scope.RoleIn(c.Table.ProjectId) < UserRole.Editor)
+        if (a.Operation == DeleteOperation && c.Scope.RoleIn(table.ProjectId) < UserRole.Editor)
         {
             throw new ForbiddenException(UserRole.Editor);
         }
@@ -353,8 +388,8 @@ public sealed partial class ProjectPageService(
             throw new NotFoundException("page-action", action);
         }
 
-        var row = await FindRowAsync(c, rowKey, ct);
-        var masked = Masked(c, c.Table, row.Data);
+        var row = await find();
+        var masked = Masked(c, table, row.Data);
         if (a.When is not null && !Truthy(Evaluate(JsonValue.Create(a.When), c.User, masked)))
         {
             throw new UnprocessableException(InvalidCode, $"Дія «{a.Label}» для цього рядка недоступна.");
@@ -363,12 +398,17 @@ public sealed partial class ProjectPageService(
         if (a.Workflow is { } workflow)
         {
             var input = new JsonObject { ["row"] = masked.DeepClone(), ["rowKey"] = row.Key, ["user"] = c.User.DeepClone() };
+            if (parentKey is not null)
+            {
+                input["parentKey"] = parentKey;
+            }
+
             return await workflows.RunAsync(c.ProjectId, workflow, input, ct);
         }
 
-        if (!await store.DeleteRowAsync(c.Table, row.Key, ct))
+        if (!await store.DeleteRowAsync(table, row.Key, ct))
         {
-            throw new NotFoundException(RowEntity, rowKey);
+            throw new NotFoundException(RowEntity, row.Key);
         }
 
         return new PageActionResult(PageActionStates.Success, null, null, null, null);
@@ -402,7 +442,10 @@ public sealed partial class ProjectPageService(
     {
         var scope = await _access.ScopeAsync(ct);
         _ = scope.RoleIn(projectId) ?? throw new NotFoundException("project", projectId);
-        var entity = await db.ProjectPages.AsNoTracking().SingleOrDefaultAsync(p => p.ProjectId == projectId && p.Key == key, ct)
+        // «today.3» — власне визначення блоку 3 сторінки today (F8-15): ті самі запити, що й для сторінки.
+        var dot = key.IndexOf('.', StringComparison.Ordinal);
+        var pageKey = dot < 0 ? key : key[..dot];
+        var entity = await db.ProjectPages.AsNoTracking().SingleOrDefaultAsync(p => p.ProjectId == projectId && p.Key == pageKey, ct)
                      ?? throw new NotFoundException(Entity, key);
         var page = ToDto(entity);
         if (!CanSee(scope, projectId, page.Roles))
@@ -417,6 +460,14 @@ public sealed partial class ProjectPageService(
             ["role"] = currentUser.Role is { } role ? UserRoles.ToValue(role) : null,
             ["appRole"] = scope.AppRoleIn(projectId),
         };
+        IReadOnlyList<PageUserFilter>? shared = null;
+        if (dot >= 0)
+        {
+            var dashboard = page.Definition;
+            page = BlockPage(page, key, key[(dot + 1)..], user) ?? throw new NotFoundException(Entity, key);
+            shared = dashboard.Filters;
+        }
+
         var context = new PageContext(scope, projectId, page, null!, user);
         if (page.Kind == ProjectPageKinds.Metrics || (page.Kind == ProjectPageKinds.Dashboard && string.IsNullOrWhiteSpace(page.Definition.Table)))
         {
@@ -425,7 +476,7 @@ public sealed partial class ProjectPageService(
         }
 
         var table = await ResolveTableAsync(context, page.Definition.Table, ct) ?? throw TableUnknown(page.Definition.Table);
-        return context with { Table = table };
+        return WithShared(context with { Table = table }, shared);
     }
 
     private static bool CanSee(ProjectScope scope, Guid projectId, IReadOnlyList<string> roles) =>
@@ -593,23 +644,8 @@ public sealed partial class ProjectPageService(
 
             switch (column.Type)
             {
-                case DataColumnType.Number:
-                    property["type"] = "number";
-                    break;
-                case DataColumnType.Boolean:
-                    property["type"] = "boolean";
-                    break;
-                case DataColumnType.Date:
-                    property["type"] = "string";
-                    property["format"] = "date";
-                    break;
-                case DataColumnType.Datetime:
-                    property["type"] = "string";
-                    property["format"] = "date-time";
-                    break;
-                case DataColumnType.Enum:
-                    property["type"] = "string";
-                    property["enum"] = new JsonArray([.. (column.Values ?? []).Select(v => (JsonNode?)JsonValue.Create(v))]);
+                case DataColumnType.Number or DataColumnType.Boolean or DataColumnType.Date or DataColumnType.Datetime or DataColumnType.Enum:
+                    TypeSchema(column, property);
                     break;
                 case DataColumnType.Ref:
                     property["type"] = "string";
@@ -636,6 +672,35 @@ public sealed partial class ProjectPageService(
         }
 
         return new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = required };
+    }
+
+    /// <summary>Тип поля форми за простим типом колонки: число, так/ні, дата, дата й час, перелік, текст.</summary>
+    private static void TypeSchema(DataColumn column, JsonObject property)
+    {
+        switch (column.Type)
+        {
+            case DataColumnType.Number:
+                property["type"] = "number";
+                break;
+            case DataColumnType.Boolean:
+                property["type"] = "boolean";
+                break;
+            case DataColumnType.Date:
+                property["type"] = "string";
+                property["format"] = "date";
+                break;
+            case DataColumnType.Datetime:
+                property["type"] = "string";
+                property["format"] = "date-time";
+                break;
+            case DataColumnType.Enum:
+                property["type"] = "string";
+                property["enum"] = new JsonArray([.. (column.Values ?? []).Select(v => (JsonNode?)JsonValue.Create(v))]);
+                break;
+            default:
+                property["type"] = "string";
+                break;
+        }
     }
 
     private async Task<JsonArray> RefOptionsAsync(PageContext c, DataColumn column, string? display, CancellationToken ct)

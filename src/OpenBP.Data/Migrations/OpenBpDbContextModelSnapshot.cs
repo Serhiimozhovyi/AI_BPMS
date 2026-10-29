@@ -1680,6 +1680,10 @@ namespace OpenBP.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("App")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("app");
+
                     b.Property<string>("AppRoles")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

@@ -58,6 +58,8 @@ public static class AuditActions
     public const string UserPasswordChanged = "user.passwordChanged";
     public const string ProjectPageSaved = "project.pageSaved";
     public const string ProjectPageDeleted = "project.pageDeleted";
+    /// <summary>Змінено оболонку застосунку проєкту (F8-15).</summary>
+    public const string ProjectAppSaved = "project.appSaved";
     /// <summary>Експорт проєкту шаблоном (F8-06).</summary>
     public const string ProjectExported = "project.exported";
     /// <summary>Імпорт шаблону проєкту (F8-06).</summary>
