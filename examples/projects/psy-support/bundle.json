@@ -961,8 +961,8 @@
             "where": [{"column": "status", "operator": "eq", "value": "open"}]
           },
           {
-            "label": "Заповненість слотів",
-            "expression": "{{ ($tiles.booked + $tiles.open_slots) ? $tiles.booked / ($tiles.booked + $tiles.open_slots) : 0 }}"
+            "label": "Заповненість слотів, %",
+            "expression": "{{ ($tiles.booked + $tiles.open_slots) ? Math.round(1000 * $tiles.booked / ($tiles.booked + $tiles.open_slots)) / 10 : 0 }}"
           },
           {
             "label": "Реєстрацій на події",
