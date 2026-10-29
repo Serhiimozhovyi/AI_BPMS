@@ -25,6 +25,9 @@ public sealed partial class S3BinaryStore : IBinaryStore, IDisposable
 
     private const string Sha256Metadata = "sha256";
 
+    /// <summary>Скільки разів пробувати записати об'єкт, якщо сервер обірвав запит.</summary>
+    private const int PutAttempts = 3;
+
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
     private readonly TimeProvider _time;
@@ -110,7 +113,21 @@ public sealed partial class S3BinaryStore : IBinaryStore, IDisposable
             ContentType = mimeType,
         };
         request.Metadata[Sha256Metadata] = hash;
-        await _client.PutObjectAsync(request, ct).ConfigureAwait(false);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await _client.PutObjectAsync(request, ct).ConfigureAwait(false);
+                break;
+            }
+            catch (AmazonS3Exception ex) when (IsDroppedRequest(ex) && attempt < PutAttempts)
+            {
+                // Сервер обірвав запит, не записавши об'єкт (MinIO під навантаженням відповідає 499 «Client disconnected
+                // before response was ready»), а SDK такі відповіді не повторює. Ключ новий і унікальний — повтор безпечний.
+                buffer.Position = 0;
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), ct).ConfigureAwait(false);
+            }
+        }
 
         return new BinaryRef
         {
@@ -189,6 +206,10 @@ public sealed partial class S3BinaryStore : IBinaryStore, IDisposable
             _bucketLock.Release();
         }
     }
+
+    /// <summary>499 — сервер скасував обробку запиту (nginx і MinIO так позначають обірване з'єднання); об'єкт не записано.</summary>
+    private static bool IsDroppedRequest(AmazonS3Exception ex) =>
+        (int)ex.StatusCode == 499 || ex.ErrorCode == "ClientDisconnected";
 
     [GeneratedRegex("^[0-9a-f]{32}$")]
     private static partial Regex FileId();
