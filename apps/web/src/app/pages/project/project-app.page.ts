@@ -36,7 +36,7 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
                 <div class="mt-2 w-full px-2 text-xs uppercase opacity-60" data-testid="shell-group">{{ group.label }}</div>
               }
               @for (p of group.pages; track p.id) {
-                <a class="shell-nav__link" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
+                <a class="ac-side-link" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
               }
             }
           </nav>
@@ -53,8 +53,8 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
             </p>
           }
           @if (canEdit() && !building()) {
-            <a class="shell-nav__link mt-3 inline-block" data-testid="shell-builder" routerLink="_builder" i18n="@@project.app.builder">Конструктор</a>
-            <a class="shell-nav__link inline-block" data-testid="shell-settings" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
+            <a class="ac-side-link mt-3" data-testid="shell-builder" routerLink="_builder" i18n="@@project.app.builder">Конструктор</a>
+            <a class="ac-side-link" data-testid="shell-settings" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
           }
         </aside>
         <div class="min-w-0 grow">
@@ -79,13 +79,13 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
           </p>
         }
         @if (canEdit() && !building()) {
-          <a class="shell-nav__link mb-2 inline-block" data-testid="app-new-page" routerLink="_builder" i18n="@@project.app.newPage">+ Нова сторінка</a>
-          <a class="shell-nav__link mb-2 ml-2 inline-block" data-testid="app-settings-link" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
+          <a class="mb-2 inline-block" data-testid="app-new-page" routerLink="_builder" i18n="@@project.app.newPage">+ Нова сторінка</a>
+          <a class="mb-2 ml-4 inline-block" data-testid="app-settings-link" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
         }
         @if (pages().length > 1) {
-          <nav class="mb-2 flex flex-wrap gap-1" aria-label="Сторінки застосунку" i18n-aria-label="@@project.app.nav" data-testid="app-nav">
+          <nav class="ac-tabs mb-3" aria-label="Сторінки застосунку" i18n-aria-label="@@project.app.nav" data-testid="app-nav">
             @for (p of pages(); track p.id) {
-              <a class="shell-nav__link" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
+              <a class="ac-tab" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
             }
           </nav>
         }

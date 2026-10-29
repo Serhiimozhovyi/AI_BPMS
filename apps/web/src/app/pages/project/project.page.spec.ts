@@ -44,7 +44,7 @@ describe('ProjectPage', () => {
     expect(host.querySelector('[data-testid="project-icon"]')?.textContent).toContain('psychology');
     expect(host.querySelector('[data-testid="project-description"]')?.textContent).toContain('Бот підтримки');
     const tabs = [...host.querySelectorAll('[data-testid="project-tabs"] a')].map((a) => a.getAttribute('data-testid'));
-    expect(tabs).toEqual(['tab-overview', 'tab-workflows', 'tab-tables', 'tab-connections', 'tab-app', 'tab-members']);
+    expect(tabs).toEqual(['tab-app', 'tab-overview', 'tab-workflows', 'tab-tables', 'tab-connections', 'tab-members']);
   });
 
   it('робить проєкт вибраним у шапці, щоб вкладки-сторінки фільтрувалися за ним', async () => {
@@ -90,6 +90,6 @@ describe('ProjectPage', () => {
       TestBed.inject(AuthService).user.set({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
       TestBed.inject(ProjectContextService).projects.set([{ id: 'p1', name: 'Психологи', sortOrder: 0, workflowCount: 3, role: 'viewer', appRole: 'operator' }]);
     });
-    expect([...host.querySelectorAll('[data-testid="project-tabs"] a')].map((a) => a.getAttribute('data-testid'))).toEqual(['tab-overview', 'tab-app']);
+    expect([...host.querySelectorAll('[data-testid="project-tabs"] a')].map((a) => a.getAttribute('data-testid'))).toEqual(['tab-app', 'tab-overview']);
   });
 });

@@ -19,7 +19,8 @@ interface ProjectTab {
 
 /**
  * `/projects/:id` (F8-03): сторінка проєкту як робочого простору — заголовок (іконка, назва, опис, моя роль) і вкладки
- * «Огляд», «Сценарії», «Таблиці», «Підключення», «Застосунок», «Учасники». Вкладки — дочірні маршрути, тому кожна має
+ * «Застосунок» (перша й типова, коли в проєкті є сторінки застосунку), «Огляд», «Сценарії», «Таблиці», «Підключення»,
+ * «Учасники». Вкладки — дочірні маршрути, тому кожна має
  * власну адресу. Сценарії, таблиці й підключення — ті самі сторінки, що й у головному меню: при вході сюди проєкт стає
  * вибраним у шапці ({@link ProjectContextService}), і вони фільтруються за ним. Назву й опис змінює editor проєкту.
  */
@@ -64,10 +65,10 @@ interface ProjectTab {
         <p role="alert" class="mb-2 text-red-700" data-testid="project-error">{{ error() }}</p>
       }
 
-      <nav class="mt-3 flex flex-wrap gap-1 border-b border-ac-line" aria-label="Вкладки проєкту" i18n-aria-label="@@project.tabs.label" data-testid="project-tabs">
+      <nav class="ac-tabs mt-3" aria-label="Вкладки проєкту" i18n-aria-label="@@project.tabs.label" data-testid="project-tabs">
         @for (t of visibleTabs(); track t.path) {
           <a
-            class="shell-nav__link"
+            class="ac-tab"
             [routerLink]="t.path"
             routerLinkActive="active"
             [attr.data-testid]="t.testId"
@@ -98,11 +99,11 @@ export class ProjectPage implements OnInit {
   readonly icon = new FormControl('', { nonNullable: true });
 
   readonly tabs: ProjectTab[] = [
+    { path: 'app', testId: 'tab-app', label: $localize`:@@project.tab.app:Застосунок` },
     { path: 'overview', testId: 'tab-overview', label: $localize`:@@project.tab.overview:Огляд` },
     { path: 'workflows', testId: 'tab-workflows', label: $localize`:@@project.tab.workflows:Сценарії` },
     { path: 'tables', testId: 'tab-tables', label: $localize`:@@project.tab.tables:Таблиці` },
     { path: 'connections', testId: 'tab-connections', label: $localize`:@@project.tab.connections:Підключення` },
-    { path: 'app', testId: 'tab-app', label: $localize`:@@project.tab.app:Застосунок` },
     { path: 'members', testId: 'tab-members', label: $localize`:@@project.tab.members:Учасники` },
   ];
 

@@ -1,4 +1,4 @@
-import { inject } from '@angular/core';
+import { Injector, inject } from '@angular/core';
 import { Router, Routes, UrlMatcher, UrlSegment } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
@@ -69,7 +69,17 @@ export const routes: Routes = [
         title: $localize`:@@project.title:Проєкт`,
         loadComponent: () => import('./pages/project/project.page').then((m) => m.ProjectPage),
         children: [
-          { path: '', pathMatch: 'full', redirectTo: 'overview' },
+          {
+            // Без вкладки: «Застосунок», якщо в проєкті є його сторінки, інакше «Огляд». Модуль вантажиться лише тут.
+            path: '',
+            pathMatch: 'full',
+            redirectTo: async ({ params }) => {
+              const injector = inject(Injector);
+              const router = injector.get(Router);
+              const { projectDefaultTab } = await import('./pages/project/project-default-tab');
+              return router.createUrlTree(['/projects', params['id'], await projectDefaultTab(injector, params['id'] as string)]);
+            },
+          },
           {
             path: 'overview',
             loadComponent: () => import('./pages/overview/overview.page').then((m) => m.OverviewPage),
