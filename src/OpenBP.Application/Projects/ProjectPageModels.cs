@@ -673,7 +673,11 @@ public sealed record PageCalendarEvent(DateTimeOffset Start, DateTimeOffset End,
 /// <param name="To">Кінець діапазону (не включно).</param>
 /// <param name="Events">Події за часом початку.</param>
 /// <param name="Truncated">Подій більше за ліміт — показано перші.</param>
-public sealed record PageCalendarEvents(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<PageCalendarEvent> Events, bool Truncated);
+public sealed record PageCalendarEvents(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<PageCalendarEvent> Events, bool Truncated)
+{
+    /// <summary>Фільтри, що діяли на запит, разом зі значеннями за замовчуванням (F8-17).</summary>
+    public IReadOnlyDictionary<string, PageFilterInput>? Filters { get; init; }
+}
 
 /// <summary>Блок сторінки <c>dashboard</c> з даними (<c>GET …/dashboard</c>, F8-15).</summary>
 /// <param name="Index">Індекс блоку у визначенні.</param>

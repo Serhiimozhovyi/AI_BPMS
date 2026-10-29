@@ -485,7 +485,7 @@ public sealed partial class ProjectPageService
         var start = Column(c.Table, calendar.Start).Name;
         var minutes = calendar.DefaultMinutes ?? DefaultEventMinutes;
         var lookBack = calendar.End is null && calendar.Duration is null ? TimeSpan.FromMinutes(minutes) : TimeSpan.FromDays(1);
-        var (where, anyOf, _) = await UserFiltersAsync(c, filters, ct);
+        var (where, anyOf, applied) = await UserFiltersAsync(c, filters, ct);
         List<DataFilter> range =
         [
             .. where,
@@ -522,7 +522,7 @@ public sealed partial class ProjectPageService
         }
 
         await AuditSensitiveAsync(c, c.Table, columns.Select(col => col.Column), rows.Count, ct);
-        return new PageCalendarEvents(from, to, events, total > MaxCalendarEvents);
+        return new PageCalendarEvents(from, to, events, total > MaxCalendarEvents) { Filters = applied };
     }
 
     private static DateTimeOffset? Instant(JsonNode? value) =>

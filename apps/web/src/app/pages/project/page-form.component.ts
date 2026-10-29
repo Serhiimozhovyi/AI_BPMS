@@ -7,6 +7,7 @@ import { FormlyFieldConfig, FormlyForm } from '@ngx-formly/core';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { providePublicForm } from '../../forms/form-field-types';
 import { formFields, toPayload } from '../../forms/form-fields';
+import { localInput, zonedParts, zonedToInstant } from '../../projects/calendar-time';
 import { PageSubmitResult, ProjectPageView, ProjectPagesApiService } from '../../projects/project-pages-api.service';
 
 interface FieldError {
@@ -75,7 +76,7 @@ export class PageFormComponent implements OnInit {
     this.loading.set(true);
     this.api.row(this.projectId(), view.page.key, rowKey).subscribe({
       next: (record) => {
-        this.model = { ...record.row.data };
+        this.model = this.toInputs({ ...record.row.data });
         this.fields.set(formFields(view.schema));
         this.loading.set(false);
       },
@@ -101,7 +102,7 @@ export class PageFormComponent implements OnInit {
       return;
     }
     this.submitting.set(true);
-    this.api.submit(this.projectId(), view.page.key, toPayload(view.schema, this.model).fields, this.rowKey()).subscribe({
+    this.api.submit(this.projectId(), view.page.key, this.fromInputs(toPayload(view.schema, this.model).fields), this.rowKey()).subscribe({
       next: (result) => {
         this.submitting.set(false);
         if (!result.then && !result.result?.message) this.saved.set(true);
@@ -117,6 +118,34 @@ export class PageFormComponent implements OnInit {
         this.submitError.set(apiErrorMessage(e));
       },
     });
+  }
+
+  /** Поля `date-time` схеми: значення в формі — час у поясі застосунку (`ГГГГ-ММ-ДДTГГ:ХХ`), у Api — момент часу ISO 8601. */
+  private dateTimeFields(): string[] {
+    const properties = (this.view().schema?.['properties'] ?? {}) as Record<string, Record<string, unknown>>;
+    return Object.keys(properties).filter((name) => properties[name]?.['format'] === 'date-time');
+  }
+
+  private toInputs(data: Record<string, unknown>): Record<string, unknown> {
+    const tz = this.view().timezone;
+    for (const name of this.dateTimeFields()) {
+      const value = data[name];
+      const date = typeof value === 'string' ? new Date(value) : null;
+      if (date && !Number.isNaN(date.getTime())) {
+        const p = zonedParts(date, tz);
+        data[name] = localInput(p, p.h, p.mi);
+      }
+    }
+    return data;
+  }
+
+  private fromInputs(fields: Record<string, unknown>): Record<string, unknown> {
+    const tz = this.view().timezone;
+    for (const name of this.dateTimeFields()) {
+      const m = typeof this.model[name] === 'string' ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(this.model[name] as string) : null;
+      if (m) fields[name] = zonedToInstant({ y: +m[1], m: +m[2], d: +m[3] }, +m[4], +m[5], tz).toISOString();
+    }
+    return fields;
   }
 
   /** Помилки полів з Api — під полями; без поля — над кнопкою. */
