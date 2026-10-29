@@ -1495,38 +1495,47 @@ describe('WorkflowEditorComponent', () => {
     expect(canvasNodes(fixture).length).toBe(workflow.definition.nodes.length);
   });
 
-  it('помічник (F3-60): «Пояснити вузол» відкриває панель замість панелі вузла; відповідь — одна правка, Ctrl+Z її скасовує', async () => {
-    const { fixture, http, host } = await loaded();
+  it('помічник (F3-117): «Пояснити вузол» відкриває загальну панель із запитом і вузлом, а не панель редактора; Ctrl+Z нічого не скасовує', async () => {
+    const { fixture, host } = await loaded();
+    const global = TestBed.inject(GlobalAssistantService);
+    const show = vi.spyOn(global, 'show').mockImplementation(() => undefined);
     canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
     await render(fixture);
     await menuClick(fixture, host, 'assistant-explain');
     await render(fixture);
 
-    expect(host.querySelector('[data-testid="editor-panel"]')).toBeNull();
-    expect(host.querySelector('[data-testid="assistant-panel"]')).not.toBeNull();
-    // Панель показує пояснення процесу (F3-72).
-    http
-      .expectOne('/api/v1/workflows/w1/explanation')
-      .flush({ status: 'ready', version: 1, currentVersion: 1, text: 'Коротко: приймає заявки.', error: null, updatedAt: null, stale: false });
-    const request = http.expectOne('/api/v1/workflows/w1/assistant');
-    expect(request.request.body.message).toContain('«Поля» (n_set)');
-    expect(request.request.body.definition.nodes.map((n: { id: string }) => n.id)).toEqual(['n_hook', 'n_set']);
-    const next = { ...workflow.definition, nodes: [workflow.definition.nodes[0]], connections: [] };
-    request.flush(
-      `event: definition\ndata: ${JSON.stringify({ type: 'definition', definition: next })}\n\n` +
-        `event: message\ndata: ${JSON.stringify({ type: 'message', text: 'Прибрав крок' })}\n\nevent: done\ndata: {"type":"done"}\n\n`,
-    );
-    await render(fixture);
-    expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook']);
-
-    key({ key: 'z', ctrlKey: true });
-    await render(fixture);
+    expect(show).toHaveBeenCalledTimes(1);
+    const prompt = show.mock.calls[0][0]!;
+    expect(prompt.text).toContain('«Поля» (n_set)');
+    expect(prompt).toMatchObject({ send: true, nodeId: 'n_set' });
+    expect(host.querySelector('[data-testid="assistant-panel"]')).toBeNull();
     expect(canvasNodes(fixture).map((n) => n.id)).toEqual(['n_hook', 'n_set']);
+  });
+
+  it('помічник (F3-117): «Написати вираз» лише підставляє текст у загальну панель; «Описати процес» відкриває панель редактора', async () => {
+    const { fixture, http, host } = await loaded();
+    const global = TestBed.inject(GlobalAssistantService);
+    const show = vi.spyOn(global, 'show').mockImplementation(() => undefined);
+    canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+    await menuClick(fixture, host, 'assistant-expression');
+    await render(fixture);
+    expect(show.mock.calls[0][0]).toMatchObject({ send: false, nodeId: 'n_set' });
 
     click(host, '[data-testid="toolbar-more"]');
     await render(fixture);
     click(host, '[data-testid="assistant-toggle"]');
-    canvasComponent(fixture).selectionChange.emit({ nodes: ['n_set'], edges: [] });
+    await render(fixture);
+    http
+      .expectOne('/api/v1/workflows/w1/explanation')
+      .flush({ status: 'none', version: null, currentVersion: 1, text: null, error: null, updatedAt: null, stale: false });
+    expect(host.querySelector('[data-testid="assistant-panel"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="describe-process"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="assistant-input"]')).toBeNull();
+
+    click(host, '[data-testid="toolbar-more"]');
+    await render(fixture);
+    click(host, '[data-testid="assistant-toggle"]');
     await render(fixture);
     expect(host.querySelector('[data-testid="assistant-panel"]')).toBeNull();
     expect(host.querySelector('[data-testid="editor-panel"]')).not.toBeNull();

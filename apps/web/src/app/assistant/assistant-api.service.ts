@@ -35,12 +35,6 @@ export interface AssistantProfileInput {
   model: string;
 }
 
-/** Репліка розмови. */
-export interface AssistantTurn {
-  role: 'user' | 'assistant';
-  text: string;
-}
-
 /** Подія відповіді помічника (SSE `POST /workflows/{id}/assistant`). */
 export interface AssistantEvent {
   type: 'step' | 'message' | 'definition' | 'error' | 'done';
@@ -144,14 +138,6 @@ export class AssistantApiService {
       `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/explanation`,
       null,
     );
-  }
-
-  /** Запит до помічника: події в міру надходження (поточний текст відповіді — `partialText` прогресу). */
-  ask(
-    workflowId: string,
-    body: { message: string; definition: WorkflowDefinition; history: AssistantTurn[] },
-  ): Observable<AssistantEvent> {
-    return this.stream<AssistantEvent>(workflowId, 'assistant', body);
   }
 
   /** Побудова сценарію з опису (F3-103): події прогресу, потім `definition` і `todo`. Відписка зупиняє побудову. */
