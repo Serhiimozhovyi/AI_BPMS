@@ -104,6 +104,7 @@
         "required": { "type": "boolean" },
         "description": { "type": "string", "maxLength": 500 },
         "value": { "$ref": "#/$defs/filterValue" },
+        "copyFrom": { "type": "string", "pattern": "^.+\\..+$", "description": "Форма: колонка_ref.колонка — значення з рядка, вибраного в полі ref цієї форми; поле не показується." },
         "display": { "type": "string", "pattern": "^.+\\..+$" },
         "labels": { "$ref": "#/$defs/labels" }
       }
