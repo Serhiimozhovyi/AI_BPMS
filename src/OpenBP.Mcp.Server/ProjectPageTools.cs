@@ -48,13 +48,20 @@ public sealed class ProjectPageTools
                  "A workflow (action, onSubmit) must belong to the same project and have an enabled core.workflowTrigger or core.manualTrigger; the server runs it with " +
                  "one item { row, rowKey, user } (actions) or { values, rowKey, user } (forms), waits up to 30 s and shows `message` of its result; " +
                  "`ok: false` (+ optional `field`) in the result is a refusal. " +
+                 "F8-14 extras (docs/projects.md §3, JSON Schema at GET /api/v1/projects/pages/schema): columns/fields take format (text|number|date|datetime|time|weekday|enum|badge|phone|capacity|boolean), " +
+                 "labels { value: text } and colors { value: gray|green|yellow|red|blue|purple } (badge); list takes filters [{ column, kind: select|chips|period|search, label?, display?, labels?, default? }], " +
+                 "computed [{ key, label, table, by, aggregate: count|sum, column?, where?, of? }] (key usable in columns), layout: table|cards + card { title, subtitle? }, " +
+                 "expand [{ table, by, label?, columns, sort?, actions (any kind), create?, empty? }], empty; any page link (create, actions[].page, calendar.open) takes mode: navigate|drawer; " +
+                 "form takes keyValue { key, value, keys?, labels?, multiline? } instead of fields (onSubmit upsert); " +
+                 "calendar { table, calendar: { start, duration | end, defaultMinutes?, title?, subtitle?, color (needs colors), views?, default?, open?, fromHour?, toHour? }, filter?, filters?, actions?, create?, empty? }; " +
+                 "dashboard { table?, filters?, blocks: [{ kind: tiles|list|calendar|form (page | definition) | actions (actions) | text (text), label?, limit?, range?, when?, width? }] }. " +
                  "Errors: PAGE_TABLE_UNKNOWN, PAGE_COLUMN_UNKNOWN, PAGE_WORKFLOW_UNKNOWN (also a workflow of another project), PAGE_METRICS_SENSITIVE, PAGE_INVALID.")]
     public static Task<ProjectPageDto> UpsertProjectPage(
         IProjectPageService pages,
         [Description("Project id.")] Guid projectId,
         [Description("Page key: lowercase latin letters, digits, _ or -, starting with a letter; the URL /projects/:id/app/<key>.")] string key,
         [Description("Page name in the app menu.")] string name,
-        [Description("list, detail, form or metrics.")] string kind,
+        [Description("list, detail, form, metrics, calendar or dashboard.")] string kind,
         [Description("Page definition for the kind (see the tool description).")] PageDefinition definition,
         [Description("App role keys that see the page; empty — every project member.")] IReadOnlyList<string>? roles = null,
         [Description("Menu position; omitted — last for a new page, unchanged otherwise.")] int? sortOrder = null,

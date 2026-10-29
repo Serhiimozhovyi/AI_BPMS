@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Schemas/workflow.schema.json" LogicalName="OpenBP.Shared.Schemas.workflow.schema.json" />
+    <EmbeddedResource Include="Schemas/project-page.schema.json" LogicalName="OpenBP.Shared.Schemas.project-page.schema.json" />
   </ItemGroup>
 
 </Project>

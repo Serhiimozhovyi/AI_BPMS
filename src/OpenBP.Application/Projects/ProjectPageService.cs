@@ -94,16 +94,18 @@ public sealed partial class ProjectPageService(
     {
         var c = await LoadAsync(projectId, key, ct);
         var def = c.Page.Definition;
-        if (c.Page.Kind == ProjectPageKinds.Metrics)
+        if (c.Page.Kind is ProjectPageKinds.Metrics or ProjectPageKinds.Dashboard)
         {
             return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, c.Scope.RoleIn(projectId) >= UserRole.Editor);
         }
 
+        // Обчислювані колонки списку й форма «ключ — значення» — дані сервера F8-15; тут вони не в колонках і без схеми.
+        var computed = (def.Computed ?? []).Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
         var columns = c.Page.Kind == ProjectPageKinds.List
-            ? (def.Columns ?? []).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format)).ToList()
+            ? (def.Columns ?? []).Where(col => !computed.Contains(col.Column)).Select(col => ViewColumn(c.Table, col.Column, col.Label, col.Format)).ToList()
             : [.. (def.Fields ?? []).Where(f => c.Page.Kind != ProjectPageKinds.Form || f.Value is null)
                 .Select(f => ViewColumn(c.Table, f.Column, f.Label, f.Format))];
-        var schema = c.Page.Kind == ProjectPageKinds.Form ? await FormSchemaAsync(c, ct) : null;
+        var schema = c.Page.Kind == ProjectPageKinds.Form && def.KeyValue is null ? await FormSchemaAsync(c, ct) : null;
         return new ProjectPageView(c.Page, c.Table.Id, columns, schema, c.Scope.RoleIn(projectId) >= UserRole.Editor);
     }
 
@@ -416,9 +418,9 @@ public sealed partial class ProjectPageService(
             ["appRole"] = scope.AppRoleIn(projectId),
         };
         var context = new PageContext(scope, projectId, page, null!, user);
-        if (page.Kind == ProjectPageKinds.Metrics)
+        if (page.Kind == ProjectPageKinds.Metrics || (page.Kind == ProjectPageKinds.Dashboard && string.IsNullOrWhiteSpace(page.Definition.Table)))
         {
-            // Таблиці показників — у плитках і діаграмах.
+            // Таблиці показників — у плитках і діаграмах; таблиця сторінки з блоків — лише для спільних фільтрів.
             return context;
         }
 
@@ -695,6 +697,12 @@ public sealed partial class ProjectPageService(
             return;
         }
 
+        if (kind == ProjectPageKinds.Dashboard)
+        {
+            await ValidateDashboardAsync(projectId, def, ct);
+            return;
+        }
+
         var table = await ResolveTableAsync(projectId, sharedVisible: true, def.Table, ct) ?? throw TableUnknown(def.Table);
         foreach (var filter in def.Filter ?? [])
         {
@@ -713,9 +721,10 @@ public sealed partial class ProjectPageService(
                     throw Invalid("Сторінка-список потребує колонок (columns).");
                 }
 
+                var computedKeys = await ValidateComputedAsync(projectId, table, def.Computed, ct);
                 foreach (var column in def.Columns)
                 {
-                    await ValidateColumnAsync(projectId, table, column.Column, column.Display, ct);
+                    await ValidateListColumnAsync(projectId, table, column, computedKeys, ct);
                 }
 
                 foreach (var search in def.Search ?? [])
@@ -726,10 +735,7 @@ public sealed partial class ProjectPageService(
                 if (def.Sort is { } sort)
                 {
                     Require(table, sort.Column);
-                    if (sort.Direction is not null && sort.Direction is not ("asc" or "desc"))
-                    {
-                        throw Invalid($"Напрямок сортування «{sort.Direction}»: asc або desc.");
-                    }
+                    ValidateDirection(sort);
                 }
 
                 if (def.PageSize is < 1 or > MaxPageSize)
@@ -737,6 +743,11 @@ public sealed partial class ProjectPageService(
                     throw Invalid($"pageSize: від 1 до {MaxPageSize}.");
                 }
 
+                ValidateLayout(table, def, computedKeys);
+                ValidateLink(def.Create);
+                ValidateEmpty(def.Empty);
+                await ValidateUserFiltersAsync(projectId, table, def.Filters, ct);
+                await ValidateExpandAsync(projectId, def.Expand, pagesOnly: false, ct);
                 await ValidateActionsAsync(projectId, def.Actions, pagesOnly: false, ct);
                 break;
 
@@ -749,33 +760,37 @@ public sealed partial class ProjectPageService(
                 foreach (var field in def.Fields)
                 {
                     await ValidateColumnAsync(projectId, table, field.Column, field.Display, ct);
+                    ValidateFormat(Column(table, field.Column), field.Format, field.Labels, null);
                 }
 
-                foreach (var related in def.Related ?? [])
-                {
-                    var relatedTable = await ResolveTableAsync(projectId, sharedVisible: true, related.Table, ct) ?? throw TableUnknown(related.Table);
-                    Require(relatedTable, related.By);
-                    foreach (var column in related.Columns ?? [])
-                    {
-                        await ValidateColumnAsync(projectId, relatedTable, column.Column, column.Display, ct);
-                    }
-
-                    await ValidateActionsAsync(projectId, related.Actions, pagesOnly: true, ct);
-                }
-
+                await ValidateExpandAsync(projectId, def.Related, pagesOnly: true, ct);
                 await ValidateActionsAsync(projectId, def.Actions, pagesOnly: false, ct);
                 break;
 
+            case ProjectPageKinds.Calendar:
+                await ValidateCalendarAsync(projectId, table, def, ct);
+                break;
+
             case ProjectPageKinds.Form:
+                if (def.KeyValue is not null)
+                {
+                    ValidateKeyValue(table, def);
+                    ValidateLink(def.Then);
+                    break;
+                }
+
                 if (def.Fields is not { Count: > 0 })
                 {
-                    throw Invalid("Форма потребує полів (fields).");
+                    throw Invalid("Форма потребує полів (fields) або keyValue.");
                 }
 
                 foreach (var field in def.Fields)
                 {
                     await ValidateColumnAsync(projectId, table, field.Column, field.Display, ct);
+                    ValidateFormat(Column(table, field.Column), field.Format, field.Labels, null);
                 }
+
+                ValidateLink(def.Then);
 
                 if (def.Fields.GroupBy(f => f.Column, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } twice)
                 {
@@ -846,6 +861,16 @@ public sealed partial class ProjectPageService(
             if (action.Operation is not null && action.Operation != DeleteOperation)
             {
                 throw Invalid($"Дія «{action.Label}»: operation — лише {DeleteOperation}.");
+            }
+
+            if (action.Mode is not null && action.Page is null)
+            {
+                throw Invalid($"Дія «{action.Label}»: mode — лише з page.");
+            }
+
+            if (action.Page is not null)
+            {
+                ValidateLink(new PageLink(action.Page, action.Mode));
             }
 
             if (action.Roles is { Count: > 0 })

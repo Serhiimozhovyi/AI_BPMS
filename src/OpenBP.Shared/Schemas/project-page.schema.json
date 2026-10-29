@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbp.dev/schemas/project-page.schema.json",
+  "title": "Сторінка застосунку проєкту",
+  "description": "Сторінка з project_pages: ключ, назва, вид, визначення за видом і ролі застосунку (docs/projects.md §3). Контракт F8-14: список з фільтрами, мітками, обчислюваними колонками, картками, боковою панеллю і підлеглими списками; формати колонок; форма «ключ — значення»; календар; сторінка з блоків.",
+  "type": "object",
+  "required": ["name", "kind", "definition"],
+  "additionalProperties": false,
+  "properties": {
+    "key": { "$ref": "#/$defs/pageKey" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "kind": { "type": "string", "enum": ["list", "detail", "form", "metrics", "calendar", "dashboard"] },
+    "definition": { "type": "object" },
+    "roles": { "type": "array", "items": { "$ref": "#/$defs/roleKey" } },
+    "sortOrder": { "type": ["integer", "null"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "list" } } }, "then": { "properties": { "definition": { "$ref": "#/$defs/list" } } } },
+    { "if": { "properties": { "kind": { "const": "detail" } } }, "then": { "properties": { "definition": { "$ref": "#/$defs/detail" } } } },
+    { "if": { "properties": { "kind": { "const": "form" } } }, "then": { "properties": { "definition": { "$ref": "#/$defs/form" } } } },
+    { "if": { "properties": { "kind": { "const": "metrics" } } }, "then": { "properties": { "definition": { "$ref": "#/$defs/metrics" } } } },
+    { "if": { "properties": { "kind": { "const": "calendar" } } }, "then": { "properties": { "definition": { "$ref": "#/$defs/calendar" } } } },
+    { "if": { "properties": { "kind": { "const": "dashboard" } } }, "then": { "properties": { "definition": { "$ref": "#/$defs/dashboard" } } } }
+  ],
+  "$defs": {
+    "pageKey": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,39}$", "description": "Ключ сторінки: латиниця в нижньому регістрі, цифри, _ або -, з літери." },
+    "roleKey": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,39}$" },
+    "identifier": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,39}$" },
+    "columnName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "expression": { "type": "string", "pattern": "\\{\\{.*\\}\\}", "description": "Вираз у {{ }}: $user — хто дивиться, $row — рядок (дії), $tiles — плитки (metrics)." },
+    "format": {
+      "type": "string",
+      "enum": ["text", "number", "date", "datetime", "time", "weekday", "enum", "badge", "phone", "capacity", "boolean"],
+      "description": "Формат показу: дати у поясі застосунку; enum/badge — підписи з labels (badge — ще кольори з colors); phone — маска й нормалізація до цифр; capacity — 0 означає «без ліміту»."
+    },
+    "color": { "type": "string", "enum": ["gray", "green", "yellow", "red", "blue", "purple"] },
+    "labels": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 100 }, "description": "Значення → підпис." },
+    "colors": { "type": "object", "additionalProperties": { "$ref": "#/$defs/color" }, "description": "Значення → колір мітки." },
+    "mode": { "type": "string", "enum": ["navigate", "drawer"], "description": "navigate — перехід на сторінку; drawer — бокова панель поверх поточної." },
+    "filterValue": { "type": ["string", "number", "boolean", "null", "array", "object"] },
+    "filter": {
+      "type": "object",
+      "required": ["column", "operator"],
+      "additionalProperties": false,
+      "properties": {
+        "column": { "$ref": "#/$defs/columnName" },
+        "operator": { "type": "string", "enum": ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "isEmpty", "isNotEmpty"] },
+        "value": { "$ref": "#/$defs/filterValue" }
+      }
+    },
+    "filters": { "type": "array", "items": { "$ref": "#/$defs/filter" } },
+    "sort": {
+      "type": "object",
+      "required": ["column"],
+      "additionalProperties": false,
+      "properties": { "column": { "$ref": "#/$defs/columnName" }, "direction": { "type": "string", "enum": ["asc", "desc"] } }
+    },
+    "link": {
+      "type": "object",
+      "required": ["page"],
+      "additionalProperties": false,
+      "properties": { "page": { "$ref": "#/$defs/pageKey" }, "mode": { "$ref": "#/$defs/mode" } }
+    },
+    "action": {
+      "type": "object",
+      "required": ["label"],
+      "additionalProperties": false,
+      "description": "Рівно одне з workflow (сценарій проєкту), page (перехід) чи operation: delete.",
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "workflow": { "type": "string", "minLength": 1 },
+        "page": { "$ref": "#/$defs/pageKey" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "operation": { "type": "string", "enum": ["delete"] },
+        "confirm": { "type": "string", "maxLength": 500 },
+        "when": { "$ref": "#/$defs/expression" },
+        "roles": { "type": "array", "items": { "$ref": "#/$defs/roleKey" } }
+      },
+      "oneOf": [{ "required": ["workflow"] }, { "required": ["page"] }, { "required": ["operation"] }]
+    },
+    "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
+    "column": {
+      "type": "object",
+      "required": ["column"],
+      "additionalProperties": false,
+      "properties": {
+        "column": { "$ref": "#/$defs/columnName" },
+        "label": { "type": "string", "maxLength": 100 },
+        "format": { "$ref": "#/$defs/format" },
+        "display": { "type": "string", "pattern": "^.+\\..+$", "description": "Для колонки ref: <таблиця>.<колонка>." },
+        "labels": { "$ref": "#/$defs/labels" },
+        "colors": { "$ref": "#/$defs/colors" }
+      }
+    },
+    "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/column" } },
+    "field": {
+      "type": "object",
+      "required": ["column"],
+      "additionalProperties": false,
+      "properties": {
+        "column": { "$ref": "#/$defs/columnName" },
+        "label": { "type": "string", "maxLength": 100 },
+        "format": { "$ref": "#/$defs/format" },
+        "required": { "type": "boolean" },
+        "description": { "type": "string", "maxLength": 500 },
+        "value": { "$ref": "#/$defs/filterValue" },
+        "display": { "type": "string", "pattern": "^.+\\..+$" },
+        "labels": { "$ref": "#/$defs/labels" }
+      }
+    },
+    "userFilter": {
+      "type": "object",
+      "required": ["column", "kind"],
+      "additionalProperties": false,
+      "description": "Фільтр, яким керує користувач: select (один з enum/boolean/ref/user), chips (кілька станів), period (сьогодні, тиждень, місяць, від–до), search (підрядок).",
+      "properties": {
+        "column": { "$ref": "#/$defs/columnName" },
+        "kind": { "type": "string", "enum": ["select", "chips", "period", "search"] },
+        "label": { "type": "string", "maxLength": 100 },
+        "display": { "type": "string", "pattern": "^.+\\..+$" },
+        "labels": { "$ref": "#/$defs/labels" },
+        "default": { "$ref": "#/$defs/filterValue" }
+      }
+    },
+    "computed": {
+      "type": "object",
+      "required": ["key", "label", "table", "by"],
+      "additionalProperties": false,
+      "description": "Обчислювана колонка: count чи sum пов'язаних рядків table, де by = ключ рядка; of — колонка рядка з загальною кількістю («3 / 8»).",
+      "properties": {
+        "key": { "$ref": "#/$defs/identifier" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "table": { "$ref": "#/$defs/columnName" },
+        "by": { "$ref": "#/$defs/columnName" },
+        "aggregate": { "type": "string", "enum": ["count", "sum"] },
+        "column": { "$ref": "#/$defs/columnName" },
+        "where": { "$ref": "#/$defs/filters" },
+        "of": { "$ref": "#/$defs/columnName" }
+      }
+    },
+    "related": {
+      "type": "object",
+      "required": ["table", "by"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "$ref": "#/$defs/columnName" },
+        "by": { "$ref": "#/$defs/columnName" },
+        "label": { "type": "string", "maxLength": 100 },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
+        "actions": { "$ref": "#/$defs/actions" },
+        "create": { "$ref": "#/$defs/link" },
+        "empty": { "type": "string", "maxLength": 200 },
+        "sort": { "$ref": "#/$defs/sort" }
+      }
+    },
+    "card": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": { "title": { "$ref": "#/$defs/columnName" }, "subtitle": { "$ref": "#/$defs/columnName" } }
+    },
+    "keyValue": {
+      "type": "object",
+      "required": ["key", "value"],
+      "additionalProperties": false,
+      "description": "Усі рядки таблиці налаштувань однією формою: поле на кожен рядок, збереження — upsert за ключовою колонкою.",
+      "properties": {
+        "key": { "$ref": "#/$defs/columnName" },
+        "value": { "$ref": "#/$defs/columnName" },
+        "keys": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 100 } },
+        "labels": { "$ref": "#/$defs/labels" },
+        "multiline": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 100 } }
+      }
+    },
+    "calendarSettings": {
+      "type": "object",
+      "required": ["start"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "$ref": "#/$defs/columnName" },
+        "duration": { "$ref": "#/$defs/columnName" },
+        "end": { "$ref": "#/$defs/columnName" },
+        "defaultMinutes": { "type": "integer", "minimum": 5, "maximum": 1440 },
+        "title": { "$ref": "#/$defs/column" },
+        "subtitle": { "$ref": "#/$defs/column" },
+        "color": { "$ref": "#/$defs/column" },
+        "views": { "type": "array", "minItems": 1, "items": { "type": "string", "enum": ["week", "day", "month"] } },
+        "default": { "type": "string", "enum": ["week", "day", "month"] },
+        "open": { "$ref": "#/$defs/link" },
+        "fromHour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "toHour": { "type": "integer", "minimum": 1, "maximum": 24 }
+      }
+    },
+    "tile": {
+      "type": "object",
+      "required": ["label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/identifier" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "table": { "$ref": "#/$defs/columnName" },
+        "aggregate": { "type": "string", "enum": ["count", "sum", "avg", "min", "max"] },
+        "column": { "$ref": "#/$defs/columnName" },
+        "where": { "$ref": "#/$defs/filters" },
+        "expression": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "chart": {
+      "type": "object",
+      "required": ["groupBy"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "maxLength": 100 },
+        "table": { "$ref": "#/$defs/columnName" },
+        "groupBy": { "type": "string", "minLength": 1 },
+        "aggregate": { "type": "string", "enum": ["count", "sum", "avg", "min", "max"] },
+        "column": { "$ref": "#/$defs/columnName" },
+        "where": { "$ref": "#/$defs/filters" }
+      }
+    },
+    "list": {
+      "type": "object",
+      "required": ["table", "columns"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "$ref": "#/$defs/columnName" },
+        "columns": { "$ref": "#/$defs/columns" },
+        "filter": { "$ref": "#/$defs/filters" },
+        "filters": { "type": "array", "items": { "$ref": "#/$defs/userFilter" } },
+        "computed": { "type": "array", "items": { "$ref": "#/$defs/computed" } },
+        "search": { "type": "array", "items": { "$ref": "#/$defs/columnName" } },
+        "sort": { "$ref": "#/$defs/sort" },
+        "pageSize": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "layout": { "type": "string", "enum": ["table", "cards"] },
+        "card": { "$ref": "#/$defs/card" },
+        "actions": { "$ref": "#/$defs/actions" },
+        "create": { "$ref": "#/$defs/link" },
+        "expand": { "type": "array", "items": { "$ref": "#/$defs/related" } },
+        "empty": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "detail": {
+      "type": "object",
+      "required": ["table", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "$ref": "#/$defs/columnName" },
+        "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" } },
+        "filter": { "$ref": "#/$defs/filters" },
+        "related": { "type": "array", "items": { "$ref": "#/$defs/related" } },
+        "actions": { "$ref": "#/$defs/actions" }
+      }
+    },
+    "form": {
+      "type": "object",
+      "required": ["table", "onSubmit"],
+      "additionalProperties": false,
+      "description": "Або fields, або keyValue.",
+      "properties": {
+        "table": { "$ref": "#/$defs/columnName" },
+        "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" } },
+        "keyValue": { "$ref": "#/$defs/keyValue" },
+        "filter": { "$ref": "#/$defs/filters" },
+        "onSubmit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "operation": { "type": "string", "enum": ["insert", "upsert", "update"] }, "workflow": { "type": "string", "minLength": 1 } },
+          "oneOf": [{ "required": ["operation"] }, { "required": ["workflow"] }]
+        },
+        "then": { "$ref": "#/$defs/link" }
+      },
+      "oneOf": [{ "required": ["fields"] }, { "required": ["keyValue"] }]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "table": { "$ref": "#/$defs/columnName" },
+        "tiles": { "type": "array", "items": { "$ref": "#/$defs/tile" } },
+        "charts": { "type": "array", "items": { "$ref": "#/$defs/chart" } }
+      }
+    },
+    "calendar": {
+      "type": "object",
+      "required": ["table", "calendar"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "$ref": "#/$defs/columnName" },
+        "calendar": { "$ref": "#/$defs/calendarSettings" },
+        "filter": { "$ref": "#/$defs/filters" },
+        "filters": { "type": "array", "items": { "$ref": "#/$defs/userFilter" } },
+        "actions": { "$ref": "#/$defs/actions" },
+        "create": { "$ref": "#/$defs/link" },
+        "empty": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "description": "Блок головної: tiles/list/calendar/form — сторінка проєкту (page) або власне визначення (definition); actions — кнопки без рядка; text — текст.",
+      "properties": {
+        "kind": { "type": "string", "enum": ["tiles", "list", "calendar", "actions", "form", "text"] },
+        "label": { "type": "string", "maxLength": 100 },
+        "page": { "$ref": "#/$defs/pageKey" },
+        "definition": { "type": "object" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "range": { "type": "string", "enum": ["today", "week"] },
+        "actions": { "$ref": "#/$defs/actions" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "when": { "$ref": "#/$defs/expression" },
+        "width": { "type": "integer", "minimum": 1, "maximum": 12 }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "enum": ["tiles", "list", "calendar", "form"] } } }, "then": { "oneOf": [{ "required": ["page"] }, { "required": ["definition"] }] } },
+        { "if": { "properties": { "kind": { "const": "tiles" } }, "required": ["definition"] }, "then": { "properties": { "definition": { "$ref": "#/$defs/metrics" } } } },
+        { "if": { "properties": { "kind": { "const": "list" } }, "required": ["definition"] }, "then": { "properties": { "definition": { "$ref": "#/$defs/list" } } } },
+        { "if": { "properties": { "kind": { "const": "calendar" } }, "required": ["definition"] }, "then": { "properties": { "definition": { "$ref": "#/$defs/calendar" } } } },
+        { "if": { "properties": { "kind": { "const": "form" } }, "required": ["definition"] }, "then": { "properties": { "definition": { "$ref": "#/$defs/form" } } } },
+        { "if": { "properties": { "kind": { "const": "actions" } } }, "then": { "required": ["actions"] } },
+        { "if": { "properties": { "kind": { "const": "text" } } }, "then": { "required": ["text"] } }
+      ]
+    },
+    "dashboard": {
+      "type": "object",
+      "required": ["blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "filters": { "type": "array", "items": { "$ref": "#/$defs/userFilter" }, "description": "Спільні фільтри: діють на блоки, що мають таку колонку." },
+        "table": { "$ref": "#/$defs/columnName", "description": "Таблиця спільних фільтрів." },
+        "blocks": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/block" } }
+      }
+    },
+    "app": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "description": "Оболонка застосунку проєкту (workflow_groups.app): назва, значок, головна сторінка, меню розділів, часовий пояс.",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "icon": { "type": "string", "maxLength": 40 },
+        "home": { "$ref": "#/$defs/pageKey" },
+        "nav": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": ["label", "pages"],
+            "additionalProperties": false,
+            "properties": { "label": { "type": "string", "maxLength": 100 }, "pages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pageKey" } } }
+          }
+        },
+        "timezone": { "type": "string", "maxLength": 60 }
+      }
+    }
+  }
+}

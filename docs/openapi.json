@@ -723,6 +723,45 @@
         ]
       }
     },
+    "/api/v1/projects/pages/schema": {
+      "get": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "JSON Schema сторінки застосунку",
+        "description": "Контракт сторінки (docs/projects.md §3, F8-14) для підказок у JSON-редакторі конструктора, MCP-агентів і шаблонів. Сервер перевіряє визначення сам; схема — опис полів за видами list, detail, form, metrics, calendar, dashboard і оболонки app.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -10705,6 +10744,12 @@
               "string"
             ]
           },
+          "mode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "operation": {
             "type": [
               "null",
@@ -10781,6 +10826,206 @@
           }
         }
       },
+      "PageBlock": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "page": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageDefinition"
+              }
+            ]
+          },
+          "limit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "range": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageAction"
+            }
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "when": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "width": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PageCalendar": {
+        "required": [
+          "start"
+        ],
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string"
+          },
+          "duration": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "end": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageColumn"
+              }
+            ]
+          },
+          "subtitle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageColumn"
+              }
+            ]
+          },
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageColumn"
+              }
+            ]
+          },
+          "views": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "open": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageLink"
+              }
+            ]
+          },
+          "fromHour": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toHour": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PageCard": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "PageChart": {
         "type": "object",
         "properties": {
@@ -10844,6 +11089,74 @@
             ]
           },
           "display": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "labels": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "colors": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PageComputed": {
+        "required": [
+          "key",
+          "label",
+          "table",
+          "by"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "table": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "aggregate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "column": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "where": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageFilter"
+            }
+          },
+          "of": {
             "type": [
               "null",
               "string"
@@ -10977,6 +11290,84 @@
             "items": {
               "$ref": "#/components/schemas/PageChart"
             }
+          },
+          "filters": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageUserFilter"
+            }
+          },
+          "computed": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageComputed"
+            }
+          },
+          "layout": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "card": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageCard"
+              }
+            ]
+          },
+          "expand": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageRelated"
+            }
+          },
+          "empty": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "keyValue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageKeyValue"
+              }
+            ]
+          },
+          "calendar": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageCalendar"
+              }
+            ]
+          },
+          "blocks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PageBlock"
+            }
           }
         }
       },
@@ -11025,6 +11416,15 @@
               "null",
               "string"
             ]
+          },
+          "labels": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -11044,6 +11444,48 @@
           "value": {}
         }
       },
+      "PageKeyValue": {
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "keys": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "multiline": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "PageLink": {
         "required": [
           "page"
@@ -11052,6 +11494,12 @@
         "properties": {
           "page": {
             "type": "string"
+          },
+          "mode": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -11204,6 +11652,32 @@
             "items": {
               "$ref": "#/components/schemas/PageAction"
             }
+          },
+          "create": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageLink"
+              }
+            ]
+          },
+          "empty": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageSort"
+              }
+            ]
           }
         }
       },
@@ -11693,6 +12167,52 @@
             "type": [
               "null",
               "string"
+            ]
+          }
+        }
+      },
+      "PageUserFilter": {
+        "required": [
+          "column",
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "column": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "display": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "labels": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
             ]
           }
         }
