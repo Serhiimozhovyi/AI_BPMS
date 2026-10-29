@@ -1,12 +1,14 @@
 using System.Text.Json.Nodes;
 using OpenBP.Api.OpenApi;
+using OpenBP.Application.Auth;
 using OpenBP.Application.Projects;
+using OpenBP.Shared.Projects;
 
 namespace OpenBP.Api.Endpoints;
 
 /// <summary>Тіло <c>PUT /projects/{id}/pages/{key}</c>.</summary>
 /// <param name="Name">Назва в меню застосунку.</param>
-/// <param name="Kind"><c>list</c>, <c>detail</c> або <c>form</c>.</param>
+/// <param name="Kind"><c>list</c>, <c>detail</c>, <c>form</c>, <c>metrics</c>, <c>calendar</c> або <c>dashboard</c>.</param>
 /// <param name="Definition">Визначення (docs/projects.md §3).</param>
 /// <param name="Roles">Ключі ролей застосунку; порожньо — усім учасникам.</param>
 /// <param name="SortOrder">Порядок у меню; <c>null</c> — у кінці (нова) чи без змін.</param>
@@ -28,6 +30,14 @@ public static class ProjectPageEndpoints
     /// <param name="api">Група.</param>
     public static RouteGroupBuilder MapProjectPageEndpoints(this RouteGroupBuilder api)
     {
+        api.MapGet("/projects/pages/schema", (ICurrentUser user) =>
+                !user.IsAuthenticated ? Results.Unauthorized() : Results.Content(ProjectPageJson.Schema, "application/schema+json"))
+            .WithTags(OpenApiSetup.Tags.ProjectPages)
+            .WithSummary("JSON Schema сторінки застосунку")
+            .WithDescription("Контракт сторінки (docs/projects.md §3, F8-14) для підказок у JSON-редакторі конструктора, MCP-агентів і шаблонів. " +
+                             "Сервер перевіряє визначення сам; схема — опис полів за видами list, detail, form, metrics, calendar, dashboard і оболонки app.")
+            .Produces<string>(StatusCodes.Status200OK, "application/schema+json");
+
         var pages = api.MapGroup("/projects/{projectId:guid}/pages").WithTags(OpenApiSetup.Tags.ProjectPages);
 
         pages.MapGet("/", (Guid projectId, IProjectPageService service, CancellationToken ct) => service.ListAsync(projectId, ct))

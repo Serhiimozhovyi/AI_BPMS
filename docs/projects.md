@@ -99,56 +99,337 @@ JSON Schema форми, `canEdit`), `PUT /{key}` (створити/заміни�
 - Конструктор: `/projects/:id/app/_builder[/<key>]` (editor), форма з усіма розділами та запасний JSON-редактор;
   частини визначення, яких форма не знає (`related`, `display`, `value`), зберігаються.
 
+**Реалізовано (F8-14), контракт зручних сторінок** (`docs/app-pages.md`): нижче §3.1–3.9. Моделі — `ProjectPageModels.cs`,
+перевірка — `ProjectPageService.Contract.cs`, JSON Schema — `OpenBP.Shared/Schemas/project-page.schema.json`
+(`GET /api/v1/projects/pages/schema`; для підказок у редакторі й шаблонах, сервер перевіряє сам). Сервер даних для нових
+опцій — F8-15, інтерфейс — F8-16…F8-18, конструктор — F8-19. Відхилення від плану `app-pages.md`: замість `editor { form,
+mode }` — режим `mode: "drawer"` у будь-якому посиланні на сторінку (`create`, `actions[].page`, `calendar.open`); замість
+`badges` сторінки — формат `badge` з `colors` у колонці; `sections` — це сторінка `dashboard` з блоками і спільними
+фільтрами. Посилання на сторінку (`page`) перевіряється лише за формою ключа: сторінку можна створити пізніше чи
+імпортувати в будь-якому порядку.
+
+Приклади нижче — для таблиць демонстраційного проєкту (їх створює тест `ProjectPageContractTests`, а всі приклади з цього
+розділу він зберігає як сторінки):
+
+| Таблиця | Колонки |
+|---|---|
+| `slots` | `starts_at datetime`, `duration_min number`, `format enum(online, offline)`, `status enum(open, booked, closed)`, `host user`, `source string` |
+| `bookings` | `slot_id ref slots`, `starts_at datetime`, `client_name string`, `client_phone string (чутлива)`, `status enum(active, cancelled)`, `host user` |
+| `events` | `title string`, `starts_at datetime`, `format enum(online, offline)`, `capacity number`, `status enum(planned, done, cancelled)` |
+| `event_registrations` | `event_id ref events`, `client_name string`, `status enum(active, cancelled)`, `created_at datetime` |
+| `settings` | `key string (ключ)`, `value string` |
+
+Сценарії проєкту в прикладах: `cancel-registration`, `send-notice`, `generate-slots`.
+
 ### 3.1. `list`
 
 ```json
 {
-  "table": "bookings",
-  "columns": [
-    { "column": "starts_at", "label": "Час", "format": "datetime" },
-    { "column": "slot_id", "label": "Психолог", "display": "psychologists.name" },
-    { "column": "status", "label": "Стан" }
-  ],
-  "filter": [{ "column": "psychologist_id", "operator": "eq", "value": "{{ $user.id }}" }],
-  "search": ["name", "phone"],
-  "sort": { "column": "starts_at", "direction": "asc" },
-  "actions": [
-    { "label": "Скасувати", "workflow": "cancel-booking", "confirm": "Скасувати запис?", "when": "{{ $row.status === 'active' }}" },
-    { "label": "Відкрити", "page": "booking" }
-  ],
-  "create": { "page": "booking-form" }
+  "key": "events",
+  "name": "Події",
+  "kind": "list",
+  "roles": ["coordinator"],
+  "definition": {
+    "table": "events",
+    "columns": [
+      { "column": "title", "label": "Назва" },
+      { "column": "starts_at", "label": "Початок", "format": "datetime" },
+      { "column": "format", "label": "Формат", "format": "enum", "labels": { "online": "Онлайн", "offline": "Наживо" } },
+      { "column": "status", "label": "Стан", "format": "badge",
+        "labels": { "planned": "Заплановано", "done": "Відбулася", "cancelled": "Скасовано" },
+        "colors": { "planned": "blue", "done": "green", "cancelled": "gray" } },
+      { "column": "registered", "label": "Місця" }
+    ],
+    "computed": [
+      { "key": "registered", "label": "Місця", "table": "event_registrations", "by": "event_id", "aggregate": "count",
+        "where": [{ "column": "status", "operator": "eq", "value": "active" }], "of": "capacity" }
+    ],
+    "filters": [
+      { "column": "status", "kind": "chips", "default": ["planned"] },
+      { "column": "starts_at", "kind": "period", "label": "Коли", "default": "month" },
+      { "column": "title", "kind": "search", "label": "Пошук" }
+    ],
+    "filter": [{ "column": "title", "operator": "isNotEmpty" }],
+    "sort": { "column": "starts_at", "direction": "desc" },
+    "layout": "table",
+    "create": { "page": "event-new", "mode": "drawer" },
+    "actions": [
+      { "label": "Змінити", "page": "event-form", "mode": "drawer" },
+      { "label": "Надіслати оголошення", "workflow": "send-notice", "confirm": "Надіслати всім зареєстрованим?",
+        "when": "{{ $row.status === 'planned' }}" }
+    ],
+    "expand": [
+      { "table": "event_registrations", "by": "event_id", "label": "Учасники",
+        "columns": [
+          { "column": "client_name", "label": "Ім'я" },
+          { "column": "status", "label": "Стан", "format": "badge", "colors": { "active": "green", "cancelled": "gray" } },
+          { "column": "created_at", "label": "Зареєстровано", "format": "datetime" }
+        ],
+        "sort": { "column": "created_at", "direction": "asc" },
+        "actions": [{ "label": "Скасувати", "workflow": "cancel-registration", "confirm": "Скасувати реєстрацію?",
+                      "when": "{{ $row.status === 'active' }}" }],
+        "create": { "page": "registration-form", "mode": "drawer" },
+        "empty": "Ще ніхто не зареєструвався" }
+    ],
+    "empty": "Подій немає. Створіть першу кнопкою «Створити»."
+  }
 }
 ```
 
-- `display: "<table>.<column>"` для колонок `ref` показує значення з пов'язаної таблиці.
-- `filter` — умови `where` з виразами; `$user` = `{ id, email, role, appRole }`. Фільтр застосовується на сервері
-  разом із правами, його не можна зняти з клієнта.
-- `actions[].workflow` — ключ або id сценарію проєкту: запуск через `IExecutionLauncher` з items
-  `[{ row, user }]`, очікування результату до 30 с (як `run_workflow` з `wait`), показ `result.message` або
+- `columns[].column` — колонка таблиці або ключ з `computed`; `format`, `labels`, `colors` — §3.6; `display: "<table>.<column>"`
+  для колонок `ref` показує значення з пов'язаної таблиці.
+- `filter` — умови `where` з виразами; `$user` = `{ id, email, role, appRole }`. Фільтр застосовується на сервері разом із
+  правами, його не можна зняти з клієнта.
+- `filters` — панель фільтрів, якими керує користувач, поверх `filter`: `select` (одне значення: `enum`, `boolean`, `ref`
+  з `display`, `user`, текст), `chips` (кілька станів `enum`/`boolean`), `period` (`date`/`datetime`: `today`, `week`,
+  `month` або від–до), `search` (підрядок у колонці). `default` — початкове значення (список для `chips`, назва періоду для
+  `period`, вираз з `$user` дозволений). Значення передаються у `GET …/rows` як `filters[<колонка>]=…` (для `chips` —
+  кілька разів), `filters[<колонка>][from]`/`[to]` для періоду (F8-15).
+- `computed` — обчислювана колонка на кожен рядок: `count` або `sum` (з `column`) пов'язаних рядків `table`, де `by` =
+  ключ рядка, з умовами `where`; `of` — числова колонка рядка з загальною кількістю: показ «3 / 8», `0` в `of` — «без
+  ліміту». Ключ не може збігатися з колонкою таблиці; сортувати й шукати за обчислюваною колонкою не можна.
+- `layout: "cards"` — рядки картками; `card: { title, subtitle }` — які колонки в заголовку (інакше перша колонка).
+- `create` і `actions[].page` з `mode: "drawer"` відкривають сторінку боковою панеллю поверх списку (форма — з ключем
+  рядка; після збереження список оновлюється); без `mode` — перехід. `actions[].workflow` — ключ або id сценарію проєкту:
+  запуск через `IExecutionLauncher` з items `[{ row, user }]`, очікування результату до 30 с, показ `result.message` або
   помилки. `actions[].operation: "delete"` — пряме видалення рядка (editor).
+- `expand` — підлеглі списки під розгорнутим рядком: як `related` у картці (`table`, `by`, `columns`, `sort`, `empty`), але
+  з будь-якими діями над підлеглими рядками і кнопкою `create` (форма з підставленим `by`). Рядки й дії підлеглих списків —
+  `GET …/rows/{rowKey}/expand/{index}` і `POST …/rows/{rowKey}/expand/{index}/{subKey}/actions/{i}` (F8-15).
+- `empty` — текст порожнього стану (до 200 символів).
 
 ### 3.2. `detail`
 
-`{ "table": "events", "fields": [...], "related": [{ "table": "event_registrations", "by": "event_id", "columns": [...], "actions": [...] }], "actions": [...] }`.
-Адреса `/projects/:id/app/<key>/<rowKey>`.
+```json
+{
+  "key": "event",
+  "name": "Подія",
+  "kind": "detail",
+  "definition": {
+    "table": "events",
+    "fields": [
+      { "column": "title", "label": "Назва" },
+      { "column": "starts_at", "label": "Початок", "format": "datetime" },
+      { "column": "format", "label": "Формат", "labels": { "online": "Онлайн", "offline": "Наживо" } },
+      { "column": "capacity", "label": "Місць", "format": "capacity" }
+    ],
+    "related": [
+      { "table": "event_registrations", "by": "event_id", "label": "Учасники",
+        "columns": [{ "column": "client_name", "label": "Ім'я" }, { "column": "status", "label": "Стан", "format": "badge", "colors": { "active": "green" } }],
+        "actions": [{ "label": "Відкрити", "page": "registration" }] }
+    ],
+    "actions": [{ "label": "Змінити", "page": "event-form", "mode": "drawer" }]
+  }
+}
+```
+
+Адреса `/projects/:id/app/<key>/<rowKey>`. Поля мають `format` і `labels` (§3.6). Дії в `related` — лише переходи
+`page`; підлеглі списки з діями — `expand` у списку.
 
 ### 3.3. `form`
 
-`{ "table": "events", "fields": [{ "column": "title", "required": true }, { "column": "starts_at" }, ...], "onSubmit": { "operation": "upsert" } | { "workflow": "create-event" }, "then": { "page": "events" } }`.
-Поля генеруються з типів колонок (`enum` → вибір, `ref` → пошук по пов'язаній таблиці, `datetime` → дата й час,
-`user` → учасник проєкту) тим самим рушієм форм, що й `core.formTrigger` (F6-03).
+```json
+{
+  "key": "event-form",
+  "name": "Подія",
+  "kind": "form",
+  "definition": {
+    "table": "events",
+    "fields": [
+      { "column": "title", "label": "Назва", "required": true },
+      { "column": "starts_at", "label": "Початок", "required": true },
+      { "column": "format", "label": "Формат", "labels": { "online": "Онлайн", "offline": "Наживо" } },
+      { "column": "capacity", "label": "Місць", "format": "capacity", "description": "0 — без ліміту" },
+      { "column": "status", "value": "planned" }
+    ],
+    "onSubmit": { "operation": "update" },
+    "then": { "page": "events" }
+  }
+}
+```
+
+Поля генеруються з типів колонок (`enum` → вибір з підписами `labels`, `ref` → пошук по пов'язаній таблиці, `datetime`
+→ дата й час у поясі застосунку, `user` → учасник проєкту) тим самим рушієм форм, що й `core.formTrigger` (F6-03).
+`format: "phone"` нормалізує значення до цифр під час збереження (F8-15). Форма зміни (з дії рядка) — `update`; форма
+створення (з `create`) — окрема сторінка з `insert`, або одна форма з `upsert`, якщо в таблиці є ключова колонка.
+
+Форма «ключ — значення» — усі рядки таблиці налаштувань однією формою (поле на кожен рядок; збереження — `upsert`
+змінених рядків за ключовою колонкою):
+
+```json
+{
+  "key": "settings-form",
+  "name": "Тексти й налаштування",
+  "kind": "form",
+  "roles": ["coordinator"],
+  "definition": {
+    "table": "settings",
+    "keyValue": {
+      "key": "key",
+      "value": "value",
+      "keys": ["greeting", "help", "limit_bookings"],
+      "labels": { "greeting": "Привітання", "help": "Текст допомоги", "limit_bookings": "Ліміт активних записів" },
+      "multiline": ["greeting", "help"]
+    },
+    "onSubmit": { "operation": "upsert" }
+  }
+}
+```
+
+`keyValue.key` — ключова колонка таблиці; `keys` — які ключі показати і в якому порядку (порожньо — усі рядки за
+ключем); `multiline` — багаторядкові поля. `fields` і `keyValue` разом не можна; `onSubmit` — лише `upsert`.
 
 ### 3.4. `metrics`
 
-`{ "tiles": [{ "label": "Записів за місяць", "table": "bookings", "aggregate": "count", "where": [...] }, { "label": "Заповненість слотів", "expression": "{{ $tiles.booked / $tiles.slots }}" }], "charts": [{ "table": "bookings", "groupBy": "month(starts_at)", "aggregate": "count" }] }`.
+```json
+{
+  "key": "metrics",
+  "name": "Показники",
+  "kind": "metrics",
+  "roles": ["coordinator"],
+  "definition": {
+    "tiles": [
+      { "key": "booked", "label": "Активних записів", "table": "bookings", "aggregate": "count", "where": [{ "column": "status", "operator": "eq", "value": "active" }] },
+      { "key": "open_slots", "label": "Відкритих слотів", "table": "slots", "aggregate": "count", "where": [{ "column": "status", "operator": "eq", "value": "open" }] },
+      { "label": "Заповненість слотів, %", "expression": "{{ ($tiles.booked + $tiles.open_slots) ? Math.round(1000 * $tiles.booked / ($tiles.booked + $tiles.open_slots)) / 10 : 0 }}" }
+    ],
+    "charts": [{ "label": "Записи за тижнями", "table": "bookings", "groupBy": "week(starts_at)", "aggregate": "count" }]
+  }
+}
+```
+
 Чутливі колонки в `metrics` недоступні (валідатор сторінки відхиляє).
 
-### 3.5. Конструктор
+### 3.5. `calendar`
 
-Editor проєкту редагує сторінки формою: тип, таблиця, колонки з таблиці, фільтри, дії зі списку сценаріїв
-проєкту. Валідація — application-шар: невідома таблиця/колонка/сценарій, чутлива колонка в `metrics`, сценарій
-іншого проєкту → 422 з кодом. `GET|POST|PUT|DELETE /api/v1/projects/{id}/pages`, MCP `list_project_pages`,
-`upsert_project_page`.
+```json
+{
+  "key": "my-calendar",
+  "name": "Мій розклад",
+  "kind": "calendar",
+  "roles": ["psychologist"],
+  "definition": {
+    "table": "slots",
+    "filter": [{ "column": "host", "operator": "eq", "value": "{{ $user.id }}" }],
+    "calendar": {
+      "start": "starts_at",
+      "duration": "duration_min",
+      "title": { "column": "format", "format": "enum", "labels": { "online": "Онлайн", "offline": "Наживо" } },
+      "subtitle": { "column": "source" },
+      "color": { "column": "status", "format": "badge", "labels": { "open": "Вільно", "booked": "Зайнято", "closed": "Закрито" },
+                 "colors": { "open": "green", "booked": "blue", "closed": "gray" } },
+      "views": ["week", "day", "month"],
+      "default": "week",
+      "fromHour": 8,
+      "toHour": 20,
+      "open": { "page": "slot-form", "mode": "drawer" }
+    },
+    "filters": [{ "column": "status", "kind": "chips", "labels": { "open": "Вільно", "booked": "Зайнято", "closed": "Закрито" } }],
+    "create": { "page": "slot-form", "mode": "drawer" },
+    "actions": [{ "label": "Закрити слот", "workflow": "generate-slots", "when": "{{ $row.status === 'open' }}" }],
+    "empty": "На цей тиждень слотів немає"
+  }
+}
+```
+
+- Подія — рядок таблиці: `start` (`datetime`), тривалість `duration` (хвилини, число) або кінець `end` (`datetime`); без
+  обох — `defaultMinutes` (типово 60). Заголовок `title`, підзаголовок `subtitle` і колір `color` — колонки з форматами
+  §3.6; `color.colors` обов'язковий.
+- `views` — доступні вигляди (`week`, `day`, `month`), `default` — початковий; `fromHour`/`toHour` — межі дня у вигляді
+  тижня/дня.
+- Клік по події відкриває `open` (картку чи форму з ключем рядка, `mode` як у §3.1); клік по вільній клітинці —
+  `create` з підставленим часом початку (поле `start` форми). `filter`, `filters`, `actions` (дії над подією), `empty` — як
+  у списку. Рядки за діапазоном — `GET …/calendar?from&to` (F8-15).
+
+### 3.6. Формати колонок і полів
+
+`format` у колонках списку, полях картки й форми, заголовку й кольорі календаря. Без `format` показ — за типом колонки.
+
+| `format` | Для типів | Показ |
+|---|---|---|
+| `text`, `number` | текст, число | як є |
+| `date`, `datetime`, `time` | `date`, `datetime` (`time` — ще текст `ГГ:ХХ`) | у часовому поясі застосунку (`app.timezone`, §3.9), напр. «пн, 2 лис 10:00» |
+| `weekday` | число 1–7 (1 — понеділок), `date`, `datetime` | назва дня тижня |
+| `enum` | `enum`, текст, число | підпис з `labels` (значення → текст); без підпису — значення |
+| `badge` | `enum`, текст, число, `boolean`, `ref` | кольорова мітка: підпис з `labels`, колір з `colors` (`gray`, `green`, `yellow`, `red`, `blue`, `purple`) |
+| `phone` | текст | маска «+38 (067) 123-45-67»; у формі значення нормалізується до цифр |
+| `capacity` | число | `0` — «без ліміту» (інший текст — `labels["0"]`) |
+| `boolean` | `boolean` | «так»/«ні» або підписи `labels["true"]`/`["false"]` |
+
+Для колонки `enum` ключі `labels` і `colors` мають бути з переліку колонки. `colors` — лише з `format: "badge"`.
+
+### 3.7. `dashboard`
+
+Сторінка з блоків — головна застосунку («Сьогодні») або екран з кількох списків і форм під спільними фільтрами («Розклад»):
+
+```json
+{
+  "key": "today",
+  "name": "Сьогодні",
+  "kind": "dashboard",
+  "roles": ["psychologist"],
+  "definition": {
+    "table": "slots",
+    "filters": [{ "column": "host", "kind": "select", "label": "Хто веде", "default": "{{ $user.id }}" }],
+    "blocks": [
+      { "kind": "text", "text": "Вітаємо, {{ $user.email }}! Нижче — ваш день.", "width": 12 },
+      { "kind": "tiles", "label": "Показники", "page": "metrics", "width": 6, "when": "{{ $user.appRole === 'coordinator' }}" },
+      { "kind": "calendar", "label": "Сьогодні", "page": "my-calendar", "range": "today", "width": 6 },
+      { "kind": "list", "label": "Найближчі записи", "page": "bookings", "limit": 5 },
+      { "kind": "list", "label": "Заплановані події", "limit": 3,
+        "definition": { "table": "events", "columns": [{ "column": "title" }, { "column": "starts_at", "format": "datetime" }],
+                        "filter": [{ "column": "status", "operator": "eq", "value": "planned" }], "sort": { "column": "starts_at" } } },
+      { "kind": "form", "label": "Налаштування", "page": "settings-form", "when": "{{ $user.appRole === 'coordinator' }}" },
+      { "kind": "actions", "actions": [
+          { "label": "Додати слот", "page": "slot-form", "mode": "drawer" },
+          { "label": "Згенерувати слоти з шаблонів", "workflow": "generate-slots", "confirm": "Створити слоти на місяць уперед?", "roles": ["coordinator"] }
+      ] }
+    ]
+  }
+}
+```
+
+- Блок `tiles` | `list` | `calendar` | `form` показує сторінку проєкту (`page`, того самого виду; `tiles` — `metrics`)
+  або власне визначення (`definition`, як у сторінки цього виду). `limit` (1–50, типово 5) — рядків у списку, «Усі» веде
+  на `page`; `range: today | week` — період блоку календаря.
+- `actions` — кнопки без рядка: `workflow` запускається з item `{ user }`, `page` — перехід чи бокова панель; `when` і
+  `roles` як у дій рядка (у `when` — лише `$user`). `text` — текст з виразами над `$user`.
+- `filters` з `table` — спільні фільтри сторінки: діють на блоки, таблиця яких має таку саму колонку. `when` блоку — вираз
+  з `$user`; `width` — колонок сітки з 12.
+- Дані всіх блоків — `GET …/dashboard` (F8-15); блоки до 20.
+
+### 3.8. Конструктор
+
+Editor проєкту редагує сторінки формою: тип, таблиця, колонки з таблиці, фільтри, дії зі списку сценаріїв проєкту.
+Валідація — application-шар: невідома таблиця/колонка/сценарій, чутлива колонка в `metrics`, сценарій іншого проєкту →
+422 з кодом. `GET|POST|PUT|DELETE /api/v1/projects/{id}/pages`, MCP `list_project_pages`, `upsert_project_page`. Нові
+опції §3.1–3.7 у формі конструктора — F8-19; до того — JSON-редактор з підказками за JSON Schema
+(`GET /api/v1/projects/pages/schema`).
+
+### 3.9. Оболонка застосунку
+
+Проєкт задає `app` (`workflow_groups.app`, `GET|PATCH /workflow-groups/{id}` — F8-15): назву, значок, головну сторінку,
+меню розділів і часовий пояс показу дат. Користувач лише з роллю застосунку бачить оболонку без меню OpenBP: назва,
+групи розділів, головна сторінка (F8-18); editor — те саме в рамці проєкту плюс кнопку «Конструктор».
+
+```json
+{
+  "title": "Кабінет",
+  "icon": "calendar_month",
+  "home": "today",
+  "timezone": "Europe/Kyiv",
+  "nav": [
+    { "label": "", "pages": ["today", "my-calendar"] },
+    { "label": "Записи", "pages": ["bookings", "events"] },
+    { "label": "Налаштування", "pages": ["settings-form", "metrics"] }
+  ]
+}
+```
+
+Перевірка (`ProjectApps.Validate`): назва до 100 символів; `timezone` — назва IANA; `home` і сторінки меню існують у
+проєкті, у меню кожна сторінка один раз, група без сторінок не допускається; сторінки не з меню відкриваються за
+посиланням. Користувач бачить лише ті пункти меню, сторінки яких йому видно (`roles`). Без `app` застосунок показується
+як зараз: вкладка «Застосунок» зі списком сторінок.
 
 ## 4. Ролі застосунку
 

@@ -1440,9 +1440,10 @@
 - DoD: CI зелений; архітектурний тест F7-08 зелений; `docs/` без мертвих посилань.
 
 ### F8-14 · Контракт зручних сторінок: фільтри, мітки, обчислювані колонки, панель, календар, головна, оболонка
-- model: `fable` · status: `ready` · depends: F8-05
+- model: `fable` · status: `review` · depends: F8-05
 - Що: за `docs/app-pages.md` — у `docs/projects.md` §3 описати `list.filters` (вибір, чипи стану, період), `badges` (колір за значенням), `computed` (count/sum пов'язаних з `where`), `layout: table|cards`, `editor { form, mode: drawer }`, `expand` (підлеглі списки з діями), `empty`; `format` колонок і полів (`datetime`/`date`/`time` у поясі проєкту, `weekday`, `enum` з підписами, `badge`, `phone` з маскою й нормалізацією, `capacity`); `sections` (кілька блоків на сторінці з одним фільтром); форма `keyValue` (усі рядки таблиці налаштувань однією формою); види `calendar` (колонки початку й тривалості, `views`, клік по клітинці → форма з часом) і `dashboard` (блоки: плитки, короткий список, сьогодні з календаря, кнопки); `app { title, icon, home, nav[] }` проєкту. Валідатор сторінок і JSON Schema; коди помилок.
 - DoD: контракт і приклади в `docs/projects.md`; валідатор приймає всі приклади й відхиляє помилкові (тести); архітектурний тест F7-08 зелений.
+- Зроблено: `docs/projects.md` §3.1–3.9 з прикладом кожного виду; моделі `ProjectPageModels.cs` (`PageUserFilter`, `PageComputed`, `PageCard`, `PageKeyValue`, `PageCalendar`, `PageBlock`, `PageFormats`, `PageOpenModes`), `ProjectApp`/`ProjectApps.Validate`; перевірка `ProjectPageService.Contract.cs`; JSON Schema `OpenBP.Shared/Schemas/project-page.schema.json` і `GET /projects/pages/schema`. Відхилення від плану: замість `editor` — `mode: drawer` у посиланнях, замість `badges` — `format: badge` + `colors`, `sections` = `dashboard` з блоками. Тести: `ProjectPageSchemaTests` (усі приклади документа проходять схему), `ProjectPageContractTests` (приклади зберігаються, 31 помилкове визначення — 422 з кодом), `ProjectAppTests`. Сервер даних (`filters`, `computed`, `calendar`, `dashboard`, `app` у проєкті) — F8-15.
 
 ### F8-15 · Сервер зручних сторінок
 - model: `opus` · status: `ready` · depends: F8-14
