@@ -3789,8 +3789,8 @@
               "typeVersion": 1,
               "position": [720, 0],
               "parameters": {
-                "mode": "eachItem",
-                "code": "// Розділ і дія за кодом кнопки (docs/psy-support.md §6.1). Ключі рядків приходять у base64url — тут вони стають UUID.\nconst all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst u = $json;\nconst user = all('Людина')[0] || null;\nconst meRow = all('Я психолог')[0] || null;\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst dec = (s) => {\n  s = String(s == null ? '' : s);\n  if (!/^[A-Za-z0-9_-]{22}$/.test(s)) return s;\n  let bits = '';\n  for (const ch of s) bits += B64.indexOf(ch).toString(2).padStart(6, '0');\n  let hex = '';\n  for (let i = 0; i < 128; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16);\n  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);\n};\nconst phoneOf = (p) => { let d = String(p || '').replace(/\\D/g, ''); if (d.length === 10 && d[0] === '0') d = '38' + d; return d; };\nconst data = String(u.data || '').trim();\nconst p = data.split(':');\nconst out = { section: 'start', action: 'none', telegram_id: String(u.telegram_id), name: u.name || '', data: data, parts: p, parts_decoded: p.map(dec), metric: null };\nconst sections = [\n  ['menu', /^m:(psy|help|sos)$/],\n  ['materials', /^(m:mat$|mt:)/],\n  ['consult', /^(m:cons$|c:)/],\n  ['events', /^(m:ev$|e:)/],\n  ['bst', /^(m:bst$|b:)/],\n  ['cabinet', /^(\\/psy(@\\w+)?$|p:)/],\n];\nfor (const [name, re] of sections) if (re.test(data)) { out.section = name; break; }\nif (u.contact) {\n  out.section = 'start';\n  const own = u.contact.user_id == null || String(u.contact.user_id) === out.telegram_id;\n  out.phone = phoneOf(u.contact.phone_number);\n  if (!own) out.code = 'not_own_contact';\n  else if (out.phone.length < 10) out.code = 'bad_phone';\n  else out.action = 'register';\n  return [out];\n}\nif (!user) { out.section = 'start'; return [out]; }\nif (out.section === 'start') {\n  // /start чи будь-який текст: психолога, чий телефон збігся, прив'язуємо до Telegram (як у n8n-боті).\n  if (!me && user.phone) { out.action = 'link'; out.phone = user.phone; }\n  return [out];\n}\nconst metrics = { 'm:psy': 'psy_section_opened', 'm:help': 'help_opened', 'm:sos': 'sos_opened', 'm:cons': 'consult_opened',\n  'm:ev': 'events_opened', 'm:bst': 'bst_opened', 'm:mat': 'materials_opened' };\nout.metric = metrics[data] || null;\nconst id = (i) => dec(p[i]);\nconst act = (action, fields) => { out.action = action; Object.assign(out, fields); };\nswitch (p[0] + ':' + (p[1] || '')) {\n  case 'mt:r': act('material_view', { material_id: id(2) }); out.metric = 'material_views'; break;\n  case 'c:ok': act('book', { slot_id: id(2) }); break;\n  case 'c:xx': act('cancel', { booking_id: id(2) }); break;\n  case 'c:mo': act('move', { booking_id: id(2), slot_id: id(3) }); break;\n  case 'e:ok': act('event_register', { event_id: id(2) }); break;\n  case 'e:x': act('event_cancel', { event_id: id(2) }); break;\n  case 'e:fb': act('event_rate', { event_id: id(2), rating: Number(p[3]) }); break;\n  case 'b:ok': act('bst_book', { session_id: id(2) }); break;\n  case 'b:x': act('bst_cancel', { session_id: id(2) }); break;\n  case 'b:w': act('bst_wait', { session_id: id(2) }); break;\n  case 'b:wx': act('bst_leave', { session_id: id(2) }); break;\n  case 'b:mo': act('bst_move', { from_session: id(2), session_id: id(3) }); break;\n  case 'p:se': if (me) act('event_notice', { kind: 'event', id: id(2) }); break;\n  case 'p:sb': if (me) act('bst_notice', { kind: 'bst', id: id(2) }); break;\n}\nreturn [out];\n"
+                "mode": "allItems",
+                "code": "// Розділ і дія за кодом кнопки (docs/psy-support.md §6.1). Ключі рядків приходять у base64url — тут вони стають UUID.\n// Один прогін на оновлення: у «Маршрут» сходяться Розбір, Налаштування, Людина і Я психолог, тож вхідних items\n// кілька (settings — по рядку на ключ); оновлення беремо лише з «Розбору».\nconst all = (name) => { try { return $node[name].all || []; } catch (e) { return []; } };\nconst u = all('Розбір')[0] || {};\nconst user = all('Людина')[0] || null;\nconst meRow = all('Я психолог')[0] || null;\nconst me = meRow && meRow.active !== false ? meRow : null;\nconst B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst dec = (s) => {\n  s = String(s == null ? '' : s);\n  if (!/^[A-Za-z0-9_-]{22}$/.test(s)) return s;\n  let bits = '';\n  for (const ch of s) bits += B64.indexOf(ch).toString(2).padStart(6, '0');\n  let hex = '';\n  for (let i = 0; i < 128; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16);\n  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);\n};\nconst phoneOf = (p) => { let d = String(p || '').replace(/\\D/g, ''); if (d.length === 10 && d[0] === '0') d = '38' + d; return d; };\nconst data = String(u.data || '').trim();\nconst p = data.split(':');\nconst out = { section: 'start', action: 'none', telegram_id: String(u.telegram_id), name: u.name || '', data: data, parts: p, parts_decoded: p.map(dec), metric: null };\nconst sections = [\n  ['menu', /^m:(psy|help|sos)$/],\n  ['materials', /^(m:mat$|mt:)/],\n  ['consult', /^(m:cons$|c:)/],\n  ['events', /^(m:ev$|e:)/],\n  ['bst', /^(m:bst$|b:)/],\n  ['cabinet', /^(\\/psy(@\\w+)?$|p:)/],\n];\nfor (const [name, re] of sections) if (re.test(data)) { out.section = name; break; }\nif (u.contact) {\n  out.section = 'start';\n  const own = u.contact.user_id == null || String(u.contact.user_id) === out.telegram_id;\n  out.phone = phoneOf(u.contact.phone_number);\n  if (!own) out.code = 'not_own_contact';\n  else if (out.phone.length < 10) out.code = 'bad_phone';\n  else out.action = 'register';\n  return [out];\n}\nif (!user) { out.section = 'start'; return [out]; }\nif (out.section === 'start') {\n  // /start чи будь-який текст: психолога, чий телефон збігся, прив'язуємо до Telegram (як у n8n-боті).\n  if (!me && user.phone) { out.action = 'link'; out.phone = user.phone; }\n  return [out];\n}\nconst metrics = { 'm:psy': 'psy_section_opened', 'm:help': 'help_opened', 'm:sos': 'sos_opened', 'm:cons': 'consult_opened',\n  'm:ev': 'events_opened', 'm:bst': 'bst_opened', 'm:mat': 'materials_opened' };\nout.metric = metrics[data] || null;\nconst id = (i) => dec(p[i]);\nconst act = (action, fields) => { out.action = action; Object.assign(out, fields); };\nswitch (p[0] + ':' + (p[1] || '')) {\n  case 'mt:r': act('material_view', { material_id: id(2) }); out.metric = 'material_views'; break;\n  case 'c:ok': act('book', { slot_id: id(2) }); break;\n  case 'c:xx': act('cancel', { booking_id: id(2) }); break;\n  case 'c:mo': act('move', { booking_id: id(2), slot_id: id(3) }); break;\n  case 'e:ok': act('event_register', { event_id: id(2) }); break;\n  case 'e:x': act('event_cancel', { event_id: id(2) }); break;\n  case 'e:fb': act('event_rate', { event_id: id(2), rating: Number(p[3]) }); break;\n  case 'b:ok': act('bst_book', { session_id: id(2) }); break;\n  case 'b:x': act('bst_cancel', { session_id: id(2) }); break;\n  case 'b:w': act('bst_wait', { session_id: id(2) }); break;\n  case 'b:wx': act('bst_leave', { session_id: id(2) }); break;\n  case 'b:mo': act('bst_move', { from_session: id(2), session_id: id(3) }); break;\n  case 'p:se': if (me) act('event_notice', { kind: 'event', id: id(2) }); break;\n  case 'p:sb': if (me) act('bst_notice', { kind: 'bst', id: id(2) }); break;\n}\nreturn [out];\n"
               }
             },
             {
@@ -3870,7 +3870,7 @@
             },
             {
               "id": "n_link_find",
-              "name": "Психолог за номером",
+              "name": "Психологи без Telegram",
               "type": "core.dataTable",
               "typeVersion": 1,
               "position": [1680, -100],
@@ -3878,11 +3878,21 @@
                 "table": "psychologists",
                 "operation": "list",
                 "where": [
-                  {"column": "phone", "operator": "eq", "value": "{{ $node['Маршрут'].json.phone }}"},
                   {"column": "telegram_id", "operator": "isEmpty"},
                   {"column": "active", "operator": "eq", "value": true}
                 ],
-                "limit": 1
+                "limit": 1000
+              }
+            },
+            {
+              "id": "n_link_pick",
+              "name": "Психолог за номером",
+              "type": "core.code",
+              "typeVersion": 1,
+              "position": [1800, -100],
+              "parameters": {
+                "mode": "allItems",
+                "code": "const phoneOf = (p) => { let d = String(p || '').replace(/\\D/g, ''); if (d.length === 10 && d[0] === '0') d = '38' + d; return d; };\nconst phone = phoneOf(($node['Маршрут'].all[0] || {}).phone);\nconst found = phone ? items.find((p) => phoneOf(p.phone) === phone) : null;\nreturn found ? [found] : [];\n"
               }
             },
             {
@@ -4580,7 +4590,8 @@
             {"from": {"node": "n_reg_user", "output": 0}, "to": {"node": "n_reg_ok", "input": 0}},
             {"from": {"node": "n_reg_ok", "output": 0}, "to": {"node": "n_link_find", "input": 0}},
             {"from": {"node": "n_action", "output": 2}, "to": {"node": "n_link_find", "input": 0}},
-            {"from": {"node": "n_link_find", "output": 0}, "to": {"node": "n_link", "input": 0}},
+            {"from": {"node": "n_link_find", "output": 0}, "to": {"node": "n_link_pick", "input": 0}},
+            {"from": {"node": "n_link_pick", "output": 0}, "to": {"node": "n_link", "input": 0}},
             {"from": {"node": "n_action", "output": 3}, "to": {"node": "n_book", "input": 0}},
             {"from": {"node": "n_action", "output": 4}, "to": {"node": "n_cancel", "input": 0}},
             {"from": {"node": "n_action", "output": 5}, "to": {"node": "n_move", "input": 0}},
@@ -4604,6 +4615,7 @@
             {"from": {"node": "n_reg_user", "output": 0}, "to": {"node": "n_after", "input": 0}},
             {"from": {"node": "n_reg_ok", "output": 0}, "to": {"node": "n_after", "input": 0}},
             {"from": {"node": "n_link_find", "output": 0}, "to": {"node": "n_after", "input": 0}},
+            {"from": {"node": "n_link_pick", "output": 0}, "to": {"node": "n_after", "input": 0}},
             {"from": {"node": "n_link", "output": 0}, "to": {"node": "n_after", "input": 0}},
             {"from": {"node": "n_book", "output": 0}, "to": {"node": "n_after", "input": 0}},
             {"from": {"node": "n_cancel", "output": 0}, "to": {"node": "n_after", "input": 0}},
