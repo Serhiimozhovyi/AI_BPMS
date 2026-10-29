@@ -350,8 +350,10 @@ public class ProjectPageServerTests(ApiFactory api)
         Assert.Equal(from.AddHours(3).AddMinutes(30), events[1].GetProperty("end").GetDateTimeOffset());
         Assert.Equal([0], events[1].GetProperty("row").GetProperty("actions").EnumerateArray().Select(a => a.GetInt32()));
 
-        var booked = (await GetOk(d.Psy.Client, $"{url}&filters[status]=booked")).GetProperty("events");
+        var bookedResult = await GetOk(d.Psy.Client, $"{url}&filters[status]=booked");
+        var booked = bookedResult.GetProperty("events");
         Assert.Equal(1, booked.GetArrayLength());
+        Assert.Equal(["booked"], bookedResult.GetProperty("filters").GetProperty("status").GetProperty("values").EnumerateArray().Select(v => v.GetString()));
 
         var plain = (await GetOk(d.Plain.Client, url)).GetProperty("events");
         Assert.All(plain.EnumerateArray(), e => Assert.Equal(JsonValueKind.Null, e.GetProperty("row").GetProperty("data").GetProperty("note").ValueKind));

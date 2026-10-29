@@ -24,6 +24,7 @@ import {
   ProjectPagesApiService,
 } from '../../projects/project-pages-api.service';
 import { ExpandOpen, PageExpandComponent } from './page-expand.component';
+import { PageCalendarComponent } from './page-calendar.component';
 import { PageDrawerComponent } from './page-drawer.component';
 import { PageFiltersComponent, emptyFilters } from './page-filters.component';
 import { PageFormComponent } from './page-form.component';
@@ -55,6 +56,7 @@ interface DrawerState {
     PageExpandComponent,
     PageFormComponent,
     PageDrawerComponent,
+    PageCalendarComponent,
   ],
   template: `
     <section class="px-6 pb-6">
@@ -73,7 +75,7 @@ interface DrawerState {
           @if (v.canEdit) {
             <a mat-button data-testid="app-edit-page" [routerLink]="['/projects', projectId, 'app', '_builder', v.page.key]" i18n="@@app.page.edit">Налаштувати</a>
           }
-          @if (v.page.kind === 'list' && v.page.definition.create; as create) {
+          @if ((v.page.kind === 'list' || v.page.kind === 'calendar') && v.page.definition.create; as create) {
             <button mat-flat-button type="button" data-testid="app-create" (click)="open(create.page, undefined, create.mode)" i18n="@@app.page.create">Створити</button>
           }
         </div>
@@ -325,6 +327,15 @@ interface DrawerState {
               }
             }
           }
+          @case ('calendar') {
+            <app-page-calendar
+              [projectId]="projectId"
+              [view]="v"
+              [version]="expandVersion()"
+              (open)="openFromExpand($event)"
+              (act)="act($event.action, $event.index, $event.row)"
+            />
+          }
           @case ('form') {
             <app-page-form [projectId]="projectId" [view]="v" [rowKey]="rowKey" [prefill]="prefill" (submitted)="formDone($event)" />
           }
@@ -554,7 +565,7 @@ export class AppPagePage implements OnInit {
           else this.open(this.view()!.page.definition.create?.page ?? this.key);
         } else {
           this.expandVersion.update((n) => n + 1);
-          this.loadRows();
+          if (this.view()?.page.kind === 'list') this.loadRows();
         }
       },
       error: (e: unknown) => this.error.set(apiErrorMessage(e)),

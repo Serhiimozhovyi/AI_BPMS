@@ -6,7 +6,7 @@ import { JsonSchema } from '../forms/form-fields';
 import { cellView } from './page-format';
 
 /** Тип сторінки застосунку (docs/projects.md §3). */
-export type PageKind = 'list' | 'detail' | 'form' | 'metrics';
+export type PageKind = 'list' | 'detail' | 'form' | 'metrics' | 'calendar' | 'dashboard';
 
 /** Типи сторінок для вибору в конструкторі. */
 export const PAGE_KINDS: readonly PageKind[] = ['list', 'detail', 'form', 'metrics'];
@@ -33,6 +33,25 @@ export type PageOpenMode = 'navigate' | 'drawer';
 export interface PageLink {
   page: string;
   mode?: PageOpenMode;
+}
+
+/** Колонка заголовка, підзаголовка чи кольору події календаря. */
+export type PageCalendarColumn = PageColumn;
+
+/** Календар (`calendar`): подія — рядок таблиці з початком і тривалістю чи кінцем (F8-14). */
+export interface PageCalendar {
+  start: string;
+  duration?: string;
+  end?: string;
+  defaultMinutes?: number;
+  title?: PageCalendarColumn;
+  subtitle?: PageCalendarColumn;
+  color?: PageCalendarColumn;
+  views?: ('week' | 'day' | 'month')[];
+  default?: 'week' | 'day' | 'month';
+  open?: PageLink;
+  fromHour?: number;
+  toHour?: number;
 }
 
 /** Фільтр, яким керує користувач (F8-14). */
@@ -142,6 +161,7 @@ export interface PageDefinition {
   /** Панель фільтрів над списком (F8-14). */
   filters?: PageUserFilter[];
   computed?: PageComputed[];
+  calendar?: PageCalendar;
   layout?: 'table' | 'cards';
   card?: { title: string; subtitle?: string };
   /** Підлеглі списки під розгорнутим рядком. */
@@ -223,6 +243,24 @@ export interface PageExpandRows {
   rows: PageRow[];
 }
 
+/** Подія календаря: початок, кінець і рядок (`GET …/calendar`). */
+export interface PageCalendarEvent {
+  start: string;
+  end: string;
+  row: PageRow;
+}
+
+/** `GET …/calendar?from&to`. */
+export interface PageCalendarEvents {
+  from: string;
+  to: string;
+  events: PageCalendarEvent[];
+  /** Подій більше за ліміт сервера — показано перші. */
+  truncated: boolean;
+  /** Фільтри, що діяли на запит, разом зі значеннями за замовчуванням. */
+  filters?: Record<string, PageFilterValue> | null;
+}
+
 /** `GET …/rows/{rowKey}`. */
 export interface PageRecord {
   row: PageRow;
@@ -295,7 +333,12 @@ export class ProjectPagesApiService {
     for (const [name, value] of Object.entries(query)) {
       if (name !== 'filters' && value !== undefined && value !== null && value !== '') params = params.set(name, String(value));
     }
-    for (const [column, filter] of Object.entries(query.filters ?? {})) {
+    params = this.filterParams(params, query.filters ?? {});
+    return this.http.get<PageRows>(`${this.base(projectId, key)}/rows`, { params });
+  }
+
+  private filterParams(params: HttpParams, filters: Record<string, PageFilterValue>): HttpParams {
+    for (const [column, filter] of Object.entries(filters)) {
       const from = filter.from?.trim();
       const to = filter.to?.trim();
       const values = filter.values.filter((v) => v !== '');
@@ -304,7 +347,14 @@ export class ProjectPagesApiService {
       if (values.length === 0 && !from && !to) params = params.set(`filters[${column}]`, '');
       for (const value of values) params = params.append(`filters[${column}]`, value);
     }
-    return this.http.get<PageRows>(`${this.base(projectId, key)}/rows`, { params });
+    return params;
+  }
+
+  /** Події календаря за діапазон `[from, to)`; фільтри користувача — як у списку. */
+  calendar(projectId: string, key: string, from: Date, to: Date, filters: Record<string, PageFilterValue> = {}): Observable<PageCalendarEvents> {
+    let params = new HttpParams().set('from', from.toISOString()).set('to', to.toISOString());
+    params = this.filterParams(params, filters);
+    return this.http.get<PageCalendarEvents>(`${this.base(projectId, key)}/calendar`, { params });
   }
 
   /** Підлеглий список `expand[index]` під рядком списку (F8-15). */

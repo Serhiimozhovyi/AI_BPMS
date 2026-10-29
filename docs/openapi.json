@@ -11545,6 +11545,15 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "filters": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PageFilterInput"
+            }
           }
         }
       },
