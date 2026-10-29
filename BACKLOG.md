@@ -1427,7 +1427,7 @@
 - DoD: протокол пройдено на локальному OpenBP власника з тестовим ботом, результат записано в `psy-check.md`; імпорт з копії таблиці відтворює кількість рядків по листах; продакшн-бот і n8n не торкалися.
 
 ### F8-13 · Додати людину в проєкт з вкладки «Учасники»
-- model: `sonnet` · status: `review` · depends: F8-04
+- model: `sonnet` · status: `done` · depends: F8-04
 - Що: editor проєкту (і admin) у вкладці «Учасники» додає людину за поштою: якщо облікового запису немає — створює його з глобальною роллю `viewer` і тимчасовим паролем (показується один раз; при першому вході — зміна пароля) або без пароля для входу через OIDC; одразу задає роль проєкту й роль застосунку. Зараз облікові записи психологів доводиться створювати SQL'ем (`docs/admin/README.md` §5), а власник хоче адміністрування всередині проєкту (F8-11).
 - DoD: REST + application-шар + MCP-tool (правило 4); тести на створення, повтор пошти, права (viewer не може); UI-тест; `docs/admin/README.md` §5 і `docs/guide/users.md` оновлено.
 - Зроблено: `POST /workflow-groups/{id}/members/add` → `{ member, created, temporaryPassword }`, `IWorkflowGroupService.AddPersonAsync`, MCP `add_project_member`; `users.must_change_password` (міграція `UserMustChangePassword`), `POST /auth/password`, `/account/password` і guard, кнопка з ключем у шапці. Скидання пароля чужому запису й глобальні ролі — поза задачею (лише admin, SQL). Тести: `ProjectPersonTests` (4), MCP, Vitest (сторінка учасників, guard, зміна пароля).
