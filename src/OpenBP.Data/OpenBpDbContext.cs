@@ -77,6 +77,7 @@ public sealed class OpenBpDbContext(DbContextOptions<OpenBpDbContext> options) :
             e.ToTable("workflow_groups");
             e.HasIndex(x => x.NormalizedName).IsUnique();
             e.Property(x => x.AppRoles).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+            e.Property(x => x.App).HasColumnType("jsonb");
         });
         b.Entity<ProjectPageEntity>(e =>
         {

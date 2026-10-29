@@ -47,4 +47,28 @@ public interface IProjectPageService
     /// <c>{ row, rowKey, user }</c> з очікуванням результату до 30 с (F8-05).
     /// </summary>
     Task<PageActionResult> RunActionAsync(Guid projectId, string key, string rowKey, int action, CancellationToken ct);
+
+    /// <summary>
+    /// Підлеглий список <c>expand[index]</c> під рядком списку (F8-15): рядки пов'язаної таблиці, де <c>by</c> = ключ рядка,
+    /// з доступними діями; рядок поза фільтром сторінки — 404.
+    /// </summary>
+    Task<PageRelatedRows> ExpandAsync(Guid projectId, string key, string rowKey, int index, CancellationToken ct);
+
+    /// <summary>Дія над рядком підлеглого списку: рядок <paramref name="subKey"/> має посилатися на <paramref name="rowKey"/>.</summary>
+    Task<PageActionResult> RunExpandActionAsync(Guid projectId, string key, string rowKey, int index, string subKey, int action, CancellationToken ct);
+
+    /// <summary>
+    /// Події сторінки <c>calendar</c> (F8-15) за діапазоном <c>[from, to)</c> до 62 днів, з фільтром сторінки, фільтрами
+    /// користувача й правами.
+    /// </summary>
+    Task<PageCalendarEvents> CalendarAsync(Guid projectId, string key, DateTimeOffset from, DateTimeOffset to, IReadOnlyDictionary<string, PageFilterInput>? filters, CancellationToken ct);
+
+    /// <summary>
+    /// Дані блоків сторінки <c>dashboard</c> (F8-15): плитки, перші рядки списків, події за сьогодні чи тиждень, форми,
+    /// тексти, доступні кнопки. Спільні фільтри сторінки діють на блоки, таблиця яких має таку колонку.
+    /// </summary>
+    Task<PageDashboard> DashboardAsync(Guid projectId, string key, IReadOnlyDictionary<string, PageFilterInput>? filters, CancellationToken ct);
+
+    /// <summary>Кнопка блоку <c>actions</c>: сценарій проєкту з item <c>{ user }</c> і очікуванням результату до 30 с.</summary>
+    Task<PageActionResult> RunBlockActionAsync(Guid projectId, string key, int block, int action, CancellationToken ct);
 }

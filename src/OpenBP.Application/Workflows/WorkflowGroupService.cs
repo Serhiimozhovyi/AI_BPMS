@@ -6,6 +6,7 @@ using Npgsql;
 using OpenBP.Application.Audit;
 using OpenBP.Application.Auth;
 using OpenBP.Application.Errors;
+using OpenBP.Application.Projects;
 using OpenBP.Data;
 
 namespace OpenBP.Application.Workflows;
@@ -47,7 +48,7 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         var rows = await db.WorkflowGroups.AsNoTracking()
             .Where(g => scope.All || ids.Contains(g.Id))
             .OrderBy(g => g.SortOrder).ThenBy(g => g.CreatedAt)
-            .Select(g => new { g.Id, g.Name, g.SortOrder, g.Description, g.Icon, g.AppRoles, Count = db.Workflows.Count(w => w.GroupId == g.Id) })
+            .Select(g => new { g.Id, g.Name, g.SortOrder, g.Description, g.Icon, g.AppRoles, g.App, Count = db.Workflows.Count(w => w.GroupId == g.Id) })
             .ToListAsync(ct);
         return [.. rows.Select(g => new WorkflowGroupSummary(g.Id, g.Name, g.SortOrder, g.Count, scope.RoleIn(g.Id))
         {
@@ -55,6 +56,7 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
             Icon = g.Icon,
             AppRoles = ProjectAppRoles.Parse(g.AppRoles),
             AppRole = scope.AppRoleIn(g.Id),
+            App = ProjectApps.Parse(g.App),
         })];
     }
 
@@ -145,6 +147,24 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
         group.Description = newDescription;
         group.Icon = newIcon;
         await SaveAsync(trimmed, ct);
+        return await SummaryAsync(group, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowGroupSummary> SetAppAsync(Guid id, ProjectApp? app, CancellationToken ct)
+    {
+        var group = await FindManagedAsync(id, ct);
+        ProjectApp? valid = null;
+        if (app is not null)
+        {
+            var pages = (await db.ProjectPages.AsNoTracking().Where(p => p.ProjectId == id).Select(p => p.Key).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+            valid = ProjectApps.Validate(app, pages);
+        }
+
+        group.App = valid is null ? null : ProjectApps.Serialize(valid);
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.ProjectAppSaved, AuditEntities.Project, id.ToString(),
+            new JsonObject { ["title"] = valid?.Title, ["home"] = valid?.Home });
+        await db.SaveChangesAsync(ct);
         return await SummaryAsync(group, ct);
     }
 
@@ -377,5 +397,6 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
             Icon = group.Icon,
             AppRoles = ProjectAppRoles.Parse(group.AppRoles),
             AppRole = await _access.AppRoleInAsync(group.Id, ct),
+            App = ProjectApps.Parse(group.App),
         };
 }

@@ -37,6 +37,22 @@ public sealed class WorkflowGroupTools
         CancellationToken ct = default) =>
         groups.CreateAsync(name, ct, description, icon);
 
+    /// <summary><c>set_project_app</c> (F8-15).</summary>
+    /// <param name="groups">Сервіс груп.</param>
+    /// <param name="projectId">Проєкт.</param>
+    /// <param name="app">Оболонка; <c>null</c> — прибрати.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "set_project_app", Title = "Set the project app shell", Destructive = false, Idempotent = true, UseStructuredContent = true)]
+    [Description("Sets (or with app null removes) the app shell of a project (editor of the project): { title, icon?, home?: page key, " +
+                 "nav?: [{ label, pages: [page keys] }], timezone?: IANA zone like Europe/Kyiv (dates, periods and calendar days use it; default UTC) }. " +
+                 "Pages in nav and home must be pages of the project (upsert_project_page first), each page at most once in nav.")]
+    public static Task<WorkflowGroupSummary> SetProjectApp(
+        IWorkflowGroupService groups,
+        [Description("Project id from list_workflow_groups.")] Guid projectId,
+        [Description("App shell; null removes it.")] Application.Projects.ProjectApp? app = null,
+        CancellationToken ct = default) =>
+        groups.SetAppAsync(projectId, app, ct);
+
     /// <summary><c>move_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
     /// <param name="workflowId">Id сценарію.</param>

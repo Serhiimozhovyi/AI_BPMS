@@ -15,6 +15,11 @@ public sealed partial class ProjectPageService
     {
         var c = await LoadAsync(projectId, key, ct);
         RequireKind(c, ProjectPageKinds.Metrics);
+        return await MetricsCoreAsync(c, ct);
+    }
+
+    private async Task<PageMetrics> MetricsCoreAsync(PageContext c, CancellationToken ct)
+    {
         var def = c.Page.Definition;
 
         // Спершу агрегати, потім вирази над ними в порядку визначення.

@@ -9,7 +9,7 @@ using OpenBP.Data;
 
 namespace OpenBP.Mcp.Server.Tests;
 
-/// <summary>F8-04: <c>upsert_project_page</c> і <c>list_project_pages</c> з тими самими правами й перевіркою, що в REST.</summary>
+/// <summary>F8-04: <c>upsert_project_page</c> і <c>list_project_pages</c>, F8-15: <c>set_project_app</c> — з тими самими правами й перевіркою, що в REST.</summary>
 [Collection(McpServerCollection.Name)]
 public class ProjectPageToolsTests(McpServerFactory mcp)
 {
@@ -60,6 +60,21 @@ public class ProjectPageToolsTests(McpServerFactory mcp)
             });
             Assert.True(bad.IsError);
             Assert.Contains("PAGE_COLUMN_UNKNOWN", Structured(bad).ToJsonString());
+
+            // F8-15: оболонка застосунку — меню й головна лише зі сторінок проєкту.
+            var app = await editor.CallToolAsync("set_project_app", new Dictionary<string, object?>
+            {
+                ["projectId"] = project,
+                ["app"] = new { title = "Кабінет", home = "events", timezone = "Europe/Kyiv", nav = new[] { new { label = "Головне", pages = new[] { "events" } } } },
+            });
+            Assert.True(app.IsError != true, Structured(app).ToJsonString());
+            Assert.Equal("events", (string)Structured(app)["app"]!["home"]!);
+            var wrongApp = await editor.CallToolAsync("set_project_app", new Dictionary<string, object?>
+            {
+                ["projectId"] = project,
+                ["app"] = new { title = "Кабінет", home = "missing" },
+            });
+            Assert.True(wrongApp.IsError);
         }
 
         await using var viewer = await mcp.ConnectAsync(readerKey.Key);
@@ -74,5 +89,7 @@ public class ProjectPageToolsTests(McpServerFactory mcp)
             ["definition"] = definition,
         });
         Assert.True(denied.IsError);
+        var deniedApp = await viewer.CallToolAsync("set_project_app", new Dictionary<string, object?> { ["projectId"] = project });
+        Assert.True(deniedApp.IsError);
     }
 }

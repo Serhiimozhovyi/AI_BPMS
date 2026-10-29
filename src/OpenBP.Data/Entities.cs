@@ -75,6 +75,8 @@ public sealed class WorkflowGroupEntity
     public string Icon { get; set; } = "";
     /// <summary>Ролі застосунку проєкту (F8-04), jsonb: <c>[{ key, name }]</c>.</summary>
     public string AppRoles { get; set; } = "[]";
+    /// <summary>Оболонка застосунку (F8-15), jsonb: <c>{ title, icon, home, nav, timezone }</c>; <c>null</c> — без оболонки.</summary>
+    public string? App { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 

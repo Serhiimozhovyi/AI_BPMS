@@ -2785,6 +2785,114 @@
         ]
       }
     },
+    "/api/v1/workflow-groups/{id}/app": {
+      "put": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Задати оболонку застосунку проєкту",
+        "description": "Лише editor проєкту (docs/projects.md §3.9): `title`, `icon`, `home` (ключ сторінки), `nav: [{ label, pages }]` і `timezone` (IANA). Сторінки меню й головна мають бути сторінками проєкту і не повторюватися — інакше 400. Оболонка повертається в `app` групи.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectApp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowGroupSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Прибрати оболонку застосунку проєкту",
+        "description": "Лише editor проєкту; сторінки лишаються.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowGroupSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/workflow-groups/order": {
       "put": {
         "tags": [
@@ -4001,7 +4109,7 @@
           "Сторінки застосунку"
         ],
         "summary": "Рядки сторінки-списку",
-        "description": "Фільтр сторінки (з `$user`) діє завжди, параметри його не знімають. `search` — підрядок у колонках `search`, `sort` — колонка сторінки, `direction` — `asc`/`desc`. Чутливі колонки — `null` без права; `actions` — індекси доступних дій.",
+        "description": "Фільтр сторінки (з `$user`) діє завжди, параметри його не знімають. `search` — підрядок у колонках `search`, `sort` — колонка сторінки, `direction` — `asc`/`desc`. Чутливі колонки — `null` без права; `actions` — індекси доступних дій. Обчислювані колонки (`computed`) — у `data` під своїм ключем (`count` без рядків — 0) разом зі значенням колонки `of`. Фільтри користувача (`filters` сторінки) — у query: `filters[<колонка>]=<значення>` (для `chips` — кілька разів), `filters[<колонка>]=today|week|month` чи `filters[<колонка>][from]=2026-11-01&filters[<колонка>][to]=2026-11-30` для `period` (дата без часу — у поясі застосунку, `to` включно). Без параметра діє `default` фільтра, порожнє значення знімає фільтр; фільтра, якого немає на сторінці, — 400. Фільтр за чутливою колонкою без права її читати не діє.",
         "parameters": [
           {
             "name": "projectId",
@@ -4073,6 +4181,388 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PageRows"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/pages/{key}/rows/{rowKey}/expand/{index}": {
+      "get": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Підлеглий список під рядком",
+        "description": "`index` — індекс у `expand` сторінки-списку: рядки таблиці `expand[index].table`, де `by` = `rowKey` (до 200), з колонками, показом `ref` і доступними діями. Рядок поза фільтром сторінки — 404.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rowKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageRelatedRows"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/pages/{key}/rows/{rowKey}/expand/{index}/{subKey}/actions/{action}": {
+      "post": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Виконати дію над рядком підлеглого списку",
+        "description": "Як дія рядка; `subKey` має посилатися на `rowKey` колонкою `by` (інакше 404). Сценарій отримує item `{ row, rowKey, user, parentKey }`.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rowKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "subKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageActionResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/pages/{key}/calendar": {
+      "get": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Події сторінки-календаря",
+        "description": "Події за `[from, to)` (ISO 8601, до 62 днів): `start`, `end` (з тривалості, колонки кінця чи `defaultMinutes`) і `row` з колонками заголовка, підзаголовка, кольору й часу, показом `ref` і доступними діями. До 1000 подій (`truncated`). Чутливий час без права читати — подій немає. Фільтри користувача (`filters` сторінки) — у query: `filters[<колонка>]=<значення>` (для `chips` — кілька разів), `filters[<колонка>]=today|week|month` чи `filters[<колонка>][from]=2026-11-01&filters[<колонка>][to]=2026-11-30` для `period` (дата без часу — у поясі застосунку, `to` включно). Без параметра діє `default` фільтра, порожнє значення знімає фільтр; фільтра, якого немає на сторінці, — 400. Фільтр за чутливою колонкою без права її читати не діє.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageCalendarEvents"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/pages/{key}/dashboard": {
+      "get": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Дані блоків сторінки dashboard",
+        "description": "Блоки з істинним `when`: `text` — текст з обчисленими виразами, `actions` — індекси доступних кнопок, `tiles` — показники, `list` — перші `limit` рядків, `calendar` — події за сьогодні чи тиждень у поясі застосунку, `form` — схема форми. `source` — ключ сторінки блоку для подальших запитів (рядки, форма, дії): `page` блоку або `<dashboard>.<індекс>` для власного визначення. Блок з недоступною сторінкою пропущено. Спільні `filters` сторінки діють на блоки, таблиця яких має таку колонку. Фільтри користувача (`filters` сторінки) — у query: `filters[<колонка>]=<значення>` (для `chips` — кілька разів), `filters[<колонка>]=today|week|month` чи `filters[<колонка>][from]=2026-11-01&filters[<колонка>][to]=2026-11-30` для `period` (дата без часу — у поясі застосунку, `to` включно). Без параметра діє `default` фільтра, порожнє значення знімає фільтр; фільтра, якого немає на сторінці, — 400. Фільтр за чутливою колонкою без права її читати не діє.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDashboard"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/pages/{key}/blocks/{block}/actions/{action}": {
+      "post": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Натиснути кнопку блоку actions",
+        "description": "Сценарій кнопки запускається з item `{ user }`, відповідь — як у дії рядка. Перехід (`page`) виконує браузер — 400.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "block",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageActionResult"
                 }
               }
             }
@@ -11009,6 +11499,55 @@
           }
         }
       },
+      "PageCalendarEvent": {
+        "required": [
+          "start",
+          "end",
+          "row"
+        ],
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "row": {
+            "$ref": "#/components/schemas/PageRow"
+          }
+        }
+      },
+      "PageCalendarEvents": {
+        "required": [
+          "from",
+          "to",
+          "events",
+          "truncated"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageCalendarEvent"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
       "PageCard": {
         "required": [
           "title"
@@ -11161,6 +11700,123 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "PageDashboard": {
+        "required": [
+          "blocks"
+        ],
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageDashboardBlock"
+            }
+          }
+        }
+      },
+      "PageDashboardBlock": {
+        "required": [
+          "index",
+          "kind",
+          "label",
+          "width",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "width": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "source": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "view": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectPageView"
+              }
+            ]
+          },
+          "metrics": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageMetrics"
+              }
+            ]
+          },
+          "rows": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageRows"
+              }
+            ]
+          },
+          "events": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageCalendarEvents"
+              }
+            ]
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
           }
         }
       },
@@ -12313,6 +12969,62 @@
           }
         },
         "description": "Помилка (RFC 9457) з машинним кодом."
+      },
+      "ProjectApp": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "home": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nav": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ProjectAppNav"
+            }
+          },
+          "timezone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ProjectAppNav": {
+        "required": [
+          "label",
+          "pages"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "ProjectAppRole": {
         "required": [
@@ -13839,6 +14551,16 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "app": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectApp"
+              }
             ]
           }
         }

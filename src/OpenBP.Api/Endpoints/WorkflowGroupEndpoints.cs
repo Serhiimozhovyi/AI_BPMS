@@ -1,5 +1,6 @@
 using OpenBP.Api.OpenApi;
 using OpenBP.Application.Auth;
+using OpenBP.Application.Projects;
 using OpenBP.Application.Workflows;
 
 namespace OpenBP.Api.Endpoints;
@@ -57,6 +58,17 @@ public static class WorkflowGroupEndpoints
             .WithSummary("Змінити назву, опис, значок чи ролі застосунку групи")
             .WithDescription("Лише передані поля; порожній рядок в `description` чи `icon` очищає їх. Назва — як у створенні (409 WORKFLOW_GROUP_NAME_TAKEN). " +
                              "`appRoles` — `[{ key, name }]` цілим списком; роль, призначену учасникам, прибрати не можна (409 APP_ROLE_IN_USE).");
+
+        groups.MapPut("/{id:guid}/app", (Guid id, ProjectApp body, IWorkflowGroupService service, CancellationToken ct) =>
+            service.SetAppAsync(id, body, ct))
+            .WithSummary("Задати оболонку застосунку проєкту")
+            .WithDescription("Лише editor проєкту (docs/projects.md §3.9): `title`, `icon`, `home` (ключ сторінки), `nav: [{ label, pages }]` і `timezone` (IANA). " +
+                             "Сторінки меню й головна мають бути сторінками проєкту і не повторюватися — інакше 400. Оболонка повертається в `app` групи.");
+
+        groups.MapDelete("/{id:guid}/app", (Guid id, IWorkflowGroupService service, CancellationToken ct) =>
+            service.SetAppAsync(id, null, ct))
+            .WithSummary("Прибрати оболонку застосунку проєкту")
+            .WithDescription("Лише editor проєкту; сторінки лишаються.");
 
         groups.MapDelete("/{id:guid}", async (Guid id, IWorkflowGroupService service, CancellationToken ct) =>
         {

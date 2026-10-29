@@ -122,6 +122,12 @@ public sealed record WorkflowGroupSummary(Guid Id, string Name, int SortOrder, i
 
     /// <summary>Моя роль застосунку в проєкті (F8-04); <c>null</c> — немає.</summary>
     public string? AppRole { get; init; }
+
+    /// <summary>
+    /// Оболонка застосунку (F8-15, docs/projects.md §3.9); <c>null</c> — немає. Меню містить усі сторінки — клієнт показує
+    /// ті, що є серед видимих йому (<c>GET /projects/{id}/pages</c>).
+    /// </summary>
+    public Projects.ProjectApp? App { get; init; }
 }
 
 /// <summary>Роль застосунку проєкту (F8-04, docs/projects.md §4): незалежна від ролі проєкту editor/viewer.</summary>

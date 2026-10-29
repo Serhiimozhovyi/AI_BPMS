@@ -84,16 +84,28 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
     /// <param name="limit">Скільки рядків.</param>
     /// <param name="offset">Скільки пропустити.</param>
     /// <param name="ct">Скасування.</param>
+    /// <param name="anyOf">
+    /// Групи «або» (F8-15, фільтр-чипи): рядок має задовольнити хоча б одну умову кожної групи; порожня група — жодного рядка.
+    /// </param>
     /// <returns>Рядки і загальна кількість за умовами й пошуком.</returns>
     public async Task<(IReadOnlyList<DataRow> Rows, int Total)> PageRowsAsync(
         DataTableInfo table, IReadOnlyList<DataFilter> where, IReadOnlyList<string> searchColumns, string? search,
-        string? sortColumn, bool descending, int limit, int offset, CancellationToken ct)
+        string? sortColumn, bool descending, int limit, int offset, CancellationToken ct, IReadOnlyList<IReadOnlyList<DataFilter>>? anyOf = null)
     {
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(searchColumns);
         var filters = DataTableRules.NormalizeFilters(table, where);
         var (condition, parameters) = Where(table, filters);
         var sql = new StringBuilder(condition);
+        var columns = table.Columns.ToDictionary(c => c.Name, StringComparer.Ordinal);
+        var index = filters.Count;
+        foreach (var group in anyOf ?? [])
+        {
+            var normalized = DataTableRules.NormalizeFilters(table, group);
+            var parts = normalized.Select(f => Condition(f, columns[f.Column], index++, parameters)).ToList();
+            sql.Append(" AND (").Append(parts.Count == 0 ? "FALSE" : string.Join(" OR ", parts)).Append(')');
+        }
+
         if (!string.IsNullOrWhiteSpace(search) && searchColumns.Count > 0)
         {
             parameters.Add(new NpgsqlParameter("search", search.Trim()));
@@ -196,6 +208,61 @@ public sealed class PostgresDataTableStore(IDbContextFactory<OpenBpDbContext> co
         // Підставлені в sql — лише фіксовані фрагменти й дозволений період; значення йдуть параметрами.
         var rows = await db.Database.SqlQueryRaw<AggregateRow>(sql, [.. parameters]).ToListAsync(ct).ConfigureAwait(false);
         return [.. rows.Select(r => new DataAggregate(r.Group, r.Value))];
+    }
+
+    /// <summary>
+    /// Агрегат пов'язаних рядків для кожного ключа (обчислювані колонки списку, F8-15): <c>count</c> або <c>sum</c> по числовій
+    /// колонці серед рядків, де <paramref name="byColumn"/> — один з <paramref name="keys"/>, за умовами <paramref name="where"/>.
+    /// Один запит на всю сторінку списку.
+    /// </summary>
+    /// <param name="table">Таблиця пов'язаних рядків.</param>
+    /// <param name="where">Умови.</param>
+    /// <param name="aggregate"><c>count</c> або <c>sum</c>.</param>
+    /// <param name="valueColumn">Числова колонка для <c>sum</c>.</param>
+    /// <param name="byColumn">Колонка, що посилається на рядок списку.</param>
+    /// <param name="keys">Ключі рядків списку.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <returns>Ключ → значення; ключів без пов'язаних рядків немає.</returns>
+    public async Task<IReadOnlyDictionary<string, decimal?>> AggregateByKeysAsync(
+        DataTableInfo table, IReadOnlyList<DataFilter> where, string aggregate, string? valueColumn, string byColumn, IReadOnlyList<string> keys, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(keys);
+        if (keys.Count == 0)
+        {
+            return new Dictionary<string, decimal?>(StringComparer.Ordinal);
+        }
+
+        var filters = DataTableRules.NormalizeFilters(table, where);
+        var (condition, parameters) = Where(table, filters);
+        string value;
+        if (aggregate == "count")
+        {
+            value = "count(*)::numeric";
+        }
+        else if (aggregate == "sum")
+        {
+            var column = ColumnOf(table, valueColumn ?? "");
+            if (column.Type != DataColumnType.Number)
+            {
+                throw new DataTableException(DataTableRules.Codes.TypeMismatch, $"Агрегат «sum» потребує числової колонки, а «{column.Name}» — {DataTableRules.TypeName(column.Type)}.");
+            }
+
+            parameters.Add(new NpgsqlParameter("a", column.Name));
+            value = "sum(CASE WHEN jsonb_typeof(data -> @a) = 'number' THEN (data ->> @a)::numeric END)";
+        }
+        else
+        {
+            throw new DataTableException(DataTableRules.Codes.TypeMismatch, $"Невідомий агрегат «{aggregate}»: count або sum.");
+        }
+
+        parameters.Add(new NpgsqlParameter("g", ColumnOf(table, byColumn).Name));
+        parameters.Add(new NpgsqlParameter("keys", keys.Distinct(StringComparer.Ordinal).ToArray()));
+        var sql = $"SELECT (data ->> @g) AS \"Group\", {value} AS \"Value\" FROM data_rows WHERE {condition} AND (data ->> @g) = ANY(@keys) GROUP BY 1";
+        await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);
+        // Підставлені в sql — лише фіксовані фрагменти; значення й назви колонок ідуть параметрами.
+        var rows = await db.Database.SqlQueryRaw<AggregateRow>(sql, [.. parameters]).ToListAsync(ct).ConfigureAwait(false);
+        return rows.Where(r => r.Group is not null).ToDictionary(r => r.Group!, r => r.Value, StringComparer.Ordinal);
     }
 
     private static string Bucket(string bucket) => bucket switch
