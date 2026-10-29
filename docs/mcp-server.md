@@ -84,7 +84,7 @@ OpenBP приймає лише API-ключ у заголовку, а OAuth дл
 | `get_workflow` | viewer | `id`, `version?` (`draft` — типово, або `published`) | сценарій з `definition` чернетки чи опублікованої версії (F6-10): `version` — чернетка, `publishedVersion` — що виконують тригери, `hasUnpublishedChanges`, `definitionVersion` — чиє визначення віддано; `published` до першої публікації — `WORKFLOW_NOT_PUBLISHED` |
 | `validate_workflow` | viewer | `definition`, `active?` | `{ valid, errors: [{ code, message, nodeId?, path? }], warnings }` (`path` — JSON Pointer; `warnings` — `VARIABLE_UNKNOWN` для `$vars.key` без такої змінної, не заважає збереженню); помилки сценарію не є помилкою tool'а |
 | `create_workflow` | editor | `definition`, `groupId?` | створений неактивний сценарій, версія 1 |
-| `update_workflow` | editor | `id`, `definition` | нова версія-чернетка (назва не змінюється); тригери далі виконують опубліковану версію |
+| `update_workflow` | editor | `id`, `definition`, `planId?` | **у два виклики** (F3-116): без `planId` — `{ applied: false, plan }`, нічого не збережено; `plan` = `{ planId, workflowId, name, baseVersion, addedNodes, removedNodes, changedNodes: [{ id, name, type, fields, renamedFrom?, typeChangedFrom? }], addedConnections, removedConnections` (з `fromName`/`toName`), `settingsChanges: [{ field, before, after }], otherChanges, errors, warnings, valid, hasChanges }`; помилки валідації — у плані (`valid: false`), не помилка tool'а. Той самий виклик з `planId` — `{ applied: true, workflow }`: нова версія-чернетка (назва не змінюється), тригери далі виконують опубліковану версію. Інше визначення чи збереження між викликами — `WORKFLOW_PLAN_STALE`; план з помилками — `WORKFLOW_INVALID` |
 | `get_workflow_explanation` | viewer | `id` | пояснення сценарію простими словами (F3-72/F3-73): `{ status, version, currentVersion, text, error, stale }` — той самий текст, що картка «Пояснення процесу» в редакторі |
 | `save_workflow_explanation` | editor | `id`, `text` (≤ 50 000) | агент сам пише пояснення поточної версії (модель у «Налаштуваннях → Помічник» не потрібна); опис tool'а задає структуру тексту. `create_workflow`/`update_workflow` підказують викликати його після збереження; пересування вузлів пояснення не старить |
 | `publish_workflow` | editor | `id` | чернетка перевірена як активна і стала опублікованою (F6-10): в активного сценарію webhook'и й розклади одразу перемикаються на неї; неактивний сценарій не вмикається; некоректна чернетка — `WORKFLOW_INVALID`, опублікована версія не змінюється |
@@ -156,14 +156,17 @@ resolvedAt }`; виконання, зупинене `block`-правилом, �
 
 `tokens` — сума `usage` підкроків вузла (F6-12); для вузла без підкроків з `usage` — `null`. У UI — розділ «Оцінки» в панелі вузлів ШІ.
 
-### Зміни з планом (F3-109)
+### Зміни з планом (F3-109, F3-116)
 
-`create_table` і `alter_table` змінюють структуру даних, тому працюють у режимі «пропозиція»: перший виклик без `planId`
+`create_table`, `alter_table` і `update_workflow` (F3-116) працюють у режимі «пропозиція»: перший виклик без `planId`
 лише перевіряє все те саме, що й REST (права, назву, колонки, посилання `ref`, ключ і обмеження на наявних рядках), і
 повертає план; нічого не записано. Агент показує план людині своїми словами (що з'явиться, що зникне, `warnings`) і після
 її згоди повторює виклик з **тими самими аргументами** та `planId`. `planId` — відбиток аргументів і версії таблиці, тож
 застосовується саме те, що показали: інші аргументи чи зміна таблиці між викликами — `DATA_TABLE_PLAN_STALE`, план
-складається заново. Так само працюватимуть картки «Застосувати / Скасувати» загального помічника (`docs/global-assistant.md`).
+складається заново. Для `update_workflow` план — відмінності від поточної версії (вузли з назвами й типами, зв'язки,
+налаштування) і помилки валідації; `planId` — відбиток сценарію, його поточної версії й нового визначення, тож збереження
+в редакторі між викликами дає `WORKFLOW_PLAN_STALE`. На цих планах побудовані картки «Застосувати / Скасувати» загального
+помічника (`docs/global-assistant.md`).
 
 ### Приклади викликів
 
@@ -195,7 +198,8 @@ resolvedAt }`; виконання, зупинене `block`-правилом, �
 
 Помилка application-шару — результат з `isError: true` і `structuredContent = { code, message, errors? }`, коди ті
 самі, що в REST: `BAD_REQUEST` (аргументи), `FORBIDDEN` (роль), `NOT_FOUND`, `WORKFLOW_INVALID` (з `errors`, як у
-`validate_workflow`), `WORKFLOW_VERSION_CONFLICT` (збережено паралельно: `get_workflow` і повторити),
+`validate_workflow`), `WORKFLOW_VERSION_CONFLICT` (збережено паралельно: `get_workflow` і повторити), `WORKFLOW_PLAN_STALE` (план `update_workflow`
+застарів: перечитати `get_workflow` і скласти новий), `DATA_TABLE_PLAN_STALE`,
 `WORKFLOW_GROUP_NAME_TAKEN` (група з такою назвою вже є), `WORKFLOW_NOT_PUBLISHED` (`get_workflow` з `version: published` до першої публікації),
 `START_NODE_UNKNOWN`, `NODE_FAILED` (`test_node`). Коди валідації: `SCHEMA_VIOLATION`, `CONNECTION_*`, `GRAPH_CYCLE`,
 `TRIGGER_MISSING`, `NODE_TYPE_UNKNOWN`, `PARAMETER_INVALID`, `MCP_TOOL_UNKNOWN`, `WEBHOOK_PATH_CONFLICT`.

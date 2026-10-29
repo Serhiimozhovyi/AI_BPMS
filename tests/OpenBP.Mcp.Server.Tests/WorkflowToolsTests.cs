@@ -79,7 +79,7 @@ public class WorkflowToolsTests(McpServerFactory mcp)
 
         definition["nodes"]![0]!["name"] = "Старт вручну";
         definition["x-meta"]!["author"] = "agent-2";
-        var updated = await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        var updated = await WorkflowUpdates.SaveAsync(client, id, definition);
         Assert.Equal(2, (int)updated["version"]!);
 
         var read = await CallAsync(client, "get_workflow", new() { ["id"] = id });
@@ -104,6 +104,51 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         Assert.Empty((await CallAsync(client, "list_workflows", new() { ["search"] = name, ["active"] = true }))["items"]!.AsArray());
     }
 
+    /// <summary>F3-116: update_workflow без planId повертає план і нічого не зберігає; застарілий план не застосовується.</summary>
+    [Fact]
+    public async Task Update_returns_plan_first_and_applies_only_a_fresh_plan()
+    {
+        await using var client = await mcp.ConnectAsync(UserRole.Editor);
+        var definition = Definition(Unique("План"));
+        var id = (string)(await CallAsync(client, "create_workflow", new() { ["definition"] = definition }))["id"]!;
+
+        definition["nodes"]![0]!["name"] = "Старт вручну";
+        definition["nodes"]!.AsArray().Add(JsonNode.Parse("""
+            { "id": "n_set", "name": "Поля", "type": "core.set", "typeVersion": 1, "position": [200, 0], "parameters": { "fields": [] } }
+            """));
+        definition["connections"]!.AsArray().Add(JsonNode.Parse("""{ "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_set", "input": 0 } }"""));
+        definition["settings"]!["timezone"] = "UTC";
+
+        var planned = await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        Assert.False((bool)planned["applied"]!);
+        var plan = planned["plan"]!;
+        Assert.True((bool)plan["valid"]!);
+        Assert.Equal(1, (int)plan["baseVersion"]!);
+        Assert.Equal("Поля", (string?)Assert.Single(plan["addedNodes"]!.AsArray())!["name"]);
+        var changed = Assert.Single(plan["changedNodes"]!.AsArray())!;
+        Assert.Equal("Старт", (string?)changed["renamedFrom"]);
+        Assert.Equal(["name"], changed["fields"]!.AsArray().Select(f => (string?)f));
+        var connection = Assert.Single(plan["addedConnections"]!.AsArray())!;
+        Assert.Equal(("Старт вручну", "Поля"), ((string?)connection["fromName"], (string?)connection["toName"]));
+        var setting = Assert.Single(plan["settingsChanges"]!.AsArray())!;
+        Assert.Equal(("timezone", "Europe/Kyiv", "UTC"), ((string?)setting["field"], (string?)setting["before"], (string?)setting["after"]));
+        Assert.Equal(1, (int)(await CallAsync(client, "get_workflow", new() { ["id"] = id }))["version"]!);
+
+        // Інші аргументи з тим самим planId — план не про них.
+        var other = definition.DeepClone();
+        other["settings"]!["timezone"] = "Europe/Warsaw";
+        var mismatch = await ErrorAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = other, ["planId"] = (string?)plan["planId"] });
+        Assert.Equal(WorkflowService.PlanStaleCode, (string?)mismatch["code"]);
+
+        // Сценарій зберегли після плану — план застарів, нічого не записано.
+        await WorkflowUpdates.SaveAsync(client, id, other);
+        var stale = await ErrorAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition, ["planId"] = (string?)plan["planId"] });
+        Assert.Equal(WorkflowService.PlanStaleCode, (string?)stale["code"]);
+        var read = await CallAsync(client, "get_workflow", new() { ["id"] = id });
+        Assert.Equal(2, (int)read["version"]!);
+        Assert.Equal("Europe/Warsaw", (string?)read["definition"]!["settings"]!["timezone"]);
+    }
+
     /// <summary>F6-10: update_workflow пише чернетку, publish_workflow її публікує, get_workflow читає обидві.</summary>
     [Fact]
     public async Task Update_writes_draft_and_publish_switches_published_version()
@@ -120,7 +165,7 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         Assert.False((bool)published["hasUnpublishedChanges"]!);
 
         definition["nodes"]![0]!["name"] = "Нова назва";
-        var draft = await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        var draft = await WorkflowUpdates.SaveAsync(client, id, definition);
         Assert.Equal(2, (int)draft["version"]!);
         Assert.Equal(1, (int)draft["publishedVersion"]!);
         Assert.True((bool)draft["hasUnpublishedChanges"]!);
@@ -168,7 +213,7 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         var created = await CallAsync(client, "create_workflow", new() { ["definition"] = definition });
         var id = (string)created["id"]!;
         definition["business"]!["steps"]![0]!["links"]!.AsArray().Add(JsonNode.Parse("""{ "node": "n_set", "direction": "out" }"""));
-        await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        await WorkflowUpdates.SaveAsync(client, id, definition);
 
         var saved = (await CallAsync(client, "get_workflow", new() { ["id"] = id }))["definition"]!;
         Assert.True(JsonNode.DeepEquals(definition["business"], saved["business"]), saved["business"]?.ToJsonString());
@@ -188,7 +233,10 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         var errors = invalid["errors"]!.AsArray();
         Assert.Equal(["BUSINESS_LINK_NODE_UNKNOWN", "BUSINESS_LANE_UNKNOWN", "STAGE_NODE_UNKNOWN"], errors.Select(e => (string?)e!["code"]));
         Assert.Equal(["/business/steps/0/links/0/node", "/nodes/0/business/lane", "/stages/0/nodes/1"], errors.Select(e => (string?)e!["path"]));
-        var failed = await ErrorAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        var plan = (await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition }))["plan"]!;
+        Assert.False((bool)plan["valid"]!);
+        Assert.Equal(errors.Select(e => (string?)e!["code"]), plan["errors"]!.AsArray().Select(e => (string?)e!["code"]));
+        var failed = await ErrorAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition, ["planId"] = (string?)plan["planId"] });
         Assert.Equal("WORKFLOW_INVALID", (string?)failed["code"]);
     }
 
@@ -214,7 +262,7 @@ public class WorkflowToolsTests(McpServerFactory mcp)
 
         definition["notes"]![1]!["text"] = "Перевірити ліміт 1С";
         definition["notes"]![1]!["color"] = "red";
-        await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition });
+        await WorkflowUpdates.SaveAsync(client, id, definition);
 
         var saved = (await CallAsync(client, "get_workflow", new() { ["id"] = id }))["definition"]!;
         Assert.True(JsonNode.DeepEquals(definition["notes"], saved["notes"]), saved["notes"]?.ToJsonString());
@@ -287,14 +335,15 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         var definition = Definition(Unique("Гонка"));
         var id = (string)(await CallAsync(client, "create_workflow", new() { ["definition"] = definition }))["id"]!;
 
+        // Один план застосовують вісім разів паралельно: зберігає лише перший, решта — конфлікт версії або застарілий план.
+        var planId = (string?)(await CallAsync(client, "update_workflow", new() { ["id"] = id, ["definition"] = definition }))["plan"]!["planId"];
         var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
-            client.CallToolAsync("update_workflow", new Dictionary<string, object?> { ["id"] = id, ["definition"] = definition }).AsTask()));
+            client.CallToolAsync("update_workflow", new Dictionary<string, object?> { ["id"] = id, ["definition"] = definition, ["planId"] = planId }).AsTask()));
 
         var conflicts = results.Where(r => r.IsError == true).Select(r => (string?)Structured(r)["code"]).ToList();
-        Assert.All(conflicts, code => Assert.Equal(WorkflowService.VersionConflictCode, code));
-        var versions = results.Where(r => r.IsError != true).Select(r => (int)Structured(r)["version"]!).ToList();
-        Assert.NotEmpty(versions);
-        Assert.Equal(versions.Count, versions.Distinct().Count());
+        Assert.All(conflicts, code => Assert.Contains(code, new[] { WorkflowService.VersionConflictCode, WorkflowService.PlanStaleCode }));
+        var versions = results.Where(r => r.IsError != true).Select(r => (int)Structured(r)["workflow"]!["version"]!).ToList();
+        Assert.Equal([2], versions);
     }
 
     [Fact]

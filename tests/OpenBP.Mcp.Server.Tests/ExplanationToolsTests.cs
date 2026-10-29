@@ -49,7 +49,7 @@ public class ExplanationToolsTests(McpServerFactory mcp)
         Assert.False((bool)saved["stale"]!);
 
         // Пересунули вузол — нова версія, пояснення те саме й актуальне.
-        await CallAsync(editor, "update_workflow", new() { ["id"] = workflowId, ["definition"] = Definition(name, 480) });
+        await WorkflowUpdates.SaveAsync(editor, workflowId, Definition(name, 480));
         await using var viewer = await mcp.ConnectAsync(UserRole.Viewer);
         var moved = await CallAsync(viewer, "get_workflow_explanation", new() { ["id"] = workflowId });
         Assert.Equal(Text, (string?)moved["text"]);
@@ -57,7 +57,7 @@ public class ExplanationToolsTests(McpServerFactory mcp)
         Assert.False((bool)moved["stale"]!);
 
         // Змінили крок — пояснення застаріло, доки агент не напише нове.
-        await CallAsync(editor, "update_workflow", new() { ["id"] = workflowId, ["definition"] = Definition(name, 480, "Дані клієнта") });
+        await WorkflowUpdates.SaveAsync(editor, workflowId, Definition(name, 480, "Дані клієнта"));
         var changed = await CallAsync(viewer, "get_workflow_explanation", new() { ["id"] = workflowId });
         Assert.Equal(Text, (string?)changed["text"]);
         Assert.True((bool)changed["stale"]!);

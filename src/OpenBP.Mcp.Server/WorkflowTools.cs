@@ -10,6 +10,12 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Mcp.Server;
 
+/// <summary>Результат <c>update_workflow</c>.</summary>
+/// <param name="Applied"><c>false</c> — повернуто план, нічого не збережено; <c>true</c> — збережено.</param>
+/// <param name="Plan">План (коли <paramref name="Applied"/> = <c>false</c>).</param>
+/// <param name="Workflow">Сценарій після збереження (коли <paramref name="Applied"/> = <c>true</c>).</param>
+public sealed record WorkflowChangeResult(bool Applied, WorkflowPlan? Plan, WorkflowView? Workflow);
+
 /// <summary>Сценарій з визначенням чернетки або опублікованої версії (як <c>GET /workflows/{id}</c>).</summary>
 /// <param name="Id"><c>workflows.id</c>.</param>
 /// <param name="Name">Назва.</param>
@@ -162,23 +168,35 @@ public sealed class WorkflowTools
         CancellationToken ct = default) =>
         WorkflowView.From(await workflows.CreateAsync(WorkflowDefinitions.FromJson(definition), groupId, ct).ConfigureAwait(false));
 
-    /// <summary><c>update_workflow</c>.</summary>
+    /// <summary><c>update_workflow</c>: без <paramref name="planId"/> — план (F3-116), з ним — збереження.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
     /// <param name="id">Id сценарію.</param>
     /// <param name="definition">Визначення.</param>
+    /// <param name="planId">Id плану з попереднього виклику; <c>null</c> — лише план.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "update_workflow", Title = "Update workflow", Destructive = false, Idempotent = false, UseStructuredContent = true)]
     [Description(
         "Saves the definition as a new draft version (the workflow name is kept; rename is not done here). " +
+        "Two calls: without planId nothing is saved and you get a plan (planId, nodes added/removed/changed with names and types, " +
+        "connections added/removed, settings changes, validation errors and warnings) — show it to the user in plain words and wait " +
+        "for their confirmation; then call again with exactly the same arguments plus planId to save. A plan with valid=false cannot " +
+        "be applied: fix the errors and make a new plan. If the workflow was saved in between, the apply fails with WORKFLOW_PLAN_STALE — " +
+        "read it with get_workflow and make a new plan. " +
         "Unknown fields are preserved. Triggers keep running the published version until publish_workflow. " +
         "Errors: WORKFLOW_INVALID with `errors`, NOT_FOUND, WORKFLOW_VERSION_CONFLICT when saved concurrently (get_workflow and retry). " +
         "After a change to steps or parameters, update the plain-language explanation with save_workflow_explanation.")]
-    public static async Task<WorkflowView> UpdateWorkflow(
+    public static async Task<WorkflowChangeResult> UpdateWorkflow(
         IWorkflowService workflows,
         [Description("Workflow id.")] Guid id,
         [Description(DefinitionHint)] JsonElement definition,
-        CancellationToken ct = default) =>
-        WorkflowView.From(await workflows.SaveAsync(id, WorkflowDefinitions.FromJson(definition), ct).ConfigureAwait(false));
+        [Description("planId from the plan the user confirmed; omit to get a plan.")] string? planId = null,
+        CancellationToken ct = default)
+    {
+        var parsed = WorkflowDefinitions.FromJson(definition);
+        return string.IsNullOrWhiteSpace(planId)
+            ? new(false, await workflows.PlanSaveAsync(id, parsed, ct).ConfigureAwait(false), null)
+            : new(true, null, WorkflowView.From(await workflows.ApplySaveAsync(id, parsed, planId, ct).ConfigureAwait(false)));
+    }
 
     /// <summary><c>publish_workflow</c>.</summary>
     /// <param name="workflows">Сервіс сценаріїв.</param>
