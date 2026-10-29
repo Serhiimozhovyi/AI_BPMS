@@ -176,6 +176,14 @@ Editor проєкту редагує сторінки формою: тип, та
 - Користувач «лише застосунку» — глобальний `viewer` з одним проєктом, у якому він `viewer` з роллю застосунку: з
   головної переходить на `/projects/:id/app`, меню й вкладки проєкту — лише «Застосунок» і «Огляд».
 
+**Реалізовано (F8-13).** Вкладка «Учасники» додає людину за поштою: `POST /workflow-groups/{id}/members/add
+{ email, role, appRole?, password? }` → `{ member, created, temporaryPassword }`. Облікового запису немає — створюється з
+глобальною роллю `viewer` і тимчасовим паролем (12 символів, показується один раз, `users.must_change_password`) або без
+пароля (`password: false`, вхід через OIDC); роль і роль застосунку перевіряються до створення. Наявний запис не
+змінюється. Аудит `user.created` (без пароля). `GET /auth/me` повертає `mustChangePassword`; SPA веде такого користувача
+на `/account/password` (`POST /auth/password { currentPassword, newPassword }`, щонайменше 8 символів). MCP:
+`add_project_member`.
+
 ## 5. Шаблон проєкту
 
 `GET /api/v1/projects/{id}/export` → JSON:

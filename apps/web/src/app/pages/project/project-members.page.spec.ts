@@ -51,14 +51,56 @@ describe('ProjectMembersPage', () => {
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-testid="member-add"]')!.click();
-    const put = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
-    expect(put.request.body).toEqual({ email: 'bob@firma.ua', role: 'viewer', appRole: null });
-    put.flush(bob);
+    const add = http.expectOne({ method: 'POST', url: `${base}/p1/members/add` });
+    expect(add.request.body).toEqual({ email: 'bob@firma.ua', role: 'viewer', appRole: null, password: true });
+    add.flush({ member: bob, created: false, temporaryPassword: null });
     http.expectOne({ method: 'GET', url: base }).flush([]);
     await render(fixture);
 
     expect(host.querySelectorAll('[data-member]')).toHaveLength(2);
     expect(email.value).toBe('');
+    expect(host.querySelector('[data-testid="member-temporary"]')).toBeNull();
+  });
+
+  it('F8-13: нова людина з роллю застосунку — тимчасовий пароль показано один раз', async () => {
+    const { fixture, http, host } = await setup('editor', [alice], [{ key: 'psychologist', name: 'Психолог' }]);
+    const email = host.querySelector<HTMLInputElement>('[data-testid="member-email"]')!;
+    email.value = 'olena@firma.ua';
+    email.dispatchEvent(new Event('input'));
+    const role = host.querySelector<HTMLSelectElement>('[data-testid="member-role"]')!;
+    role.value = 'viewer';
+    role.dispatchEvent(new Event('change'));
+    const appRole = host.querySelector<HTMLSelectElement>('[data-testid="member-new-app-role"]')!;
+    appRole.value = 'psychologist';
+    appRole.dispatchEvent(new Event('change'));
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="member-add"]')!.click();
+    const add = http.expectOne({ method: 'POST', url: `${base}/p1/members/add` });
+    expect(add.request.body).toEqual({ email: 'olena@firma.ua', role: 'viewer', appRole: 'psychologist', password: true });
+    add.flush({
+      member: { userId: 'u3', email: 'olena@firma.ua', role: 'viewer', globalRole: 'viewer', appRole: 'psychologist' },
+      created: true,
+      temporaryPassword: 'abcDEF234xyz',
+    });
+    http.expectOne({ method: 'GET', url: base }).flush([]);
+    await render(fixture);
+
+    expect(host.querySelector('[data-testid="member-temporary-password"]')?.textContent).toBe('abcDEF234xyz');
+    expect(host.querySelector('[data-member="olena@firma.ua"]')).not.toBeNull();
+  });
+
+  it('F8-13: без тимчасового пароля — запис лише для OIDC', async () => {
+    const { fixture, http, host } = await setup('editor', [alice]);
+    const email = host.querySelector<HTMLInputElement>('[data-testid="member-email"]')!;
+    email.value = 'sso@firma.ua';
+    email.dispatchEvent(new Event('input'));
+    host.querySelector<HTMLInputElement>('[data-testid="member-password"]')!.click();
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="member-add"]')!.click();
+    const add = http.expectOne({ method: 'POST', url: `${base}/p1/members/add` });
+    expect(add.request.body).toEqual({ email: 'sso@firma.ua', role: 'editor', appRole: null, password: false });
   });
 
   it('змінює роль і прибирає учасника', async () => {

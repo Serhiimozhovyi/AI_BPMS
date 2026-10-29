@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OpenBP.Application.Audit;
 using OpenBP.Application.Errors;
 using OpenBP.Data;
 
@@ -12,6 +14,16 @@ public sealed class AuthService(OpenBpDbContext db, ICurrentUser currentUser, Ti
 
     // Хеш для невідомого email: перевірка йде тим самим шляхом, щоб час відповіді не видавав, чи існує користувач.
     private static readonly string DummyHash = Hasher.HashPassword(new UserEntity(), Guid.NewGuid().ToString("N"));
+
+    /// <summary>Найкоротший пароль, який можна встановити (F8-13).</summary>
+    public const int MinPasswordLength = 8;
+
+    // Без схожих символів (0/O, 1/l/I), щоб тимчасовий пароль легко передати голосом чи з екрана.
+    private const string TemporaryAlphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    /// <summary>Випадковий тимчасовий пароль з 12 символів (F8-13).</summary>
+    public static string GenerateTemporaryPassword() =>
+        RandomNumberGenerator.GetString(TemporaryAlphabet, 12);
 
     /// <summary>Нормалізація email для збереження і пошуку.</summary>
     /// <param name="email">Email.</param>
@@ -56,7 +68,7 @@ public sealed class AuthService(OpenBpDbContext db, ICurrentUser currentUser, Ti
             await db.SaveChangesAsync(ct);
         }
 
-        return new UserInfo(user.Id, user.Email, role.Value);
+        return new UserInfo(user.Id, user.Email, role.Value) { MustChangePassword = user.MustChangePassword };
     }
 
     /// <inheritdoc />
@@ -71,7 +83,35 @@ public sealed class AuthService(OpenBpDbContext db, ICurrentUser currentUser, Ti
             throw new UnauthenticatedException();
         }
 
-        return new UserInfo(user.Id, user.Email, role.Value);
+        return new UserInfo(user.Id, user.Email, role.Value) { MustChangePassword = user.MustChangePassword };
+    }
+
+    /// <inheritdoc />
+    public async Task ChangePasswordAsync(string currentPassword, string newPassword, CancellationToken ct)
+    {
+        currentUser.Require(UserRole.Viewer);
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < MinPasswordLength)
+        {
+            throw new ArgumentException($"Новий пароль — щонайменше {MinPasswordLength} символів.", nameof(newPassword));
+        }
+
+        var id = currentUser.UserId!.Value;
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id, ct) ?? throw new UnauthenticatedException();
+        if (user.PasswordHash is null
+            || Hasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword ?? "") == PasswordVerificationResult.Failed)
+        {
+            throw new ArgumentException("Поточний пароль невірний.", nameof(currentPassword));
+        }
+
+        if (newPassword == currentPassword)
+        {
+            throw new ArgumentException("Новий пароль має відрізнятися від поточного.", nameof(newPassword));
+        }
+
+        user.PasswordHash = Hasher.HashPassword(user, newPassword);
+        user.MustChangePassword = false;
+        db.Audit(currentUser, time.GetUtcNow(), AuditActions.UserPasswordChanged, AuditEntities.User, user.Id.ToString(), null);
+        await db.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc />

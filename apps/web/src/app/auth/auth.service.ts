@@ -8,6 +8,8 @@ export interface UserInfo {
   id: string;
   email: string;
   role: 'admin' | 'editor' | 'viewer';
+  /** Пароль тимчасовий (F8-13): до зміни пароля застосунок веде на `/account/password`. */
+  mustChangePassword?: boolean;
 }
 
 /** Провайдер входу — елемент `GET /api/v1/auth/providers` (F4-14). */
@@ -58,6 +60,13 @@ export class AuthService {
     return this.http
       .get<AuthProviders>(`${this.base}/providers`)
       .pipe(catchError(() => of<AuthProviders>({ passwordLogin: true, providers: [] })));
+  }
+
+  /** `POST /auth/password` (F8-13): змінює пароль і перечитує користувача (знімає `mustChangePassword`). */
+  changePassword(currentPassword: string, newPassword: string): Observable<UserInfo | null> {
+    return this.http
+      .post<void>(`${this.base}/password`, { currentPassword, newPassword })
+      .pipe(switchMap(() => this.me()));
   }
 
   logout(): Observable<void> {

@@ -166,7 +166,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 
 | Таблиця | Ключові поля |
 |---|---|
-| `users` | id, email, password_hash (null — лише OIDC, F4-14), role, created_at |
+| `users` | id, email, password_hash (null — лише OIDC, F4-14), role, created_at, must_change_password (тимчасовий пароль, F8-13) |
 | `user_logins` | id, user_id → users (cascade), provider, subject (unique provider+subject), created_at, last_login_at (F4-14) |
 | `api_keys` | id, user_id, hash, name, last_used_at, project_id (→ `workflow_groups`, cascade; null — весь інстанс; F6-14) |
 | `workflows` | id, name, active, current_version_id, created_by, updated_at, group_id (→ `workflow_groups`, `ON DELETE SET NULL`) |
@@ -242,7 +242,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 ## 7. Frontend (Angular)
 
 - Standalone-компоненти, Signals, роутинг: `/` («Огляд», F6-07), `/workflows`, `/workflows/:id` (канвас), `/executions`, `/tasks` і `/tasks/:id` (задачі погодження, F6-02; картка — і за токеном з `$execution.taskUrl`), `/tables` (таблиці даних, F6-11), `/connections` («Підключення», F3-99: вкладки `?tab=connected|catalog|credentials`; старі `/connectors` і `/credentials` — редіректи), `/settings`.
-- Вхід (F3-24): `/login` (email + пароль, `POST /auth/login`, cookie-сесія); решта маршрутів — під guard'ом, який перевіряє сесію через `GET /auth/me` і без неї веде на `/login?returnUrl=…` (лише шлях усередині застосунку). 401 від Api посеред роботи — теж на `/login` з поверненням; «Вийти» — `POST /auth/logout`.
+- Вхід (F3-24): `/login` (email + пароль, `POST /auth/login`, cookie-сесія); решта маршрутів — під guard'ом, який перевіряє сесію через `GET /auth/me` і без неї веде на `/login?returnUrl=…` (лише шлях усередині застосунку). 401 від Api посеред роботи — теж на `/login` з поверненням; «Вийти» — `POST /auth/logout`. З тимчасовим паролем (F8-13) guard пускає лише на `/account/password`.
 - Канвас — обраний у спайку фази 2 (ngx-vflow або Rete.js); обгорнутий у власний компонент `CanvasComponent`, щоб бібліотеку можна було замінити.
 - Форма вузла — ngx-formly з JSON Schema; для `mcp.tool` схема береться з `tools_cache`.
 - Стан тестового запуску — SSE `/executions/{id}/events`.
@@ -379,7 +379,8 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 | Метод і шлях | Роль | Відповідь |
 |---|---|---|
-| `POST /auth/login` `{ email, password }` · `POST /auth/logout` · `GET /auth/me` | — / будь-яка | 204 + cookie · 204 · `UserInfo` |
+| `POST /auth/login` `{ email, password }` · `POST /auth/logout` · `GET /auth/me` | — / будь-яка | 204 + cookie · 204 · `UserInfo` (з `mustChangePassword`, F8-13) |
+| `POST /auth/password` `{ currentPassword, newPassword }` (F8-13) | будь-яка | 204; невірний поточний чи новий коротший за 8 — 400 |
 | `GET /api-keys` · `POST /api-keys { name }` · `DELETE /api-keys/{id}` | будь-яка (свої), admin (усі) | `ApiKeyInfo[]` · `ApiKeyCreated` (ключ показується один раз) · 204 |
 | `GET /workflows?page&pageSize&search&active&groupId` | viewer | `PageResult<WorkflowSummary>`; `groupId` — id групи або `none` (без групи) |
 | `POST /workflows?groupId` (тіло — визначення) | editor | 201 `WorkflowDetail` |
@@ -389,6 +390,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 | `PATCH /workflows/{id} { name?, groupId? }` | editor | `WorkflowDetail`; змінюються лише передані поля, `groupId: null` — прибрати з групи (без нової версії) |
 | `GET /workflow-groups` · `POST /workflow-groups { name }` · `PATCH /workflow-groups/{id} { name?, description?, icon?, appRoles? }` · `DELETE /workflow-groups/{id}` · `PUT /workflow-groups/order { ids }` | viewer (читання видимих), editor (створення), admin або editor проєкту (зміни) — §10.6 | `WorkflowGroupSummary[]` (`{ id, name, sortOrder, workflowCount, role }`) · 201 · `WorkflowGroupSummary` · 204 (сценарії переходять у спільний простір; з credentials чи конекторами — 409 `PROJECT_NOT_EMPTY`) · `WorkflowGroupSummary[]`; повтор назви — 409 `WORKFLOW_GROUP_NAME_TAKEN` |
 | `GET /workflow-groups/{id}/members` · `PUT /workflow-groups/{id}/members { email, role, appRole? }` · `DELETE /workflow-groups/{id}/members/{userId}` | учасник (читання), admin або editor проєкту | `ProjectMember[]` (`{ userId, email, role, globalRole }`) · `ProjectMember` · 204 (F6-14) |
+| `POST /workflow-groups/{id}/members/add { email, role, appRole?, password? }` (F8-13) | admin або editor проєкту | `{ member, created, temporaryPassword }`: облікового запису немає — створюється (`viewer`, тимчасовий пароль один раз або лише OIDC) |
 | `POST /workflows/{id}/activate` · `/deactivate` | editor | `WorkflowDetail` |
 | `POST /workflows/{id}/publish` · `/discard-draft` | editor | `WorkflowDetail`; публікація чернетки й «Скасувати зміни» (F6-10, §10.2) |
 | `POST /workflows/{id}/assistant { message, definition?, history? }` | editor | SSE помічника (§10.8): `step`, `message`, `definition`, `error`, `done`; не налаштовано — 409 `ASSISTANT_NOT_CONFIGURED` |

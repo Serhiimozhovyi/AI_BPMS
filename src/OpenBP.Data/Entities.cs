@@ -10,6 +10,8 @@ public sealed class UserEntity
     public string? PasswordHash { get; set; }
     public string Role { get; set; } = "viewer";
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>Пароль тимчасовий (F8-13): після входу користувач має його змінити.</summary>
+    public bool MustChangePassword { get; set; }
 }
 
 /// <summary>Зв'язок користувача з обліковим записом OIDC-провайдера (F4-14): <c>(provider, subject)</c> унікальні.</summary>

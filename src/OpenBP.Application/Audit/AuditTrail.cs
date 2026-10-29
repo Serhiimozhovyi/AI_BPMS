@@ -16,6 +16,7 @@ public static class AuditEntities
     public const string DataTable = "dataTable";
     public const string NotificationChannel = "notificationChannel";
     public const string Project = "project";
+    public const string User = "user";
 }
 
 /// <summary>Дії журналу аудиту (<c>audit_log.action</c>): <c>&lt;сутність&gt;.&lt;дія&gt;</c>.</summary>
@@ -53,6 +54,8 @@ public static class AuditActions
     public const string ProjectDeleted = "project.deleted";
     public const string ProjectMemberSet = "project.memberSet";
     public const string ProjectMemberRemoved = "project.memberRemoved";
+    public const string UserCreated = "user.created";
+    public const string UserPasswordChanged = "user.passwordChanged";
     public const string ProjectPageSaved = "project.pageSaved";
     public const string ProjectPageDeleted = "project.pageDeleted";
     /// <summary>Експорт проєкту шаблоном (F8-06).</summary>

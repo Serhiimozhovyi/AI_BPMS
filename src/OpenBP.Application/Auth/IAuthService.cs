@@ -20,6 +20,14 @@ public interface IAuthService
     /// <exception cref="UnauthenticatedException">Запит не автентифіковано або користувача вже немає.</exception>
     Task<UserInfo> GetMeAsync(CancellationToken ct);
 
+    /// <summary>Змінює пароль поточного користувача й знімає ознаку тимчасового пароля (F8-13).</summary>
+    /// <param name="currentPassword">Поточний пароль.</param>
+    /// <param name="newPassword">Новий пароль, щонайменше <see cref="AuthService.MinPasswordLength"/> символів.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="UnauthenticatedException">Запит не автентифіковано.</exception>
+    /// <exception cref="ArgumentException">Поточний пароль невірний, у користувача немає пароля (лише OIDC) або новий закороткий.</exception>
+    Task ChangePasswordAsync(string currentPassword, string newPassword, CancellationToken ct);
+
     /// <summary>
     /// Створює першого <see cref="UserRole.Admin"/>, якщо в <c>users</c> немає жодного запису (старт Api,
     /// <c>OPENBP_ADMIN_EMAIL</c>/<c>OPENBP_ADMIN_PASSWORD</c>). Ролей не перевіряє — лише для хоста.

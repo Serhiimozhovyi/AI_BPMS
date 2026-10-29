@@ -140,6 +140,13 @@ public sealed record ProjectMember(Guid UserId, string Email, UserRole Role, Use
     public string? AppRole { get; init; }
 }
 
+/// <summary>Результат <c>POST /workflow-groups/{id}/members/add</c> (F8-13).</summary>
+/// <param name="Member">Учасник з ролями.</param>
+/// <param name="Created">Обліковий запис створено цим запитом.</param>
+/// <param name="TemporaryPassword">Тимчасовий пароль нового облікового запису — показується один раз; <c>null</c>, якщо
+/// запис уже був або створений без пароля (вхід через OIDC).</param>
+public sealed record ProjectMemberAdded(ProjectMember Member, bool Created, string? TemporaryPassword);
+
 /// <summary>Результат <c>POST /workflows/validate</c>.</summary>
 /// <param name="Errors">Помилки; порожній список — сценарій коректний.</param>
 public sealed record WorkflowValidationResult(IReadOnlyList<WorkflowValidationError> Errors)

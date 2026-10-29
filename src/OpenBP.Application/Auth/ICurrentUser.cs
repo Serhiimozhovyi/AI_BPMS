@@ -81,7 +81,11 @@ public static class CurrentUserExtensions
 /// <param name="ApiKeyId">Ключ, яким автентифіковано запит (не віддається назовні).</param>
 /// <param name="ApiKeyProjectId">Проєкт, до якого обмежено ключ (F6-14; не віддається назовні).</param>
 public sealed record UserInfo(Guid Id, string Email, UserRole Role, [property: JsonIgnore] Guid? ApiKeyId = null,
-    [property: JsonIgnore] Guid? ApiKeyProjectId = null);
+    [property: JsonIgnore] Guid? ApiKeyProjectId = null)
+{
+    /// <summary>Пароль тимчасовий (F8-13): UI веде на зміну пароля, доки його не змінено.</summary>
+    public bool MustChangePassword { get; init; }
+}
 
 /// <summary>API-ключ у списку (<c>GET /api-keys</c>); сам ключ не зберігається і не повертається.</summary>
 /// <param name="Id"><c>api_keys.id</c>.</param>

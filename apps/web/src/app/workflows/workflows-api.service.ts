@@ -50,6 +50,15 @@ export interface WorkflowGroup {
   appRole?: string | null;
 }
 
+/** Відповідь `POST /workflow-groups/{id}/members/add` (F8-13). */
+export interface ProjectMemberAdded {
+  member: ProjectMember;
+  /** Обліковий запис створено цим запитом. */
+  created: boolean;
+  /** Тимчасовий пароль нового запису — показується один раз. */
+  temporaryPassword: string | null;
+}
+
 /** Роль застосунку проєкту (F8-04): незалежна від ролі проєкту editor/viewer. */
 export interface ProjectAppRole {
   key: string;
@@ -416,6 +425,14 @@ export class WorkflowsApiService {
   /** `PUT /workflow-groups/{id}/members` — додати учасника за email або змінити його роль. */
   setMember(projectId: string, email: string, role: 'editor' | 'viewer', appRole: string | null = null): Observable<ProjectMember> {
     return this.http.put<ProjectMember>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members`, { email, role, appRole });
+  }
+
+  /**
+   * `POST /workflow-groups/{id}/members/add` (F8-13): додає людину; якщо облікового запису немає — створює його
+   * (тимчасовий пароль — у відповіді, один раз).
+   */
+  addPerson(projectId: string, person: { email: string; role: 'editor' | 'viewer'; appRole: string | null; password: boolean }): Observable<ProjectMemberAdded> {
+    return this.http.post<ProjectMemberAdded>(`${API_BASE}/workflow-groups/${encodeURIComponent(projectId)}/members/add`, person);
   }
 
   /** `DELETE /workflow-groups/{id}/members/{userId}`. */
