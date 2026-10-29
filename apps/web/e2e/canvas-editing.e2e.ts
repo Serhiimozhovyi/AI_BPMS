@@ -71,16 +71,9 @@ const TEMPLATES = [
   },
 ];
 
-/** Відповідь фейкового помічника (F3-60): кроки інструментів, нове визначення, текст. */
-function assistantStream(definition: unknown): string {
-  const events = [
-    { type: 'step', tool: 'get_workflow', ok: true, text: 'визначення сценарію' },
-    { type: 'step', tool: 'describe_nodes', ok: true, text: 'типів вузлів: 3' },
-    { type: 'step', tool: 'update_workflow', ok: true, text: "сценарій оновлено: вузлів 2, з'єднань 1" },
-    { type: 'definition', definition },
-    { type: 'message', text: 'Додав ручний запуск і «Привітання».' },
-    { type: 'done' },
-  ];
+/** Відповідь фейкового загального помічника (F3-117): текст. */
+function assistantStream(): string {
+  const events = [{ type: 'message', text: 'Вузол «Привітання» задає привітання для клієнта.' }, { type: 'done' }];
   return events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
 }
 
@@ -152,10 +145,16 @@ class FakeApi {
       }
       const versionMatch = new RegExp(`^/api/v1/workflows/${WORKFLOW_ID}/versions/(\\d+)$`).exec(path);
       if (versionMatch) return route.fulfill({ json: this.history()[Number(versionMatch[1]) - 1] });
-      if (path === `/api/v1/workflows/${WORKFLOW_ID}/assistant` && request.method() === 'POST') {
-        this.assistantRequests.push(request.postDataJSON());
-        return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(TEMPLATES[0].definition) });
+      if (path === '/api/v1/assistant/conversations' && request.method() === 'GET') return route.fulfill({ json: [] });
+      if (path === '/api/v1/assistant/conversations' && request.method() === 'POST') {
+        const now = '2026-10-29T10:00:00Z';
+        return route.fulfill({ status: 201, json: { id: 'c1', title: 'Нова розмова', userId: 'u1', createdAt: now, updatedAt: now, messages: [], proposals: [] } });
       }
+      if (path === '/api/v1/assistant/conversations/c1/messages' && request.method() === 'POST') {
+        this.assistantRequests.push(request.postDataJSON());
+        return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream() });
+      }
+      if (path === `/api/v1/workflows/${WORKFLOW_ID}/assistant`) throw new Error('Чат редактора вилучено (F3-117): розмова йде через /assistant/conversations');
       if (path === `/api/v1/workflows/${WORKFLOW_ID}/draft` && request.method() === 'POST') {
         this.draftRequests.push(request.postDataJSON());
         return route.fulfill({ status: 200, contentType: 'text/event-stream', body: draftStream() });
@@ -684,31 +683,39 @@ test('F3-59: порожній сценарій — «Почати з прикл�
   await expect(page.getByTestId('first-step-hint')).toHaveCount(0);
 });
 
-test('F3-60: «Описати процес» → помічник будує сценарій з тригером і Set; «Скасувати» прибирає відповідь', async ({ page }) => {
+test('F3-117: «Пояснити вузол» відкриває загальну панель із запитом і вузлом; панель редактора лишає «Описати процес»', async ({ page }) => {
   const api = new FakeApi();
   await api.install(page);
   await page.goto(`/workflows/${WORKFLOW_ID}`);
 
+  // «Описати процес» з порожнього сценарію — панель редактора без чату.
   await page.getByTestId('start-describe').click();
   await expect(page.getByTestId('assistant-panel')).toBeVisible();
-  await expect(page.getByTestId('empty-start')).toHaveCount(0);
-  await page.getByTestId('assistant-mode').click();
-  await page.getByTestId('assistant-input').fill('зроби сценарій з тригером і Set');
-  await page.getByTestId('assistant-send').click();
-
-  await expect(page.getByTestId('assistant-log')).toContainText('Додав ручний запуск і «Привітання».');
-  await expect(page.getByTestId('assistant-log')).toContainText('Змінив сценарій');
-  await expect(card(page, 'Старт')).toBeVisible();
-  await expect(card(page, 'Привітання')).toBeVisible();
-  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
-  await waitSaved(page);
-  expect(graph(api.definition).nodes).toEqual(['Привітання:core.set', 'Старт:core.manualTrigger']);
-  expect(api.assistantRequests).toEqual([expect.objectContaining({ message: 'зроби сценарій з тригером і Set', history: [] })]);
-
-  // Відповідь помічника — одна правка в історії: «Скасувати» повертає порожній сценарій.
+  await expect(page.getByTestId('describe-process')).toBeVisible();
+  await expect(page.getByTestId('assistant-input')).toHaveCount(0);
   await page.getByTestId('assistant-close').click();
-  await page.getByTestId('undo').click();
-  await expect(page.getByTestId('counts')).toContainText('вузлів: 0');
+
+  await page.getByTestId('start-template').click();
+  await page.locator('[data-template="hello-manual"]').click();
+  await waitSaved(page);
+  await card(page, 'Привітання').click({ position: { x: 12, y: 12 } });
+  await expect(page.getByTestId('node-panel-name')).toHaveText('Привітання');
+
+  await page.getByTestId('node-more').click();
+  await page.getByTestId('assistant-explain').click();
+
+  // Відкрилась загальна панель: запит пішов у розмову з контекстом сценарію й вузла, панель вузла не заважає.
+  await expect(page.getByTestId('global-assistant')).toBeVisible();
+  await expect(page.getByTestId('global-assistant-log')).toContainText('Вузол «Привітання» задає привітання для клієнта.');
+  await expect.poll(() => api.assistantRequests.length).toBe(1);
+  expect(api.assistantRequests).toEqual([
+    expect.objectContaining({
+      message: expect.stringContaining('«Привітання» (n_greeting)'),
+      context: expect.objectContaining({ workflowId: WORKFLOW_ID, nodeId: 'n_greeting' }),
+    }),
+  ]);
+  await expect(page.getByTestId('assistant-panel')).toHaveCount(0);
+  await expect(page.getByTestId('counts')).toContainText('вузлів: 2 · ребер: 1');
 });
 
 test('F3-104: «Описати процес» → вузли на канвасі, «Що доналаштувати» відкриває панель вузла; «Скасувати» повертає порожній канвас', async ({ page }) => {

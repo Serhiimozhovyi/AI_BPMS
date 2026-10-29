@@ -37,7 +37,7 @@ import { EmptyStartComponent } from '../canvas/empty-start.component';
 import { DraftTodoItem } from '../assistant/assistant-api.service';
 import { GlobalAssistantService } from '../assistant/global-assistant.service';
 import { DraftResult } from '../assistant/describe-process.component';
-import { AssistantPanelComponent, AssistantPrompt } from '../assistant/assistant-panel.component';
+import { AssistantPanelComponent } from '../assistant/assistant-panel.component';
 import { VersionHistoryDialogComponent, VersionHistoryDialogData, VersionRestore } from '../workflows/version-history-dialog.component';
 import { CanvasContextMenuComponent, CanvasMenuAction } from '../canvas/context-menu.component';
 import { EMPTY_PINNED_ITEMS } from '../canvas/pinned-data';
@@ -189,7 +189,7 @@ export interface EditorErrorEvent {
             <app-business-view class="editor__business" [definition]="def" [descriptors]="descriptors()" [connectors]="businessConnectors()" [fileName]="workflow()?.name ?? 'scenario'" [execution]="businessRun()" [editable]="!readonly()" (stepPick)="openStep($event)" (definitionChange)="changed($event)" />
           @if (assistantOpen() && !readonly()) {
             <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
-              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" [draftTodo]="draftTodo()" (definitionChange)="assistantChanged($event)" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [draftTodo]="draftTodo()" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
             </aside>
           }
           </div>
@@ -297,7 +297,7 @@ export interface EditorErrorEvent {
           </div>
           @if (assistantOpen() && !readonly()) {
             <aside class="editor__panel" data-testid="assistant-aside" [style.width.px]="panelWidth()">
-              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [prompt]="assistantPrompt()" [draftTodo]="draftTodo()" (definitionChange)="assistantChanged($event)" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
+              <app-assistant-panel [workflowId]="workflowId()" [version]="workflow()?.version ?? null" [definition]="def" [draftTodo]="draftTodo()" (drafted)="draftedFromDescription($event)" (todoSelected)="openDraftTodo($event)" (closed)="assistantOpen.set(false)" />
             </aside>
           } @else if (selectedNode(); as node) {
             <aside class="editor__panel" data-testid="editor-panel" [class.editor__panel--wide]="wide()" [style.width.px]="panelWidth()">
@@ -1269,20 +1269,13 @@ export class WorkflowEditorComponent implements OnInit {
     this.showQuickAdd({ kind: 'free' }, 'step', center);
   }
 
-  /** Панель «Помічник» замість панелі вузла (F3-60). */
+  /** Панель «Помічник» замість панелі вузла (F3-60): «Пояснення процесу» й «Описати процес». Розмова — у загальній панелі (F3-117). */
   protected readonly assistantOpen = signal(false);
-  protected readonly assistantPrompt = signal<AssistantPrompt | null>(null);
   protected readonly draftTodo = signal<DraftTodoItem[]>([]);
-  private assistantSeq = 0;
 
   protected toggleAssistant(): void {
     this.assistantOpen.update((open) => !open);
     if (this.assistantOpen()) this.globalAssistant.close();
-  }
-
-  /** Відповідь помічника — одна правка з історією: Ctrl+Z скасовує її цілком. */
-  protected assistantChanged(definition: WorkflowDefinition): void {
-    this.changed(definition);
   }
 
   /**
@@ -1302,8 +1295,17 @@ export class WorkflowEditorComponent implements OnInit {
     this.openStep(nodeId);
   }
 
-  /** Швидкі дії: пояснити вузол, виправити помилку (з текстом помилки й входом), написати вираз; «Описати процес». */
+  /**
+   * Швидкі дії вузла (F3-117): пояснити, виправити помилку (з текстом помилки й входом), написати вираз — розмова йде в
+   * загальній панелі з контекстом сценарію й вузла; зміни сценарію приходять карткою з планом (F3-116). «Описати процес»
+   * відкриває панель редактора.
+   */
   protected assistantAction(kind: 'explain' | 'fix' | 'expression' | 'describe', node?: WorkflowNode): void {
+    if (kind === 'describe') {
+      this.assistantOpen.set(true);
+      this.globalAssistant.close();
+      return;
+    }
     const label = node ? `«${node.name}» (${node.id})` : '';
     let text: string;
     let send = true;
@@ -1313,16 +1315,12 @@ export class WorkflowEditorComponent implements OnInit {
       const input = JSON.stringify(step?.input?.[0]?.slice(0, 3) ?? []).slice(0, 2000);
       const error = [step?.error?.message, step?.error?.details].filter(Boolean).join('\n');
       text = $localize`:@@workfloweditor.assistant.fixPrompt:Вузол ${label}:node: завершився помилкою:\n${error}:error:\nВхідні дані: ${input}:input:\nВиправ вузол.`;
-    } else if (kind === 'expression') {
+    } else {
       text = $localize`:@@workfloweditor.assistant.expressionPrompt:Напиши вираз {{ }} для вузла ${label}:node:: `;
       send = false;
-    } else {
-      text = '';
-      send = false;
     }
-    this.assistantOpen.set(true);
-    this.globalAssistant.close();
-    this.assistantPrompt.set({ text, send, seq: ++this.assistantSeq, mode: kind === 'describe' ? 'describe' : undefined });
+    this.assistantOpen.set(false);
+    this.globalAssistant.show({ text, send, nodeId: node?.id });
   }
 
   /** Порожній сценарій → «Додати тригер» (F3-59). */

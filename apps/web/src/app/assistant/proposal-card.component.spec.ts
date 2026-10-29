@@ -74,6 +74,71 @@ describe('ProposalCardComponent', () => {
     expect(text).toContain('буде втрачено');
   });
 
+  it('зміна сценарію: план вузлів, зв\'язків і налаштувань замість JSON', () => {
+    const { host, events } = create(
+      proposal({
+        tool: 'update_workflow',
+        arguments: { id: ID, definition: { nodes: [] } },
+        plan: {
+          planId: 'w1',
+          name: 'Заявки',
+          baseVersion: 3,
+          addedNodes: [{ id: 'n_mail', name: 'Лист', type: 'mcp.tool' }],
+          removedNodes: [{ id: 'n_old', name: 'Старий', type: 'core.set' }],
+          changedNodes: [{ id: 'n_if', name: 'Перевірка', type: 'core.if', fields: ['name', 'parameters.conditions', 'position'], renamedFrom: 'Умова' }],
+          addedConnections: [{ from: 'n_if', fromName: 'Перевірка', output: 1, to: 'n_mail', toName: 'Лист', input: 0 }],
+          removedConnections: [],
+          settingsChanges: [{ field: 'timezone', before: 'UTC', after: 'Europe/Kyiv' }],
+          otherChanges: ['notes'],
+          errors: [],
+          warnings: [{ code: 'VARIABLE_UNKNOWN', message: 'Змінної $vars.chat немає.' }],
+          valid: true,
+          hasChanges: true,
+        },
+      }),
+    );
+    const text = host.textContent ?? '';
+    expect(host.querySelector('h3')?.textContent).toBe('Змінити сценарій «Заявки»');
+    expect(host.querySelector('[data-testid="proposal-nodes-added"]')?.textContent).toContain('«Лист» (mcp.tool)');
+    expect(host.querySelector('[data-testid="proposal-nodes-removed"]')?.textContent).toContain('«Старий» (core.set)');
+    expect(host.querySelector('[data-testid="proposal-node-changed"]')?.textContent).toContain('«Перевірка»: назва (була «Умова»), параметри conditions, місце на полотні');
+    expect(host.querySelector('[data-testid="proposal-links-added"]')?.textContent).toContain('«Перевірка» (вихід 2) → «Лист»');
+    expect(host.querySelector('[data-testid="proposal-setting"]')?.textContent).toContain('Часовий пояс: UTC → Europe/Kyiv');
+    expect(text).toContain('нотатки на полотні');
+    expect(text).toContain('чернеткою версії 4');
+    expect(host.querySelector('[data-testid="proposal-warning"]')?.textContent).toContain('$vars.chat');
+    expect(host.querySelector('pre')).toBeNull();
+
+    click(host, 'proposal-apply');
+    expect(events).toEqual(['apply']);
+  });
+
+  it('зміна сценарію з помилками: показує їх і не дає застосувати', () => {
+    const { host } = create(
+      proposal({
+        tool: 'update_workflow',
+        arguments: { id: ID },
+        plan: {
+          planId: 'w2',
+          name: 'Заявки',
+          baseVersion: 1,
+          errors: [{ code: 'CONNECTION_NODE_UNKNOWN', message: 'Зв\'язок веде до вузла «ghost», якого немає.' }],
+          valid: false,
+          hasChanges: true,
+        },
+      }),
+    );
+    expect(host.querySelector('[data-testid="proposal-error"]')?.textContent).toContain('ghost');
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="proposal-apply"]')!.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="proposal-cancel"]')!.disabled).toBe(false);
+    expect(host.querySelector('[data-testid="proposal-invalid"]')).not.toBeNull();
+  });
+
+  it('зміна сценарію без відмінностей: так і каже', () => {
+    const { host } = create(proposal({ tool: 'update_workflow', arguments: { id: ID }, plan: { name: 'Заявки', baseVersion: 2, hasChanges: false, valid: true } }));
+    expect(host.querySelector('[data-testid="proposal-no-changes"]')?.textContent).toContain('версії 2');
+  });
+
   it('інший інструмент: аргументи списком і повний JSON у «Параметри»', () => {
     const { host } = create(proposal({ tool: 'create_workflow_group', arguments: { name: 'Бот', description: 'Підтримка' } }));
     expect(host.querySelector('h3')?.textContent).toBe('Створити проєкт «Бот»');

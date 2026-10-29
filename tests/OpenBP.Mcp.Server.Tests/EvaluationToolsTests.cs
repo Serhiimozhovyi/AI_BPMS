@@ -78,7 +78,7 @@ public class EvaluationToolsTests(McpServerFactory mcp)
         var firstVersion = (int)run["version"]!;
 
         // Нова версія сценарію: модель відповідає інакше — прогін на ній зберігається окремо.
-        await CallAsync(editor, "update_workflow", new() { ["id"] = workflowId, ["definition"] = JsonNode.Parse(Definition(credential.ToString(), "good {{ $json.text }}")) });
+        await WorkflowUpdates.SaveAsync(editor, workflowId, JsonNode.Parse(Definition(credential.ToString(), "good {{ $json.text }}"))!);
         var second = await CallAsync(editor, "run_evaluation", new() { ["id"] = evaluationId });
         Assert.Equal(3, (int)second["passed"]!);
         Assert.True((int)second["version"]! > firstVersion);

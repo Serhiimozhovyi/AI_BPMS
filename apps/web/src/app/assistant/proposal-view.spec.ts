@@ -1,5 +1,16 @@
 import { AssistantProposalView } from './global-assistant-api.service';
-import { columnText, failureText, proposalLink, proposalTitle, scalarArguments, tablePlan } from './proposal-view';
+import {
+  columnText,
+  connectionText,
+  failureText,
+  nodeChangeText,
+  proposalLink,
+  proposalTitle,
+  scalarArguments,
+  settingText,
+  tablePlan,
+  workflowPlan,
+} from './proposal-view';
 
 const ID = '11111111-2222-3333-4444-555555555555';
 
@@ -76,5 +87,24 @@ describe('proposalLink', () => {
     );
     expect(proposalLink(applied('create_table', { name: 'Т' }, '{"applied":true}'))?.href).toBe('/tables');
     expect(proposalLink(applied('some_tool', {}, '{}'))).toBeNull();
+  });
+});
+
+describe('план сценарію', () => {
+  it('розпізнається лише за baseVersion і дає назву в заголовку', () => {
+    expect(workflowPlan(proposal('create_table', {}, { plan: { action: 'create' } }))).toBeNull();
+    const update = proposal('update_workflow', {}, { plan: { baseVersion: 1, name: 'Бот' } });
+    expect(workflowPlan(update)?.baseVersion).toBe(1);
+    expect(proposalTitle(update)).toBe('Змінити сценарій «Бот»');
+    expect(proposalTitle(proposal('update_workflow'))).toBe('Змінити сценарій');
+  });
+
+  it('зміни вузла, зв\'язку й налаштувань текстом', () => {
+    expect(nodeChangeText({ id: 'a', name: 'Б', type: 'core.code', fields: ['type', 'retry', 'x-color'], typeChangedFrom: 'core.set' })).toBe(
+      '«Б»: тип (був core.set), повтори, x-color',
+    );
+    expect(connectionText({ from: 'a', fromName: 'А', output: 0, to: 'b', toName: 'Б', input: 1 })).toBe('«А» → «Б» (вхід 2)');
+    expect(settingText({ field: 'saveSuccessfulData', before: false, after: true })).toBe('Зберігати дані успішних виконань: ні → так');
+    expect(settingText({ field: 'concurrency', before: null, after: { max: 2 } })).toBe('Одночасні виконання: — → {"max":2}');
   });
 });

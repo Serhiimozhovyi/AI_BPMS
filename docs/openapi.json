@@ -1913,6 +1913,7 @@
           "Сценарії"
         ],
         "summary": "Зберегти нову версію сценарію",
+        "description": "`?planId=` — зберегти лише за планом `POST /workflows/{id}/plan` (F3-116): якщо сценарій збережено після плану або тіло інше — 409 WORKFLOW_PLAN_STALE, нічого не збережено.",
         "parameters": [
           {
             "name": "id",
@@ -1921,6 +1922,13 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "planId",
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -2049,6 +2057,72 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/{id}/plan": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "План збереження сценарію без збереження",
+        "description": "Що зміниться відносно поточної версії: вузли (додано, видалено, змінено — з назвами й типами), зв'язки, налаштування, інші частини визначення, а також помилки (`valid: false`) і попередження валідації. Застосувати — `PUT /workflows/{id}?planId=` з тим самим тілом. Потрібна роль editor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkflowDefinition"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPlan"
+                }
+              }
+            }
           },
           "4XX": {
             "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
@@ -13196,6 +13270,226 @@
             "items": {
               "$ref": "#/components/schemas/ManifestWorkflow"
             }
+          }
+        }
+      },
+      "WorkflowPlan": {
+        "required": [
+          "planId",
+          "workflowId",
+          "name",
+          "baseVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "workflowId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "baseVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "addedNodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowPlanNode"
+            }
+          },
+          "removedNodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowPlanNode"
+            }
+          },
+          "changedNodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowPlanNodeChange"
+            }
+          },
+          "addedConnections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowPlanConnection"
+            }
+          },
+          "removedConnections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowPlanConnection"
+            }
+          },
+          "settingsChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowPlanSettingChange"
+            }
+          },
+          "otherChanges": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowValidationError"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowValidationError"
+            }
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "hasChanges": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkflowPlanConnection": {
+        "required": [
+          "from",
+          "fromName",
+          "output",
+          "to",
+          "toName",
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "output": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "to": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          },
+          "input": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "WorkflowPlanNode": {
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowPlanNodeChange": {
+        "required": [
+          "id",
+          "name",
+          "type",
+          "fields"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "renamedFrom": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "typeChangedFrom": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "WorkflowPlanSettingChange": {
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
           }
         }
       },

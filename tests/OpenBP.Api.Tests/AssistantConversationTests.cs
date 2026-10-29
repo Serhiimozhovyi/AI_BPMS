@@ -239,6 +239,69 @@ public class AssistantConversationTests(ApiFactory api)
         Assert.Equal("note", conversation.GetProperty("messages").EnumerateArray().Last().GetProperty("role").GetString());
     }
 
+    private static JsonObject WorkflowDefinition(string name, params string[] extraNodes) => JsonNode.Parse($$"""
+        {
+          "formatVersion": 1,
+          "name": "{{name}}",
+          "settings": { "timezone": "Europe/Kyiv" },
+          "nodes": [
+            { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} }
+            {{string.Concat(extraNodes.Select(n => "," + n))}}
+          ],
+          "connections": []
+        }
+        """)!.AsObject();
+
+    /// <summary>F3-116: <c>update_workflow</c> — картка з планом змін; застосовується саме показаний план, застарілий — ні.</summary>
+    [Fact]
+    public async Task Workflow_update_is_proposed_as_a_plan_and_a_stale_plan_is_not_applied()
+    {
+        // Модель на кожне повідомлення спершу викликає update_workflow з поточним «changed», потім відповідає текстом.
+        var workflowId = Guid.Empty;
+        var changed = WorkflowDefinition("ігнорується",
+            """{ "id": "n_set", "name": "Поля", "type": "core.set", "typeVersion": 1, "position": [200, 0], "parameters": { "fields": [] } }""");
+        changed["connections"]!.AsArray().Add(JsonNode.Parse("""{ "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_set", "input": 0 } }"""));
+        var provider = new FakeProvider(i => i % 2 == 1
+            ? ToolCall("update_workflow", new JsonObject { ["id"] = workflowId.ToString(), ["definition"] = changed.DeepClone() }, i)
+            : Text("Зміню сценарій після підтвердження."));
+        var factory = WithProvider(provider);
+        await ConfigureAsync(factory);
+        var editor = await LoginAsync(factory, UserRole.Editor);
+        var created = await editor.PostAsJsonAsync("/api/v1/workflows", WorkflowDefinition($"План {Guid.NewGuid():N}"));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        workflowId = (await JsonAsync(created)).GetProperty("id").GetGuid();
+
+        var id = await CreateConversationAsync(editor);
+        var events = await SendAsync(editor, id, new { message = "Додай вузол Поля" });
+        var proposal = events.Single(e => e.Type == "proposal").Data.GetProperty("proposal");
+        var plan = proposal.GetProperty("plan");
+        Assert.True(plan.GetProperty("valid").GetBoolean());
+        Assert.Equal("Поля", plan.GetProperty("addedNodes")[0].GetProperty("name").GetString());
+        Assert.Equal("Старт", plan.GetProperty("addedConnections")[0].GetProperty("fromName").GetString());
+        Assert.Equal(1, JsonDocument.Parse(await editor.GetStringAsync($"/api/v1/workflows/{workflowId}")).RootElement.GetProperty("version").GetInt32());
+
+        var applied = await editor.PostAsJsonAsync($"{Conversations}/{id}/proposals/{proposal.GetProperty("id").GetGuid()}", new { apply = true });
+        Assert.Equal("applied", (await JsonAsync(applied)).GetProperty("status").GetString());
+        var saved = JsonDocument.Parse(await editor.GetStringAsync($"/api/v1/workflows/{workflowId}")).RootElement;
+        Assert.Equal(2, saved.GetProperty("version").GetInt32());
+        Assert.Equal(2, saved.GetProperty("definition").GetProperty("nodes").GetArrayLength());
+
+        // Ще одна пропозиція, а сценарій тим часом зберегли в редакторі: план застарів, картка — «не вдалося».
+        changed["settings"]!["timezone"] = "UTC";
+        events = await SendAsync(editor, id, new { message = "Постав UTC" });
+        proposal = events.Single(e => e.Type == "proposal").Data.GetProperty("proposal");
+        Assert.Equal("timezone", proposal.GetProperty("plan").GetProperty("settingsChanges")[0].GetProperty("field").GetString());
+        var edited = WorkflowDefinition("ігнорується");
+        Assert.Equal(HttpStatusCode.OK, (await editor.PutAsJsonAsync($"/api/v1/workflows/{workflowId}", edited)).StatusCode);
+
+        var stale = await JsonAsync(await editor.PostAsJsonAsync($"{Conversations}/{id}/proposals/{proposal.GetProperty("id").GetGuid()}", new { apply = true }));
+        Assert.Equal("failed", stale.GetProperty("status").GetString());
+        Assert.Contains("WORKFLOW_PLAN_STALE", stale.GetProperty("result").GetString(), StringComparison.Ordinal);
+        saved = JsonDocument.Parse(await editor.GetStringAsync($"/api/v1/workflows/{workflowId}")).RootElement;
+        Assert.Equal(3, saved.GetProperty("version").GetInt32());
+        Assert.Equal("Europe/Kyiv", saved.GetProperty("definition").GetProperty("settings").GetProperty("timezone").GetString());
+    }
+
     [Fact]
     public async Task Only_editors_talk_and_a_conversation_is_seen_by_its_author_and_admin()
     {

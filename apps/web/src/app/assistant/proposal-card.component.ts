@@ -1,11 +1,25 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AssistantProposalView } from './global-assistant-api.service';
-import { columnText, failureText, proposalLink, proposalTitle, scalarArguments, tablePlan } from './proposal-view';
+import {
+  columnText,
+  connectionText,
+  failureText,
+  nodeChangeText,
+  nodeText,
+  otherChangesText,
+  proposalLink,
+  proposalTitle,
+  scalarArguments,
+  settingText,
+  tablePlan,
+  workflowPlan,
+} from './proposal-view';
 
 /**
  * Картка підтвердження змін (F3-111): що саме помічник пропонує створити чи змінити й кнопки «Застосувати» / «Скасувати».
- * Для таблиць (F3-109) показує план — нові, змінені й видалені колонки та попередження; для решти — аргументи виклику.
+ * Для таблиць (F3-109) показує план — нові, змінені й видалені колонки та попередження; для сценарію (F3-116) — вузли,
+ * зв'язки й налаштування, що зміняться, і помилки (з ними «Застосувати» недоступне); для решти — аргументи виклику.
  * Нічого не виконується, поки людина не натисне «Застосувати».
  */
 @Component({
@@ -37,6 +51,40 @@ import { columnText, failureText, proposalLink, proposalTitle, scalarArguments, 
         @for (warning of plan.warnings ?? []; track $index) {
           <p class="pc__warning" data-testid="proposal-warning">{{ warning }}</p>
         }
+      } @else if (workflow(); as plan) {
+        @if (plan.hasChanges === false) {
+          <p class="pc__row" data-testid="proposal-no-changes" i18n="@@proposal.noChanges">Змін немає — визначення таке саме, як у версії {{ plan.baseVersion }}.</p>
+        }
+        @if (plan.addedNodes?.length) {
+          <p class="pc__row" data-testid="proposal-nodes-added"><b i18n="@@proposal.nodesAdded">Нові кроки:</b> {{ nodes(plan.addedNodes) }}</p>
+        }
+        @if (plan.removedNodes?.length) {
+          <p class="pc__row" data-testid="proposal-nodes-removed"><b i18n="@@proposal.nodesRemoved">Видаляються кроки:</b> {{ nodes(plan.removedNodes) }}</p>
+        }
+        @for (change of plan.changedNodes ?? []; track change.id) {
+          <p class="pc__row" data-testid="proposal-node-changed"><b i18n="@@proposal.nodeChanged">Змінюється:</b> {{ nodeChangeText(change) }}</p>
+        }
+        @if (plan.addedConnections?.length) {
+          <p class="pc__row" data-testid="proposal-links-added"><b i18n="@@proposal.linksAdded">Нові зв'язки:</b> {{ links(plan.addedConnections) }}</p>
+        }
+        @if (plan.removedConnections?.length) {
+          <p class="pc__row" data-testid="proposal-links-removed"><b i18n="@@proposal.linksRemoved">Прибираються зв'язки:</b> {{ links(plan.removedConnections) }}</p>
+        }
+        @for (change of plan.settingsChanges ?? []; track change.field) {
+          <p class="pc__row" data-testid="proposal-setting"><b i18n="@@proposal.setting">Налаштування:</b> {{ settingText(change) }}</p>
+        }
+        @if (plan.otherChanges?.length) {
+          <p class="pc__row"><b i18n="@@proposal.otherChanges">Також змінюються:</b> {{ other(plan) }}</p>
+        }
+        @if (plan.hasChanges !== false) {
+          <p class="pc__note" i18n="@@proposal.draftNote">Зміни стануть чернеткою версії {{ plan.baseVersion + 1 }}; запуски йдуть на опублікованій версії, доки її не опублікують.</p>
+        }
+        @for (error of plan.errors ?? []; track $index) {
+          <p class="pc__warning" data-testid="proposal-error">{{ error.message }}</p>
+        }
+        @for (warning of plan.warnings ?? []; track $index) {
+          <p class="pc__warning" data-testid="proposal-warning">{{ warning.message }}</p>
+        }
       } @else {
         <dl class="pc__args">
           @for (arg of args(); track arg.key) {
@@ -52,9 +100,12 @@ import { columnText, failureText, proposalLink, proposalTitle, scalarArguments, 
       @switch (proposal().status) {
         @case ('pending') {
           <div class="pc__actions">
-            <button type="button" class="pc__apply" data-testid="proposal-apply" [disabled]="busy()" (click)="approved.emit()" i18n="@@proposal.apply">Застосувати</button>
+            <button type="button" class="pc__apply" data-testid="proposal-apply" [disabled]="busy() || invalid()" (click)="approved.emit()" i18n="@@proposal.apply">Застосувати</button>
             <button type="button" class="pc__cancel" data-testid="proposal-cancel" [disabled]="busy()" (click)="rejected.emit()" i18n="@@proposal.cancel">Скасувати</button>
           </div>
+          @if (invalid()) {
+            <p class="pc__note" data-testid="proposal-invalid" i18n="@@proposal.invalid">Застосувати не можна, доки є помилки: попросіть помічника їх виправити.</p>
+          }
         }
         @case ('applied') {
           <p class="pc__status pc__status--ok" data-testid="proposal-status">
@@ -103,6 +154,12 @@ import { columnText, failureText, proposalLink, proposalTitle, scalarArguments, 
       border-radius: var(--ac-radius);
       background: var(--ac-cool-grey);
       color: var(--ac-red);
+    }
+
+    .pc__note {
+      margin: 0 0 4px;
+      color: var(--ac-cool-grey-4);
+      font-size: 12px;
     }
 
     .pc__args {
@@ -181,11 +238,25 @@ export class ProposalCardComponent {
 
   protected readonly title = computed(() => proposalTitle(this.proposal()));
   protected readonly plan = computed(() => tablePlan(this.proposal()));
+  protected readonly workflow = computed(() => workflowPlan(this.proposal()));
+  /** План сценарію з помилками валідації застосувати не можна. */
+  protected readonly invalid = computed(() => (this.workflow()?.errors?.length ?? 0) > 0);
   protected readonly args = computed(() => scalarArguments(this.proposal()));
   protected readonly json = computed(() => JSON.stringify(this.proposal().arguments, null, 2));
   protected readonly link = computed(() => proposalLink(this.proposal()));
   protected readonly failure = computed(() => failureText(this.proposal()));
   protected readonly columnText = columnText;
+  protected readonly nodeChangeText = nodeChangeText;
+  protected readonly settingText = settingText;
+  protected readonly other = otherChangesText;
+
+  protected nodes(nodes: Parameters<typeof nodeText>[0][] | undefined): string {
+    return (nodes ?? []).map(nodeText).join(', ');
+  }
+
+  protected links(links: Parameters<typeof connectionText>[0][] | undefined): string {
+    return (links ?? []).map(connectionText).join('; ');
+  }
 
   protected columns(columns: Parameters<typeof columnText>[0][] | undefined): string {
     return (columns ?? []).map(columnText).join(', ');

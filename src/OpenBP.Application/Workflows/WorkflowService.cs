@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
@@ -44,6 +46,9 @@ public sealed class WorkflowService(
 
     /// <summary>Код конфлікту: скасувати зміни нема до чого — сценарій ще не публікувався (F6-10).</summary>
     public const string NotPublishedCode = "WORKFLOW_NOT_PUBLISHED";
+
+    /// <summary>Код конфлікту: план зміни застарів — сценарій збережено після нього або визначення інше (F3-116).</summary>
+    public const string PlanStaleCode = "WORKFLOW_PLAN_STALE";
 
     private const string Entity = "workflow";
 
@@ -182,7 +187,72 @@ public sealed class WorkflowService(
         var document = ToDocument(definition);
         document["name"] = workflow.Name;
         await ThrowIfInvalidAsync(document, asActive: false, ct, id, new(workflow.GroupId));
+        return await SaveDocumentAsync(workflow, document, ct);
+    }
 
+    /// <inheritdoc />
+    public async Task<WorkflowPlan> PlanSaveAsync(Guid id, WorkflowDefinition definition, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
+        var (plan, _) = await PlanAsync(workflow, definition, ct);
+        return plan;
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowDetail> ApplySaveAsync(Guid id, WorkflowDefinition definition, string planId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+
+        // Рядок сценарію блокується до кінця збереження: план перераховується на версії, яку вже ніхто не замінить, тож два
+        // застосування одного плану не запишуть дві версії — друге побачить нову поточну версію й отримає «план застарів».
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Workflows.FromSql($"SELECT * FROM workflows WHERE id = {id} FOR UPDATE").AsNoTracking().Select(w => w.Id).ToListAsync(ct);
+        var workflow = await FindAsync(id, UserRole.Editor, ct);
+        var (plan, document) = await PlanAsync(workflow, definition, ct);
+        if (!string.Equals(plan.PlanId, planId?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ConflictException(PlanStaleCode,
+                "План застарів: сценарій збережено після нього або визначення інше. Складіть план ще раз і покажіть його людині.");
+        }
+
+        if (!plan.Valid)
+        {
+            throw new WorkflowValidationException(plan.Errors);
+        }
+
+        var saved = await SaveDocumentAsync(workflow, document, ct);
+        await tx.CommitAsync(ct);
+        return saved;
+    }
+
+    /// <summary>
+    /// План збереження: порівняння з поточною версією, помилки й попередження валідації та відбиток — сценарій, його
+    /// поточна версія і нормалізоване нове визначення (той самий виклик на тій самій версії дає той самий id).
+    /// </summary>
+    private async Task<(WorkflowPlan Plan, JsonObject Document)> PlanAsync(WorkflowEntity workflow, WorkflowDefinition definition, CancellationToken ct)
+    {
+        var current = await CurrentVersionAsync(workflow, ct);
+        var before = ToDocument(WorkflowJson.Deserialize(current.Definition));
+        before["name"] = workflow.Name;
+        var document = ToDocument(definition);
+        document["name"] = workflow.Name;
+
+        var errors = await ValidateDocumentAsync(document, asActive: false, ct, workflow.Id, new(workflow.GroupId));
+        var payload = JsonSerializer.Serialize(new { workflow = workflow.Id, version = current.Id, definition = document.ToJsonString(WorkflowJson.Options) });
+        var planId = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)))[..32];
+        var plan = WorkflowDiff.Fill(new WorkflowPlan(planId, workflow.Id, workflow.Name, current.Version), before, document) with
+        {
+            Errors = errors,
+            Warnings = errors.Count == 0 ? await VariableWarningsAsync(document, ct) : [],
+        };
+        return (plan, document);
+    }
+
+    /// <summary>Пише перевірений документ новою поточною версією (чернеткою).</summary>
+    private async Task<WorkflowDetail> SaveDocumentAsync(WorkflowEntity workflow, JsonObject document, CancellationToken ct)
+    {
+        var id = workflow.Id;
         var current = await db.WorkflowVersions.AsNoTracking()
             .Where(v => v.WorkflowId == id)
             .MaxAsync(v => (int?)v.Version, ct) ?? 0;
