@@ -48,6 +48,23 @@ export interface WorkflowGroup {
   appRoles?: ProjectAppRole[];
   /** Моя роль застосунку (F8-04); `null` — немає. */
   appRole?: string | null;
+  /** Оболонка застосунку (F8-15): назва, значок, головна, меню, пояс; `null` — без оболонки. */
+  app?: ProjectAppShell | null;
+}
+
+/** Група меню оболонки застосунку: сторінки за ключами. */
+export interface ProjectAppNavGroup {
+  label: string;
+  pages: string[];
+}
+
+/** `ProjectApp` — оболонка застосунку проєкту (`workflow_groups.app`, docs/projects.md §3.9). */
+export interface ProjectAppShell {
+  title: string;
+  icon?: string | null;
+  home?: string | null;
+  nav?: ProjectAppNavGroup[] | null;
+  timezone?: string | null;
 }
 
 /** Відповідь `POST /workflow-groups/{id}/members/add` (F8-13). */

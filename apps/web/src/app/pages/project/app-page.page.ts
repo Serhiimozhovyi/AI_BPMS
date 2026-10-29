@@ -25,6 +25,8 @@ import {
 } from '../../projects/project-pages-api.service';
 import { ExpandOpen, PageExpandComponent } from './page-expand.component';
 import { PageCalendarComponent } from './page-calendar.component';
+import { PageMetricsComponent } from './page-metrics.component';
+import { PageDashboardComponent } from './page-dashboard.component';
 import { PageDrawerComponent } from './page-drawer.component';
 import { PageFiltersComponent, emptyFilters } from './page-filters.component';
 import { PageFormComponent } from './page-form.component';
@@ -57,6 +59,8 @@ interface DrawerState {
     PageFormComponent,
     PageDrawerComponent,
     PageCalendarComponent,
+    PageMetricsComponent,
+    PageDashboardComponent,
   ],
   template: `
     <section class="px-6 pb-6">
@@ -299,33 +303,11 @@ interface DrawerState {
           }
           @case ('metrics') {
             @if (metrics(); as m) {
-              @if (m.tiles.length) {
-                <div class="mb-6 grid max-w-5xl grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" data-testid="app-tiles">
-                  @for (t of m.tiles; track $index) {
-                    <div class="rounded border border-ac-line p-3" [attr.data-tile]="t.key ?? $index">
-                      <div class="opacity-70">{{ t.label }}</div>
-                      <div class="text-2xl font-semibold" data-testid="tile-value">{{ number(t.value) }}</div>
-                    </div>
-                  }
-                </div>
-              }
-              @for (chart of m.charts; track $index; let ci = $index) {
-                <h3 class="mb-2 mt-4 font-semibold">{{ chart.label || chart.groupBy }}</h3>
-                @if (chart.points.length === 0) {
-                  <p class="opacity-70" i18n="@@app.page.empty">Записів немає.</p>
-                } @else {
-                  <ul class="mb-4 max-w-3xl" [attr.data-chart]="ci">
-                    @for (p of chart.points; track p.label) {
-                      <li class="grid grid-cols-[10rem_1fr_5rem] items-center gap-2 py-0.5" [attr.data-point]="p.label">
-                        <span class="truncate">{{ p.label }}</span>
-                        <span class="block h-3 rounded bg-ac-kit" [style.width.%]="barWidth(chart.points, p.value)"></span>
-                        <span class="text-right">{{ number(p.value) }}</span>
-                      </li>
-                    }
-                  </ul>
-                }
-              }
+              <app-page-metrics [metrics]="m" />
             }
+          }
+          @case ('dashboard') {
+            <app-page-dashboard [projectId]="projectId" [view]="v" [version]="expandVersion()" (open)="openFromExpand($event)" />
           }
           @case ('calendar') {
             <app-page-calendar
@@ -447,16 +429,6 @@ export class AppPagePage implements OnInit {
 
   badge(color: keyof typeof BADGE_CLASSES): string {
     return BADGE_CLASSES[color];
-  }
-
-  number(value: number | null): string {
-    return value === null ? '—' : new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(value);
-  }
-
-  /** Ширина стовпчика діаграми у відсотках від найбільшого значення. */
-  barWidth(points: { value: number | null }[], value: number | null): number {
-    const max = Math.max(0, ...points.map((p) => p.value ?? 0));
-    return max > 0 && value !== null && value > 0 ? Math.max(2, (value / max) * 100) : 0;
   }
 
   pages(rows: PageRows): number {

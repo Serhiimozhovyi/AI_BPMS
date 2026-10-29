@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage } from '../../projects/project-pages-api.service';
+import { ProjectAppShell } from '../../workflows/workflows-api.service';
 import { ProjectAppPage } from './project-app.page';
 
 const page = (key: string, name: string): ProjectPage => ({
@@ -18,7 +19,7 @@ const page = (key: string, name: string): ProjectPage => ({
 });
 
 describe('ProjectAppPage (F8-04)', () => {
-  async function setup(role: 'editor' | 'viewer', firstChild: unknown = null) {
+  async function setup(role: 'editor' | 'viewer', firstChild: unknown = null, app: ProjectAppShell | null = null) {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -27,7 +28,7 @@ describe('ProjectAppPage (F8-04)', () => {
         { provide: ActivatedRoute, useValue: { firstChild, parent: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } } },
       ],
     });
-    TestBed.inject(ProjectContextService).projects.set([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 0, role }]);
+    TestBed.inject(ProjectContextService).projects.set([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 0, role, app }]);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     const fixture = TestBed.createComponent(ProjectAppPage);
     fixture.detectChanges();
@@ -84,5 +85,56 @@ describe('ProjectAppPage (F8-04)', () => {
     viewer.http.expectOne('/api/v1/projects/p1/pages').flush([page('slots', 'Слоти')]);
     await render(viewer.fixture);
     expect(viewer.host.querySelector('[data-testid="app-new-page"]')).toBeNull();
+  });
+
+  describe('оболонка застосунку (F8-18)', () => {
+    const shell: ProjectAppShell = {
+      title: 'Кабінет',
+      icon: 'calendar_month',
+      home: 'today',
+      nav: [
+        { label: '', pages: ['today', 'schedule'] },
+        { label: 'Записи', pages: ['bookings'] },
+        { label: 'Службове', pages: ['hidden-for-role'] },
+      ],
+    };
+    const pages = [page('bookings', 'Записи'), page('today', 'Сьогодні'), page('schedule', 'Мій розклад'), page('settings', 'Налаштування')];
+
+    it('показує назву, значок і меню за групами лише з видимих сторінок, а сторінки не з меню — не показує', async () => {
+      const { fixture, http, host } = await setup('viewer', null, shell);
+      http.expectOne('/api/v1/projects/p1/pages').flush(pages);
+      await render(fixture);
+      expect(host.querySelector('[data-testid="shell-title"]')?.textContent).toBe('Кабінет');
+      expect(host.querySelector('[data-testid="shell-icon"]')?.textContent).toBe('calendar_month');
+      expect([...host.querySelectorAll('[data-testid="shell-group"]')].map((g) => g.textContent)).toEqual(['Записи']);
+      expect([...host.querySelectorAll('[data-page]')].map((a) => a.getAttribute('data-page'))).toEqual(['today', 'schedule', 'bookings']);
+      expect(host.querySelector('[data-testid="app-nav"]')).toBeNull();
+    });
+
+    it('відкриває головну сторінку оболонки', async () => {
+      const { fixture, http, navigate } = await setup('viewer', null, shell);
+      http.expectOne('/api/v1/projects/p1/pages').flush(pages);
+      await render(fixture);
+      expect(navigate).toHaveBeenCalledWith(['today'], expect.objectContaining({ replaceUrl: true }));
+    });
+
+    it('без головної чи коли її не видно — перша сторінка меню', async () => {
+      const { fixture, http, navigate } = await setup('viewer', null, { ...shell, home: 'secret' });
+      http.expectOne('/api/v1/projects/p1/pages').flush(pages);
+      await render(fixture);
+      expect(navigate).toHaveBeenCalledWith(['today'], expect.objectContaining({ replaceUrl: true }));
+    });
+
+    it('editor бачить кнопку «Конструктор», viewer — ні', async () => {
+      const editor = await setup('editor', null, shell);
+      editor.http.expectOne('/api/v1/projects/p1/pages').flush(pages);
+      await render(editor.fixture);
+      expect(editor.host.querySelector('[data-testid="shell-builder"]')).not.toBeNull();
+      TestBed.resetTestingModule();
+      const viewer = await setup('viewer', null, shell);
+      viewer.http.expectOne('/api/v1/projects/p1/pages').flush(pages);
+      await render(viewer.fixture);
+      expect(viewer.host.querySelector('[data-testid="shell-builder"]')).toBeNull();
+    });
   });
 });

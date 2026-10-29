@@ -413,6 +413,9 @@ public class ProjectPageServerTests(ApiFactory api)
         });
         var url = $"/api/v1/projects/{d.Project}/pages/home/dashboard";
 
+        var home = await GetOk(d.Psy.Client, $"/api/v1/projects/{d.Project}/pages/home");
+        Assert.True(home.GetProperty("filterOptions").GetProperty("status").GetArrayLength() > 0);
+
         var blocks = (await GetOk(d.Psy.Client, url)).GetProperty("blocks").EnumerateArray().ToList();
         Assert.Equal([0, 2, 3, 4, 6], blocks.Select(b => b.GetProperty("index").GetInt32()));
         Assert.Equal($"Вітаємо, {d.Psy.Email}!", blocks[0].GetProperty("text").GetString());

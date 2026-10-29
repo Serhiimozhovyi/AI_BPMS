@@ -16,11 +16,11 @@ import {
   zonedParts,
   zonedToInstant,
 } from '../../projects/calendar-time';
-import { BADGE_CLASSES, CellView, DisplayColumn, cellView } from '../../projects/page-format';
+import { EventLine, eventLine } from '../../projects/calendar-line';
+import { BADGE_CLASSES } from '../../projects/page-format';
 import {
   PageAction,
   PageCalendarEvent,
-  PageColumn,
   PageFilterValue,
   PageRow,
   ProjectPageView,
@@ -36,13 +36,9 @@ const DEFAULT_TO_HOUR = 21;
 const MAX_MONTH_CHIPS = 3;
 
 /** Подія з підготовленим показом: день, положення в сітці, смуга при перетині. */
-interface Shown {
+interface Shown extends EventLine {
   event: PageCalendarEvent;
   id: string;
-  title: CellView;
-  subtitle: string;
-  color: keyof typeof BADGE_CLASSES;
-  time: string;
   top: number;
   height: number;
   lane: number;
@@ -494,43 +490,8 @@ export class PageCalendarComponent {
     return new Intl.DateTimeFormat('uk-UA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(day.y, day.m - 1, day.d)));
   }
 
-  private column(spec: PageColumn | undefined): DisplayColumn | null {
-    if (!spec) return null;
-    const known = this.view().columns.find((c) => c.column === spec.column);
-    return {
-      column: spec.column,
-      label: spec.label ?? known?.label ?? spec.column,
-      type: known?.type ?? 'string',
-      format: spec.format ?? known?.format,
-      labels: spec.labels,
-      colors: spec.colors,
-    };
-  }
-
   private present(event: PageCalendarEvent, index: number): Shown {
-    const calendar = this.definition().calendar;
-    const tz = this.timezone();
-    const title = this.column(calendar?.title);
-    const subtitle = this.column(calendar?.subtitle);
-    const color = this.column(calendar?.color);
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const clock = (d: Date) => {
-      const p = zonedParts(d, tz);
-      return `${String(p.h).padStart(2, '0')}:${String(p.mi).padStart(2, '0')}`;
-    };
-    return {
-      event,
-      id: `${event.row.key}#${index}`,
-      title: title ? cellView(event.row, title, tz) : { text: event.row.key },
-      subtitle: subtitle ? cellView(event.row, subtitle, tz).text : '',
-      color: (color ? cellView(event.row, color, tz).color : undefined) ?? 'gray',
-      time: `${clock(start)}–${clock(end)}`,
-      top: 0,
-      height: 0,
-      lane: 0,
-      lanes: 1,
-    };
+    return { ...eventLine(this.view(), event, this.timezone()), event, id: `${event.row.key}#${index}`, top: 0, height: 0, lane: 0, lanes: 1 };
   }
 
   /** Положення подій дня в сітці годин; перетини ділять день на смуги. */

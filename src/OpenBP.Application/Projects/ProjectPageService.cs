@@ -102,7 +102,9 @@ public sealed partial class ProjectPageService(
         var canEdit = c.Scope.RoleIn(c.ProjectId) >= UserRole.Editor;
         if (c.Page.Kind is ProjectPageKinds.Metrics or ProjectPageKinds.Dashboard)
         {
-            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, canEdit) { Timezone = (await TimeZoneAsync(c.ProjectId, ct)).Id };
+            // Спільні фільтри головної (F8-18) показують ті самі варіанти, що й фільтри списку.
+            var options = c.Page.Kind == ProjectPageKinds.Dashboard && c.Table is not null && def.Filters is { Count: > 0 } ? await FilterOptionsAsync(c, ct) : null;
+            return new ProjectPageView(c.Page, c.Table?.Id ?? Guid.Empty, [], null, canEdit) { FilterOptions = options, Timezone = (await TimeZoneAsync(c.ProjectId, ct)).Id };
         }
 
         // Обчислювані колонки списку — не колонки таблиці: їх значення в рядках під ключем computed (F8-15).

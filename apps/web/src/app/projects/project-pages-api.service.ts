@@ -54,6 +54,20 @@ export interface PageCalendar {
   toHour?: number;
 }
 
+/** Блок головної сторінки (`dashboard`, F8-14): `text`, `tiles`, `list`, `calendar`, `form` чи `actions`. */
+export interface PageBlock {
+  kind: 'text' | 'tiles' | 'list' | 'calendar' | 'form' | 'actions';
+  label?: string;
+  page?: string;
+  definition?: PageDefinition;
+  limit?: number;
+  range?: 'today' | 'week';
+  actions?: PageAction[];
+  text?: string;
+  when?: string;
+  width?: number;
+}
+
 /** Фільтр, яким керує користувач (F8-14). */
 export interface PageUserFilter {
   column: string;
@@ -162,6 +176,8 @@ export interface PageDefinition {
   filters?: PageUserFilter[];
   computed?: PageComputed[];
   calendar?: PageCalendar;
+  /** Блоки головної сторінки (`dashboard`). */
+  blocks?: PageBlock[];
   layout?: 'table' | 'cards';
   card?: { title: string; subtitle?: string };
   /** Підлеглі списки під розгорнутим рядком. */
@@ -261,6 +277,27 @@ export interface PageCalendarEvents {
   filters?: Record<string, PageFilterValue> | null;
 }
 
+/** Блок із даними (`GET …/dashboard`); `source` — ключ сторінки блоку для подальших запитів. */
+export interface PageDashboardBlock {
+  index: number;
+  kind: PageBlock['kind'];
+  label?: string | null;
+  width: number;
+  source?: string | null;
+  view?: ProjectPageView | null;
+  metrics?: PageMetrics | null;
+  rows?: PageRows | null;
+  events?: PageCalendarEvents | null;
+  text?: string | null;
+  /** Індекси кнопок блоку `actions`, доступних користувачу. */
+  actions?: number[] | null;
+}
+
+/** `GET …/dashboard`. */
+export interface PageDashboard {
+  blocks: PageDashboardBlock[];
+}
+
 /** `GET …/rows/{rowKey}`. */
 export interface PageRecord {
   row: PageRow;
@@ -355,6 +392,16 @@ export class ProjectPagesApiService {
     let params = new HttpParams().set('from', from.toISOString()).set('to', to.toISOString());
     params = this.filterParams(params, filters);
     return this.http.get<PageCalendarEvents>(`${this.base(projectId, key)}/calendar`, { params });
+  }
+
+  /** Дані блоків головної; спільні фільтри діють на блоки, таблиця яких має таку колонку. */
+  dashboard(projectId: string, key: string, filters: Record<string, PageFilterValue> = {}): Observable<PageDashboard> {
+    return this.http.get<PageDashboard>(`${this.base(projectId, key)}/dashboard`, { params: this.filterParams(new HttpParams(), filters) });
+  }
+
+  /** Кнопка блоку `actions`: сценарій запускається від імені користувача, перехід виконує браузер. */
+  runBlockAction(projectId: string, key: string, block: number, action: number): Observable<PageActionResult> {
+    return this.http.post<PageActionResult>(`${this.base(projectId, key)}/blocks/${block}/actions/${action}`, null);
   }
 
   /** Підлеглий список `expand[index]` під рядком списку (F8-15). */
