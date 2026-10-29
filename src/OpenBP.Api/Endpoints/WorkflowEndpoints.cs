@@ -85,9 +85,20 @@ public static class WorkflowEndpoints
             service.GetAsync(id, ct))
             .WithSummary("Сценарій з поточною версією");
 
-        workflows.MapPut("/{id:guid}", (Guid id, WorkflowDefinition? definition, IWorkflowService service, CancellationToken ct) =>
-            service.SaveAsync(id, Required(definition), ct))
-            .WithSummary("Зберегти нову версію сценарію");
+        workflows.MapPut("/{id:guid}", (Guid id, WorkflowDefinition? definition, string? planId, IWorkflowService service, CancellationToken ct) =>
+            string.IsNullOrWhiteSpace(planId)
+                ? service.SaveAsync(id, Required(definition), ct)
+                : service.ApplySaveAsync(id, Required(definition), planId, ct))
+            .WithSummary("Зберегти нову версію сценарію")
+            .WithDescription("`?planId=` — зберегти лише за планом `POST /workflows/{id}/plan` (F3-116): якщо сценарій збережено після " +
+                             "плану або тіло інше — 409 WORKFLOW_PLAN_STALE, нічого не збережено.");
+
+        workflows.MapPost("/{id:guid}/plan", (Guid id, WorkflowDefinition? definition, IWorkflowService service, CancellationToken ct) =>
+            service.PlanSaveAsync(id, Required(definition), ct))
+            .WithSummary("План збереження сценарію без збереження")
+            .WithDescription("Що зміниться відносно поточної версії: вузли (додано, видалено, змінено — з назвами й типами), зв'язки, " +
+                             "налаштування, інші частини визначення, а також помилки (`valid: false`) і попередження валідації. " +
+                             "Застосувати — `PUT /workflows/{id}?planId=` з тим самим тілом. Потрібна роль editor.");
 
         // Тіло читається як JSON-дерево: треба відрізнити `"groupId": null` (прибрати з групи) від відсутнього поля.
         workflows.MapPatch("/{id:guid}", async (Guid id, HttpRequest request, IWorkflowService service, CancellationToken ct) =>

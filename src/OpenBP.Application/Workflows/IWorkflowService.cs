@@ -54,6 +54,26 @@ public interface IWorkflowService
     Task<WorkflowDetail> SaveAsync(Guid id, WorkflowDefinition definition, CancellationToken ct);
 
     /// <summary>
+    /// План збереження (F3-116, режим «пропозиція»): що зміниться відносно поточної версії — вузли, зв'язки, налаштування —
+    /// і помилки валідації. Нічого не записує; помилки валідації — у плані, не винятком.
+    /// </summary>
+    /// <param name="id"><c>workflows.id</c>.</param>
+    /// <param name="definition">Визначення; його <c>name</c> ігнорується.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Сценарію немає.</exception>
+    Task<WorkflowPlan> PlanSaveAsync(Guid id, WorkflowDefinition definition, CancellationToken ct);
+
+    /// <summary>Зберігає визначення за планом <see cref="PlanSaveAsync"/>, як <see cref="SaveAsync"/>.</summary>
+    /// <param name="id"><c>workflows.id</c>.</param>
+    /// <param name="definition">Те саме визначення, що й для плану.</param>
+    /// <param name="planId"><see cref="WorkflowPlan.PlanId"/>.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Сценарію немає.</exception>
+    /// <exception cref="ConflictException">План застарів або визначення інше (<c>WORKFLOW_PLAN_STALE</c>); нічого не збережено.</exception>
+    /// <exception cref="WorkflowValidationException">Визначення некоректне; нічого не збережено.</exception>
+    Task<WorkflowDetail> ApplySaveAsync(Guid id, WorkflowDefinition definition, string planId, CancellationToken ct);
+
+    /// <summary>
     /// Публікує чернетку (F6-10): перевіряє її з <c>IsActive = true</c> і робить опублікованою; в активного сценарію
     /// тригери (<c>webhooks</c>, Quartz) перереєструються з неї в тій самій транзакції. Неактивний сценарій не вмикає.
     /// Виконання, що вже йдуть або чекають, довиконуються на своїй версії. Ідемпотентно.
