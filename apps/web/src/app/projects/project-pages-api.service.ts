@@ -9,7 +9,7 @@ import { cellView } from './page-format';
 export type PageKind = 'list' | 'detail' | 'form' | 'metrics' | 'calendar' | 'dashboard';
 
 /** Типи сторінок для вибору в конструкторі. */
-export const PAGE_KINDS: readonly PageKind[] = ['list', 'detail', 'form', 'metrics'];
+export const PAGE_KINDS: readonly PageKind[] = ['list', 'detail', 'form', 'metrics', 'calendar', 'dashboard'];
 
 /** Колір мітки `format: badge` (AC-Kit). */
 export type PageColor = 'gray' | 'green' | 'yellow' | 'red' | 'blue' | 'purple';
@@ -298,6 +298,15 @@ export interface PageDashboard {
   blocks: PageDashboardBlock[];
 }
 
+/** `POST …/preview` — дані чернетки сторінки без збереження (F8-19). */
+export interface PagePreview {
+  view: ProjectPageView;
+  rows?: PageRows | null;
+  metrics?: PageMetrics | null;
+  events?: PageCalendarEvents | null;
+  dashboard?: PageDashboard | null;
+}
+
 /** `GET …/rows/{rowKey}`. */
 export interface PageRecord {
   row: PageRow;
@@ -436,6 +445,11 @@ export class ProjectPagesApiService {
   /** Створює чи замінює сторінку (editor проєкту). */
   save(projectId: string, key: string, page: ProjectPageInput): Observable<ProjectPage> {
     return this.http.put<ProjectPage>(this.base(projectId, key), page);
+  }
+
+  /** Дані чернетки без збереження: та сама перевірка, що й при збереженні (422 з повідомленням). */
+  preview(projectId: string, key: string, page: ProjectPageInput): Observable<PagePreview> {
+    return this.http.post<PagePreview>(`${this.base(projectId, key)}/preview`, page);
   }
 
   remove(projectId: string, key: string): Observable<void> {

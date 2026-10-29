@@ -97,6 +97,10 @@ export const routes: Routes = [
                 loadComponent: () => import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
               },
               {
+                path: '_app',
+                loadComponent: () => import('./pages/project/app-settings.page').then((m) => m.AppSettingsPage),
+              },
+              {
                 path: '_builder/:key',
                 loadComponent: () => import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
               },

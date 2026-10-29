@@ -16,6 +16,7 @@ const tables = [
       { name: 'name', type: 'string' },
       { name: 'status', type: 'enum', values: ['active', 'cancelled'] },
       { name: 'minutes', type: 'number' },
+      { name: 'starts_at', type: 'datetime' },
     ],
   },
   { id: 't2', name: 'other', projectId: 'p2', rowCount: 0, updatedAt: '2026-10-28T00:00:00Z', columns: [{ name: 'x', type: 'string' }] },
@@ -209,5 +210,151 @@ describe('PageBuilderPage (F8-05)', () => {
       tiles: [{ label: 'Усього', aggregate: 'count' }],
       charts: [{ groupBy: 'status', aggregate: 'count' }],
     });
+  });
+
+  it('редагування списку не губить фільтри, обчислювані колонки, картки й expand, а формат колонки змінюється формою', async () => {
+    const { fixture, http, host } = await setup('list');
+    const definition = {
+      table: 'bookings',
+      columns: [{ column: 'name' }, { column: 'status', format: 'badge', colors: { active: 'green' } }],
+      filters: [{ column: 'status', kind: 'chips', label: 'Статус' }],
+      computed: [{ key: 'n', label: 'Записів', table: 'bookings', by: 'name', aggregate: 'count' }],
+      layout: 'cards',
+      card: { title: 'name' },
+      expand: [{ table: 'bookings', by: 'name', label: 'Записи' }],
+      empty: 'Нічого',
+    };
+    http.expectOne('/api/v1/projects/p1/pages/list').flush({
+      page: { id: 'l', key: 'list', name: 'Список', kind: 'list', roles: [], sortOrder: 0, updatedAt: '', definition },
+      tableId: 't1',
+      columns: [],
+      schema: null,
+      canEdit: true,
+    });
+    await render(fixture);
+
+    expect(host.querySelector('[data-user-filter="0"]')).not.toBeNull();
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="b-layout"]')!.value).toBe('cards');
+    const format = host.querySelector('[data-column-format="name"]')!.querySelectorAll('select')[0] as HTMLSelectElement;
+    format.value = 'text';
+    format.dispatchEvent(new Event('change'));
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/list' });
+    expect(put.request.body.definition).toEqual({ ...definition, columns: [{ column: 'name', format: 'text' }, definition.columns[1]] });
+  });
+
+  it('календар зі зразка: колонки добираються за типами, решта налаштовується формою без JSON', async () => {
+    const { fixture, http, host } = await setup();
+    await render(fixture);
+    pick(host, '[data-testid="b-sample"]', 'calendar');
+    await render(fixture);
+    expect(host.querySelector<HTMLInputElement>('[data-testid="b-key"]')!.value).toBe('calendar');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="b-kind"]')!.value).toBe('calendar');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="bc-start"]')!.value).toBe('starts_at');
+
+    host.querySelector<HTMLInputElement>('[data-view="month"]')!.click();
+    await render(fixture);
+    pick(host, '[data-testid="bc-open"]', 'booking');
+    await render(fixture);
+    const mode = host.querySelector('[data-testid="bc-open"]')!.parentElement!.querySelectorAll('select')[1] as HTMLSelectElement;
+    mode.value = 'drawer';
+    mode.dispatchEvent(new Event('change'));
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/calendar' });
+    expect(put.request.body.kind).toBe('calendar');
+    expect(put.request.body.definition).toEqual({
+      table: 'bookings',
+      calendar: {
+        start: 'starts_at',
+        duration: 'minutes',
+        title: { column: 'name' },
+        color: { column: 'status', format: 'badge', colors: { active: 'green', cancelled: 'blue' } },
+        views: ['week', 'day'],
+        default: 'week',
+        fromHour: 8,
+        toHour: 20,
+        open: { page: 'booking', mode: 'drawer' },
+      },
+      filters: [{ column: 'status', kind: 'chips', label: 'status' }],
+    });
+  });
+
+  it('головна зі зразка: блоки додаються й переставляються, кнопки блоку відкривають сторінку панеллю', async () => {
+    const { fixture, http, host } = await setup();
+    await render(fixture);
+    pick(host, '[data-testid="b-sample"]', 'dashboard');
+    await render(fixture);
+    expect(host.querySelectorAll('[data-block]').length).toBe(2);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="b-add-block"]')!.click();
+    await render(fixture);
+    const kind = host.querySelector('[data-block="2"]')!.querySelectorAll('select')[0] as HTMLSelectElement;
+    kind.value = 'actions';
+    kind.dispatchEvent(new Event('change'));
+    await render(fixture);
+    host.querySelector<HTMLButtonElement>('[data-testid="bd-add-action-2"]')!.click();
+    await render(fixture);
+    const action = host.querySelector('[data-block-action="0"]')!;
+    const label = action.querySelector('input')!;
+    label.value = 'Новий запис';
+    label.dispatchEvent(new Event('input'));
+    await render(fixture);
+    const selects = host.querySelector('[data-block-action="0"]')!.querySelectorAll('select');
+    (selects[1] as HTMLSelectElement).value = 'booking';
+    selects[1].dispatchEvent(new Event('change'));
+    await render(fixture);
+    const mode = host.querySelector('[data-block-action="0"]')!.querySelectorAll('select')[2] as HTMLSelectElement;
+    mode.value = 'drawer';
+    mode.dispatchEvent(new Event('change'));
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-block="2"] button[aria-label="Вище"]')!.click();
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/home' });
+    const blocks = put.request.body.definition.blocks;
+    expect(put.request.body.kind).toBe('dashboard');
+    expect(blocks.map((b: { kind: string }) => b.kind)).toEqual(['text', 'actions', 'list']);
+    expect(blocks[1].actions).toEqual([{ label: 'Новий запис', page: 'booking', mode: 'drawer' }]);
+  });
+
+  it('перегляд: чернетка йде на сервер після паузи, дані показуються тими ж компонентами, помилка — під переглядом', async () => {
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 600));
+    {
+      const { fixture, http, host } = await setup();
+      await render(fixture);
+      pick(host, '[data-testid="b-table"]', 'bookings');
+      await render(fixture);
+      host.querySelector<HTMLInputElement>('[data-column="name"]')!.click();
+      await render(fixture);
+      await pause();
+      const req = http.expectOne({ method: 'POST', url: '/api/v1/projects/p1/pages/preview/preview' });
+      expect(req.request.body.definition).toEqual({ table: 'bookings', columns: [{ column: 'name' }] });
+      req.flush({
+        view: {
+          page: { id: 'x', key: 'preview', name: 'preview', kind: 'list', roles: [], sortOrder: 0, updatedAt: '', definition: { table: 'bookings', columns: [{ column: 'name' }] } },
+          tableId: 't1',
+          columns: [{ column: 'name', label: 'Імʼя', type: 'string' }],
+          schema: null,
+          canEdit: true,
+        },
+        rows: { items: [{ key: '1', data: { name: 'Оля' }, display: {}, actions: [] }], page: 1, pageSize: 10, total: 1 },
+      });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="preview-table"]')!.textContent).toContain('Оля');
+
+      host.querySelector<HTMLInputElement>('[data-column="status"]')!.click();
+      await render(fixture);
+      await pause();
+      http.expectOne('/api/v1/projects/p1/pages/preview/preview').flush({ title: 'Колонку не знайдено' }, { status: 422, statusText: 'Unprocessable' });
+      await render(fixture);
+      expect(host.querySelector('[data-testid="preview-error"]')!.textContent).toContain('Колонку не знайдено');
+      expect(host.querySelector('[data-testid="preview-table"]')).not.toBeNull();
+    }
   });
 });

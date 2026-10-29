@@ -713,6 +713,23 @@ public sealed record PageDashboardBlock(int Index, string Kind, string? Label, i
 /// <param name="Blocks">Видимі блоки в порядку визначення (блоки з хибним <c>when</c> і недоступними сторінками пропущено).</param>
 public sealed record PageDashboard(IReadOnlyList<PageDashboardBlock> Blocks);
 
+/// <summary>Перегляд чернетки сторінки в конструкторі (<c>POST /projects/{id}/pages/{key}/preview</c>, F8-19): дані без збереження.</summary>
+/// <param name="View">Сторінка для показу.</param>
+public sealed record PagePreview(ProjectPageView View)
+{
+    /// <summary>Перші рядки списку.</summary>
+    public PageRows? Rows { get; init; }
+
+    /// <summary>Плитки й діаграми.</summary>
+    public PageMetrics? Metrics { get; init; }
+
+    /// <summary>Події календаря поточного тижня.</summary>
+    public PageCalendarEvents? Events { get; init; }
+
+    /// <summary>Блоки головної.</summary>
+    public PageDashboard? Dashboard { get; init; }
+}
+
 /// <summary>Результат форми.</summary>
 /// <param name="Row">Збережений рядок; для форми зі сценарієм (<c>onSubmit.workflow</c>) — <c>null</c>.</param>
 /// <param name="Then">Сторінка, куди перейти; <c>null</c> — лишитися.</param>
