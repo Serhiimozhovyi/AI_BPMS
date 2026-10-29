@@ -12,6 +12,11 @@ namespace OpenBP.Api.Endpoints;
 /// <param name="Password">Пароль.</param>
 public sealed record LoginRequest(string? Email, string? Password);
 
+/// <summary>Тіло <c>POST /auth/password</c> (F8-13).</summary>
+/// <param name="CurrentPassword">Поточний пароль.</param>
+/// <param name="NewPassword">Новий пароль.</param>
+public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+
 /// <summary>Провайдер на сторінці входу.</summary>
 /// <param name="Key">Ключ провайдера.</param>
 /// <param name="DisplayName">Назва для кнопки «Увійти через …».</param>
@@ -76,6 +81,16 @@ public static class AuthEndpoints
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.NoContent();
         }).WithTags(OpenApiSetup.Tags.Auth).WithSummary("Вихід: знімає cookie сесії").Produces(StatusCodes.Status204NoContent);
+
+        api.MapPost("/auth/password", async (ChangePasswordRequest body, IAuthService auth, CancellationToken ct) =>
+        {
+            await auth.ChangePasswordAsync(body.CurrentPassword ?? "", body.NewPassword ?? "", ct);
+            return Results.NoContent();
+        })
+            .WithTags(OpenApiSetup.Tags.Auth).WithSummary("Змінити свій пароль")
+            .WithDescription("Поточний і новий пароль (щонайменше 8 символів); знімає ознаку тимчасового пароля `mustChangePassword` (F8-13). " +
+                             "Невірний поточний пароль чи закороткий новий — 400 BAD_REQUEST.")
+            .Produces(StatusCodes.Status204NoContent);
 
         api.MapGet("/auth/me", (IAuthService auth, CancellationToken ct) => auth.GetMeAsync(ct))
             .WithTags(OpenApiSetup.Tags.Auth).WithSummary("Поточний користувач і його роль");

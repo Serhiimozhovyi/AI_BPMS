@@ -513,6 +513,48 @@
         ]
       }
     },
+    "/api/v1/auth/password": {
+      "post": {
+        "tags": [
+          "Вхід"
+        ],
+        "summary": "Змінити свій пароль",
+        "description": "Поточний і новий пароль (щонайменше 8 символів); знімає ознаку тимчасового пароля `mustChangePassword` (F8-13). Невірний поточний пароль чи закороткий новий — 400 BAD_REQUEST.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
@@ -2841,6 +2883,66 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectMember"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflow-groups/{id}/members/add": {
+      "post": {
+        "tags": [
+          "Сценарії"
+        ],
+        "summary": "Додати людину до проєкту, створивши обліковий запис за потреби",
+        "description": "Лише admin або editor проєкту (F8-13). Якщо облікового запису з цією поштою немає — створюється з глобальною роллю `viewer` і тимчасовим паролем `temporaryPassword` (показується один раз; при першому вході — зміна пароля) або, з `password: false`, без пароля для входу через OIDC. Наявний запис не змінюється — лише ролі в проєкті, як у `PUT …/members`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMemberAdded"
                 }
               }
             }
@@ -7715,6 +7817,27 @@
           }
         }
       },
+      "ChangePasswordRequest": {
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "newPassword": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CompleteTaskRequest": {
         "required": [
           "decision"
@@ -11849,6 +11972,28 @@
           }
         }
       },
+      "ProjectMemberAdded": {
+        "required": [
+          "member",
+          "created",
+          "temporaryPassword"
+        ],
+        "type": "object",
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/ProjectMember"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "temporaryPassword": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ProjectMemberRequest": {
         "required": [
           "email",
@@ -12014,6 +12159,43 @@
           },
           "canEdit": {
             "type": "boolean"
+          }
+        }
+      },
+      "ProjectPersonRequest": {
+        "required": [
+          "email",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserRole"
+              }
+            ]
+          },
+          "appRole": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "password": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -12662,6 +12844,9 @@
           },
           "role": {
             "$ref": "#/components/schemas/UserRole"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
           }
         }
       },

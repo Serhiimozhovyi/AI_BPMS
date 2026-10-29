@@ -50,7 +50,37 @@ type MemberRole = ProjectMember['role'];
             <option value="editor" i18n="@@project.role.editor">Editor</option>
             <option value="viewer" i18n="@@project.role.viewer">Viewer</option>
           </select>
+          @if (appRoles().length > 0) {
+            <select class="border" data-testid="member-new-app-role" aria-label="Роль у застосунку" i18n-aria-label="@@project.members.col.appRole" [value]="newAppRole()" (change)="newAppRole.set($any($event.target).value)">
+              <option value="" i18n="@@project.members.noAppRole">—</option>
+              @for (r of appRoles(); track r.key) {
+                <option [value]="r.key">{{ r.name }}</option>
+              }
+            </select>
+          }
+          <label class="flex items-center gap-1 self-center">
+            <input type="checkbox" data-testid="member-password" [checked]="withPassword()" (change)="withPassword.set($any($event.target).checked)" />
+            <span i18n="@@project.members.password">Видати тимчасовий пароль новому обліковому запису</span>
+          </label>
           <button mat-flat-button type="button" data-testid="member-add" [disabled]="saving() || email.invalid" (click)="add()" i18n="@@project.members.add">Додати</button>
+        </div>
+        <p class="-mt-2 mb-4 max-w-3xl text-sm opacity-70" i18n="@@project.members.addHint">
+          Якщо людини ще немає в OpenBP, буде створено обліковий запис з роллю viewer. Без тимчасового пароля людина входить лише
+          через корпоративний вхід (OIDC).
+        </p>
+      }
+
+      @if (issued(); as i) {
+        <div class="mb-4 max-w-3xl rounded border p-3" role="status" data-testid="member-temporary">
+          <p>
+            <ng-container i18n="@@project.members.issued">Створено обліковий запис</ng-container> <b>{{ i.email }}</b>.
+            <ng-container i18n="@@project.members.issuedPassword">Тимчасовий пароль (показується лише зараз, при першому вході людина його змінить):</ng-container>
+          </p>
+          <p class="mt-2 flex items-center gap-2">
+            <code class="text-lg" data-testid="member-temporary-password">{{ i.password }}</code>
+            <button mat-button type="button" (click)="copy(i.password)" i18n="@@project.members.copy">Копіювати</button>
+            <button mat-button type="button" (click)="issued.set(null)" i18n="@@project.members.hide">Сховати</button>
+          </p>
         </div>
       }
 
@@ -159,6 +189,10 @@ export class ProjectMembersPage implements OnInit {
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
   readonly newRole = signal<MemberRole>('editor');
+  readonly newAppRole = signal('');
+  readonly withPassword = signal(true);
+  /** Тимчасовий пароль щойно створеного облікового запису (F8-13) — лише до переходу зі сторінки. */
+  readonly issued = signal<{ email: string; password: string } | null>(null);
   readonly canManage = computed(() => this.project()?.role === 'admin' || this.project()?.role === 'editor');
   readonly appRoles = computed<ProjectAppRole[]>(() => this.project()?.appRoles ?? []);
 
@@ -199,10 +233,31 @@ export class ProjectMembersPage implements OnInit {
     return this.appRoles().find((r) => r.key === key)?.name ?? key;
   }
 
+  /** F8-13: людина додається за поштою; облікового запису немає — Api створює його (з тимчасовим паролем, якщо обрано). */
   add(): void {
     const email = this.email.value.trim();
     if (!email || this.email.invalid) return;
-    this.save(email, this.newRole(), () => this.email.reset(''));
+    this.saving.set(true);
+    this.error.set(null);
+    this.issued.set(null);
+    this.api
+      .addPerson(this.projectId, { email, role: this.newRole(), appRole: this.newAppRole() || null, password: this.withPassword() })
+      .subscribe({
+        next: ({ member, temporaryPassword }) => {
+          this.members.update((list) =>
+            [...list.filter((m) => m.userId !== member.userId), member].sort((a, b) => a.email.localeCompare(b.email)),
+          );
+          if (temporaryPassword) this.issued.set({ email: member.email, password: temporaryPassword });
+          this.saving.set(false);
+          this.email.reset('');
+          this.context.reload();
+        },
+        error: (e: unknown) => this.fail(e),
+      });
+  }
+
+  copy(text: string): void {
+    void navigator.clipboard?.writeText(text);
   }
 
   changeRole(member: ProjectMember, role: MemberRole): void {

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Mail;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -291,6 +292,53 @@ public sealed class WorkflowGroupService(OpenBpDbContext db, ICurrentUser curren
             new JsonObject { ["userId"] = user.Id.ToString(), ["email"] = user.Email, ["role"] = member.Role, ["appRole"] = appRole });
         await db.SaveChangesAsync(ct);
         return new ProjectMember(user.Id, user.Email, role, UserRoles.TryParse(user.Role)) { AppRole = appRole };
+    }
+
+    /// <inheritdoc />
+    public async Task<ProjectMemberAdded> AddPersonAsync(Guid id, string email, UserRole role, string? appRole, bool withPassword, CancellationToken ct)
+    {
+        var normalized = AuthService.NormalizeEmail(email ?? "");
+        if (!MailAddress.TryCreate(normalized, out var parsed) || parsed.Address != normalized)
+        {
+            throw new ArgumentException("Некоректна пошта.", nameof(email));
+        }
+
+        // Роль і роль застосунку перевіряємо до створення облікового запису, щоб відмова не лишила людину поза проєктом.
+        if (role is not (UserRole.Editor or UserRole.Viewer))
+        {
+            throw new ArgumentException("Роль у проєкті — editor або viewer.", nameof(role));
+        }
+
+        var group = await FindManagedAsync(id, ct);
+        if (!string.IsNullOrWhiteSpace(appRole) && !ProjectAppRoles.Parse(group.AppRoles).Any(r => r.Key == appRole.Trim()))
+        {
+            throw new ArgumentException($"У проєкті немає ролі застосунку «{appRole.Trim()}».", nameof(appRole));
+        }
+
+        string? password = null;
+        var created = false;
+        if (!await db.Users.AnyAsync(u => u.Email.ToLower() == normalized, ct))
+        {
+            password = withPassword ? AuthService.GenerateTemporaryPassword() : null;
+            var now = time.GetUtcNow();
+            var user = new UserEntity
+            {
+                Id = Guid.CreateVersion7(now),
+                Email = normalized,
+                PasswordHash = password is null ? null : AuthService.HashPassword(password),
+                Role = UserRoles.ToValue(UserRole.Viewer),
+                CreatedAt = now,
+                MustChangePassword = password is not null,
+            };
+            db.Users.Add(user);
+            db.Audit(currentUser, now, AuditActions.UserCreated, AuditEntities.User, user.Id.ToString(),
+                new JsonObject { ["email"] = normalized, ["projectId"] = id.ToString(), ["password"] = password is not null });
+            await db.SaveChangesAsync(ct);
+            created = true;
+        }
+
+        var member = await SetMemberAsync(id, normalized, role, ct, appRole);
+        return new ProjectMemberAdded(member, created, password);
     }
 
     /// <inheritdoc />

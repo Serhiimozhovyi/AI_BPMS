@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -147,6 +148,29 @@ public sealed class S3BinaryStoreTests(MinioFixture minio)
     }
 
     [Fact]
+    public async Task Put_retries_when_the_server_drops_the_request()
+    {
+        // MinIO під навантаженням (CI) відповідає на запис 499 «Client disconnected before response was ready» і нічого не
+        // записує; SDK такі відповіді не повторює — сховище пробує ще раз з початку файлу.
+        var options = minio.Options();
+        var dropping = new DropFirstObjectPut();
+        var client = new AmazonS3Client(MinioFixture.AccessKey, MinioFixture.SecretKey, new AmazonS3Config
+        {
+            ServiceURL = minio.Endpoint,
+            ForcePathStyle = true,
+            AuthenticationRegion = "us-east-1",
+            HttpClientFactory = dropping,
+        });
+        using var store = new S3BinaryStore(client, options.Bucket!);
+        var bytes = Encoding.UTF8.GetBytes("повтор після обриву");
+
+        var reference = await store.PutAsync(new MemoryStream(bytes), "text/plain", "a.txt", CancellationToken.None);
+
+        Assert.Equal(1, dropping.Dropped);
+        Assert.Equal(bytes, await ReadAllAsync(store, reference));
+    }
+
+    [Fact]
     public async Task Worker_writes_to_s3_and_still_reads_local_files_when_both_are_configured()
     {
         var root = Directory.CreateTempSubdirectory("openbp-files-").FullName;
@@ -197,6 +221,43 @@ public sealed class S3BinaryStoreTests(MinioFixture minio)
         using var copy = new MemoryStream();
         await read.CopyToAsync(copy);
         return copy.ToArray();
+    }
+
+    /// <summary>Перший запис об'єкта (PUT з ключем) отримує 499 від «сервера», не дійшовши до MinIO.</summary>
+    private sealed class DropFirstObjectPut : Amazon.Runtime.HttpClientFactory
+    {
+        private int _dropped;
+
+        public int Dropped => _dropped;
+
+        public override HttpClient CreateHttpClient(Amazon.Runtime.IClientConfig clientConfig) => new(new Handler(this));
+
+        private sealed class Handler(DropFirstObjectPut owner) : DelegatingHandler(new HttpClientHandler())
+        {
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var isObjectPut = request.Method == HttpMethod.Put && request.RequestUri!.AbsolutePath.Trim('/').Contains('/', StringComparison.Ordinal);
+                if (isObjectPut && Interlocked.CompareExchange(ref owner._dropped, 1, 0) == 0)
+                {
+                    if (request.Content is not null)
+                    {
+                        await request.Content.CopyToAsync(Stream.Null, cancellationToken);
+                    }
+
+                    return new HttpResponseMessage((HttpStatusCode)499)
+                    {
+                        RequestMessage = request,
+                        Content = new StringContent(
+                            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>ClientDisconnected</Code>" +
+                            "<Message>Client disconnected before response was ready</Message></Error>",
+                            Encoding.UTF8,
+                            "application/xml"),
+                    };
+                }
+
+                return await base.SendAsync(request, cancellationToken);
+            }
+        }
     }
 
     private AmazonS3Client Client() => new(
