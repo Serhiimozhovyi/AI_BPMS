@@ -28,6 +28,7 @@ interface ProjectTab {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, RouterLink, RouterLinkActive, RouterOutlet, MatButtonModule, MatFormFieldModule, MatInputModule],
   template: `
+    @if (!shellOnly()) {
     <section class="px-6 pt-6">
       <a class="mb-2 block text-sm" routerLink="/projects" i18n="@@project.backToList">← Усі проєкти</a>
       @if (editing()) {
@@ -75,6 +76,7 @@ interface ProjectTab {
         }
       </nav>
     </section>
+    }
     <router-outlet />
   `,
 })
@@ -110,6 +112,12 @@ export class ProjectPage implements OnInit {
       ? this.tabs.filter((t) => t.path === 'overview' || t.path === 'app')
       : this.tabs,
   );
+
+  /** Користувач лише застосунку, чий проєкт має оболонку (F8-18): рамки проєкту немає — лише оболонка застосунку. */
+  readonly shellOnly = computed(() => {
+    const group = this.context.appOnlyProject(this.auth.user()?.role);
+    return group?.id === this.projectId && !!group.app;
+  });
 
   ngOnInit(): void {
     // Вкладки-сторінки фільтруються за проєктом із шапки.

@@ -49,6 +49,8 @@ export class PageFormComponent implements OnInit {
 
   readonly projectId = input.required<string>();
   readonly view = input.required<ProjectPageView>();
+  /** Ключ сторінки для запитів, якщо він не збігається з `view.page.key` (блок `form` головної з власним визначенням). */
+  readonly pageKey = input<string | null>(null);
   /** Ключ рядка для форми зміни. */
   readonly rowKey = input<string | null>(null);
   /** Початкові значення нового запису; беруться лише поля, що є у формі. */
@@ -74,7 +76,7 @@ export class PageFormComponent implements OnInit {
     const rowKey = this.rowKey();
     if (!rowKey) return;
     this.loading.set(true);
-    this.api.row(this.projectId(), view.page.key, rowKey).subscribe({
+    this.api.row(this.projectId(), this.pageKey() ?? view.page.key, rowKey).subscribe({
       next: (record) => {
         this.model = this.toInputs({ ...record.row.data });
         this.fields.set(formFields(view.schema));
@@ -102,7 +104,7 @@ export class PageFormComponent implements OnInit {
       return;
     }
     this.submitting.set(true);
-    this.api.submit(this.projectId(), view.page.key, this.fromInputs(toPayload(view.schema, this.model).fields), this.rowKey()).subscribe({
+    this.api.submit(this.projectId(), this.pageKey() ?? view.page.key, this.fromInputs(toPayload(view.schema, this.model).fields), this.rowKey()).subscribe({
       next: (result) => {
         this.submitting.set(false);
         if (!result.then && !result.result?.message) this.saved.set(true);

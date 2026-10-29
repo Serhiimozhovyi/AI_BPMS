@@ -73,6 +73,7 @@
 </ng-template>
 <ng-template #navLinks>
 @if (appOnly(); as ap) {
+  @if (!ap.app) {
       <a class="shell-nav__link" data-testid="nav-app" [routerLink]="['/projects', ap.id, 'app']" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">apps</span>
         <span i18n="@@nav.app">Застосунок</span>
@@ -81,6 +82,7 @@
         <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
         <span i18n="@@nav.overview">Огляд</span>
       </a>
+  }
 } @else {
       <a class="shell-nav__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
         <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>

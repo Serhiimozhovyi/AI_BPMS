@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { AuthService } from '../../auth/auth.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { WorkflowGroup } from '../../workflows/workflows-api.service';
 import { ProjectPage } from './project.page';
@@ -9,7 +10,7 @@ import { ProjectPage } from './project.page';
 const base = '/api/v1/workflow-groups';
 
 describe('ProjectPage', () => {
-  async function setup(role: WorkflowGroup['role'] = 'editor') {
+  async function setup(role: WorkflowGroup['role'] = 'editor', prepare: () => void = () => undefined) {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -18,6 +19,7 @@ describe('ProjectPage', () => {
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
       ],
     });
+    prepare();
     const fixture = TestBed.createComponent(ProjectPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -70,5 +72,24 @@ describe('ProjectPage', () => {
   it('viewer не бачить кнопку редагування', async () => {
     const { host } = await setup('viewer');
     expect(host.querySelector('[data-testid="project-edit"]')).toBeNull();
+  });
+
+  it('користувач лише застосунку з оболонкою (F8-18): рамки проєкту й вкладок немає', async () => {
+    const { host } = await setup('viewer', () => {
+      TestBed.inject(AuthService).user.set({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
+      TestBed.inject(ProjectContextService).projects.set([
+        { id: 'p1', name: 'Психологи', sortOrder: 0, workflowCount: 3, role: 'viewer', appRole: 'operator', app: { title: 'Кабінет' } },
+      ]);
+    });
+    expect(host.querySelector('[data-testid="project-tabs"]')).toBeNull();
+    expect(host.querySelector('[data-testid="project-name"]')).toBeNull();
+  });
+
+  it('користувач лише застосунку без оболонки лишає вкладки «Огляд» і «Застосунок»', async () => {
+    const { host } = await setup('viewer', () => {
+      TestBed.inject(AuthService).user.set({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
+      TestBed.inject(ProjectContextService).projects.set([{ id: 'p1', name: 'Психологи', sortOrder: 0, workflowCount: 3, role: 'viewer', appRole: 'operator' }]);
+    });
+    expect([...host.querySelectorAll('[data-testid="project-tabs"] a')].map((a) => a.getAttribute('data-testid'))).toEqual(['tab-overview', 'tab-app']);
   });
 });

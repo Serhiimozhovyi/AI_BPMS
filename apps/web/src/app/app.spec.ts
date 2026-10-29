@@ -200,6 +200,25 @@ describe('App: вибір проєкту (F6-14)', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="project-select"]')).toBeNull();
   });
 
+  it('користувач лише застосунку з оболонкою (F8-18): меню OpenBP немає — лише оболонка застосунку', async () => {
+    configure({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
+    const fixture = TestBed.createComponent(App);
+    const harness = await RouterTestingHarness.create();
+    const http = TestBed.inject(HttpTestingController);
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    await harness.navigateByUrl('/');
+    http
+      .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
+      .flush([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 2, role: 'viewer', appRole: 'operator', app: { title: 'Кабінет' } }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="nav-app"]')).toBeNull();
+    expect(host.querySelector('[data-testid="nav-app-overview"]')).toBeNull();
+    expect(host.querySelector('[data-testid="project-select"]')).toBeNull();
+  });
+
   it('viewer з кількома проєктами чи без ролі застосунку бачить звичайне меню', async () => {
     configure({ id: 'u8', email: 'viewer@firma.ua', role: 'viewer' });
     const fixture = TestBed.createComponent(App);
