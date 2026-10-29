@@ -163,6 +163,37 @@ public sealed class CliRunTests : IDisposable
         Assert.Contains("▶ Поле [core.set] — Success", stdout, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Now_sets_the_clock_for_expressions_and_code()
+    {
+        var path = Path.Combine(_dir, "now.json");
+        await File.WriteAllTextAsync(path, """
+            {
+              "formatVersion": 1, "name": "Now",
+              "settings": { "timezone": "Europe/Kyiv", "executionTimeoutSec": 30, "errorWorkflowId": null, "saveSuccessfulData": true },
+              "nodes": [
+                { "id": "t", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+                { "id": "s", "name": "Поле", "type": "core.set", "typeVersion": 1, "position": [200, 0],
+                  "parameters": { "fields": [ { "name": "expr", "value": "{{ $now.toISOString().slice(0, 16) }}" } ] } },
+                { "id": "c", "name": "Код", "type": "core.code", "typeVersion": 1, "position": [400, 0],
+                  "parameters": { "mode": "eachItem", "code": "return { expr: $json.expr, code: new Date().toISOString().slice(0, 16), hour: new Date().getHours() };" } }
+              ],
+              "connections": [
+                { "from": { "node": "t", "output": 0 }, "to": { "node": "s", "input": 0 } },
+                { "from": { "node": "s", "output": 0 }, "to": { "node": "c", "input": 0 } }
+              ],
+              "pinData": {}
+            }
+            """);
+
+        var (code, stdout, stderr) = await RunAsync("run", path, "--now", "2026-11-01T06:30:00Z");
+
+        Assert.True(code == CliApp.Ok, stderr + stdout);
+        Assert.Contains("\"expr\": \"2026-11-01T06:30\"", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"code\": \"2026-11-01T06:30\"", stdout, StringComparison.Ordinal);
+        Assert.Contains("\"hour\": 8", stdout, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData]
     [InlineData("build")]
@@ -171,6 +202,8 @@ public sealed class CliRunTests : IDisposable
     [InlineData("run", "a.json", "--verbose")]
     [InlineData("run", "a.json", "--servers")]
     [InlineData("run", "a.json", "--credentials")]
+    [InlineData("run", "a.json", "--now")]
+    [InlineData("run", "a.json", "--now", "завтра")]
     public async Task BadArguments_ReturnUsageError(params string[] args)
     {
         var (code, _, stderr) = await RunAsync(args);

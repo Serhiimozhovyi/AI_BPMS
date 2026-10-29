@@ -12,7 +12,7 @@ namespace OpenBP.Nodes.Core;
 public static class CoreNodes
 {
     /// <summary>Створює по екземпляру кожного <c>core.*</c> вузла (усі версії).</summary>
-    /// <param name="time">Джерело часу для <c>core.wait</c> і <c>core.schedule</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
+    /// <param name="time">Джерело часу для <c>core.wait</c>, <c>core.schedule</c> і <c>Date</c> у <c>core.code</c>; <c>null</c> — <see cref="TimeProvider.System"/>.</param>
     /// <param name="dataTables">Сховище для <c>core.dataTable</c>; <c>null</c> — вузол лише описаний (палітра, валідація) і при виконанні дає помилку.</param>
     /// <param name="subWorkflows">Запуск підсценаріїв для <c>core.executeWorkflow</c>; <c>null</c> — так само лише описаний.</param>
     /// <param name="webhookResponder">Відповіді webhook-ам для <c>core.respondToWebhook</c>; <c>null</c> — так само лише описаний.</param>
@@ -37,7 +37,7 @@ public static class CoreNodes
         new WaitNode(time, 2),
         new WaitNode(time, 3),
         new ApprovalNode(time),
-        new CodeNode(),
+        new CodeNode(time: time),
         new DataTableNode(dataTables),
         new ExecuteWorkflowNode(subWorkflows, time),
         new RespondToWebhookNode(webhookResponder),

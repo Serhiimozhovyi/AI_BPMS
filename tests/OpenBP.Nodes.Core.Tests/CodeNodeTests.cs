@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using OpenBP.Shared.Workflow;
 
@@ -113,6 +114,20 @@ public class CodeNodeTests
     }
 
     [Fact]
+    public async Task Date_now_follows_the_engine_clock()
+    {
+        var node = new CodeNode(time: new FixedTime(DateTimeOffset.Parse("2026-11-01T06:30:00Z", CultureInfo.InvariantCulture)));
+        var ctx = Ctx.For(node, Params("return { now: new Date(Date.now()).toISOString(), plain: new Date().toISOString(), h: new Date().getHours() };"), "{}");
+        ctx.Timezone = "Europe/Kyiv";
+
+        var json = (await node.ExecuteAsync(ctx, CancellationToken.None))[0][0].Json;
+
+        Assert.Equal("2026-11-01T06:30:00.000Z", json["now"]!.GetValue<string>());
+        Assert.Equal("2026-11-01T06:30:00.000Z", json["plain"]!.GetValue<string>());
+        Assert.Equal(8, json["h"]!.GetValue<int>());
+    }
+
+    [Fact]
     public async Task Unknown_timezone_fails()
     {
         var ctx = Ctx.For(_node, Params("return {};"), "{}");
@@ -198,5 +213,10 @@ public class CodeNodeTests
 
         var ex = await Assert.ThrowsAsync<CoreNodeException>(() => _node.ExecuteAsync(ctx, CancellationToken.None));
         Assert.Contains("пам'яті", ex.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class FixedTime(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }
