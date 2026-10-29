@@ -588,7 +588,22 @@ public sealed record PageViewColumn(string Column, string Label, string Type, st
 /// <param name="Columns">Колонки списку чи поля картки з типами.</param>
 /// <param name="Schema">JSON Schema форми (<c>form</c>) для рушія форм F6-03; для інших типів <c>null</c>.</param>
 /// <param name="CanEdit">Чи може користувач змінювати сторінки проєкту (editor).</param>
-public sealed record ProjectPageView(ProjectPageDto Page, Guid TableId, IReadOnlyList<PageViewColumn> Columns, JsonObject? Schema, bool CanEdit);
+public sealed record ProjectPageView(ProjectPageDto Page, Guid TableId, IReadOnlyList<PageViewColumn> Columns, JsonObject? Schema, bool CanEdit)
+{
+    /// <summary>
+    /// Варіанти фільтрів користувача <c>select</c> і <c>chips</c> за колонкою (F8-16): значення <c>enum</c> і <c>boolean</c> з підписами,
+    /// рядки пов'язаної таблиці для <c>ref</c>, учасники проєкту для <c>user</c>. Фільтр за чутливою колонкою без права читати її не показується.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<PageOption>>? FilterOptions { get; init; }
+
+    /// <summary>Часовий пояс застосунку (IANA) для показу дат; <c>UTC</c>, якщо оболонки немає (F8-16).</summary>
+    public string Timezone { get; init; } = "UTC";
+}
+
+/// <summary>Варіант вибору у фільтрі.</summary>
+/// <param name="Value">Значення, що йде в <c>filters[колонка]</c>.</param>
+/// <param name="Label">Підпис.</param>
+public sealed record PageOption(string Value, string Label);
 
 /// <summary>Рядок на сторінці.</summary>
 /// <param name="Key">Ключ рядка.</param>
@@ -602,7 +617,11 @@ public sealed record PageRow(string Key, JsonObject Data, IReadOnlyDictionary<st
 /// <param name="Page">Номер сторінки.</param>
 /// <param name="PageSize">Розмір.</param>
 /// <param name="Total">Усього за фільтром і пошуком.</param>
-public sealed record PageRows(IReadOnlyList<PageRow> Items, int Page, int PageSize, int Total);
+public sealed record PageRows(IReadOnlyList<PageRow> Items, int Page, int PageSize, int Total)
+{
+    /// <summary>Фільтри користувача, що діяли на цей запит, разом зі значеннями за замовчуванням (F8-16); клієнт показує їх у панелі.</summary>
+    public IReadOnlyDictionary<string, PageFilterInput>? Filters { get; init; }
+}
 
 /// <summary>Пов'язаний список картки.</summary>
 /// <param name="Label">Підпис.</param>

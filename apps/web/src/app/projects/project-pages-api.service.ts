@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE } from '../connectors/connectors-api.service';
 import { JsonSchema } from '../forms/form-fields';
+import { cellView } from './page-format';
 
 /** Тип сторінки застосунку (docs/projects.md §3). */
 export type PageKind = 'list' | 'detail' | 'form' | 'metrics';
@@ -10,18 +11,57 @@ export type PageKind = 'list' | 'detail' | 'form' | 'metrics';
 /** Типи сторінок для вибору в конструкторі. */
 export const PAGE_KINDS: readonly PageKind[] = ['list', 'detail', 'form', 'metrics'];
 
+/** Колір мітки `format: badge` (AC-Kit). */
+export type PageColor = 'gray' | 'green' | 'yellow' | 'red' | 'blue' | 'purple';
+
 /** Колонка списку. */
 export interface PageColumn {
   column: string;
   label?: string;
   format?: string;
   display?: string;
+  /** Підписи значень (`enum`, `badge`, `boolean`, `capacity`). */
+  labels?: Record<string, string>;
+  /** Кольори міток за значенням (лише `format: badge`). */
+  colors?: Record<string, PageColor>;
+}
+
+/** Як відкрити сторінку: перехід (типово) чи бокова панель. */
+export type PageOpenMode = 'navigate' | 'drawer';
+
+/** Посилання на сторінку застосунку. */
+export interface PageLink {
+  page: string;
+  mode?: PageOpenMode;
+}
+
+/** Фільтр, яким керує користувач (F8-14). */
+export interface PageUserFilter {
+  column: string;
+  kind: 'select' | 'chips' | 'period' | 'search';
+  label?: string;
+  display?: string;
+  labels?: Record<string, string>;
+  default?: unknown;
+}
+
+/** Обчислювана колонка списку (F8-14). */
+export interface PageComputed {
+  key: string;
+  label: string;
+  table: string;
+  by: string;
+  aggregate?: 'count' | 'sum';
+  column?: string;
+  of?: string;
 }
 
 /** Дія над рядком: перехід (`page`), видалення (`operation`) або запуск сценарію проєкту (`workflow`, F8-05). */
 export interface PageAction {
   label: string;
   page?: string;
+  /** Як відкрити `page`; без нього — перехід. */
+  mode?: PageOpenMode;
   workflow?: string;
   operation?: 'delete';
   confirm?: string;
@@ -77,6 +117,10 @@ export interface PageRelated {
   label?: string;
   columns?: PageColumn[];
   actions?: PageAction[];
+  /** Кнопка «Додати» підлеглого списку: форма з підставленим ключем батьківського рядка в `by`. */
+  create?: PageLink;
+  empty?: string;
+  sort?: { column: string; direction?: 'asc' | 'desc' };
 }
 
 /** Визначення сторінки (`project_pages.definition`). */
@@ -88,13 +132,22 @@ export interface PageDefinition {
   sort?: { column: string; direction?: 'asc' | 'desc' };
   pageSize?: number;
   actions?: PageAction[];
-  create?: { page: string };
+  create?: PageLink;
   fields?: PageField[];
   related?: PageRelated[];
   onSubmit?: { operation?: 'insert' | 'upsert' | 'update'; workflow?: string };
   then?: { page: string };
   tiles?: PageTile[];
   charts?: PageChart[];
+  /** Панель фільтрів над списком (F8-14). */
+  filters?: PageUserFilter[];
+  computed?: PageComputed[];
+  layout?: 'table' | 'cards';
+  card?: { title: string; subtitle?: string };
+  /** Підлеглі списки під розгорнутим рядком. */
+  expand?: PageRelated[];
+  /** Текст порожнього списку. */
+  empty?: string;
 }
 
 /** `ProjectPageDto`. */
@@ -126,6 +179,23 @@ export interface ProjectPageView {
   /** JSON Schema форми (лише `form`). */
   schema: JsonSchema | null;
   canEdit: boolean;
+  /** Варіанти фільтрів `select`/`chips` за колонкою (F8-16). */
+  filterOptions?: Record<string, PageOption[]> | null;
+  /** Часовий пояс застосунку (IANA) для показу дат; `UTC`, якщо оболонки немає. */
+  timezone?: string;
+}
+
+/** Варіант вибору у фільтрі. */
+export interface PageOption {
+  value: string;
+  label: string;
+}
+
+/** Значення фільтра користувача: вибрані значення (для `period` — назва періоду) і межі «від–до». */
+export interface PageFilterValue {
+  values: string[];
+  from?: string | null;
+  to?: string | null;
 }
 
 /** Рядок на сторінці: лише її колонки; `display` — показані значення `ref`; `actions` — індекси доступних дій. */
@@ -142,6 +212,15 @@ export interface PageRows {
   page: number;
   pageSize: number;
   total: number;
+  /** Фільтри, що діяли на запит, разом зі значеннями за замовчуванням (F8-16). */
+  filters?: Record<string, PageFilterValue> | null;
+}
+
+/** Підлеглий список під рядком: `GET …/rows/{rowKey}/expand/{index}`. */
+export interface PageExpandRows {
+  label: string;
+  columns: PageViewColumn[];
+  rows: PageRow[];
 }
 
 /** `GET …/rows/{rowKey}`. */
@@ -189,6 +268,8 @@ export interface PageRowsQuery {
   direction?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
+  /** Фільтри користувача за колонкою; порожнє значення знімає фільтр, у тому числі заданий за замовчуванням. */
+  filters?: Record<string, PageFilterValue>;
 }
 
 /** Клієнт `/api/v1/projects/{id}/pages` (F8-04): права й фільтри перевіряє Api. */
@@ -212,9 +293,31 @@ export class ProjectPagesApiService {
   rows(projectId: string, key: string, query: PageRowsQuery = {}): Observable<PageRows> {
     let params = new HttpParams();
     for (const [name, value] of Object.entries(query)) {
-      if (value !== undefined && value !== null && value !== '') params = params.set(name, String(value));
+      if (name !== 'filters' && value !== undefined && value !== null && value !== '') params = params.set(name, String(value));
+    }
+    for (const [column, filter] of Object.entries(query.filters ?? {})) {
+      const from = filter.from?.trim();
+      const to = filter.to?.trim();
+      const values = filter.values.filter((v) => v !== '');
+      if (from) params = params.set(`filters[${column}][from]`, from);
+      if (to) params = params.set(`filters[${column}][to]`, to);
+      if (values.length === 0 && !from && !to) params = params.set(`filters[${column}]`, '');
+      for (const value of values) params = params.append(`filters[${column}]`, value);
     }
     return this.http.get<PageRows>(`${this.base(projectId, key)}/rows`, { params });
+  }
+
+  /** Підлеглий список `expand[index]` під рядком списку (F8-15). */
+  expand(projectId: string, key: string, rowKey: string, index: number): Observable<PageExpandRows> {
+    return this.http.get<PageExpandRows>(`${this.base(projectId, key)}/rows/${encodeURIComponent(rowKey)}/expand/${index}`);
+  }
+
+  /** Дія над рядком підлеглого списку. */
+  runExpandAction(projectId: string, key: string, rowKey: string, index: number, subKey: string, action: number): Observable<PageActionResult> {
+    return this.http.post<PageActionResult>(
+      `${this.base(projectId, key)}/rows/${encodeURIComponent(rowKey)}/expand/${index}/${encodeURIComponent(subKey)}/actions/${action}`,
+      null,
+    );
   }
 
   row(projectId: string, key: string, rowKey: string): Observable<PageRecord> {
@@ -243,21 +346,7 @@ export class ProjectPagesApiService {
   }
 }
 
-/** Значення комірки для людей: показане значення `ref`, дата й час — локально, `null` — тире. */
+/** Значення комірки для людей (без міток і кольорів): див. `cellView`. */
 export function cellText(row: PageRow, column: string, type?: string, format?: string | null): string {
-  const shown = row.display?.[column];
-  if (shown !== undefined && shown !== null) return shown;
-  const value = row.data[column];
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'boolean') return value ? $localize`:@@app.page.yes:так` : $localize`:@@app.page.no:ні`;
-  const kind = format ?? type;
-  if (typeof value === 'string' && (kind === 'datetime' || kind === 'date')) {
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) {
-      return kind === 'date'
-        ? date.toLocaleDateString('uk-UA')
-        : date.toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' });
-    }
-  }
-  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return cellView(row, { column, label: column, type: type ?? 'string', format }, 'UTC').text;
 }

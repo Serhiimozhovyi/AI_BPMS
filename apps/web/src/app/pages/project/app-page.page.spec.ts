@@ -1,10 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { ProjectPageView } from '../../projects/project-pages-api.service';
 import { AppPagePage } from './app-page.page';
+import { PageFormComponent } from './page-form.component';
 
 const base = '/api/v1/projects/p1/pages';
 
@@ -184,7 +186,8 @@ describe('AppPagePage (F8-04)', () => {
       { status: 422, statusText: 'Unprocessable Entity' },
     );
     await render(fixture);
-    expect(fixture.componentInstance.form.get('client')?.errors?.['server']).toBe('Такий запис уже є.');
+    const formComponent = fixture.debugElement.query(By.directive(PageFormComponent)).componentInstance as PageFormComponent;
+    expect(formComponent.form.get('client')?.errors?.['server']).toBe('Такий запис уже є.');
     expect(host.querySelector('[data-testid="app-form-error"]')).not.toBeNull();
 
     client.value = 'Олена К.';
