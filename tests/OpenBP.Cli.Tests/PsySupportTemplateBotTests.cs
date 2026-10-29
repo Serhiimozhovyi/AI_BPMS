@@ -112,6 +112,8 @@ public sealed class PsySupportTemplateBotTests : IDisposable
 
         public JsonObject Node(string name) => Output(Report, name);
 
+        public int Count(string name) => OutputItems(Report, name).Count;
+
         public void Ran(string node) => Assert.Matches($"▶ {Regex.Escape(node)} \\[[^\\]]+\\] — Success", Report);
 
         public void Skipped(string node) => Assert.Matches($"▶ {Regex.Escape(node)} \\[[^\\]]+\\] — Skipped", Report);
@@ -158,7 +160,10 @@ public sealed class PsySupportTemplateBotTests : IDisposable
     private Task<Run> TapAsync(string data, Dictionary<string, JsonArray>? pins = null) => RunAsync(Update.Callback(Me, data), pins);
 
     /// <summary>Перший item виходу 0 вузла зі звіту <c>openbp run</c>.</summary>
-    private static JsonObject Output(string report, string node)
+    private static JsonObject Output(string report, string node) => OutputItems(report, node)[0]!["json"]!.AsObject();
+
+    /// <summary>Items виходу 0 вузла зі звіту <c>openbp run</c>.</summary>
+    private static JsonArray OutputItems(string report, string node)
     {
         var start = report.IndexOf($"▶ {node} [", StringComparison.Ordinal);
         Assert.True(start >= 0, $"У звіті немає вузла «{node}»:\n{report}");
@@ -167,7 +172,7 @@ public sealed class PsySupportTemplateBotTests : IDisposable
         block = end < 0 ? block : block[..end];
         var at = block.IndexOf("output[0]: ", StringComparison.Ordinal);
         Assert.True(at >= 0, $"Вузол «{node}» нічого не віддав:\n{block}");
-        return JsonNode.Parse(block[(at + "output[0]: ".Length)..])!.AsArray()[0]!["json"]!.AsObject();
+        return JsonNode.Parse(block[(at + "output[0]: ".Length)..])!.AsArray();
     }
 
     // ---------------------------------------------------------------- реєстрація
@@ -228,6 +233,37 @@ public sealed class PsySupportTemplateBotTests : IDisposable
         Assert.Contains("/psy", notifications[1]!["text"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Equal("chat", run.Answer["commands"]!["scope"]!["type"]!.GetValue<string>());
         run.Ran("Команди /psy");
+    }
+
+    [Fact]
+    public async Task Psychologist_phone_matches_in_any_spelling_and_the_route_runs_once()
+    {
+        var run = await RunAsync(Update.Contact(Me, "+380671234567"), new()
+        {
+            ["n_user"] = [],
+            ["n_link_find"] = Items(Psy(P2, "Інший", null, "380501112233"), Psy(P1, "Ірина Коваль", null, "+38 (067) 123-45-67")),
+            ["n_link"] = Items(Psy(P1, "Ірина Коваль", "1001", "+38 (067) 123-45-67")),
+        });
+
+        // Налаштування (рядок на ключ), Людина і Я психолог сходяться в «Маршрут», але оновлення одне.
+        Assert.Equal(1, run.Count("Маршрут"));
+        Assert.Equal(P1, run.Node("Психолог за номером")["_key"]!.GetValue<string>());
+        run.Ran("Прив'язати психолога");
+        run.Ran("Команди /psy");
+    }
+
+    [Fact]
+    public async Task Psychologist_with_another_phone_is_not_linked()
+    {
+        var run = await RunAsync(Update.Contact(Me, "380671234567"), new()
+        {
+            ["n_user"] = [],
+            ["n_link_find"] = Items(Psy(P2, "Інший", null, "0501112233")),
+        });
+
+        Assert.Equal("registered", run.Code);
+        run.Skipped("Прив'язати психолога");
+        run.Skipped("Команди /psy");
     }
 
     [Fact]

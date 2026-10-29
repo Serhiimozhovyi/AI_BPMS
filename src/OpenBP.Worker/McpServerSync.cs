@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Application.Connectors;
 using OpenBP.Application.Credentials;
@@ -35,7 +36,7 @@ public sealed class ConnectorConfigurationException(string message) : Exception(
 /// <param name="registry">Реєстр MCP-серверів воркера.</param>
 /// <param name="credentials">Сховище credentials.</param>
 /// <param name="time">Годинник для часу кешу tools без <c>tools_cached_at</c>.</param>
-public sealed class McpServerSync(
+public sealed partial class McpServerSync(
     IDbContextFactory<OpenBpDbContext> contexts,
     IMcpServerRegistry registry,
     CredentialStore credentials,
@@ -52,10 +53,20 @@ public sealed class McpServerSync(
     /// (<c>tools[].serverId</c>, F6-12) сценарію — без виразів.
     /// </summary>
     /// <param name="workflow">Сценарій.</param>
-    public static IReadOnlySet<string> ReferencedServers(WorkflowDefinition workflow)
+    public static IReadOnlySet<string> ReferencedServers(WorkflowDefinition workflow) => Referenced(workflow).Servers;
+
+    /// <summary>
+    /// Ключі змінних інстансу, якими задано <c>serverId</c> цілим виразом <c>{{ $vars.key }}</c> (F8-11): їхні значення
+    /// теж реєструються перед виконанням, бо після обчислення виразу вузол звертається до сервера за id зі змінної.
+    /// </summary>
+    /// <param name="workflow">Сценарій.</param>
+    public static IReadOnlySet<string> ReferencedVariables(WorkflowDefinition workflow) => Referenced(workflow).Variables;
+
+    private static (HashSet<string> Servers, HashSet<string> Variables) Referenced(WorkflowDefinition workflow)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         var result = new HashSet<string>(StringComparer.Ordinal);
+        var variables = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in workflow.Nodes)
         {
             if (node.Type.StartsWith("mcp.", StringComparison.Ordinal))
@@ -71,19 +82,28 @@ public sealed class McpServerSync(
             }
         }
 
-        return result;
+        return (result, variables);
 
         void Add(JsonNode? value)
         {
-            if (value is JsonValue v
-                && v.TryGetValue<string>(out var serverId)
-                && !string.IsNullOrWhiteSpace(serverId)
-                && !ExpressionSyntax.ContainsExpression(serverId))
+            if (value is not JsonValue v || !v.TryGetValue<string>(out var serverId) || string.IsNullOrWhiteSpace(serverId))
+            {
+                return;
+            }
+
+            if (!ExpressionSyntax.ContainsExpression(serverId))
             {
                 result.Add(serverId);
             }
+            else if (VariableReference().Match(serverId) is { Success: true } match)
+            {
+                variables.Add(match.Groups["key"].Value);
+            }
         }
     }
+
+    [GeneratedRegex("""^\s*\{\{\s*\$vars(?:\.(?<key>[A-Za-z_][A-Za-z0-9_]*)|\[\s*(?<q>['"])(?<key>[^'"]+)\k<q>\s*\])\s*\}\}\s*$""")]
+    private static partial Regex VariableReference();
 
     /// <summary>Готує реєстр до виконання сценарію.</summary>
     /// <param name="workflow">Сценарій.</param>
@@ -93,16 +113,24 @@ public sealed class McpServerSync(
     public async Task SyncAsync(WorkflowDefinition workflow, SecretScrubber scrubber, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(scrubber);
-        var referenced = ReferencedServers(workflow);
-        if (referenced.Count == 0)
+        var (referenced, variables) = Referenced(workflow);
+        if (referenced.Count == 0 && variables.Count == 0)
         {
             return;
         }
 
-        var ids = referenced.Select(s => Guid.TryParse(s, out var id) ? id : (Guid?)null).OfType<Guid>().ToList();
         List<McpServerEntity> rows;
         await using (var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false))
         {
+            if (variables.Count > 0)
+            {
+                var keys = variables.ToList();
+                var values = await db.Variables.AsNoTracking().Where(v => keys.Contains(v.Key)).Select(v => v.Value)
+                    .ToListAsync(ct).ConfigureAwait(false);
+                referenced.UnionWith(values.Select(v => v.Trim()).Where(v => v.Length > 0));
+            }
+
+            var ids = referenced.Select(s => Guid.TryParse(s, out var id) ? id : (Guid?)null).OfType<Guid>().ToList();
             rows = await db.McpServers.AsNoTracking().Where(s => ids.Contains(s.Id)).ToListAsync(ct).ConfigureAwait(false);
         }
 

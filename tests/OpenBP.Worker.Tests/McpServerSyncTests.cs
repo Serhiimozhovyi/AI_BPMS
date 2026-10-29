@@ -180,6 +180,44 @@ public sealed class McpServerSyncTests(PostgresFixture postgres)
         Assert.Equal(["s1", "s2", "s4"], McpServerSync.ReferencedServers(workflow).Order());
     }
 
+    [Fact]
+    public void ReferencedVariables_TakesWholeVarsExpressionsOnly()
+    {
+        var workflow = WorkflowJson.Deserialize("""
+            {
+              "formatVersion": 1,
+              "name": "x",
+              "nodes": [
+                { "id": "a", "name": "a", "type": "mcp.tool", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "{{ $vars.tg }}", "toolName": "t" } },
+                { "id": "b", "name": "b", "type": "mcp.tool", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "{{$vars['other_server']}}", "toolName": "t" } },
+                { "id": "c", "name": "c", "type": "mcp.tool", "typeVersion": 1, "position": [0, 0], "parameters": { "serverId": "{{ $vars.tg + $json.x }}", "toolName": "t" } },
+                { "id": "e", "name": "e", "type": "ai.agent", "typeVersion": 1, "position": [0, 0], "parameters": { "tools": [ { "serverId": "{{ $vars.agent_tools }}", "toolName": "t" } ] } }
+              ],
+              "connections": []
+            }
+            """);
+
+        Assert.Equal(["agent_tools", "other_server", "tg"], McpServerSync.ReferencedVariables(workflow).Order());
+        Assert.Empty(McpServerSync.ReferencedServers(workflow));
+    }
+
+    [Fact]
+    public async Task ServerFromVariable_IsRegistered()
+    {
+        await using var worker = await WorkerHarness.CreateAsync(postgres);
+        var server = await AddServerAsync(worker, "http", new JsonObject { ["url"] = "http://127.0.0.1:1/mcp" });
+        var key = "tg_" + Guid.NewGuid().ToString("N")[..8];
+        await using (var db = worker.Db.CreateDbContext())
+        {
+            db.Variables.Add(new VariableEntity { Key = key, Value = server.Id.ToString(), UpdatedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        await worker.Servers.SyncAsync(Workflow("{{ $vars." + key + " }}"), new SecretScrubber(), default);
+
+        Assert.True(worker.Mcp.TryGetServer(server.Id.ToString(), out _));
+    }
+
     private static async Task<McpServerEntity> AddServerAsync(
         WorkerHarness worker, string transport, JsonNode config, Guid? credentialId = null, string? toolsCache = null)
     {
