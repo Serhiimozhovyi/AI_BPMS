@@ -419,6 +419,16 @@ export class WorkflowsApiService {
     return this.updateGroup(id, { name });
   }
 
+  /** `PUT /workflow-groups/{id}/app` — оболонка застосунку проєкту (editor проєкту, F8-15). */
+  setApp(id: string, app: ProjectAppShell): Observable<WorkflowGroup> {
+    return this.http.put<WorkflowGroup>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}/app`, app);
+  }
+
+  /** `DELETE /workflow-groups/{id}/app` — прибрати оболонку: застосунок знову показується списком сторінок. */
+  clearApp(id: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}/app`);
+  }
+
   /** Змінює лише передані поля; `''` очищає опис чи іконку (F8-03). */
   updateGroup(id: string, patch: { name?: string; description?: string; icon?: string; appRoles?: ProjectAppRole[] }): Observable<WorkflowGroup> {
     return this.http.patch<WorkflowGroup>(`${API_BASE}/workflow-groups/${encodeURIComponent(id)}`, patch);

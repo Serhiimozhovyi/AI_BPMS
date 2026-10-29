@@ -1470,9 +1470,10 @@
 - Зроблено: `PageDashboardComponent` — сітка з 12 колонок, блоки `text`, `tiles` (спільний `PageMetricsComponent`), `list` («Усі (N)», мітки, дії рядка), `calendar` (події дня чи тижня), `form` і `actions` (перехід у панель чи сценарій від імені користувача), спільні фільтри з типовими значеннями. Оболонка (`ProjectAppPage`): назва, значок, меню за групами лише з видимих сторінок, відкриття головної (`app.home`) або першої сторінки меню, кнопка «Конструктор» для editor; користувач лише застосунку з оболонкою не бачить ні меню OpenBP, ні рамки проєкту. Сервер: `filterOptions` для спільних фільтрів головної. Тести: Vitest `page-dashboard.component`, `project-app.page`, `project.page`, `app`; Playwright `app-shell.e2e.ts`.
 
 ### F8-19 · Конструктор зручних сторінок
-- model: `sonnet` · status: `ready` · depends: F8-16, F8-17, F8-18
+- model: `sonnet` · status: `review` · depends: F8-16, F8-17, F8-18
 - Що: усі опції F8-14 формою з живим попереднім переглядом на даних проєкту; нова сторінка за зразком («список з панеллю», «календар», «головна»); налаштування `app` (меню, головна).
 - DoD: Vitest; Playwright: зібрати календар і головну в конструкторі без JSON; `docs/guide/users.md` — розділ про конструктор.
+- Зроблено: `PageBuilderPage` зберігає й редагує всі опції F8-14 (редактори `builder/*`: фільтри, колонки, `computed`, картки, `expand`, календар, блоки головної, режим відкриття `navigate`/`drawer`), список «Почати зі зразка» (`sampleFor`), перегляд справа (`PagePreviewComponent` + `POST …/pages/{key}/preview`, чернетка не зберігається), `AppSettingsPage` (`/app/_app`: назва, значок, головна, пояс, групи меню, «Прибрати оболонку»). Сервер: `PreviewAsync` (`_draft`), тест `Preview_returns_data_of_unsaved_draft…`; `docs/openapi.json` оновлено. Тести: Vitest `page-builder.page`, `builder-components`, `builder-list-options`, `app-settings.page`, `page-builder-options`; Playwright `app-builder.e2e.ts`. Документація: `docs/guide/users.md` §12, `docs/projects.md` §3.
 
 ### F8-20 · Кабінет психолога і координатора в шаблоні psy-support
 - model: `sonnet` · status: `ready` · depends: F8-19, F8-13

@@ -1,11 +1,12 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { forkJoin, of } from 'rxjs';
+import { catchError, debounceTime, forkJoin, map, of, switchMap, tap } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
+import { SampleKind, sampleFor } from '../../projects/page-builder-options';
 import {
   ActionRow,
   ChartRow,
@@ -29,13 +30,22 @@ import {
 import {
   PAGE_AGGREGATES,
   PAGE_KINDS,
+  PageBlock,
+  PageCalendar,
+  PageColumn,
   PageDefinition,
   PageField,
   PageKind,
+  PagePreview,
   ProjectPagesApiService,
 } from '../../projects/project-pages-api.service';
 import { DataTableSummary, DataTablesApiService } from '../../tables/data-tables-api.service';
 import { WorkflowSummary, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { BuilderCalendarComponent } from './builder/builder-calendar.component';
+import { BuilderDashboardComponent } from './builder/builder-dashboard.component';
+import { BuilderListOptionsComponent, ListExtras } from './builder/builder-list-options.component';
+import { BuilderUserFiltersComponent } from './builder/builder-user-filters.component';
+import { PagePreviewComponent } from './builder/page-preview.component';
 
 type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 
@@ -47,9 +57,10 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 @Component({
   selector: 'app-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, NgTemplateOutlet, RouterLink],
+  imports: [MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent],
   template: `
-    <section class="max-w-4xl px-6 pb-8 pt-2" data-testid="page-builder">
+    <div class="grid gap-6 px-6 pb-8 pt-2 xl:grid-cols-2">
+    <section class="min-w-0" data-testid="page-builder">
       <h2 class="mb-3 text-lg font-semibold">
         @if (editing()) {
           <ng-container i18n="@@builder.edit">Сторінка «{{ name() }}»</ng-container>
@@ -80,6 +91,18 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
           }
         </select>
       </div>
+
+      @if (!editing()) {
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+          <label for="b-sample" i18n="@@builder.sample">Почати зі зразка</label>
+          <select id="b-sample" class="border p-1" data-testid="b-sample" (change)="applySample($any($event.target).value); $any($event.target).value = ''">
+            <option value="" selected>—</option>
+            <option value="list" i18n="@@builder.sample.list">Список з панеллю фільтрів</option>
+            <option value="calendar" i18n="@@builder.sample.calendar">Календар</option>
+            <option value="dashboard" i18n="@@builder.sample.dashboard">Головна</option>
+          </select>
+        </div>
+      }
 
       @if (appRoles().length) {
         <fieldset class="mb-4">
@@ -127,6 +150,28 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
           <label for="b-size" i18n="@@builder.pageSize">Рядків на сторінці</label>
           <input id="b-size" class="w-20 border p-1" type="number" min="1" max="200" [value]="pageSize()" (input)="pageSize.set($any($event.target).value)" />
         </div>
+        <app-builder-list-options
+          [extras]="listExtras()"
+          [columnNames]="columnNames()"
+          [selected]="selectedColumns()"
+          [tables]="tables()"
+          [pageKeys]="pageKeys()"
+          (extrasChange)="listExtras.set($event)"
+          (columnsChange)="setColumnOverrides($event)"
+        />
+      }
+
+      @if (kind() === 'calendar') {
+        <app-builder-calendar [calendar]="calendar()" [columns]="columnNames()" [pageKeys]="pageKeys()" (calendarChange)="calendar.set($event)" />
+      }
+
+      @if (kind() === 'calendar' || kind() === 'dashboard') {
+        <h3 class="mb-1 mt-4 font-medium" i18n="@@bo.list.filters">Фільтри над списком</h3>
+        <app-builder-user-filters [filters]="listExtras().filters ?? []" [columns]="columnNames()" (changed)="listExtras.set({ ...listExtras(), filters: $event.length ? $event : undefined })" />
+      }
+
+      @if (kind() === 'dashboard') {
+        <app-builder-dashboard [blocks]="blocks()" [pageKeys]="pageKeys()" [workflows]="workflowNames()" [appRoles]="appRoles()" (blocksChange)="blocks.set($event)" />
       }
 
       @if (kind() === 'detail' || kind() === 'form') {
@@ -176,8 +221,8 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         </div>
       }
 
-      @if (kind() !== 'metrics') {
-        <h3 class="mb-1 font-medium" i18n="@@builder.filters">Умови (діють на сервері, їх не можна зняти)</h3>
+      @if (kind() !== 'metrics' && kind() !== 'dashboard') {
+        <h3 class="mb-1 mt-4 font-medium" i18n="@@builder.filters">Умови (діють на сервері, їх не можна зняти)</h3>
         @for (f of filters(); track $index; let i = $index) {
           <div class="mb-1 flex flex-wrap items-center gap-2" [attr.data-filter]="i">
             <ng-container *ngTemplateOutlet="filterTpl; context: { $implicit: f, columns: columnNames(), set: setFilter(i) }" />
@@ -203,6 +248,10 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
                     <option [value]="p" [selected]="p === a.target">{{ p }}</option>
                   }
                 </select>
+                <select class="border p-1" aria-label="Як відкрити" i18n-aria-label="@@bc.mode" [value]="a.mode" (change)="setAction(i, { mode: $any($event.target).value })">
+                  <option value="navigate" [selected]="a.mode !== 'drawer'" i18n="@@bc.mode.navigate">переходом</option>
+                  <option value="drawer" [selected]="a.mode === 'drawer'" i18n="@@bc.mode.drawer">бічною панеллю</option>
+                </select>
               } @else if (a.type === 'workflow') {
                 <select class="border p-1" aria-label="Сценарій" i18n-aria-label="@@builder.action.target.workflow" [value]="a.target" (change)="setAction(i, { target: $any($event.target).value })">
                   <option value="" [selected]="!a.target">—</option>
@@ -225,7 +274,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
           <button mat-button type="button" data-testid="b-add-action" (click)="actions.set([...actions(), emptyAction()])" i18n="@@builder.addAction">Додати дію</button>
         }
 
-        @if (kind() === 'list') {
+        @if (kind() === 'list' || kind() === 'calendar') {
           <div class="mb-4 mt-4 flex items-center gap-2">
             <label for="b-create" i18n="@@builder.create">Кнопка «Створити» веде на форму</label>
             <select id="b-create" class="border p-1" [value]="createPage()" (change)="createPage.set($any($event.target).value)">
@@ -234,9 +283,15 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
                 <option [value]="p" [selected]="p === createPage()">{{ p }}</option>
               }
             </select>
+            @if (createPage()) {
+              <select class="border p-1" aria-label="Як відкрити" i18n-aria-label="@@bc.mode" [value]="createMode()" (change)="createMode.set($any($event.target).value)">
+                <option value="navigate" [selected]="createMode() !== 'drawer'" i18n="@@bc.mode.navigate">переходом</option>
+                <option value="drawer" [selected]="createMode() === 'drawer'" i18n="@@bc.mode.drawer">бічною панеллю</option>
+              </select>
+            }
           </div>
         }
-      } @else {
+      } @else if (kind() === 'metrics') {
         <h3 class="mb-1 font-medium" i18n="@@builder.tiles">Плитки</h3>
         @for (t of tiles(); track $index; let i = $index) {
           <div class="mb-2 flex flex-wrap items-center gap-2" [attr.data-tile]="i">
@@ -284,6 +339,21 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         }
       </div>
     </section>
+
+    <aside class="min-w-0 xl:sticky xl:top-2 xl:max-h-[calc(100vh-1rem)] xl:self-start xl:overflow-auto" data-testid="builder-preview" aria-live="polite">
+      <h3 class="mb-2 font-medium" i18n="@@builder.preview">Перегляд на даних проєкту</h3>
+      @if (previewError()) {
+        <p role="alert" class="mb-2 text-red-700" data-testid="preview-error">{{ previewError() }}</p>
+      }
+      @if (previewData(); as p) {
+        <div class="rounded border border-ac-line p-3" [class.opacity-50]="previewError()">
+          <app-page-preview [data]="p" />
+        </div>
+      } @else if (!previewError()) {
+        <p class="opacity-70" i18n="@@builder.preview.none">Виберіть таблицю — тут з'явиться сторінка.</p>
+      }
+    </aside>
+    </div>
 
     <ng-template #filterTpl let-row let-columns="columns" let-set="set">
       <select class="border p-1" aria-label="Колонка умови" i18n-aria-label="@@builder.filter.column" [value]="row.column" (change)="set({ column: $any($event.target).value })">
@@ -378,6 +448,16 @@ export class PageBuilderPage implements OnInit {
   readonly submitWorkflow = signal('');
   readonly thenPage = signal('');
   readonly createPage = signal('');
+  readonly createMode = signal<'navigate' | 'drawer'>('navigate');
+  /** Параметри колонок (формат, підписи, кольори, `display`) вибраних колонок списку. */
+  readonly columnOverrides = signal<PageColumn[]>([]);
+  /** Фільтри користувача, обчислювані колонки, картки, `expand`, `empty` (F8-14). */
+  readonly listExtras = signal<ListExtras>({});
+  readonly calendar = signal<PageCalendar>({ start: '', defaultMinutes: 60 });
+  readonly blocks = signal<PageBlock[]>([]);
+  private readonly loaded = signal(false);
+  readonly previewData = signal<PagePreview | null>(null);
+  readonly previewError = signal<string | null>(null);
   readonly filters = signal<FilterRow[]>([]);
   readonly actions = signal<ActionRow[]>([]);
   readonly tiles = signal<TileRow[]>([]);
@@ -389,6 +469,8 @@ export class PageBuilderPage implements OnInit {
   private base: PageDefinition = { table: '' };
 
   readonly columnNames = computed(() => this.columnsOf(this.table()));
+  readonly workflowNames = computed(() => this.workflows().map((w) => w.name));
+  readonly selectedColumns = computed<PageColumn[]>(() => this.columns().map((column) => this.columnOverrides().find((c) => c.column === column) ?? { column }));
 
   readonly definition = computed<PageDefinition>(() => {
     const kind = this.kind();
@@ -397,16 +479,30 @@ export class PageBuilderPage implements OnInit {
       return { table, tiles: toTiles(this.tiles()), charts: toCharts(this.charts()) };
     }
 
+    const extras = this.listExtras();
+    if (kind === 'dashboard') {
+      const dash: PageDefinition = { table };
+      if (extras.filters?.length) dash.filters = extras.filters;
+      dash.blocks = this.blocks();
+      return dash;
+    }
+
     const def: PageDefinition = { table };
     const filter = toFilters(this.filters());
     if (filter.length) def.filter = filter;
-    if (kind === 'list') {
-      def.columns = this.columns().map((column) => this.base.columns?.find((c) => c.column === column) ?? { column });
+    if (kind === 'calendar') {
+      def.calendar = this.calendar();
+      if (extras.filters?.length) def.filters = extras.filters;
+      const create = this.createPage();
+      if (create) def.create = this.createMode() === 'drawer' ? { page: create, mode: 'drawer' } : { page: create };
+    } else if (kind === 'list') {
+      def.columns = this.selectedColumns();
+      Object.assign(def, extras);
       if (this.search().length) def.search = this.search();
       if (this.sortColumn()) def.sort = { column: this.sortColumn(), direction: this.sortDirection() };
       if (this.pageSize()) def.pageSize = Number(this.pageSize());
       const create = this.createPage();
-      if (create) def.create = { page: create };
+      if (create) def.create = this.createMode() === 'drawer' ? { page: create, mode: 'drawer' } : { page: create };
     } else {
       const required = this.required();
       def.fields = this.fields().map((column): PageField => {
@@ -431,6 +527,37 @@ export class PageBuilderPage implements OnInit {
 
   readonly jsonText = computed(() => this.jsonDraft() ?? JSON.stringify(this.definition(), null, 2));
 
+  constructor() {
+    const request = computed(() => {
+      const kind = this.kind();
+      const ready = this.table() || kind === 'metrics' || kind === 'dashboard';
+      if (!ready || !this.loaded()) return null;
+      const key = this.key().trim();
+      return { key: /^[a-z0-9][a-z0-9_-]*$/i.test(key) ? key : 'preview', input: { name: this.name().trim() || key || 'preview', kind, definition: this.definition(), roles: this.roles() } };
+    });
+    toObservable(request)
+      .pipe(
+        debounceTime(500),
+        switchMap((r) =>
+          r
+            ? this.api.preview(this.projectId, r.key, r.input).pipe(
+                tap(() => this.previewError.set(null)),
+                map((data): PagePreview | null => data),
+                catchError((e: unknown) => {
+                  this.previewError.set(apiErrorMessage(e));
+                  return of(undefined);
+                }),
+              )
+            : of(null),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((data) => {
+        if (data === undefined) return;
+        this.previewData.set(data);
+      });
+  }
+
   ngOnInit(): void {
     const editKey = this.route.snapshot.paramMap.get('key');
     forkJoin({
@@ -445,6 +572,7 @@ export class PageBuilderPage implements OnInit {
           this.tables.set(tables.filter((t) => !t.projectId || t.projectId === this.projectId));
           this.workflows.set(workflows.items.filter((w) => w.groupId === this.projectId));
           this.pageKeys.set(pages.map((p) => p.key));
+          this.loaded.set(true);
           if (page) {
             this.editing.set(true);
             this.key.set(page.page.key);
@@ -466,6 +594,10 @@ export class PageBuilderPage implements OnInit {
         return $localize`:@@builder.kind.detail:Картка`;
       case 'form':
         return $localize`:@@builder.kind.form:Форма`;
+      case 'calendar':
+        return $localize`:@@builder.kind.calendar:Календар`;
+      case 'dashboard':
+        return $localize`:@@builder.kind.dashboard:Головна`;
       default:
         return $localize`:@@builder.kind.metrics:Показники`;
     }
@@ -532,6 +664,21 @@ export class PageBuilderPage implements OnInit {
     return (patch) => this.charts.update((rows) => rows.map((r, i) => (i === index ? { ...r, where: { ...r.where, ...patch } } : r)));
   }
 
+  setColumnOverrides(next: PageColumn[]): void {
+    this.columnOverrides.update((all) => [...all.filter((c) => !next.some((n) => n.column === c.column)), ...next]);
+  }
+
+  /** Підставляє зразок за таблицею (вибраною чи першою) і зберігає ключ, якщо його вже введено. */
+  applySample(kind: string): void {
+    if (!kind) return;
+    const table = this.tables().find((t) => t.name === this.table()) ?? this.tables()[0];
+    const sample = sampleFor(kind as SampleKind, table, this.pageKeys());
+    this.key.set(sample.key);
+    this.name.set(sample.name);
+    this.kind.set(sample.kind);
+    this.load(sample.definition);
+  }
+
   /** Застосовує текст JSON до форми; хибний JSON лишає форму без змін. */
   applyJson(): void {
     const draft = this.jsonDraft();
@@ -584,6 +731,18 @@ export class PageBuilderPage implements OnInit {
     this.submitWorkflow.set(def.onSubmit?.workflow ?? '');
     this.thenPage.set(def.then?.page ?? '');
     this.createPage.set(def.create?.page ?? '');
+    this.createMode.set(def.create?.mode === 'drawer' ? 'drawer' : 'navigate');
+    this.columnOverrides.set(def.columns ?? []);
+    this.listExtras.set({
+      ...(def.filters?.length ? { filters: def.filters } : {}),
+      ...(def.computed?.length ? { computed: def.computed } : {}),
+      ...(def.layout ? { layout: def.layout } : {}),
+      ...(def.card ? { card: def.card } : {}),
+      ...(def.expand?.length ? { expand: def.expand } : {}),
+      ...(def.empty ? { empty: def.empty } : {}),
+    });
+    this.calendar.set(def.calendar ?? { start: '', defaultMinutes: 60 });
+    this.blocks.set(def.blocks ?? []);
     this.filters.set(fromFilters(def.filter));
     this.actions.set(fromActions(def.actions));
     this.tiles.set(fromTiles(def.tiles));

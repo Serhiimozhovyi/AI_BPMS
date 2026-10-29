@@ -40,7 +40,7 @@ interface FieldError {
       @if (saved()) {
         <p role="status" class="mb-2" data-testid="app-form-saved" i18n="@@app.page.saved">Збережено.</p>
       }
-      <button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting() || loading()" i18n="@@app.page.submit">Зберегти</button>
+      <button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting() || loading() || preview()" i18n="@@app.page.submit">Зберегти</button>
     </form>
   `,
 })
@@ -55,6 +55,8 @@ export class PageFormComponent implements OnInit {
   readonly rowKey = input<string | null>(null);
   /** Початкові значення нового запису; беруться лише поля, що є у формі. */
   readonly prefill = input<Record<string, unknown>>({});
+  /** Перегляд у конструкторі (F8-19): рядок не читається, зберегти не можна. */
+  readonly preview = input(false);
   /** Форму збережено (або сценарій форми відповів). */
   readonly submitted = output<PageSubmitResult>();
 
@@ -74,7 +76,7 @@ export class PageFormComponent implements OnInit {
     this.model = Object.fromEntries(Object.entries(this.prefill()).filter(([name]) => known.has(name)));
     this.fields.set(formFields(view.schema));
     const rowKey = this.rowKey();
-    if (!rowKey) return;
+    if (!rowKey || this.preview()) return;
     this.loading.set(true);
     this.api.row(this.projectId(), this.pageKey() ?? view.page.key, rowKey).subscribe({
       next: (record) => {

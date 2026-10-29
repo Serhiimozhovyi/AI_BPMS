@@ -528,4 +528,48 @@ public class ProjectPageServerTests(ApiFactory api)
         Assert.Equal("events", group.GetProperty("app").GetProperty("home").GetString());
         Assert.Equal("Europe/Kyiv", group.GetProperty("app").GetProperty("timezone").GetString());
     }
+
+    [Fact]
+    public async Task Preview_returns_data_of_unsaved_draft_without_saving_and_validates_like_save()
+    {
+        var d = await SetupAsync();
+        string Url(string key) => $"/api/v1/projects/{d.Project}/pages/{key}/preview";
+        Task<HttpResponseMessage> Preview(HttpClient client, string key, string kind, object definition) =>
+            client.PostAsJsonAsync(Url(key), new { name = key, kind, definition, roles = Array.Empty<string>() });
+
+        var list = await JsonAsync(await Preview(d.Editor.Client, "draft-list", "list", new
+        {
+            table = "events",
+            columns = new object[] { new { column = "title" }, new { column = "status", format = "badge" } },
+            filters = new object[] { new { column = "status", kind = "chips" } },
+        }));
+        Assert.Equal("draft-list", list.GetProperty("view").GetProperty("page").GetProperty("key").GetString());
+        Assert.True(list.GetProperty("rows").GetProperty("total").GetInt32() > 0);
+        Assert.True(list.GetProperty("view").GetProperty("filterOptions").GetProperty("status").GetArrayLength() > 0);
+
+        var calendar = await JsonAsync(await Preview(d.Editor.Client, "draft-cal", "calendar", new
+        {
+            table = "slots",
+            calendar = new { start = "starts_at", duration = "duration_min", title = new { column = "note" } },
+        }));
+        Assert.Equal(JsonValueKind.Array, calendar.GetProperty("events").GetProperty("events").ValueKind);
+
+        // Власне визначення блоку головної доступне й у чернетці.
+        var dashboard = await JsonAsync(await Preview(d.Editor.Client, "draft-home", "dashboard", new
+        {
+            blocks = new object[]
+            {
+                new { kind = "text", text = "Привіт, {{ $user.email }}" },
+                new { kind = "list", limit = 2, definition = new { table = "events", columns = new object[] { new { column = "title" } } } },
+            },
+        }));
+        var blocks = dashboard.GetProperty("dashboard").GetProperty("blocks").EnumerateArray().ToList();
+        Assert.Equal($"Привіт, {d.Editor.Email}", blocks[0].GetProperty("text").GetString());
+        Assert.Equal(2, blocks[1].GetProperty("rows").GetProperty("items").GetArrayLength());
+
+        // Чернетка не зберігається; помилка перевіряється як при збереженні; psychologist не editor.
+        Assert.Equal(HttpStatusCode.NotFound, (await d.Editor.Client.GetAsync($"/api/v1/projects/{d.Project}/pages/draft-list")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Preview(d.Editor.Client, "bad", "list", new { table = "немає", columns = new object[] { new { column = "x" } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Preview(d.Psy.Client, "draft-list", "list", new { table = "events", columns = new object[] { new { column = "title" } } })).StatusCode);
+    }
 }

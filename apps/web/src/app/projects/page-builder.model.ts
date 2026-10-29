@@ -16,6 +16,8 @@ export interface ActionRow {
   confirm: string;
   when: string;
   roles: string[];
+  /** Як відкрити сторінку: перехід чи бокова панель (лише `page`). */
+  mode: 'navigate' | 'drawer';
 }
 
 /** Рядок плитки `metrics`: агрегат по таблиці або вираз над іншими плитками. */
@@ -47,7 +49,7 @@ export const FILTER_OPERATORS: readonly string[] = ['eq', 'ne', 'gt', 'gte', 'lt
 
 export const emptyFilter = (): FilterRow => ({ column: '', operator: 'eq', value: '' });
 
-export const emptyAction = (): ActionRow => ({ label: '', type: 'page', target: '', confirm: '', when: '', roles: [] });
+export const emptyAction = (): ActionRow => ({ label: '', type: 'page', target: '', confirm: '', when: '', roles: [], mode: 'navigate' });
 
 export const emptyTile = (): TileRow => ({
   label: '',
@@ -91,7 +93,10 @@ export function toActions(rows: ActionRow[]): PageAction[] {
     .filter((r) => r.label.trim() && (r.type === 'delete' || r.target))
     .map((r) => {
       const action: PageAction = { label: r.label.trim() };
-      if (r.type === 'page') action.page = r.target;
+      if (r.type === 'page') {
+        action.page = r.target;
+        if (r.mode === 'drawer') action.mode = 'drawer';
+      }
       else if (r.type === 'workflow') action.workflow = r.target;
       else action.operation = 'delete';
       if (r.confirm.trim()) action.confirm = r.confirm.trim();
@@ -109,6 +114,7 @@ export function fromActions(actions: PageAction[] | undefined): ActionRow[] {
     confirm: a.confirm ?? '',
     when: a.when ?? '',
     roles: a.roles ?? [],
+    mode: a.mode ?? 'navigate',
   }));
 }
 

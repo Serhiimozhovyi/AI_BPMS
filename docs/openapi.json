@@ -4103,6 +4103,74 @@
         ]
       }
     },
+    "/api/v1/projects/{projectId}/pages/{key}/preview": {
+      "post": {
+        "tags": [
+          "Сторінки застосунку"
+        ],
+        "summary": "Переглянути чернетку сторінки без збереження",
+        "description": "Лише editor проєкту. Та сама перевірка, що й при збереженні (422 з тими ж кодами), і дані за визначенням: `rows` — перші 10 рядків списку, `metrics` — показники, `events` — події поточного тижня календаря, `dashboard` — блоки головної. Нічого не зберігається.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePreview"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Помилка запиту: 400 — некоректні дані, 401 — немає входу, 403 — недостатньо прав, 404 — не знайдено, 409 — конфлікт стану.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/projects/{projectId}/pages/{key}/rows": {
       "get": {
         "tags": [
@@ -12304,6 +12372,57 @@
           },
           "label": {
             "type": "string"
+          }
+        }
+      },
+      "PagePreview": {
+        "required": [
+          "view"
+        ],
+        "type": "object",
+        "properties": {
+          "view": {
+            "$ref": "#/components/schemas/ProjectPageView"
+          },
+          "rows": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageRows"
+              }
+            ]
+          },
+          "metrics": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageMetrics"
+              }
+            ]
+          },
+          "events": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageCalendarEvents"
+              }
+            ]
+          },
+          "dashboard": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PageDashboard"
+              }
+            ]
           }
         }
       },

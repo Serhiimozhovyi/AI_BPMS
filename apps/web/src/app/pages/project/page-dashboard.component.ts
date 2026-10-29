@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, injec
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, of } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { eventLine } from '../../projects/calendar-line';
 import { zonedParts } from '../../projects/calendar-time';
@@ -195,6 +195,8 @@ export class PageDashboardComponent {
   readonly view = input.required<ProjectPageView>();
   /** Змінюється, коли дані треба перечитати. */
   readonly version = input(0);
+  /** Готові дані чернетки (конструктор, F8-19): Api не опитується. */
+  readonly preview = input<PageDashboard | null>(null);
 
   /** Відкрити сторінку застосунку: картка, форма чи бокова панель. */
   readonly open = output<ExpandOpen>();
@@ -216,7 +218,7 @@ export class PageDashboardComponent {
   constructor() {
     effect(() => {
       const v = this.view();
-      const id = v.page.id + v.page.updatedAt;
+      const id = v.page.id + v.page.updatedAt + (this.preview() ? JSON.stringify(v.page.definition.filters) : '');
       untracked(() => {
         if (this.initialisedFor === id) return;
         this.initialisedFor = id;
@@ -230,6 +232,7 @@ export class PageDashboardComponent {
       this.version();
       this.projectId();
       this.view();
+      this.preview();
       untracked(() => {
         if (this.initialisedFor) this.load(filters);
       });
@@ -361,7 +364,8 @@ export class PageDashboardComponent {
     this.loadSub?.unsubscribe();
     this.loading.set(true);
     this.error.set(null);
-    this.loadSub = this.api.dashboard(this.projectId(), this.view().page.key, filters).subscribe({
+    const preview = this.preview();
+    this.loadSub = (preview ? of(preview) : this.api.dashboard(this.projectId(), this.view().page.key, filters)).subscribe({
       next: (dashboard) => {
         this.dashboard.set(dashboard);
         this.loading.set(false);

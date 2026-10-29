@@ -23,6 +23,13 @@ public interface IProjectPageService
     /// <exception cref="UnprocessableException">Невідома таблиця, колонка чи сценарій, сценарій іншого проєкту, некоректне визначення.</exception>
     Task<ProjectPageDto> UpsertAsync(Guid projectId, string key, ProjectPageInput input, CancellationToken ct);
 
+    /// <summary>
+    /// Дані чернетки сторінки без збереження (editor проєкту): та сама перевірка, що й у <see cref="UpsertAsync"/>, і ті самі
+    /// запити даних, що й у сторінки, — перші рядки, показники, події тижня, блоки головної.
+    /// </summary>
+    /// <exception cref="UnprocessableException">Некоректне визначення — як у <see cref="UpsertAsync"/>.</exception>
+    Task<PagePreview> PreviewAsync(Guid projectId, string key, ProjectPageInput input, CancellationToken ct);
+
     /// <summary>Видаляє сторінку (editor проєкту).</summary>
     Task DeleteAsync(Guid projectId, string key, CancellationToken ct);
 

@@ -86,6 +86,40 @@ public sealed partial class ProjectPageService
         return await CalendarCoreAsync(c, from, to, filters, ct);
     }
 
+    /// <summary>Скільки рядків списку показує перегляд чернетки.</summary>
+    public const int PreviewRows = 10;
+
+    /// <inheritdoc />
+    public async Task<PagePreview> PreviewAsync(Guid projectId, string key, ProjectPageInput input, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var (pageKey, name, kind, roles, definition) = await ValidatedAsync(projectId, key, input, ct);
+        _draft = new ProjectPageDto(Guid.Empty, pageKey, name, kind, definition, roles, 0, time.GetUtcNow());
+        try
+        {
+            var c = await LoadAsync(projectId, pageKey, ct);
+            var preview = new PagePreview(await GetCoreAsync(c, ct));
+            switch (kind)
+            {
+                case ProjectPageKinds.List:
+                    return preview with { Rows = await RowsCoreAsync(c, new PageRowsQuery(PageSize: PreviewRows), ct) };
+                case ProjectPageKinds.Metrics:
+                    return preview with { Metrics = await MetricsCoreAsync(c, ct) };
+                case ProjectPageKinds.Calendar:
+                    var (from, to) = await RangeAsync(projectId, "week", ct);
+                    return preview with { Events = await CalendarCoreAsync(c, from, to, null, ct) };
+                case ProjectPageKinds.Dashboard:
+                    return preview with { Dashboard = await DashboardAsync(projectId, pageKey, null, ct) };
+                default:
+                    return preview;
+            }
+        }
+        finally
+        {
+            _draft = null;
+        }
+    }
+
     /// <inheritdoc />
     public async Task<PageDashboard> DashboardAsync(Guid projectId, string key, IReadOnlyDictionary<string, PageFilterInput>? filters, CancellationToken ct)
     {

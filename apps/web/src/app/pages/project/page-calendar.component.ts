@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { Subscription } from 'rxjs';
+import { Subscription, of } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import {
   CalendarView,
@@ -21,6 +21,7 @@ import { BADGE_CLASSES } from '../../projects/page-format';
 import {
   PageAction,
   PageCalendarEvent,
+  PageCalendarEvents,
   PageFilterValue,
   PageRow,
   ProjectPageView,
@@ -257,6 +258,8 @@ export class PageCalendarComponent {
   readonly view = input.required<ProjectPageView>();
   /** Змінюється, коли дані треба перечитати (збережено форму, виконано дію). */
   readonly version = input(0);
+  /** Готові події чернетки (конструктор, F8-19): Api не опитується. */
+  readonly preview = input<PageCalendarEvents | null>(null);
 
   /** Відкрити сторінку застосунку: картку чи форму події або створення із часом початку. */
   readonly open = output<ExpandOpen>();
@@ -337,7 +340,7 @@ export class PageCalendarComponent {
     // Нова сторінка (чи її визначення) — початкові вигляд, дата й фільтри.
     effect(() => {
       const v = this.view();
-      const id = v.page.id + v.page.updatedAt;
+      const id = v.page.id + v.page.updatedAt + (this.preview() ? JSON.stringify(v.page.definition.calendar) : '');
       untracked(() => {
         if (this.initialisedFor === id) return;
         this.initialisedFor = id;
@@ -357,6 +360,7 @@ export class PageCalendarComponent {
       const filters = this.chosen();
       this.projectId();
       this.view();
+      this.preview();
       untracked(() => {
         if (this.initialisedFor) this.load(days, filters);
       });
@@ -466,7 +470,8 @@ export class PageCalendarComponent {
     this.loadSub?.unsubscribe();
     this.loading.set(true);
     this.error.set(null);
-    this.loadSub = this.api.calendar(this.projectId(), this.view().page.key, from, to, filters).subscribe({
+    const preview = this.preview();
+    this.loadSub = (preview ? of(preview) : this.api.calendar(this.projectId(), this.view().page.key, from, to, filters)).subscribe({
       next: (result) => {
         this.events.set(result.events);
         this.truncated.set(result.truncated);

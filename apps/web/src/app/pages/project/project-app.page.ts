@@ -54,6 +54,7 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
           }
           @if (canEdit() && !building()) {
             <a class="shell-nav__link mt-3 inline-block" data-testid="shell-builder" routerLink="_builder" i18n="@@project.app.builder">Конструктор</a>
+            <a class="shell-nav__link inline-block" data-testid="shell-settings" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
           }
         </aside>
         <div class="min-w-0 grow">
@@ -79,6 +80,7 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
         }
         @if (canEdit() && !building()) {
           <a class="shell-nav__link mb-2 inline-block" data-testid="app-new-page" routerLink="_builder" i18n="@@project.app.newPage">+ Нова сторінка</a>
+          <a class="shell-nav__link mb-2 ml-2 inline-block" data-testid="app-settings-link" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
         }
         @if (pages().length > 1) {
           <nav class="mb-2 flex flex-wrap gap-1" aria-label="Сторінки застосунку" i18n-aria-label="@@project.app.nav" data-testid="app-nav">
@@ -142,7 +144,7 @@ export class ProjectAppPage implements OnInit {
   }
 
   ngOnInit(): void {
-    const sync = () => this.building.set(this.route.firstChild?.snapshot.url[0]?.path === '_builder');
+    const sync = () => this.building.set((this.route.firstChild?.snapshot.url[0]?.path ?? '').startsWith('_'));
     sync();
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((e) => {
       if (e instanceof NavigationEnd) sync();

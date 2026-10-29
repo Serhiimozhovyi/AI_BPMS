@@ -126,12 +126,42 @@ public sealed partial class ProjectPageService(
     }
 
     /// <inheritdoc />
-    public async Task<ProjectPageDto> UpsertAsync(Guid projectId, string key, ProjectPageInput input, CancellationToken ct)
+    public async Task<ProjectPageDto> UpsertAsync(Guid projectId, string rawKey, ProjectPageInput input, CancellationToken ct)
+    {
+        var (key, name, kind, roles, definition) = await ValidatedAsync(projectId, rawKey, input, ct);
+
+        var now = time.GetUtcNow();
+        var entity = await db.ProjectPages.SingleOrDefaultAsync(p => p.ProjectId == projectId && p.Key == key, ct);
+        if (entity is null)
+        {
+            var last = await db.ProjectPages.Where(p => p.ProjectId == projectId).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
+            entity = new ProjectPageEntity { Id = Guid.CreateVersion7(now), ProjectId = projectId, Key = key, SortOrder = input.SortOrder ?? last + 1 };
+            db.ProjectPages.Add(entity);
+        }
+        else if (input.SortOrder is { } order)
+        {
+            entity.SortOrder = order;
+        }
+
+        entity.Name = name;
+        entity.Kind = kind;
+        entity.Definition = JsonSerializer.Serialize(definition, Json);
+        entity.Roles = JsonSerializer.Serialize(roles, Json);
+        entity.UpdatedAt = now;
+        db.Audit(currentUser, now, AuditActions.ProjectPageSaved, AuditEntities.Project, projectId.ToString(),
+            new JsonObject { ["page"] = key, ["kind"] = kind, ["table"] = definition.Table });
+        await db.SaveChangesAsync(ct);
+        return ToDto(entity);
+    }
+
+    /// <summary>Перевірка сторінки до збереження чи перегляду (editor проєкту): ключ, назва, тип, ролі застосунку й визначення.</summary>
+    private async Task<(string Key, string Name, string Kind, List<string> Roles, PageDefinition Definition)> ValidatedAsync(
+        Guid projectId, string rawKey, ProjectPageInput input, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(input);
         await _access.RequireAsync(projectId, UserRole.Editor, "project", projectId, ct);
         var project = await db.WorkflowGroups.AsNoTracking().SingleAsync(g => g.Id == projectId, ct);
-        key = key?.Trim() ?? "";
+        var key = rawKey?.Trim() ?? "";
         if (!KeyPattern().IsMatch(key))
         {
             throw Invalid($"Ключ сторінки «{key}»: латиниця в нижньому регістрі, цифри, _ або -, від 1 до 40 символів, з літери.");
@@ -158,29 +188,8 @@ public sealed partial class ProjectPageService(
 
         var definition = input.Definition ?? throw Invalid("Потрібне визначення сторінки.");
         await ValidateAsync(projectId, kind, definition, ct);
+        return (key, name, kind, roles, definition);
 
-        var now = time.GetUtcNow();
-        var entity = await db.ProjectPages.SingleOrDefaultAsync(p => p.ProjectId == projectId && p.Key == key, ct);
-        if (entity is null)
-        {
-            var last = await db.ProjectPages.Where(p => p.ProjectId == projectId).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
-            entity = new ProjectPageEntity { Id = Guid.CreateVersion7(now), ProjectId = projectId, Key = key, SortOrder = input.SortOrder ?? last + 1 };
-            db.ProjectPages.Add(entity);
-        }
-        else if (input.SortOrder is { } order)
-        {
-            entity.SortOrder = order;
-        }
-
-        entity.Name = name;
-        entity.Kind = kind;
-        entity.Definition = JsonSerializer.Serialize(definition, Json);
-        entity.Roles = JsonSerializer.Serialize(roles, Json);
-        entity.UpdatedAt = now;
-        db.Audit(currentUser, now, AuditActions.ProjectPageSaved, AuditEntities.Project, projectId.ToString(),
-            new JsonObject { ["page"] = key, ["kind"] = kind, ["table"] = definition.Table });
-        await db.SaveChangesAsync(ct);
-        return ToDto(entity);
     }
 
     /// <inheritdoc />
@@ -452,6 +461,9 @@ public sealed partial class ProjectPageService(
         action.Roles is not { Count: > 0 } || c.Scope.RoleIn(c.ProjectId) >= UserRole.Editor
         || (c.Scope.AppRoleIn(c.ProjectId) is { } role && action.Roles.Contains(role));
 
+    /// <summary>Чернетка сторінки, яку конструктор показує до збереження (<see cref="PreviewAsync"/>); живе лише на час запиту.</summary>
+    private ProjectPageDto? _draft;
+
     private sealed record PageContext(ProjectScope Scope, Guid ProjectId, ProjectPageDto Page, DataTableInfo Table, JsonObject User);
 
     private async Task<PageContext> LoadAsync(Guid projectId, string key, CancellationToken ct)
@@ -461,9 +473,10 @@ public sealed partial class ProjectPageService(
         // «today.3» — власне визначення блоку 3 сторінки today (F8-15): ті самі запити, що й для сторінки.
         var dot = key.IndexOf('.', StringComparison.Ordinal);
         var pageKey = dot < 0 ? key : key[..dot];
-        var entity = await db.ProjectPages.AsNoTracking().SingleOrDefaultAsync(p => p.ProjectId == projectId && p.Key == pageKey, ct)
-                     ?? throw new NotFoundException(Entity, key);
-        var page = ToDto(entity);
+        var page = _draft is not null && _draft.Key == pageKey
+            ? _draft
+            : ToDto(await db.ProjectPages.AsNoTracking().SingleOrDefaultAsync(p => p.ProjectId == projectId && p.Key == pageKey, ct)
+                    ?? throw new NotFoundException(Entity, key));
         if (!CanSee(scope, projectId, page.Roles))
         {
             throw new NotFoundException(Entity, key);

@@ -61,6 +61,12 @@ public static partial class ProjectPageEndpoints
             .WithDescription("Лише editor проєкту. Невідома таблиця — 422 PAGE_TABLE_UNKNOWN, колонка — PAGE_COLUMN_UNKNOWN, сценарій чи сценарій " +
                              "іншого проєкту — PAGE_WORKFLOW_UNKNOWN, інша помилка визначення — PAGE_INVALID.");
 
+        pages.MapPost("/{key}/preview", (Guid projectId, string key, ProjectPageRequest body, IProjectPageService service, CancellationToken ct) =>
+            service.PreviewAsync(projectId, key, body.ToInput(), ct))
+            .WithSummary("Переглянути чернетку сторінки без збереження")
+            .WithDescription("Лише editor проєкту. Та сама перевірка, що й при збереженні (422 з тими ж кодами), і дані за визначенням: `rows` — перші 10 рядків " +
+                             "списку, `metrics` — показники, `events` — події поточного тижня календаря, `dashboard` — блоки головної. Нічого не зберігається.");
+
         pages.MapDelete("/{key}", async (Guid projectId, string key, IProjectPageService service, CancellationToken ct) =>
         {
             await service.DeleteAsync(projectId, key, ct);
