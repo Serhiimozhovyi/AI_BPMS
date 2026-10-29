@@ -44,6 +44,10 @@
           <span class="material-symbols-outlined">person</span>
         </span>
         <span class="shell-user__email" data-testid="current-user">{{ user()?.email }}</span>
+        <a class="shell-icon-button" data-testid="change-password" routerLink="/account/password" title="Змінити пароль" i18n-title="@@app.changePassword.title">
+          <span class="material-symbols-outlined" aria-hidden="true">key</span>
+          <span class="sr-only" i18n="@@app.changePassword">Змінити пароль</span>
+        </a>
         <button type="button" class="shell-icon-button" data-testid="logout" title="Вийти" i18n-title="@@app.logout.title" (click)="logout()">
           <span class="material-symbols-outlined" aria-hidden="true">logout</span>
           <span class="sr-only" i18n="@@app.logout">Вийти</span>

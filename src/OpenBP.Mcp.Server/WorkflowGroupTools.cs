@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
+using OpenBP.Application.Auth;
 using OpenBP.Application.Workflows;
 
 namespace OpenBP.Mcp.Server;
@@ -49,4 +50,26 @@ public sealed class WorkflowGroupTools
         [Description("Target group id from list_workflow_groups; null removes the workflow from its group.")] Guid? groupId = null,
         CancellationToken ct = default) =>
         WorkflowView.From(await workflows.MoveAsync(workflowId, groupId, ct).ConfigureAwait(false));
+
+    /// <summary><c>add_project_member</c> (F8-13).</summary>
+    /// <param name="groups">Сервіс груп.</param>
+    /// <param name="projectId">Проєкт.</param>
+    /// <param name="email">Пошта.</param>
+    /// <param name="role">Роль у проєкті.</param>
+    /// <param name="appRole">Роль застосунку.</param>
+    /// <param name="password">Видати тимчасовий пароль новому запису.</param>
+    /// <param name="ct">Скасування.</param>
+    [McpServerTool(Name = "add_project_member", Title = "Add a person to a project", Destructive = false, UseStructuredContent = true)]
+    [Description("Adds a person to a project by email (admin or project editor). If no account has this email, creates one with global role viewer " +
+                 "and a temporary password returned once in temporaryPassword (the person must change it at first sign-in), or without a password " +
+                 "for OIDC sign-in when password is false. An existing account is not changed — only its project roles are set.")]
+    public static Task<ProjectMemberAdded> AddProjectMember(
+        IWorkflowGroupService groups,
+        [Description("Project id from list_workflow_groups.")] Guid projectId,
+        [Description("Email of the person.")] string email,
+        [Description("Project role: editor or viewer.")] UserRole role = UserRole.Viewer,
+        [Description("App role key of the project, or null.")] string? appRole = null,
+        [Description("true — give a new account a temporary password; false — OIDC sign-in only.")] bool password = true,
+        CancellationToken ct = default) =>
+        groups.AddPersonAsync(projectId, email, role, appRole, password, ct);
 }

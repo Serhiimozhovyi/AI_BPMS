@@ -74,6 +74,22 @@ public interface IWorkflowGroupService
     /// <exception cref="ForbiddenException">Користувач не admin і не editor проєкту.</exception>
     Task<ProjectMember> SetMemberAsync(Guid id, string email, UserRole role, CancellationToken ct, string? appRole = null);
 
+    /// <summary>
+    /// Додає людину до проєкту за поштою (F8-13): якщо облікового запису немає — створює його з глобальною роллю
+    /// <see cref="UserRole.Viewer"/> і тимчасовим паролем (або без пароля для входу через OIDC), далі як
+    /// <see cref="SetMemberAsync"/>. Наявного облікового запису (зокрема пароля) не змінює.
+    /// </summary>
+    /// <param name="id"><c>workflow_groups.id</c>.</param>
+    /// <param name="email">Пошта людини.</param>
+    /// <param name="role"><see cref="UserRole.Editor"/> або <see cref="UserRole.Viewer"/>.</param>
+    /// <param name="appRole">Роль застосунку або <c>null</c>.</param>
+    /// <param name="withPassword"><c>true</c> — новому запису видати тимчасовий пароль, <c>false</c> — лише OIDC.</param>
+    /// <param name="ct">Скасування.</param>
+    /// <exception cref="NotFoundException">Проєкту немає.</exception>
+    /// <exception cref="ForbiddenException">Користувач не admin і не editor проєкту.</exception>
+    /// <exception cref="ArgumentException">Пошта некоректна, роль чи роль застосунку невідомі.</exception>
+    Task<ProjectMemberAdded> AddPersonAsync(Guid id, string email, UserRole role, string? appRole, bool withPassword, CancellationToken ct);
+
     /// <summary>Прибирає користувача з проєкту (admin або editor проєкту).</summary>
     /// <param name="id"><c>workflow_groups.id</c>.</param>
     /// <param name="userId"><c>users.id</c>.</param>

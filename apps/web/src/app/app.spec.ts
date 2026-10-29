@@ -93,6 +93,7 @@ describe('routes', () => {
     expect(app.canActivateChild).toHaveLength(1);
     expect(app.children!.filter((r) => r.loadComponent).map((r) => r.path)).toEqual([
       '',
+      'account/password',
       'workflows',
       'workflows/:id',
       'projects',

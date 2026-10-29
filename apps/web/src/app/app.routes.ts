@@ -40,6 +40,12 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/overview/overview.page').then((m) => m.OverviewPage),
       },
       {
+        // Зміна пароля (F8-13); з тимчасовим паролем guard пускає лише сюди.
+        path: 'account/password',
+        title: $localize`:@@account.password.title:Зміна пароля`,
+        loadComponent: () => import('./pages/account/change-password.page').then((m) => m.ChangePasswordPage),
+      },
+      {
         path: 'workflows',
         title: $localize`:@@workflows.title:Сценарії`,
         loadComponent: () => import('./pages/workflows/workflows.page').then((m) => m.WorkflowsPage),

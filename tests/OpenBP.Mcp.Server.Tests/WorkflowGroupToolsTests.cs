@@ -80,4 +80,19 @@ public class WorkflowGroupToolsTests(McpServerFactory mcp)
         Assert.True(denied.IsError);
         Assert.Equal("FORBIDDEN", (string)Structured(denied)["code"]!);
     }
+
+    [Fact]
+    public async Task Add_project_member_creates_an_account_with_a_temporary_password()
+    {
+        await using var client = await mcp.ConnectAsync(UserRole.Editor);
+        var group = await CallAsync(client, "create_workflow_group", new() { ["name"] = Unique("Люди") });
+        var email = $"mcp.{Guid.NewGuid():N}@example.com";
+
+        var added = await CallAsync(client, "add_project_member", new() { ["projectId"] = (string)group["id"]!, ["email"] = email });
+
+        Assert.True((bool)added["created"]!);
+        Assert.Equal(12, ((string)added["temporaryPassword"]!).Length);
+        Assert.Equal(email, (string)added["member"]!["email"]!);
+        Assert.Equal("viewer", (string)added["member"]!["role"]!);
+    }
 }

@@ -21,6 +21,13 @@ public sealed record WorkflowGroupOrderRequest(IReadOnlyList<Guid>? Ids);
 /// <param name="AppRole">Роль застосунку (F8-04): ключ з ролей проєкту; <c>null</c> — без неї.</param>
 public sealed record ProjectMemberRequest(string? Email, UserRole? Role, string? AppRole = null);
 
+/// <summary>Тіло <c>POST /workflow-groups/{id}/members/add</c> (F8-13).</summary>
+/// <param name="Email">Пошта людини; облікового запису може ще не бути.</param>
+/// <param name="Role"><c>editor</c> або <c>viewer</c>.</param>
+/// <param name="AppRole">Роль застосунку або <c>null</c>.</param>
+/// <param name="Password"><c>true</c> (типово) — новому запису видати тимчасовий пароль; <c>false</c> — вхід лише через OIDC.</param>
+public sealed record ProjectPersonRequest(string? Email, UserRole? Role, string? AppRole = null, bool? Password = null);
+
 /// <summary>Маршрути <c>/workflow-groups</c> (F3-63; групи — це проєкти, F6-14). Ролі перевіряє <see cref="IWorkflowGroupService"/>.</summary>
 public static class WorkflowGroupEndpoints
 {
@@ -74,6 +81,14 @@ public static class WorkflowGroupEndpoints
             .WithSummary("Додати учасника або змінити його роль")
             .WithDescription("Лише admin або editor проєкту; `role` — `editor` чи `viewer`; `appRole` — ключ ролі застосунку проєкту або `null` (F8-04). " +
                              "Запит замінює обидві ролі.");
+
+        groups.MapPost("/{id:guid}/members/add", (Guid id, ProjectPersonRequest body, IWorkflowGroupService service, CancellationToken ct) =>
+            service.AddPersonAsync(id, body.Email ?? "", body.Role ?? UserRole.Viewer, body.AppRole, body.Password ?? true, ct))
+            .WithSummary("Додати людину до проєкту, створивши обліковий запис за потреби")
+            .WithDescription("Лише admin або editor проєкту (F8-13). Якщо облікового запису з цією поштою немає — створюється з глобальною роллю " +
+                             "`viewer` і тимчасовим паролем `temporaryPassword` (показується один раз; при першому вході — зміна пароля) або, " +
+                             "з `password: false`, без пароля для входу через OIDC. Наявний запис не змінюється — лише ролі в проєкті, як у `PUT …/members`.")
+            .Produces<ProjectMemberAdded>();
 
         groups.MapDelete("/{id:guid}/members/{userId:guid}", async (Guid id, Guid userId, IWorkflowGroupService service, CancellationToken ct) =>
         {
