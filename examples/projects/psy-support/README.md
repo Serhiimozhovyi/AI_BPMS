@@ -3,7 +3,8 @@
 Бот психологічної підтримки за ТЗ Астарти, зібраний з нуля як проєкт OpenBP (`docs/projects.md` §6, ADR-005): дані,
 ролі, сторінки психологів і координатора, підсценарії правил запису з `docs/psy-support.md` §4 (F8-08) і сценарій бота
 `bot` — webhook Telegram, меню, екрани (F8-09); шедулер `scheduler` — нагадування, опитування, розсилки, слоти й
-знеособлення (F8-10). Перенесення даних з Google Sheets — F8-11.
+знеособлення (F8-10). Даних з Google Sheets не переносимо: бот стартує з чистими даними, які ведуть на сторінках
+застосунку. Як запустити й перевірити — [`docs/admin/psy-check.md`](../../../docs/admin/psy-check.md).
 
 ```bash
 openbp import-project examples/projects/psy-support/bundle.json --url http://localhost:8088 --api-key $OPENBP_API_KEY
