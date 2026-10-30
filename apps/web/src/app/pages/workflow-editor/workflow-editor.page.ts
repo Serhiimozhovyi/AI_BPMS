@@ -28,8 +28,8 @@ import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.c
     :host {
       display: flex;
       flex-direction: column;
-      /* 106px — шапка AC-Kit: 60px верхній рядок + 46px навігація (app.scss); на телефоні навігації в шапці немає. */
-      height: calc(100vh - 106px);
+      /* 52px — одна смуга верхнього меню (app.scss, F9-04). */
+      height: calc(100vh - 52px);
     }
 
     .editor {
@@ -43,12 +43,6 @@ import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.c
       background: var(--ac-button);
       color: var(--ac-vivid);
       font: 500 14px/20px Ubuntu, sans-serif;
-    }
-
-    @media (max-width: 767.98px) {
-      :host {
-        height: calc(100vh - 60px);
-      }
     }
   `,
 })

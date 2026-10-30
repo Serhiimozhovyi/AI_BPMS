@@ -1,3 +1,4 @@
+import type { ChipTone } from '../shared/chip/chip.component';
 import type { PageColor, PageComputed, PageRow } from './project-pages-api.service';
 
 /** Колонка для показу: підпис і тип з Api, формат, підписи й кольори — з визначення сторінки. */
@@ -22,7 +23,17 @@ const DASH = '—';
 
 const WEEKDAYS = ['понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота', 'неділя'];
 
-/** Класи Tailwind міток за кольором (токени AC-Kit). */
+/** Колір чипа `bp-chip` для кольору мітки сторінки (`format: badge`, F8-16). */
+export const BADGE_TONES: Record<PageColor, ChipTone> = {
+  gray: 'gray',
+  green: 'green',
+  yellow: 'orange',
+  red: 'red',
+  blue: 'blue',
+  purple: 'violet',
+};
+
+/** Класи Tailwind міток за кольором для вузьких місць (календар, плитки). */
 export const BADGE_CLASSES: Record<PageColor, string> = {
   gray: 'bg-ac-cool-grey text-ac-cool-grey-4',
   green: 'bg-ac-green/20 text-ac-vivid',
