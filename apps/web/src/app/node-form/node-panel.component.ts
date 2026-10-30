@@ -296,8 +296,8 @@ interface PanelState {
     .panel__extra-badge {
       padding: 0 6px;
       border-radius: 8px;
-      background: var(--ac-button, #ebe9fd);
-      color: var(--ac-kit, #5f53dc);
+      background: var(--ac-button, #ddf3f1);
+      color: var(--ac-kit, #0d736d);
       font-size: 11px;
       font-weight: 400;
     }

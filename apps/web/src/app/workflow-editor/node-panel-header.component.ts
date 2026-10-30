@@ -129,7 +129,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
     .head__type {
       overflow: hidden;
       font-size: 12px;
-      color: var(--ac-cool-grey-4, #6b6580);
+      color: var(--ac-cool-grey-4, #57696b);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -180,7 +180,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       border: 1px solid var(--ac-line);
       border-radius: var(--ac-radius-sm);
       background: var(--ac-white);
-      box-shadow: 0 4px 16px rgb(38 31 75 / 16%);
+      box-shadow: 0 4px 16px rgb(12 43 48 / 16%);
     }
     .head__menu button {
       padding: 8px 12px;
@@ -197,7 +197,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       background: var(--ac-button);
     }
     .head__menu button:disabled {
-      color: var(--ac-cool-grey-4, #6b6580);
+      color: var(--ac-cool-grey-4, #57696b);
       cursor: default;
     }
   `,

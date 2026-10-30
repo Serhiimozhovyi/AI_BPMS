@@ -626,9 +626,9 @@ test('F3-58: «Вирівняти» розставляє вузли зліва �
   await api.install(page);
   await page.goto(`/workflows/${WORKFLOW_ID}`);
   await expect(page.locator('[data-node-id]')).toHaveCount(3);
-  await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(0);
+  await expect(page.locator('svg rect[stroke="#b4c4c3"]')).toHaveCount(0);
   await page.getByTestId('canvas-minimap').click();
-  await expect(page.locator('svg rect[stroke="#b9b4cc"]')).toHaveCount(1);
+  await expect(page.locator('svg rect[stroke="#b4c4c3"]')).toHaveCount(1);
 
   await page.getByTestId('canvas-arrange').click();
   await waitSaved(page);
@@ -977,7 +977,7 @@ test('F3-76: мінікарта згорнута за замовчуванням
   await page.getByTestId('canvas-minimap').click();
   await expect(minimap).toHaveCount(1);
   // Рамка мінікарти (її розмір задає ngx-vflow: 20 % полотна, далі стискається до 180×110).
-  const box = (await page.locator('svg rect[stroke="#b9b4cc"]').boundingBox())!;
+  const box = (await page.locator('svg rect[stroke="#b4c4c3"]').boundingBox())!;
   expect(box.width).toBeLessThanOrEqual(181);
   expect(box.height).toBeLessThanOrEqual(111);
 });

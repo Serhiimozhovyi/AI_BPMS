@@ -64,7 +64,7 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
       border: 1px solid var(--ac-cool-grey);
       border-radius: 8px;
       background: var(--ac-white);
-      box-shadow: 0 4px 16px rgb(38 31 75 / 0.18);
+      box-shadow: 0 4px 16px rgb(12 43 48 / 0.18);
     }
 
     .menu__item {
