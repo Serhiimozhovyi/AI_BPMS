@@ -1538,7 +1538,7 @@
 - DoD: Vitest не ламається; Playwright-знімок форм вузла й форми сторінки; axe зелений; initial bundle у бюджеті.
 
 ### F9-06 · Чипи, статуси й етапи
-- model: `sonnet` · status: `ready` · depends: F9-01
+- model: `sonnet` · status: `in review` · depends: F9-01
 - Що: Figma «Atoms / Chips» `1710:6623` (Task, Table chips, Priority, tag з ×) і стрілки етапів `2787:14405`/`1777:6516`. Компоненти `bp-chip` (стан за семантичним кольором, пріоритет, мітка з закриттям) і `bp-stage-steps` (винести з бізнес-вигляду PR #140 і перевикористати). Застосувати: стан виконань, активність сценарію, завдання, мітки сторінок (`format: badge` F8-16), етапи F7.
 - DoD: Vitest компонентів; e2e `executions-journal`, `business-view`, `app-list` зелені; axe зелений.
 

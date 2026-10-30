@@ -18,6 +18,7 @@ import { NodeRunDataComponent } from '../../canvas/node-run-data.component';
 import { executionErrorPrompt } from '../../assistant/execution-error-prompt';
 import { GlobalAssistantService } from '../../assistant/global-assistant.service';
 import { StageStripComponent } from '../../executions/stage-strip.component';
+import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import {
   ExecutionsQuery,
   executionsQueryParams,
@@ -97,6 +98,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
     BusinessViewComponent,
     NodeRunDataComponent,
     StageStripComponent,
+    ChipComponent,
   ],
   // Дати фільтра — `дд.мм.рррр` (F3-81): нативний `input[type=date]` показував би формат локалі браузера.
   providers: [
@@ -194,7 +196,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
                   <a class="hover:underline" data-testid="workflow-link" [routerLink]="['/workflows', e.workflowId]">{{ workflowName(e.workflowId) }}</a>
                 </td>
                 <td class="p-2">{{ modeLabel(e.mode) }}</td>
-                <td class="p-2" [class]="stateClass(e.state)" data-testid="state">{{ stateLabel(e.state) }}</td>
+                <td class="p-2" data-testid="state"><bp-chip [tone]="stateTone(e.state)">{{ stateLabel(e.state) }}</bp-chip></td>
                 <td class="p-2 whitespace-nowrap" data-testid="duration">{{ duration(e) }}</td>
                 <td class="p-2">{{ e.finishedAt ? (e.finishedAt | date: dateTime) : '—' }}</td>
                 <td class="p-2" data-testid="correlation-key">
@@ -237,7 +239,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
             <h2 class="text-lg font-semibold">
               <a [routerLink]="['/workflows', d.summary.workflowId]" data-testid="detail-workflow">{{ workflowName(d.summary.workflowId) }}</a>
             </h2>
-            <span [class]="stateClass(d.summary.state)" data-testid="detail-state">{{ stateLabel(d.summary.state) }}</span>
+            <bp-chip [tone]="stateTone(d.summary.state)" data-testid="detail-state">{{ stateLabel(d.summary.state) }}</bp-chip>
             <span class="opacity-70">{{ modeLabel(d.summary.mode) }}</span>
             <a mat-stroked-button data-testid="open-in-editor" [routerLink]="['/workflows', d.summary.workflowId]" [queryParams]="editorParams()" i18n="@@executions.openInEditor">Відкрити в редакторі</a>
             @if (d.summary.state === 'waiting' && waitingUntil(d); as until) {
@@ -278,7 +280,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
                 @for (c of d.children; track c.id) {
                   <li data-testid="child-execution">
                     {{ nodeName(c.parentNodeId ?? '') }} —
-                    <span [class]="stateClass(c.state)">{{ stateLabel(c.state) }}</span>
+                    <bp-chip [tone]="stateTone(c.state)">{{ stateLabel(c.state) }}</bp-chip>
                     <button mat-button type="button" (click)="select(c.id)">{{ c.id }}</button>
                   </li>
                 }
@@ -796,17 +798,20 @@ export class ExecutionsPage implements OnInit {
     return executionModeLabel(mode);
   }
 
-  stateClass(state: ExecutionState): string {
+  stateTone(state: ExecutionState): ChipTone {
     switch (state) {
       case 'success':
-        return 'text-green-700';
+        return 'green';
       case 'error':
       case 'timed_out':
-        return 'text-red-700';
+        return 'red';
       case 'waiting':
-        return 'text-blue-700';
+        return 'blue';
+      case 'running':
+      case 'queued':
+        return 'teal';
       default:
-        return 'opacity-70';
+        return 'gray';
     }
   }
 
