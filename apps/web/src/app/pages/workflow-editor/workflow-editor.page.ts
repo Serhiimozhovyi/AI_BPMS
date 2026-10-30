@@ -42,7 +42,7 @@ import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.c
       padding: 8px 16px;
       background: var(--ac-button);
       color: var(--ac-vivid);
-      font: 500 14px/20px Ubuntu, sans-serif;
+      font: var(--bp-font-h7);
     }
 
     @media (max-width: 767.98px) {

@@ -728,7 +728,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border-radius: 8px;
       background: var(--ac-white);
       color: var(--ac-orange);
-      font: 600 11px/16px Ubuntu, sans-serif;
+      font: 700 12px/16px var(--bp-font-family);
       white-space: nowrap;
       cursor: pointer;
     }

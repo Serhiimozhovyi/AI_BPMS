@@ -2,9 +2,11 @@
 // Кольори й типографіка — з палітри «Colour palette» і «Typography / Desktop»;
 // Angular Material отримує їх через системні токени, Tailwind — через `@theme` у tailwind.css.
 @use 'theme/openbp-theme' as theme;
+@use 'theme/typography';
 
 :root {
   @include theme.tokens();
+  @include typography.tokens();
 }
 
 html {
@@ -16,17 +18,12 @@ body {
   color-scheme: light;
   background-color: var(--ac-cool-grey);
   color: var(--ac-vivid);
-  // P3: Ubuntu 14/20.
-  font: 400 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-p3);
   margin: 0;
   height: 100%;
 }
 
-// Заголовок сторінки — H3 (24/30, bold).
-.mat-font-headline-sm {
-  font: 700 24px/30px Ubuntu, sans-serif;
-  color: var(--ac-vivid);
-}
+@include typography.styles();
 
 // Сторінки-розділи — білі картки на тлі Cool Grey, як «Вкладка Введення ДО».
 main > :not(router-outlet) > section.p-6 {
@@ -44,7 +41,7 @@ main table.w-full {
   th {
     padding-top: 8px;
     padding-bottom: 8px;
-    font: 400 12px/16px Ubuntu, sans-serif;
+    font: var(--bp-font-p4);
     color: var(--ac-cool-grey-4);
   }
 
@@ -164,7 +161,7 @@ a {
       content: attr(data-label);
       flex: none;
       color: var(--ac-cool-grey-4);
-      font-size: 13px;
+      font: var(--bp-font-p4);
       text-align: left;
     }
 
@@ -210,7 +207,7 @@ a {
   padding: 0 16px;
   border-bottom: 2px solid transparent;
   color: var(--ac-cool-grey-4);
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
   white-space: nowrap;
   text-decoration: none;
 
@@ -235,7 +232,7 @@ a {
   padding: 8px 12px;
   border-radius: 8px;
   color: var(--ac-vivid);
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
   text-decoration: none;
 
   &:hover {

@@ -95,13 +95,13 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
 
     .start__title {
       margin: 0;
-      font: 500 18px/24px Ubuntu, sans-serif;
+      font: var(--bp-font-h4);
     }
 
     .start__description {
       margin: 0;
       color: var(--ac-cool-grey-4);
-      font: 400 13px/18px Ubuntu, sans-serif;
+      font: var(--bp-font-p3);
     }
 
     .start__actions {
@@ -160,7 +160,7 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
     }
 
     .start__name {
-      font: 500 14px/20px Ubuntu, sans-serif;
+      font: var(--bp-font-h7);
     }
   `,
 })

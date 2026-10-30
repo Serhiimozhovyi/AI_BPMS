@@ -1553,7 +1553,7 @@
 - DoD: Vitest `notify.service`, `empty-state` зелені; e2e `empty-states` зелений; axe зелений.
 
 ### F9-09 · Типографіка й іконки
-- model: `sonnet` · status: `ready` · depends: F9-01
+- model: `sonnet` · status: `done` · depends: F9-01
 - Що: Figma «Typography - Desktop» `1710:6146` і «Icons» `1710:5456`: шкала H1…P3 токенами (`--bp-font-h4` …) і класами; один розмір і товщина іконок (20 px, outlined); таблиця відповідності іконок Кіт → Material Symbols у `docs/design-system.md` (SVG з Figma не тягнемо — асети заблоковані, а файл лише для читання).
 - DoD: Vitest зелений; візуально заголовки й іконки однакові на всіх сторінках (знімки в PR).
 

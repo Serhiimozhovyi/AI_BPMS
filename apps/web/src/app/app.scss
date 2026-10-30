@@ -53,7 +53,7 @@
   --mat-select-enabled-trigger-text-color: var(--ac-white);
   --mat-select-enabled-arrow-color: var(--ac-white);
   --mat-select-focused-arrow-color: var(--ac-white);
-  font: 400 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-p3);
 
   &:focus-visible {
     outline: 2px solid var(--ac-kit);
@@ -69,7 +69,7 @@
 }
 
 .shell-user__email {
-  font: 400 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-p3);
   opacity: 0.85;
 }
 
@@ -144,7 +144,7 @@
   padding: 0 12px;
   border-bottom: 2px solid transparent;
   color: rgb(255 255 255 / 0.6);
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
   white-space: nowrap;
   text-decoration: none;
 
@@ -188,7 +188,7 @@
   border-bottom: 2px solid var(--ac-red);
   background: var(--ac-red-15, #ffe7e7);
   color: var(--ac-vivid);
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
 }
 
 .shell-offline__text {

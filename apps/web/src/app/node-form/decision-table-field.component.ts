@@ -137,7 +137,7 @@ import { NodeFieldProps } from './schema-fields';
 
     .dt__table {
       border-collapse: collapse;
-      font: 400 13px/18px Ubuntu, sans-serif;
+      font: var(--bp-font-p3);
     }
 
     .dt__table th,
