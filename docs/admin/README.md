@@ -41,7 +41,7 @@ DNS-ім'я для AI_BPMS (наприклад, `openbp.example.com`) і TLS-с�
 ## 2. Встановлення з нуля
 
 ```bash
-git clone https://github.com/Serhiimozhovyi/OpenBP_builder.git openbp
+git clone https://github.com/Serhiimozhovyi/AI_BPMS.git openbp
 cd openbp
 scripts/gen-env.sh            # створює .env (права 600) з випадковими паролем БД, ключем шифрування і паролем адміністратора
 nano .env                     # OPENBP_PUBLIC_URL=https://openbp.example.com, за потреби TZ, OPENBP_HTTP_PORT
