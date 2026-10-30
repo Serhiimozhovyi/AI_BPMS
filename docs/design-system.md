@@ -123,3 +123,12 @@ Figma «Atoms / Tabs» `3251:37133`. Компонент `apps/web/src/app/shared
 - Додаткові стани — класи на `mat-form-field`: `bp-field-success` (зелена рамка), `bp-field-loading` (смуга завантаження), `bp-search-secondary` (вторинний пошук на `--bp-bg-2`).
 - Панель `mat-select`/автодоповнення: радіус 8, рамка line, тінь AC-Kit; пункт 40 px, вибраний — `--bp-tonal`; вкладений рівень — клас `bp-option-nested`, порожній стан — `bp-option-empty`.
 - Checkbox, radio, switch — primary / `--bp-line-3`; календар і діапазон дат — вибрана дата primary, діапазон `--bp-tonal`.
+
+## Таблиці й панель дій (F9-07)
+
+Figma «Atoms / Table» `2815:14396`, екран «Реєстр продажів» `3499:77865`. Стилі — `apps/web/src/theme/_tables.scss`, діють на всі `main table.w-full`.
+
+- Шапка `--bp-surface-2`, текст `--bp-text-muted` 12 px; рядки в рамці `--bp-line`; наведення й вибраний рядок — `--bp-bg-2` (вибраний — клас `bp-row-selected` або `aria-selected="true"`, ще смуга `--bp-primary` зліва).
+- Колонка галочок — клас `bp-col-check` на `th`/`td`. Вертикальні лінії — клас `bp-table--grid` на таблиці. Липка шапка — таблиця в контейнері `bp-table-wrap` (прокручується).
+- Картковий вигляд: на телефоні (< 768 px) для `table[appCardTable]` (F3-85) і за перемикачем — клас `bp-cards` на такій таблиці.
+- Панель над таблицею — компонент `bp-table-toolbar` (`shared/table-toolbar/`): перемикач таблиця/картки (`[(view)]`), пошук (`[(search)]`, `searchPlaceholder`, `searchTestId`), кнопки дій у проєкції контенту, праворуч іконки фільтра, вивантаження й налаштувань (`showFilter`/`showExport`/`showSettings` → події `filter`/`exportData`/`settings`). Застосована у «Сценаріях»; решта списків отримує стилі таблиці, панель підключається за потреби.
