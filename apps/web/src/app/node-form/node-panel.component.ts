@@ -280,7 +280,7 @@ interface PanelState {
 
     .panel__extra {
       margin-top: 16px;
-      border-top: 1px solid var(--ac-line);
+      border-top: 1px solid var(--bp-line);
       padding-top: 8px;
     }
 
@@ -296,8 +296,8 @@ interface PanelState {
     .panel__extra-badge {
       padding: 0 6px;
       border-radius: 8px;
-      background: var(--ac-button, #ddf3f1);
-      color: var(--ac-kit, #0d736d);
+      background: var(--bp-tonal, #ddf3f1);
+      color: var(--bp-primary, #0d736d);
       font-size: 11px;
       font-weight: 400;
     }

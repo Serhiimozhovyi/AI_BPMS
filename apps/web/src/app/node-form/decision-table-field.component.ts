@@ -127,7 +127,7 @@ import { NodeFieldProps } from './schema-fields';
 
     .dt__hint {
       margin: 0;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 12px;
     }
 
@@ -143,24 +143,24 @@ import { NodeFieldProps } from './schema-fields';
     .dt__table th,
     .dt__table td {
       padding: 4px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       text-align: left;
       vertical-align: top;
       white-space: nowrap;
     }
 
     .dt__table th {
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
       font-weight: 500;
     }
 
     .dt__out {
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
     }
 
     .dt__num {
       width: 24px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       text-align: center;
     }
 
@@ -175,9 +175,9 @@ import { NodeFieldProps } from './schema-fields';
       min-width: 120px;
       min-height: 28px;
       padding: 0 6px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-sm);
-      background: var(--ac-white);
+      background: var(--bp-white);
       font: inherit;
     }
 
@@ -189,7 +189,7 @@ import { NodeFieldProps } from './schema-fields';
       padding: 2px 6px;
       border: none;
       background: none;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       cursor: pointer;
     }
 

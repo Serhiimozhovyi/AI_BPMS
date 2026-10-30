@@ -98,7 +98,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
       border: 0;
       border-radius: var(--ac-radius-sm);
       background: none;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       font: 700 12px/16px var(--bp-font-family);
       text-align: left;
       text-transform: uppercase;
@@ -107,12 +107,12 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
 
     .palette__title:hover,
     .palette__title:focus-visible {
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
     }
 
     .palette__chevron {
       font-size: 18px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       transition: transform 0.15s ease;
     }
 
@@ -128,8 +128,8 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
     .palette__count {
       padding: 0 6px;
       border-radius: var(--ac-radius);
-      background: var(--ac-button);
-      color: var(--ac-kit);
+      background: var(--bp-tonal);
+      color: var(--bp-primary);
       font-weight: 500;
     }
 
@@ -171,7 +171,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
       padding: 2px 6px 2px 0;
       border: 0;
       background: none;
-      color: var(--ac-kit);
+      color: var(--bp-primary);
       font: 500 13px/20px Ubuntu, sans-serif;
       cursor: pointer;
     }

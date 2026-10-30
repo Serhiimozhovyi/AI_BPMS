@@ -80,11 +80,11 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
       width: min(440px, calc(100vw - 32px));
       max-height: 70vh;
       padding: 24px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-lg);
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: var(--ac-shadow);
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .start__head {
@@ -100,7 +100,7 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
 
     .start__description {
       margin: 0;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font: var(--bp-font-p3);
     }
 
@@ -142,8 +142,8 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
 
     .start__template:hover,
     .start__template:focus-visible {
-      border-color: var(--ac-kit);
-      background: var(--ac-cool-grey);
+      border-color: var(--bp-primary);
+      background: var(--bp-bg);
     }
 
     .start__missing {
@@ -151,12 +151,12 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
       flex-wrap: wrap;
       gap: 4px;
       margin: 0 12px 4px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font: 400 12px/16px Ubuntu, sans-serif;
     }
 
     .start__missing a {
-      color: var(--ac-kit);
+      color: var(--bp-primary);
     }
 
     .start__name {

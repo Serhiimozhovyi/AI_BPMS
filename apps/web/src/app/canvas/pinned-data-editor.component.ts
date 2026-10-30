@@ -67,7 +67,7 @@ import { formatPinnedItems, parsePinnedItems } from './pinned-data';
     .pinned__count {
       padding: 0 8px;
       border-radius: 10px;
-      background: var(--ac-button);
+      background: var(--bp-tonal);
       font-size: 12px;
     }
 
@@ -82,7 +82,7 @@ import { formatPinnedItems, parsePinnedItems } from './pinned-data';
       width: 100%;
       min-height: 160px;
       padding: 8px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-sm);
       font: 12px/1.4 monospace;
       resize: vertical;

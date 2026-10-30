@@ -484,7 +484,7 @@ export interface EditorErrorEvent {
 
     .editor__palette-title {
       font: 700 12px/16px var(--bp-font-family);
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       text-transform: uppercase;
     }
 
@@ -514,13 +514,13 @@ export interface EditorErrorEvent {
     }
 
     .editor__rail-add {
-      background: var(--ac-kit);
-      color: #fff;
+      background: var(--bp-primary);
+      color: var(--bp-white);
     }
 
     .editor__rail-expand {
       background: transparent;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .editor__rail-add:hover,
@@ -529,19 +529,19 @@ export interface EditorErrorEvent {
     }
 
     .editor__rail-expand:hover {
-      background: var(--ac-button);
+      background: var(--bp-tonal);
       filter: none;
     }
 
     .editor__rail-add:focus-visible,
     .editor__rail-expand:focus-visible {
-      outline: 2px solid var(--ac-kit);
+      outline: 2px solid var(--bp-primary);
       outline-offset: 2px;
     }
 
     .editor__rail-label {
       margin-top: 4px;
-      color: var(--ac-cool-grey-4, #57696b);
+      color: var(--bp-text-muted, #57696b);
       font-size: 12px;
       white-space: nowrap;
       writing-mode: vertical-rl;
@@ -552,7 +552,7 @@ export interface EditorErrorEvent {
     .editor__panel {
       position: relative;
       z-index: 1;
-      background: var(--ac-white);
+      background: var(--bp-white);
     }
 
     .editor__warning {
@@ -575,7 +575,7 @@ export interface EditorErrorEvent {
     .editor__hint {
       margin: 12px 12px 0;
       font-size: 12px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .editor__canvas {
@@ -624,7 +624,7 @@ export interface EditorErrorEvent {
 
     .editor__resize:hover,
     .editor__resize:focus-visible {
-      background: var(--ac-kit);
+      background: var(--bp-primary);
       opacity: 0.4;
       outline: none;
     }
@@ -650,13 +650,13 @@ export interface EditorErrorEvent {
     }
 
     .editor__panel--wide .editor__col--data {
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
     }
 
     .editor__panel--wide .editor__col--params {
       flex: 1.2;
-      border-right: 1px solid var(--ac-line);
-      border-left: 1px solid var(--ac-line);
+      border-right: 1px solid var(--bp-line);
+      border-left: 1px solid var(--bp-line);
     }
 
     .editor__source {
@@ -669,16 +669,16 @@ export interface EditorErrorEvent {
     .editor__source select {
       min-height: 28px;
       padding: 0 6px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-sm);
-      background: var(--ac-white);
+      background: var(--bp-white);
       font-size: 12px;
     }
 
     .editor__map-note {
       margin: 0 0 8px;
       font-size: 12px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .editor__map-note--warn {
@@ -691,15 +691,15 @@ export interface EditorErrorEvent {
       align-items: flex-start;
       gap: 8px;
       font-size: 13px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .editor__step {
       padding: 0 8px;
       border-radius: 8px;
       font-size: 12px;
-      color: #fff;
-      background: var(--ac-cool-grey-4);
+      color: var(--bp-white);
+      background: var(--bp-text-muted);
     }
 
     .editor__step--success {
