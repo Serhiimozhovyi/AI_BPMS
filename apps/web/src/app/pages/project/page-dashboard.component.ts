@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
@@ -6,7 +7,7 @@ import { Subscription, of } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { eventLine } from '../../projects/calendar-line';
 import { zonedParts } from '../../projects/calendar-time';
-import { BADGE_CLASSES, CellView, DisplayColumn, cellView } from '../../projects/page-format';
+import { BADGE_CLASSES, BADGE_TONES, CellView, DisplayColumn, cellView } from '../../projects/page-format';
 import {
   PageAction,
   PageCalendarEvent,
@@ -57,7 +58,7 @@ interface AgendaItem {
 @Component({
   selector: 'app-page-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule, RouterLink, PageFiltersComponent, PageFormComponent, PageMetricsComponent],
+  imports: [MatButtonModule, MatProgressBarModule, ChipComponent, RouterLink, PageFiltersComponent, PageFormComponent, PageMetricsComponent],
   template: `
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
@@ -112,7 +113,7 @@ interface AgendaItem {
                                 @let cell = cellOf(b, row, c);
                                 <td class="p-1.5" [attr.data-field]="c.column">
                                   @if (cell.color) {
-                                    <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)">{{ cell.text }}</span>
+                                    <bp-chip [tone]="tone(cell.color)">{{ cell.text }}</bp-chip>
                                   } @else {
                                     {{ cell.text }}
                                   }
@@ -246,6 +247,10 @@ export class PageDashboardComponent {
 
   protected badge(color: keyof typeof BADGE_CLASSES): string {
     return BADGE_CLASSES[color];
+  }
+
+  protected tone(color: keyof typeof BADGE_TONES): ChipTone {
+    return BADGE_TONES[color];
   }
 
   filtersChanged(state: Record<string, PageFilterValue>): void {
