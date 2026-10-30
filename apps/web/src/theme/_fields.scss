@@ -1,0 +1,239 @@
+// Поля, випадні списки, перемикачі й календар за AC-Kit (F9-05). Figma «FIELDS» 2605:13160,
+// «DROP WINDOW» 2322:8183, «Atoms / Selectors» 1710:6019, «Calendars» 3811:88118 (лише читаємо).
+// Усі поля проєкту — `appearance="outline"`, тож стилі глобальні, без правки шаблонів.
+@use '@angular/material' as mat;
+
+/// Токени Material для полів і перемикачів; підключати після `theme.material()`.
+@mixin overrides() {
+  // Поле: висота 40, радіус 8, рамка line → primary на hover/focus, помилка — червона.
+  @include mat.form-field-overrides(
+    (
+      container-height: 40px,
+      container-vertical-padding: 8px,
+      outlined-container-shape: var(--bp-radius-field, 8px),
+      outlined-outline-color: var(--bp-line),
+      outlined-hover-outline-color: var(--bp-primary),
+      outlined-focus-outline-color: var(--bp-primary),
+      outlined-focus-outline-width: 1px,
+      outlined-disabled-outline-color: var(--bp-line-2),
+      outlined-error-outline-color: var(--ac-red),
+      outlined-error-hover-outline-color: var(--ac-red),
+      outlined-error-focus-outline-color: var(--ac-red),
+      outlined-input-text-color: var(--bp-text),
+      outlined-input-text-placeholder-color: var(--bp-text-muted),
+      outlined-label-text-color: var(--bp-text-muted),
+      outlined-hover-label-text-color: var(--bp-text-muted),
+      outlined-focus-label-text-color: var(--bp-primary),
+      outlined-disabled-input-text-color: var(--bp-text-muted),
+      outlined-disabled-label-text-color: var(--bp-text-muted),
+      outlined-caret-color: var(--bp-primary),
+    )
+  );
+
+  @include mat.select-overrides(
+    (
+      panel-background-color: var(--bp-white),
+      enabled-trigger-text-color: var(--bp-text),
+      placeholder-text-color: var(--bp-text-muted),
+      enabled-arrow-color: var(--bp-text-muted),
+      focused-arrow-color: var(--bp-primary),
+    )
+  );
+
+  // Checkbox / radio / switch: primary, невибрані — рамка line-3.
+  @include mat.checkbox-overrides(
+    (
+      selected-icon-color: var(--bp-primary),
+      selected-hover-icon-color: var(--bp-primary-hover),
+      selected-focus-icon-color: var(--bp-primary),
+      selected-pressed-icon-color: var(--bp-primary-pressed),
+      selected-checkmark-color: var(--bp-white),
+      unselected-icon-color: var(--bp-line-3),
+      unselected-hover-icon-color: var(--bp-primary),
+      unselected-focus-icon-color: var(--bp-primary),
+      selected-hover-state-layer-color: var(--bp-primary),
+      selected-focus-state-layer-color: var(--bp-primary),
+      unselected-hover-state-layer-color: var(--bp-primary),
+      unselected-focus-state-layer-color: var(--bp-primary),
+      label-text-color: var(--bp-text),
+    )
+  );
+
+  @include mat.radio-overrides(
+    (
+      selected-icon-color: var(--bp-primary),
+      selected-hover-icon-color: var(--bp-primary-hover),
+      selected-focus-icon-color: var(--bp-primary),
+      selected-pressed-icon-color: var(--bp-primary-pressed),
+      unselected-icon-color: var(--bp-line-3),
+      unselected-hover-icon-color: var(--bp-primary),
+      unselected-focus-icon-color: var(--bp-primary),
+      label-text-color: var(--bp-text),
+    )
+  );
+
+  @include mat.slide-toggle-overrides(
+    (
+      selected-track-color: var(--bp-primary),
+      selected-hover-track-color: var(--bp-primary-hover),
+      selected-focus-track-color: var(--bp-primary),
+      selected-pressed-track-color: var(--bp-primary-pressed),
+      selected-handle-color: var(--bp-white),
+      selected-hover-handle-color: var(--bp-white),
+      selected-focus-handle-color: var(--bp-white),
+      selected-pressed-handle-color: var(--bp-white),
+      unselected-track-color: var(--bp-line-3),
+      unselected-hover-track-color: var(--bp-text-muted),
+      unselected-focus-track-color: var(--bp-line-3),
+      unselected-pressed-track-color: var(--bp-text-muted),
+      unselected-handle-color: var(--bp-white),
+      unselected-hover-handle-color: var(--bp-white),
+      unselected-focus-handle-color: var(--bp-white),
+      unselected-pressed-handle-color: var(--bp-white),
+      track-outline-color: transparent,
+      selected-track-outline-color: transparent,
+      label-text-color: var(--bp-text),
+    )
+  );
+
+  // Календар і діапазон дат.
+  @include mat.datepicker-overrides(
+    (
+      calendar-container-shape: var(--ac-radius-lg),
+      calendar-container-background-color: var(--bp-white),
+      calendar-container-text-color: var(--bp-text),
+      calendar-date-selected-state-background-color: var(--bp-primary),
+      calendar-date-selected-state-text-color: var(--bp-white),
+      calendar-date-in-range-state-background-color: var(--bp-tonal),
+      calendar-date-today-outline-color: var(--bp-primary),
+      calendar-date-hover-state-background-color: var(--bp-bg-2),
+      calendar-date-focus-state-background-color: var(--bp-tonal),
+      calendar-header-text-color: var(--bp-text-muted),
+      calendar-period-button-text-color: var(--bp-text),
+      calendar-navigation-button-icon-color: var(--bp-text-muted),
+      toggle-icon-color: var(--bp-text-muted),
+      toggle-active-state-icon-color: var(--bp-primary),
+    )
+  );
+}
+
+/// Глобальні правила, яких не дають токени: кільце фокуса, успіх, панель випадного списку, нативні поля.
+@mixin global() {
+  .mat-mdc-form-field {
+    // Фокус: рамка primary + кільце --bp-tonal.
+    &.mat-focused:not(.mat-form-field-invalid) .mdc-notched-outline {
+      border-radius: 8px;
+      box-shadow: 0 0 0 3px var(--bp-tonal);
+    }
+
+    &.mat-form-field-invalid.mat-focused .mdc-notched-outline {
+      border-radius: 8px;
+      box-shadow: 0 0 0 3px var(--ac-red-15);
+    }
+
+    &.mat-form-field-disabled .mdc-notched-outline {
+      background: var(--bp-bg);
+      border-radius: 8px;
+    }
+
+    // Успіх: клас `bp-field-success` на mat-form-field.
+    &.bp-field-success .mdc-notched-outline > * {
+      border-color: var(--ac-green);
+    }
+
+    // Завантаження: клас `bp-field-loading` — смуга-прогрес замість підказки.
+    &.bp-field-loading .mat-mdc-text-field-wrapper {
+      background-image: linear-gradient(90deg, transparent, var(--bp-tonal), transparent);
+      background-size: 200% 100%;
+      animation: bp-field-loading 1.2s linear infinite;
+      border-radius: 8px;
+    }
+
+    .mat-mdc-form-field-error {
+      color: var(--bp-error-text, #b3261e);
+    }
+  }
+
+  // Пошук: основний (білий) і вторинний (на сірому) — клас `bp-search` / `bp-search-secondary` на mat-form-field.
+  .mat-mdc-form-field.bp-search-secondary .mat-mdc-text-field-wrapper {
+    background: var(--bp-bg-2);
+    border-radius: 8px;
+  }
+
+  // Панель випадного списку (DROP WINDOW): радіус 8, рамка line, тінь AC-Kit; вибраний пункт — tonal з галочкою.
+  .mat-mdc-select-panel,
+  .mat-mdc-autocomplete-panel {
+    border: 1px solid var(--bp-line);
+    border-radius: 8px !important;
+    box-shadow: var(--ac-shadow) !important;
+    padding: 4px 0;
+  }
+
+  .mat-mdc-option {
+    min-height: 40px;
+
+    &:hover:not(.mdc-list-item--disabled) {
+      background: var(--bp-bg-2);
+    }
+
+    &.mdc-list-item--selected:not(.mat-mdc-option-multiple) {
+      background: var(--bp-tonal);
+      --mat-option-selected-state-label-text-color: var(--bp-primary);
+    }
+
+    &.mat-mdc-option-active {
+      background: var(--bp-bg-2);
+    }
+
+    // Вкладений рівень групи.
+    &.bp-option-nested {
+      padding-left: 32px;
+    }
+  }
+
+  .mat-mdc-optgroup-label {
+    color: var(--bp-text-muted);
+    font: 500 12px/16px Ubuntu, sans-serif;
+  }
+
+  // Стан «нічого не знайдено» у випадному списку.
+  .bp-option-empty {
+    padding: 12px 16px;
+    color: var(--bp-text-muted);
+  }
+
+  // Нативні поля фільтрів (select, date) — у стилі полів AC-Kit (раніше в styles.scss).
+  main select.border,
+  main input.border {
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--bp-line);
+    border-radius: 8px;
+    background: var(--bp-white);
+    color: var(--bp-text);
+
+    &:hover {
+      border-color: var(--bp-primary);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--bp-primary);
+      box-shadow: 0 0 0 3px var(--bp-tonal);
+    }
+
+    &:disabled {
+      background: var(--bp-bg);
+      color: var(--bp-text-muted);
+    }
+  }
+}
+
+@keyframes bp-field-loading {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}

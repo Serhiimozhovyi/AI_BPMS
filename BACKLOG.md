@@ -1533,7 +1533,7 @@
 - DoD: e2e `mobile-shell`, `app-shell`, `login` зелені; Vitest оболонки; знімки 1440 / 1280 / 390 px у PR; axe зелений.
 
 ### F9-05 · Поля, випадні списки, перемикачі
-- model: `sonnet` · status: `ready` · depends: F9-01
+- model: `sonnet` · status: `done` · depends: F9-01
 - Що: Figma «FIELDS» `2605:13160`, «DROP WINDOW» `2322:8183`, «Atoms / Selectors» `1710:6019`, «Calendars» `3811:88118`: висота 40, радіус 8, стани default/hover/focus (рамка primary + кільце `--bp-tonal`)/error/disabled/loading/success; пошук основний і вторинний; панель випадного списку (пошук, мультивибір з галочками, стан, вкладений рівень); checkbox, radio, switch; дата й діапазон дат. Лише глобальні стилі `theme/_fields.scss` поверх Material (усі поля вже `appearance="outline"`), без правки шаблонів, крім окремих випадків.
 - DoD: Vitest не ламається; Playwright-знімок форм вузла й форми сторінки; axe зелений; initial bundle у бюджеті.
 
