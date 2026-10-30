@@ -57,6 +57,7 @@ import { NodeTypeInfo, NodesApiService } from '../nodes/nodes-api.service';
 import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowTemplate, WorkflowsApiService } from '../workflows/workflows-api.service';
 import { WorkflowSettingsDialogComponent, WorkflowSettingsDialogData } from '../workflow-settings/workflow-settings-dialog.component';
 import { WorkflowSettings, settingsChanged } from '../workflow-settings/workflow-settings';
+import { BpTab, BpTabsComponent } from '../shared/tabs/tabs.component';
 
 /** Що зберігає автозбереження: визначення разом з id сценарію, якому воно належить. */
 interface SaveRequest {
@@ -133,7 +134,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, EditorToolbarComponent, NodePanelHeaderComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent],
+  imports: [RouterLink, EditorToolbarComponent, NodePanelHeaderComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent, BpTabsComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -330,13 +331,7 @@ export interface EditorErrorEvent {
                 (renamed)="headerRenamed(node.id, $event)"
               />
               @if (!wide()) {
-                <nav class="editor__tabs" role="tablist">
-                  @for (t of panelTabs; track t.id) {
-                    <button type="button" role="tab" class="editor__tab" [class.editor__tab--on]="panelTab() === t.id" [attr.aria-selected]="panelTab() === t.id" [attr.data-testid]="'panel-tab-' + t.id" (click)="panelTab.set(t.id)">
-                      {{ t.label }}
-                    </button>
-                  }
-                </nav>
+                <bp-tabs class="editor__tabs bp-tabs--stretch" [tabs]="panelTabItems" [value]="panelTab()" (valueChange)="panelTab.set($any($event))" label="Розділи панелі вузла" i18n-label="@@workfloweditor.panelTabs" />
               }
               <div class="editor__io">
                 <div #inputCol tabindex="-1" class="editor__col editor__col--data" data-testid="panel-input" [hidden]="!wide() && panelTab() !== 'input'">
@@ -635,25 +630,7 @@ export interface EditorErrorEvent {
     }
 
     .editor__tabs {
-      display: flex;
       flex-shrink: 0;
-      border-bottom: 1px solid var(--ac-line);
-    }
-
-    .editor__tab {
-      flex: 1;
-      padding: 8px 4px;
-      border: 0;
-      border-bottom: 2px solid transparent;
-      background: none;
-      color: var(--ac-cool-grey-4);
-      font: 400 14px/20px Ubuntu, sans-serif;
-      cursor: pointer;
-    }
-
-    .editor__tab--on {
-      border-bottom-color: var(--ac-kit);
-      color: var(--ac-kit);
     }
 
     .editor__io {
@@ -926,10 +903,10 @@ export class WorkflowEditorComponent implements OnInit {
   protected readonly minPanelWidth = MIN_PANEL_WIDTH;
   protected readonly inputTitle = $localize`:@@workfloweditor.input.title:Вхід`;
   protected readonly outputTitle = $localize`:@@workfloweditor.output.title:Вихід`;
-  protected readonly panelTabs: readonly { id: PanelTab; label: string }[] = [
-    { id: 'input', label: this.inputTitle },
-    { id: 'params', label: $localize`:@@workfloweditor.params.title:Параметри` },
-    { id: 'output', label: this.outputTitle },
+  protected readonly panelTabItems: readonly BpTab[] = [
+    { value: 'input', label: this.inputTitle, testId: 'panel-tab-input' },
+    { value: 'params', label: $localize`:@@workfloweditor.params.title:Параметри`, testId: 'panel-tab-params' },
+    { value: 'output', label: this.outputTitle, testId: 'panel-tab-output' },
   ];
   /** Ширина панелі вузла, px. */
   protected readonly panelWidth = signal(clamp(readPanelWidth(), MIN_PANEL_WIDTH, window.innerWidth - CANVAS_RESERVE - PALETTE_WIDTH));

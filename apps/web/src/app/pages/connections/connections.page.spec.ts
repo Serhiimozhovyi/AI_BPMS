@@ -75,7 +75,7 @@ describe('ConnectionsPage (F3-99)', () => {
     const { http, host, settle } = await open('/connections');
     answerPending(http);
     await settle();
-    host.querySelector<HTMLElement>('[data-testid="tab-credentials"] button')!.click();
+    host.querySelector<HTMLElement>('[data-testid="tab-credentials"]')!.click();
     await settle();
     answerPending(http);
     expect(TestBed.inject(Router).url).toBe('/connections?tab=credentials');
