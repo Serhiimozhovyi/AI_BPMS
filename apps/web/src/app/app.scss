@@ -1,71 +1,213 @@
-// Шапка за AC-Kit («AgriChainKit»): верхній рядок Vivid з логотипом і користувачем,
-// другий рівень навігації на тлі Mid з підкресленням активного пункту.
+// Верхнє меню як у Кіт CRM (Figma AC-Kit «Molecules / Menu» 2119:7736, F9-04): одна смуга --bp-shell 52 px —
+// логотип, пункти з іконками з підкресленням --bp-accent, стрілки прокрутки, праворуч круглі кнопки й аватар.
 .shell-top {
-  height: 60px;
-  gap: 16px;
+  position: relative;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 52px;
   padding: 0 24px;
+  background: var(--bp-shell);
+  color: var(--bp-white);
 }
 
 .shell-brand {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
-  color: var(--ac-white);
+  color: var(--bp-white);
   text-decoration: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--bp-accent);
+    outline-offset: 2px;
+    border-radius: var(--ac-radius-sm);
+  }
 }
 
 .shell-brand__sign {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
   border-radius: var(--ac-radius);
-  background: var(--ac-kit);
-  font: 700 15px/1 Ubuntu, sans-serif;
+  background: var(--bp-accent);
+  color: var(--bp-shell);
+  font: 700 14px/1 Ubuntu, sans-serif;
+
+  &.material-symbols-outlined {
+    font-size: 20px;
+  }
 }
 
 .shell-brand__name {
-  font: 400 20px/24px Ubuntu, sans-serif;
+  font: 400 18px/24px Ubuntu, sans-serif;
+  white-space: nowrap;
 
   b {
     font-weight: 700;
   }
 }
 
+.shell-brand__name--app {
+  max-width: 240px;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+// Меню: займає вільне місце, прокручується без смуги прокрутки; стрілки — коли пункти не вміщаються.
+.shell-nav-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.shell-nav {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: 20px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.shell-nav__link {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 0;
+  border-bottom: 3px solid transparent;
+  color: rgb(255 255 255 / 0.72);
+  font: 500 14px/20px Ubuntu, sans-serif;
+  white-space: nowrap;
+  text-decoration: none;
+
+  .material-symbols-outlined {
+    font-size: 22px;
+  }
+
+  &:hover {
+    color: var(--bp-white);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bp-accent);
+    outline-offset: -2px;
+  }
+
+  &.active {
+    border-bottom-color: var(--bp-accent);
+    color: var(--bp-white);
+  }
+}
+
+// Назва групи меню застосунку проєкту (F8-18) — тихий підпис перед її пунктами.
+.shell-nav__group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-left: 12px;
+  border-left: 1px solid rgb(255 255 255 / 0.2);
+  color: rgb(255 255 255 / 0.6);
+  font: 500 11px/16px Ubuntu, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.shell-scroll {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  padding: 0;
+  border: 0;
+  color: var(--bp-white);
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bp-shell-2);
+    font-size: 20px;
+  }
+
+  &:hover .material-symbols-outlined {
+    background: rgb(255 255 255 / 0.2);
+  }
+}
+
+.shell-scroll--start {
+  left: 0;
+  justify-items: start;
+  background: linear-gradient(to right, var(--bp-shell) 55%, transparent);
+}
+
+.shell-scroll--end {
+  right: 0;
+  justify-items: end;
+  background: linear-gradient(to left, var(--bp-shell) 55%, transparent);
+}
+
+.shell-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+}
+
 .shell-project {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 24px;
-  color: var(--ac-white);
+  color: var(--bp-white);
 }
 
 .shell-project__select {
   display: inline-flex;
   align-items: center;
-  min-width: 200px;
+  min-width: 180px;
+  max-width: 240px;
   height: 36px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 0.24);
-  border-radius: var(--ac-radius-sm);
-  background: rgb(255 255 255 / 0.08);
-  color: var(--ac-white);
-  --mat-select-enabled-trigger-text-color: var(--ac-white);
-  --mat-select-enabled-arrow-color: var(--ac-white);
-  --mat-select-focused-arrow-color: var(--ac-white);
+  border-radius: var(--ac-radius);
+  background: var(--bp-shell-2);
+  color: var(--bp-white);
+  --mat-select-enabled-trigger-text-color: var(--bp-white);
+  --mat-select-enabled-arrow-color: var(--bp-white);
+  --mat-select-focused-arrow-color: var(--bp-white);
   font: 400 14px/20px Ubuntu, sans-serif;
 
   &:focus-visible {
-    outline: 2px solid var(--ac-kit);
+    outline: 2px solid var(--bp-accent);
     outline-offset: 2px;
   }
 }
 
+// Блок користувача в drawer на телефоні (F3-84): email і кнопки.
 .shell-user {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-left: auto;
 }
 
 .shell-user__email {
@@ -73,49 +215,31 @@
   opacity: 0.85;
 }
 
-// Планшет: у шапці лише значок користувача, вужчий перемикач проєктів.
-@media (max-width: 1100px) {
-  .shell-top {
-    padding: 0 16px;
-  }
-
-  .shell-project {
-    margin-left: 8px;
-  }
-
-  .shell-project__select {
-    min-width: 140px;
-    max-width: 200px;
-  }
-
-  .shell-user__email {
-    display: none;
-  }
-
-  .shell-nav {
-    padding: 0 16px;
-    scrollbar-width: thin;
-  }
-}
-
+// Круглі кнопки праворуч (Figma «Панель управління»): 36 px на тлі --bp-shell-2.
 .shell-icon-button {
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgb(255 255 255 / 0.08);
-  color: var(--ac-white);
+  background: var(--bp-shell-2);
+  color: var(--bp-white);
+  text-decoration: none;
   cursor: pointer;
 
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+
   &:hover {
-    background: var(--ac-kit);
+    background: rgb(255 255 255 / 0.2);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--ac-kit);
+    outline: 2px solid var(--bp-accent);
     outline-offset: 2px;
   }
 }
@@ -124,41 +248,123 @@
   cursor: default;
 
   &:hover {
-    background: rgb(255 255 255 / 0.08);
+    background: var(--bp-shell-2);
   }
 }
 
-.shell-nav {
-  display: flex;
-  gap: 8px;
-  height: 46px;
-  padding: 0 24px;
-  overflow-x: auto;
-  background: var(--ac-mid);
+.shell-assistant[aria-pressed='true'] {
+  background: var(--bp-accent);
+  color: var(--bp-shell);
 }
 
-.shell-nav__link {
+// Аватар і меню користувача (профіль, вихід).
+.shell-user-menu {
+  position: relative;
+}
+
+.shell-avatar,
+.shell-menu__avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bp-accent);
+  color: var(--bp-shell);
+  font: 700 14px/1 Ubuntu, sans-serif;
+}
+
+.shell-avatar {
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    box-shadow: 0 0 0 3px rgb(255 255 255 / 0.24);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bp-accent);
+    outline-offset: 2px;
+  }
+}
+
+.shell-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  padding: 8px 0;
+  border: 1px solid var(--bp-line);
+  border-radius: var(--ac-radius);
+  background: var(--bp-white);
+  box-shadow: var(--ac-shadow);
+  color: var(--bp-text);
+}
+
+.shell-menu__head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border-bottom: 2px solid transparent;
-  color: rgb(255 255 255 / 0.6);
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--bp-line);
+}
+
+.shell-menu__email {
+  overflow: hidden;
   font: 500 14px/20px Ubuntu, sans-serif;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.shell-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--bp-text);
+  font: 400 14px/20px Ubuntu, sans-serif;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 
   .material-symbols-outlined {
+    color: var(--bp-text-muted);
     font-size: 20px;
   }
 
-  &:hover {
-    color: var(--ac-white);
+  &:hover,
+  &:focus-visible {
+    background: var(--bp-bg-2);
+    outline: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .shell-top {
+    gap: 16px;
+    padding: 0 16px;
+  }
+}
+
+// Планшет: лише знак логотипа й вужчий перемикач проєктів — більше місця пунктам меню.
+@media (min-width: 768px) and (max-width: 1100px) {
+  .shell-brand__name:not(.shell-brand__name--app) {
+    display: none;
   }
 
-  &.active {
-    border-bottom-color: var(--ac-white);
-    color: var(--ac-white);
+  .shell-project__select {
+    min-width: 140px;
+    max-width: 180px;
   }
 }
 
@@ -166,17 +372,13 @@
   margin-left: auto;
 }
 
-// Кнопка загального помічника (F3-110): на десктопі після блоку користувача; на телефоні — перед бургером.
+// Кнопка загального помічника (F3-110) на телефоні — перед бургером.
 .shell-top .shell-assistant--mobile {
   margin-left: auto;
 
   + .shell-burger {
     margin-left: 0;
   }
-}
-
-.shell-assistant[aria-pressed='true'] {
-  background: var(--ac-kit);
 }
 
 // Банер «Немає зв'язку із сервером» (F3-84).
@@ -234,8 +436,8 @@
   flex-direction: column;
   width: min(86vw, 320px);
   overflow-y: auto;
-  background: var(--ac-mid);
-  color: var(--ac-white);
+  background: var(--bp-shell);
+  color: var(--bp-white);
 }
 
 .shell-drawer__nav {
@@ -251,9 +453,14 @@
     font-size: 16px;
 
     &.active {
-      border-left-color: var(--ac-white);
+      border-left-color: var(--bp-accent);
       background: rgb(255 255 255 / 0.08);
     }
+  }
+
+  .shell-nav__group {
+    padding: 16px 20px 4px;
+    border-left: 0;
   }
 }
 
@@ -265,17 +472,9 @@
   padding: 16px 20px;
   border-top: 1px solid rgb(255 255 255 / 0.16);
 
-  .shell-project {
-    margin-left: 0;
-  }
-
   .shell-project__select {
     flex: 1;
     min-width: 0;
-  }
-
-  .shell-user {
-    margin-left: 0;
   }
 
   .shell-user__email {
