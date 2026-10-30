@@ -7,7 +7,7 @@ using OpenBP.Shared.Workflow;
 namespace OpenBP.Nodes.Core;
 
 /// <summary>
-/// <c>core.dataTable</c> (F6-11) — читання й запис рядків таблиці даних OpenBP. Операція виконується для кожного
+/// <c>core.dataTable</c> (F6-11) — читання й запис рядків таблиці даних AI_BPMS. Операція виконується для кожного
 /// вхідного item'а: <c>get</c> — item з рядком (нічого, якщо рядка немає), <c>list</c> — по item'у на рядок за умовами
 /// <c>where</c> (до <c>limit</c>), <c>insert</c>/<c>upsert</c>/<c>update</c> — item із записаним рядком,
 /// <c>delete</c> — <c>{ _key, deleted }</c>. У <c>json</c> рядка є <c>_key</c> — ключ, за яким його можна змінити чи

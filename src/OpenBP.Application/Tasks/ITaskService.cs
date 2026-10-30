@@ -56,7 +56,7 @@ public sealed record TaskFilter(string? Scope = null, string? Status = null, Gui
 public sealed record CompleteTaskRequest(string Decision, JsonObject? Data = null);
 
 /// <summary>Виконавець задачі.</summary>
-/// <param name="UserId">Користувач OpenBP.</param>
+/// <param name="UserId">Користувач AI_BPMS.</param>
 /// <param name="Email">Його email.</param>
 /// <param name="Role">Роль (задача для всіх з нею або вищою).</param>
 /// <param name="Value">Значення <c>expression</c>: email або зовнішній id.</param>

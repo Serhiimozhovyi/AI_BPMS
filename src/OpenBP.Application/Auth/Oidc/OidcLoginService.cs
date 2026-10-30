@@ -65,7 +65,7 @@ public sealed class OidcLoginService(OpenBpDbContext db, TimeProvider time, stri
 
         if (!provider.IsEmailAllowed(identity.Email))
         {
-            throw new OidcLoginException(OidcLoginException.EmailNotAllowedCode, "Домен пошти не дозволено для входу в OpenBP.");
+            throw new OidcLoginException(OidcLoginException.EmailNotAllowedCode, "Домен пошти не дозволено для входу в AI_BPMS.");
         }
 
         var now = time.GetUtcNow();

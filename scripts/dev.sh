@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Команди для локальної розробки OpenBP.
+# Команди для локальної розробки AI_BPMS.
 # Використання: scripts/dev.sh <up|down|migrate|test>
 set -euo pipefail
 

@@ -7,7 +7,7 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Workflows;
 
-/// <summary>Зауваження перетворення n8n → OpenBP.</summary>
+/// <summary>Зауваження перетворення n8n → AI_BPMS.</summary>
 /// <param name="Level"><c>replace</c> — вузол не перенесено, на його місці заглушка, яку треба замінити;
 /// <c>check</c> — перенесено, але поведінку варто перевірити.</param>
 /// <param name="Node">Назва вузла (однакова в n8n і AI_BPMS) або <c>null</c> для сценарію загалом.</param>
@@ -15,7 +15,7 @@ namespace OpenBP.Application.Workflows;
 public sealed record N8nConversionNote(string Level, string? Node, string Message);
 
 /// <summary>Результат <c>POST /workflows/convert/n8n</c>: тіло для <c>POST /workflows/import</c> і зауваження.</summary>
-/// <param name="Definition">Сценарій у форматі OpenBP.</param>
+/// <param name="Definition">Сценарій у форматі AI_BPMS.</param>
 /// <param name="Manifest">Конектори й credentials, які треба вибрати при імпорті (з назвами credentials n8n).</param>
 /// <param name="Notes">Зауваження: спершу <c>replace</c>, потім <c>check</c>.</param>
 public sealed record N8nConversion(WorkflowDefinition Definition, WorkflowManifest Manifest, IReadOnlyList<N8nConversionNote> Notes);

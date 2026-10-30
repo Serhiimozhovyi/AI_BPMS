@@ -1,6 +1,6 @@
 <Project>
 
-  <!-- Шаблон живе поза OpenBP.sln: власні налаштування збірки, як у репозиторії OpenBP. -->
+  <!-- Шаблон живе поза OpenBP.sln: власні налаштування збірки, як у репозиторії AI_BPMS. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>

@@ -158,4 +158,4 @@ AI_BPMS сам є MCP-сервером: агент бачить ваш коне�
 що в AI_BPMS) і `.editorconfig`. CI репозиторію створює з нього проєкт `dotnet new` і запускає
 `dotnet build -warnaserror`, `dotnet format --verify-no-changes` і `dotnet test`.
 
-Сторонні залежності шаблону (MIT) — у `THIRD_PARTY_NOTICES.md` репозиторію OpenBP.
+Сторонні залежності шаблону (MIT) — у `THIRD_PARTY_NOTICES.md` репозиторію AI_BPMS.

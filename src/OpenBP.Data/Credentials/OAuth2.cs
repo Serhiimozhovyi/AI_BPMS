@@ -29,7 +29,7 @@ public static class OAuth2Credential
     /// <summary>Поля, якими керує AI_BPMS (користувач їх не задає).</summary>
     public static IReadOnlyList<string> ManagedFields { get; } = ["accessToken", "refreshToken", "expiresAt", "tokenType", "oauthError"];
 
-    /// <summary>Поля типу <see cref="ClientCredentialsType"/>, якими керує OpenBP.</summary>
+    /// <summary>Поля типу <see cref="ClientCredentialsType"/>, якими керує AI_BPMS.</summary>
     public static IReadOnlyList<string> ClientCredentialsManagedFields { get; } = ["accessToken", "expiresAt", "tokenType", "oauthError", "oauthErrorAt"];
 
     /// <summary>Поля налаштувань: їх зміна скидає отримані токени.</summary>

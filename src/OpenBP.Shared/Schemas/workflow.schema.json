@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openbp.dev/schemas/workflow-format/1.json",
   "title": "AI_BPMS workflow (formatVersion 1)",
-  "description": "Формат сценарію OpenBP. Джерело правди — docs/workflow-format.md. Невідомі поля дозволені й зберігаються.",
+  "description": "Формат сценарію AI_BPMS. Джерело правди — docs/workflow-format.md. Невідомі поля дозволені й зберігаються.",
   "type": "object",
   "required": ["formatVersion", "name", "settings", "nodes", "connections", "pinData"],
   "properties": {

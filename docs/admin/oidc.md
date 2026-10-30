@@ -48,7 +48,7 @@ docker compose -f docker-compose.prod.yml up -d api
 | `ClientSecret` | так для confidential-клієнта | Секрет клієнта. У журнали й відповіді Api не потрапляє. |
 | `Scopes__0`, `Scopes__1`… | ні | Scopes понад `openid`. Типово `profile email`. |
 | `RoleClaim` | ні | Де лежать ролі, через кому. Keycloak: `realm_access.roles`, `resource_access.<client>.roles`. Entra ID: `roles`. |
-| `RoleMap__admin__0`, `RoleMap__editor__0`… | ні | Які ролі провайдера дають роль OpenBP. Діє найвища зі збігів, без збігу — viewer. Без `RoleMap` роль задає адміністратор AI_BPMS, а нові користувачі отримують viewer. |
+| `RoleMap__admin__0`, `RoleMap__editor__0`… | ні | Які ролі провайдера дають роль AI_BPMS. Діє найвища зі збігів, без збігу — viewer. Без `RoleMap` роль задає адміністратор AI_BPMS, а нові користувачі отримують viewer. |
 | `AutoProvision` | ні | `true` — створювати користувача при першому вході. Типово `false`. |
 | `AllowedEmailDomains__0`… | ні | Дозволені домени пошти, наприклад `astarta.ua`. Перевіряються на кожному вході. Порожньо — будь-які. |
 | `TrustEmail` | ні | Вважати пошту підтвердженою без claim `email_verified`. Для Entra ID одного тенанта. Для провайдерів, де користувач сам вписує пошту, не вмикати. |
@@ -110,4 +110,4 @@ Entra ID не надсилає `email_verified`. `TrustEmail=true` безпеч�
 - `curl https://<AI_BPMS>/api/v1/auth/providers` → `{"passwordLogin":…,"providers":[{"key":"kit",…}]}`.
 - Відкрийте `https://<AI_BPMS>/login`, натисніть кнопку провайдера й увійдіть. У правому верхньому куті має бути ваша
   пошта, а роль — як у `RoleMap`.
-- Вихід («Вийти») закриває сесію OpenBP. Сесія в самому провайдері лишається: наступний вхід може пройти без пароля.
+- Вихід («Вийти») закриває сесію AI_BPMS. Сесія в самому провайдері лишається: наступний вхід може пройти без пароля.

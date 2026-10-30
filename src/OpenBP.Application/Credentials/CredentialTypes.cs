@@ -80,7 +80,7 @@ public static class CredentialTypes
     /// <summary>Користувач і пароль (HTTP Basic).</summary>
     public const string Basic = "basic";
 
-    /// <summary>OAuth2 client credentials: токен отримує й оновлює OpenBP.</summary>
+    /// <summary>OAuth2 client credentials: токен отримує й оновлює AI_BPMS.</summary>
     public const string OAuth2ClientCredentials = OAuth2Credential.ClientCredentialsType;
 
     /// <summary>Підключення до бази даних.</summary>

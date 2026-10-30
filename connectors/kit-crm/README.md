@@ -22,7 +22,7 @@ MCP-сервер над OData Кіт CRM (`/odata/<Set>`), зроблений н
 Події для `mcp.subscribe` — ресурси `kit://changes/sales`, `kit://changes/tasks`, `kit://changes/contractors`,
 `kit://changes/persons`. Кіт сам подій не надсилає, тож поки сценарій активний, конектор раз на
 `Connector:Events:IntervalSec` (60 с) читає зміни після курсора тим самим запитом, що й `changes_since`, і сповіщає
-OpenBP. Подія — запис у формі `get_*` з `eventKey` = `id@час зміни` (`keyField = eventKey`: кожна зміна — окрема подія).
+AI_BPMS. Подія — запис у формі `get_*` з `eventKey` = `id@час зміни` (`keyField = eventKey`: кожна зміна — окрема подія).
 Пресети в палітрі: «Нова угода в Кіті» (сигнал від `kit://changes/sales`, записи читає `changes_since` з
 `createdOnly`, `keyField = id`) і «Нова чи змінена задача в Кіті» (`kit://changes/tasks`, `keyField = eventKey`).
 

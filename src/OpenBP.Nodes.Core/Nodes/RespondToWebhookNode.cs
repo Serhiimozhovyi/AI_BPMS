@@ -40,7 +40,7 @@ public sealed class RespondToWebhookNode(IWebhookResponder? responder = null) : 
     public async Task<Item[][]> ExecuteAsync(INodeContext ctx, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(ctx);
-        var target = responder ?? throw new CoreNodeException("Відповідь webhook-у тут недоступна: її надсилає воркер OpenBP. Запустіть сценарій на сервері.");
+        var target = responder ?? throw new CoreNodeException("Відповідь webhook-у тут недоступна: її надсилає воркер AI_BPMS. Запустіть сценарій на сервері.");
         var items = ctx.Items();
         var first = items.Count > 0 ? items[0] : new Item();
         var p = ctx.Params<RespondParameters>(0);

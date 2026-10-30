@@ -32,7 +32,7 @@ public sealed class FormLoginRequiredException : OpenBpException
 
     /// <param name="loginUrl">Сторінка входу з поверненням на форму.</param>
     public FormLoginRequiredException(string loginUrl)
-        : base(ErrorCode, 401, "Щоб надіслати цю форму, увійдіть до OpenBP.")
+        : base(ErrorCode, 401, "Щоб надіслати цю форму, увійдіть до AI_BPMS.")
     {
         LoginUrl = loginUrl;
     }

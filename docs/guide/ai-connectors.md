@@ -89,7 +89,7 @@ claude mcp list          # openbp: … ✓ Connected
 
 ### 3.2 Claude Desktop (через `mcp-remote`)
 
-Найпростіший спосіб для Desktop, який працює і з локальним OpenBP. Потрібен Node.js 18+ (`node -v`).
+Найпростіший спосіб для Desktop, який працює і з локальним AI_BPMS. Потрібен Node.js 18+ (`node -v`).
 
 1. Claude Desktop → Settings → Developer → **Edit Config** (відкриється `claude_desktop_config.json`).
 2. Додайте:

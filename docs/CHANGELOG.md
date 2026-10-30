@@ -1,6 +1,6 @@
 # Changelog
 
-Усі помітні зміни OpenBP. Формат — [Keep a Changelog](https://keepachangelog.com/uk/1.1.0/); записи додаються зверху.
+Усі помітні зміни AI_BPMS. Формат — [Keep a Changelog](https://keepachangelog.com/uk/1.1.0/); записи додаються зверху.
 
 ## [Unreleased]
 

@@ -1,6 +1,6 @@
 import { Page, expect, test } from '@playwright/test';
 
-/** F8-18: користувач лише з роллю застосунку входить одразу в оболонку — меню розділів і головна з блоків, без меню OpenBP. */
+/** F8-18: користувач лише з роллю застосунку входить одразу в оболонку — меню розділів і головна з блоків, без меню AI_BPMS. */
 const USER = { id: 'u9', email: 'olena@firma.ua', role: 'viewer' };
 
 const page = (key: string, name: string, kind: string, definition: object) => ({ id: key, key, name, kind, definition, roles: [], sortOrder: 0, updatedAt: '2026-11-04T00:00:00Z' });

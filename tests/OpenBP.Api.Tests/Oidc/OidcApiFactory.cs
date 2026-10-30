@@ -77,7 +77,7 @@ public sealed partial class OidcApiFactory : WebApplicationFactory<Program>, IAs
     }
 
     /// <summary>
-    /// Проходить вхід «браузером»: <c>/api/v1/auth/oidc/{provider}/login</c> → форма Keycloak → callback OpenBP.
+    /// Проходить вхід «браузером»: <c>/api/v1/auth/oidc/{provider}/login</c> → форма Keycloak → callback AI_BPMS.
     /// </summary>
     /// <param name="provider">Ключ провайдера.</param>
     /// <param name="username">Користувач realm'у; пароль — <c>Pass-&lt;username&gt;</c>.</param>
