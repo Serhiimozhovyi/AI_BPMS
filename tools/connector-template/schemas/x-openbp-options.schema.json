@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openbp.dev/schemas/x-openbp-options.schema.json",
   "title": "x-openbp-options",
-  "description": "Анотація властивості inputSchema tool'а: форма OpenBP пропонує значення зі списку, який повертає інший tool того самого конектора (docs/connectors.md §2).",
+  "description": "Анотація властивості inputSchema tool'а: форма AI_BPMS пропонує значення зі списку, який повертає інший tool того самого конектора (docs/connectors.md §2).",
   "type": "object",
   "required": ["tool", "valuePath"],
   "additionalProperties": false,

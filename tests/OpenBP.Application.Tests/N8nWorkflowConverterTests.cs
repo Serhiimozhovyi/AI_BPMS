@@ -13,7 +13,7 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Tests;
 
-/// <summary>F6-24: перетворення сценарію n8n у формат OpenBP.</summary>
+/// <summary>F6-24: перетворення сценарію n8n у формат AI_BPMS.</summary>
 public class N8nWorkflowConverterTests
 {
     private static JsonObject Sample() =>
@@ -93,7 +93,7 @@ public class N8nWorkflowConverterTests
         Assert.Contains(("Стрічка A", 1, "Злити", 0), edges);
         Assert.True(Node(definition, "Стрічка A").ContinueOnFail);
         Assert.Contains(("Є кандидати?", 1, "Без поста", 0), edges);
-        // «Continue (error output)» — вихід помилки n8n стає виходом помилки OpenBP.
+        // «Continue (error output)» — вихід помилки n8n стає виходом помилки AI_BPMS.
         Assert.Contains(("Картинка", 1, "Опублікувати", 0), edges);
         Assert.Contains(("Картинка", 0, "Картинка: тіло відповіді", 0), edges);
         Assert.Contains(("Картинка: тіло відповіді", 0, "Опублікувати", 0), edges);

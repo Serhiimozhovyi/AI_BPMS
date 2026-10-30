@@ -1,6 +1,6 @@
 <Project>
 
-  <!-- Ті самі версії, що в Directory.Packages.props репозиторію OpenBP (оновлюються разом, задача M-01). -->
+  <!-- Ті самі версії, що в Directory.Packages.props репозиторію AI_BPMS (оновлюються разом, задача M-01). -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>

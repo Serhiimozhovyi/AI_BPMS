@@ -12,14 +12,14 @@ namespace Connector.Template.OData;
 /// (за ключем, зокрема складеним), <c>create_&lt;set&gt;</c> (POST) і <c>update_&lt;set&gt;</c> (PATCH). <c>inputSchema</c>
 /// — з типів CSDL (Edm.* → JSON Schema, складні типи й перелічення розгортаються). Посилання на довідник
 /// (<c>&lt;Name&gt;_Key</c> з навігацією <c>&lt;Name&gt;</c> на entity set, для якого є <c>list_*</c>) отримують анотацію
-/// <c>x-openbp-options</c> — у формі OpenBP значення обирається зі списку (docs/connectors.md §2).
+/// <c>x-openbp-options</c> — у формі AI_BPMS значення обирається зі списку (docs/connectors.md §2).
 /// </summary>
 public static class ODataToolFactory
 {
     /// <summary>Аргумент із тілом сутності для create/update.</summary>
     public const string BodyArgument = "body";
 
-    /// <summary>Анотація властивості <c>inputSchema</c>: звідки форма OpenBP бере список значень (docs/connectors.md §2).</summary>
+    /// <summary>Анотація властивості <c>inputSchema</c>: звідки форма AI_BPMS бере список значень (docs/connectors.md §2).</summary>
     public const string OptionsAnnotation = "x-openbp-options";
 
     /// <summary>Суфікс властивості-посилання 1С (<c>Контрагент_Key</c> ↔ навігація <c>Контрагент</c>).</summary>

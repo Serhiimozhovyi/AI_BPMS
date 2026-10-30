@@ -200,7 +200,7 @@ describe('App: вибір проєкту (F6-14)', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="project-select"]')).toBeNull();
   });
 
-  it('користувач лише застосунку з оболонкою (F8-18): меню OpenBP немає — лише оболонка застосунку', async () => {
+  it('користувач лише застосунку з оболонкою (F8-18): меню AI_BPMS немає — лише оболонка застосунку', async () => {
     configure({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
     const fixture = TestBed.createComponent(App);
     const harness = await RouterTestingHarness.create();
@@ -328,7 +328,7 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     const connectivity = TestBed.inject(ConnectivityService);
     connectivity.offline.set(true);
     fixture.detectChanges();
-    expect(host.querySelector('[data-testid="offline-banner"]')?.textContent).toContain('Немає зв’язку із сервером OpenBP');
+    expect(host.querySelector('[data-testid="offline-banner"]')?.textContent).toContain('Немає зв’язку із сервером AI_BPMS');
     const retry = vi.spyOn(connectivity, 'retry').mockImplementation(() => undefined);
     host.querySelector<HTMLButtonElement>('[data-testid="offline-retry"]')!.click();
     expect(retry).toHaveBeenCalled();

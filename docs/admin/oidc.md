@@ -1,19 +1,19 @@
 # Вхід через OIDC: Keycloak і Microsoft Entra ID
 
-OpenBP вміє пускати користувачів через корпоративний вхід (OpenID Connect) замість окремого пароля. Після входу
+AI_BPMS вміє пускати користувачів через корпоративний вхід (OpenID Connect) замість окремого пароля. Після входу
 користувач отримує ту саму сесію, що й після пароля, з роллю viewer, editor або admin. Провайдерів може бути кілька:
 на сторінці входу для кожного з'являється кнопка «Увійти через …».
 
 ## Як це працює
 
 1. Користувач натискає «Увійти через Кіт 2» і логіниться на сторінці провайдера.
-2. Провайдер повертає браузер на `https://<OpenBP>/signin-oidc/<key>`. OpenBP перевіряє відповідь (authorization code
+2. Провайдер повертає браузер на `https://<AI_BPMS>/signin-oidc/<key>`. AI_BPMS перевіряє відповідь (authorization code
    + PKCE) і шукає користувача:
    - за обліковим записом провайдера (`sub`), якщо користувач уже входив цим провайдером;
    - інакше за поштою, якщо провайдер її підтвердив (тоді обліковий запис прив'язується до наявного користувача);
    - інакше створює нового користувача без пароля, якщо для провайдера ввімкнено `AutoProvision`.
 3. Якщо задано `RoleMap`, роль виставляється з ролей провайдера при кожному вході. Так зняття ролі в Keycloak чи Entra
-   ID забирає права в OpenBP з наступним входом. Аварійного адміністратора `OPENBP_ADMIN_EMAIL` це не стосується.
+   ID забирає права в AI_BPMS з наступним входом. Аварійного адміністратора `OPENBP_ADMIN_EMAIL` це не стосується.
 
 Якщо вхід відхилено, користувач повертається на сторінку входу з поясненням:
 
@@ -44,11 +44,11 @@ docker compose -f docker-compose.prod.yml up -d api
 |---|---|---|
 | `DisplayName` | ні | Текст кнопки: «Увійти через `DisplayName`». Без нього — ключ. |
 | `Authority` | так | Issuer. Keycloak: `https://<sso>/realms/<realm>`. Entra ID: `https://login.microsoftonline.com/<tenant-id>/v2.0`. |
-| `ClientId` | так | Client id клієнта OpenBP у провайдера. |
+| `ClientId` | так | Client id клієнта AI_BPMS у провайдера. |
 | `ClientSecret` | так для confidential-клієнта | Секрет клієнта. У журнали й відповіді Api не потрапляє. |
 | `Scopes__0`, `Scopes__1`… | ні | Scopes понад `openid`. Типово `profile email`. |
 | `RoleClaim` | ні | Де лежать ролі, через кому. Keycloak: `realm_access.roles`, `resource_access.<client>.roles`. Entra ID: `roles`. |
-| `RoleMap__admin__0`, `RoleMap__editor__0`… | ні | Які ролі провайдера дають роль OpenBP. Діє найвища зі збігів, без збігу — viewer. Без `RoleMap` роль задає адміністратор OpenBP, а нові користувачі отримують viewer. |
+| `RoleMap__admin__0`, `RoleMap__editor__0`… | ні | Які ролі провайдера дають роль AI_BPMS. Діє найвища зі збігів, без збігу — viewer. Без `RoleMap` роль задає адміністратор AI_BPMS, а нові користувачі отримують viewer. |
 | `AutoProvision` | ні | `true` — створювати користувача при першому вході. Типово `false`. |
 | `AllowedEmailDomains__0`… | ні | Дозволені домени пошти, наприклад `astarta.ua`. Перевіряються на кожному вході. Порожньо — будь-які. |
 | `TrustEmail` | ні | Вважати пошту підтвердженою без claim `email_verified`. Для Entra ID одного тенанта. Для провайдерів, де користувач сам вписує пошту, не вмикати. |
@@ -58,11 +58,11 @@ docker compose -f docker-compose.prod.yml up -d api
 
 Інші змінні:
 
-- `OPENBP_PUBLIC_URL` — публічна адреса OpenBP (`https://openbp.example.com`). З неї будується redirect URI, коли OpenBP
+- `OPENBP_PUBLIC_URL` — публічна адреса AI_BPMS (`https://openbp.example.com`). З неї будується redirect URI, коли AI_BPMS
   стоїть за reverse proxy з HTTPS. Без неї береться адреса запиту, і за проксі вона буде `http://…`, а провайдер такий
   redirect URI відхилить.
 - `OPENBP_PASSWORD_LOGIN=false` ховає форму пароля і вимикає вхід паролем для всіх, крім `OPENBP_ADMIN_EMAIL`. Аварійний
-  адміністратор входить через `https://<OpenBP>/login?password`.
+  адміністратор входить через `https://<AI_BPMS>/login?password`.
 
 Помилка в налаштуваннях (немає `Authority` чи `ClientId`, недопустимий ключ) зупиняє старт api з поясненням у журналі:
 `docker compose -f docker-compose.prod.yml logs api`.
@@ -72,13 +72,13 @@ docker compose -f docker-compose.prod.yml up -d api
 
 ## Keycloak «Кіт 2» (realm `astarta`)
 
-У Кіті OpenBP нічого не змінює. Клієнта для OpenBP створює власник Keycloak:
+У Кіті AI_BPMS нічого не змінює. Клієнта для AI_BPMS створює власник Keycloak:
 
 1. **Clients → Create client**: Client type `OpenID Connect`, Client ID `openbp`.
 2. **Capability config**: Client authentication **On** (confidential), Standard flow **On**, решта вимкнено.
 3. **Login settings**:
-   - Valid redirect URIs: `https://<OpenBP>/signin-oidc/kit`;
-   - Web origins: `https://<OpenBP>`.
+   - Valid redirect URIs: `https://<AI_BPMS>/signin-oidc/kit`;
+   - Web origins: `https://<AI_BPMS>`.
 4. **Advanced → Proof Key for Code Exchange**: `S256`.
 5. **Credentials**: скопіюйте Client secret в `OpenBp__Oidc__Providers__kit__ClientSecret`.
 6. Ролі. Варіант A — ролі клієнта: **Clients → openbp → Roles** `openbp-admin`, `openbp-editor`, призначити користувачам
@@ -87,27 +87,27 @@ docker compose -f docker-compose.prod.yml up -d api
    з `OIDC_EMAIL_NOT_VERIFIED`.
 
 Вбудований редактор `<openbp-canvas>` у Кіті може передавати access token Кіта (клієнт `KitWeb`) замість API-ключа
-(див. [embedding.md](../embedding.md)). Для цього достатньо `BearerAudiences__1=KitWeb`: OpenBP перевіряє підпис токена
+(див. [embedding.md](../embedding.md)). Для цього достатньо `BearerAudiences__1=KitWeb`: AI_BPMS перевіряє підпис токена
 ключами realm'у і `azp`, а користувача шукає за тими самими правилами, що й при вході.
 
 ## Microsoft Entra ID
 
 1. **Entra ID → App registrations → New registration**:
    - Supported account types: «Accounts in this organizational directory only»;
-   - Redirect URI: Web, `https://<OpenBP>/signin-oidc/entra`.
+   - Redirect URI: Web, `https://<AI_BPMS>/signin-oidc/entra`.
 2. **Certificates & secrets → New client secret** → `ClientSecret`. Секрет має строк дії: поставте нагадування.
 3. **App roles → Create app role**: `OpenBP.Admin`, `OpenBP.Editor` (Allowed member types: Users/Groups). Призначте їх у
-   **Enterprise applications → OpenBP → Users and groups**.
+   **Enterprise applications → AI_BPMS → Users and groups**.
 4. **Token configuration → Add optional claim → ID → `email`** (і за бажання `xms_edov`).
 5. У `oidc.env`: `Authority=https://login.microsoftonline.com/<tenant-id>/v2.0` (саме id тенанта, не `common`),
    `ClientId=<Application (client) ID>`, `RoleClaim=roles`, `RoleMap…`, `TrustEmail=true`.
 
 Entra ID не надсилає `email_verified`. `TrustEmail=true` безпечний для одного тенанта: пошту там задає адміністратор
-тенанта. Якщо claim `email` порожній, OpenBP бере UPN (`upn` або `preferred_username`).
+тенанта. Якщо claim `email` порожній, AI_BPMS бере UPN (`upn` або `preferred_username`).
 
 ## Перевірка
 
-- `curl https://<OpenBP>/api/v1/auth/providers` → `{"passwordLogin":…,"providers":[{"key":"kit",…}]}`.
-- Відкрийте `https://<OpenBP>/login`, натисніть кнопку провайдера й увійдіть. У правому верхньому куті має бути ваша
+- `curl https://<AI_BPMS>/api/v1/auth/providers` → `{"passwordLogin":…,"providers":[{"key":"kit",…}]}`.
+- Відкрийте `https://<AI_BPMS>/login`, натисніть кнопку провайдера й увійдіть. У правому верхньому куті має бути ваша
   пошта, а роль — як у `RoleMap`.
-- Вихід («Вийти») закриває сесію OpenBP. Сесія в самому провайдері лишається: наступний вхід може пройти без пароля.
+- Вихід («Вийти») закриває сесію AI_BPMS. Сесія в самому провайдері лишається: наступний вхід може пройти без пароля.

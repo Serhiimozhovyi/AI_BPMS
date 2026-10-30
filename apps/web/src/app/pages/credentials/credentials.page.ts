@@ -185,7 +185,7 @@ export class CredentialsPage implements OnInit {
     const query = this.route.snapshot.queryParamMap;
     const oauth = query.get('oauth');
     if (oauth === 'connected') {
-      this.oauthResult.set({ ok: true, message: $localize`:@@credentials.oauth.done:Підключено: токен отримано, OpenBP оновлюватиме його сам.` });
+      this.oauthResult.set({ ok: true, message: $localize`:@@credentials.oauth.done:Підключено: токен отримано, AI_BPMS оновлюватиме його сам.` });
     } else if (oauth === 'error') {
       const code = query.get('code') ?? '';
       this.oauthResult.set({

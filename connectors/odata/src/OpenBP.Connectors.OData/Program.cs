@@ -1,6 +1,6 @@
 using OpenBP.Connectors.OData;
 
-// stdio — так OpenBP запускає конектор як процес; `--http <url>` — окремий сервіс зі Streamable HTTP на <url>/mcp.
+// stdio — так AI_BPMS запускає конектор як процес; `--http <url>` — окремий сервіс зі Streamable HTTP на <url>/mcp.
 var http = Array.IndexOf(args, "--http");
 if (http >= 0 && http + 1 < args.Length)
 {

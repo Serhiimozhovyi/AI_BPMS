@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace OpenBP.Connectors.GSheets;
 
 /// <summary>
-/// Ключ сервісного акаунта Google — **лише** зі змінної середовища <see cref="KeyVariable"/> (OpenBP передає її через
+/// Ключ сервісного акаунта Google — **лише** зі змінної середовища <see cref="KeyVariable"/> (AI_BPMS передає її через
 /// credential <c>{ "env": { … } }</c> конектора). Закритий ключ, сам JSON, підписані JWT і видані токени ніколи не
 /// потрапляють у відповіді tools, тексти помилок і журнали: <see cref="Scrub"/>.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
 
         if (environment(KeyVariable) is not { Length: > 0 } json)
         {
-            throw new ConnectorException($"Не задано змінну середовища {KeyVariable} (credential конектора в OpenBP, поле env): JSON-ключ сервісного акаунта.");
+            throw new ConnectorException($"Не задано змінну середовища {KeyVariable} (credential конектора в AI_BPMS, поле env): JSON-ключ сервісного акаунта.");
         }
 
         ServiceAccountKey? key;

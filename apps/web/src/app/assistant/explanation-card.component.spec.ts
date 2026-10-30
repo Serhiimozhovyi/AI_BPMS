@@ -122,7 +122,7 @@ describe('ExplanationCardComponent', () => {
     fixture.detectChanges();
     expect(text(host, 'explanation-status')).toContain('через MCP');
     expect(text(host, 'explanation-mcp-prompt')).toBe(
-      'Поясни сценарій «Бот підтримки» і збережи пояснення в OpenBP',
+      'Поясни сценарій «Бот підтримки» і збережи пояснення в AI_BPMS',
     );
 
     fixture.componentRef.setInput('version', 3);

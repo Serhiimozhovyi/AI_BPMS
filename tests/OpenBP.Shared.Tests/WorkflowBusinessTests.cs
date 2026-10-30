@@ -18,7 +18,7 @@ public class WorkflowBusinessTests
             {
               "lanes": [
                 { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" },
-                { "id": "openbp", "name": "OpenBP" }
+                { "id": "openbp", "name": "AI_BPMS" }
               ],
               "steps": [
                 { "id": "s_order", "title": "Клієнт пише в Telegram", "subtitle": "повідомлення", "lane": "kit",

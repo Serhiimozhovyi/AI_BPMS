@@ -91,7 +91,7 @@ describe('CredentialFormComponent: поля за типом (F3-94)', () => {
 
   it('«Перевірити» для client credentials: POST /credentials/check без збереження, результат людським текстом', () => {
     const { fixture, host, http, fill } = setup('oauth2.clientCredentials');
-    // Службові поля OpenBP у формі не показуються.
+    // Службові поля AI_BPMS у формі не показуються.
     expect(host.querySelector('[data-field="accessToken"]')).toBeNull();
 
     // Без обов'язкових полів запиту немає — лише помилки форми.

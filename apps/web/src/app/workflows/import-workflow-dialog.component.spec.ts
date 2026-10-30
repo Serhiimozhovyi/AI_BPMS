@@ -88,7 +88,7 @@ describe('ImportWorkflowDialog', () => {
       definition: exported.definition,
       manifest: { connectors: [{ ref: 'n8n:telegramApi:t1', name: 'radarbot', transport: '' }], credentials: [], variables: [] },
       notes: [
-        { level: 'replace', node: 'RSS', message: 'Читання RSS у OpenBP немає' },
+        { level: 'replace', node: 'RSS', message: 'Читання RSS у AI_BPMS немає' },
         { level: 'check', node: null, message: 'Створіть таблицю даних «agro_history»' },
       ],
     };

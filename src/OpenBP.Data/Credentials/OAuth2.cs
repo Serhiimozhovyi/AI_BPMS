@@ -12,7 +12,7 @@ public sealed class OAuth2Exception(string message, Exception? inner = null) : E
 
 /// <summary>
 /// Credential типу <c>oauth2</c> (F4-04): налаштування клієнта (<c>authorizationUrl</c>, <c>tokenUrl</c>, <c>clientId</c>,
-/// <c>clientSecret?</c>, <c>scopes?</c>, <c>audience?</c>) і поля, якими керує OpenBP: <c>accessToken</c>,
+/// <c>clientSecret?</c>, <c>scopes?</c>, <c>audience?</c>) і поля, якими керує AI_BPMS: <c>accessToken</c>,
 /// <c>refreshToken</c>, <c>expiresAt</c> (ISO 8601), <c>tokenType</c>, <c>oauthError</c>.
 /// </summary>
 public static class OAuth2Credential
@@ -23,19 +23,19 @@ public static class OAuth2Credential
     /// <summary>За скільки до <c>expiresAt</c> токен оновлюється заздалегідь.</summary>
     public static readonly TimeSpan RefreshMargin = TimeSpan.FromSeconds(60);
 
-    /// <summary>Тип <c>oauth2.clientCredentials</c> (F3-93): токен за client credentials отримує й оновлює OpenBP, без входу користувача.</summary>
+    /// <summary>Тип <c>oauth2.clientCredentials</c> (F3-93): токен за client credentials отримує й оновлює AI_BPMS, без входу користувача.</summary>
     public const string ClientCredentialsType = "oauth2.clientCredentials";
 
-    /// <summary>Поля, якими керує OpenBP (користувач їх не задає).</summary>
+    /// <summary>Поля, якими керує AI_BPMS (користувач їх не задає).</summary>
     public static IReadOnlyList<string> ManagedFields { get; } = ["accessToken", "refreshToken", "expiresAt", "tokenType", "oauthError"];
 
-    /// <summary>Поля типу <see cref="ClientCredentialsType"/>, якими керує OpenBP.</summary>
+    /// <summary>Поля типу <see cref="ClientCredentialsType"/>, якими керує AI_BPMS.</summary>
     public static IReadOnlyList<string> ClientCredentialsManagedFields { get; } = ["accessToken", "expiresAt", "tokenType", "oauthError", "oauthErrorAt"];
 
     /// <summary>Поля налаштувань: їх зміна скидає отримані токени.</summary>
     public static IReadOnlyList<string> ClientFields { get; } = ["authorizationUrl", "tokenUrl", "clientId", "clientSecret", "scopes", "audience"];
 
-    /// <summary>Чи керує OpenBP токенами credential'а цього типу.</summary>
+    /// <summary>Чи керує AI_BPMS токенами credential'а цього типу.</summary>
     /// <param name="type">Значення <c>credentials.type</c>.</param>
     public static bool IsOAuth(string? type) => type is Type or ClientCredentialsType;
 

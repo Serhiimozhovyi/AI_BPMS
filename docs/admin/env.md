@@ -1,4 +1,4 @@
-# Змінні середовища OpenBP
+# Змінні середовища AI_BPMS
 
 Усі змінні з [`.env.example`](../../.env.example). `.env` створює `scripts/gen-env.sh` і читають обидва
 compose-файли: `docker-compose.yml` (розробка) і `docker-compose.prod.yml` (продакшн). Після зміни перезапустіть сервіси,

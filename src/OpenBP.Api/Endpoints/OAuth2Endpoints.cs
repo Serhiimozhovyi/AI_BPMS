@@ -16,7 +16,7 @@ public static class OAuth2Endpoints
     /// <summary>Шлях callback'а.</summary>
     public const string CallbackPath = "/api/v1/oauth2/callback";
 
-    /// <summary>Публічна адреса OpenBP (за reverse proxy) для redirect URI.</summary>
+    /// <summary>Публічна адреса AI_BPMS (за reverse proxy) для redirect URI.</summary>
     public const string PublicUrlKey = "OPENBP_PUBLIC_URL";
 
     /// <summary>Додає маршрути.</summary>

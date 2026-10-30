@@ -436,7 +436,7 @@ internal static class DrafterPrompt
 {
     public const string NodeSystem =
         """
-        You fill the parameters of ONE node of an OpenBP business-process workflow. Answer with one JSON object that matches the
+        You fill the parameters of ONE node of an AI_BPMS business-process workflow. Answer with one JSON object that matches the
         given JSON Schema and nothing else. Use the user's language (usually Ukrainian) for texts. Data from earlier steps is
         referenced with expressions: "{{ $json.field }}" is a field of the item from the previous node,
         "{{ $node["Node name"].json.field }}" — of an earlier node. Do not invent ids, e-mails or phone numbers that are not in
@@ -450,7 +450,7 @@ internal static class DrafterPrompt
 
     private const string PlanRules =
         """
-        You turn a plain-language description of a business process into a plan for the OpenBP workflow editor.
+        You turn a plain-language description of a business process into a plan for the AI_BPMS workflow editor.
         Answer with one JSON object { title, lanes, steps, links } and nothing else.
 
         Rules:

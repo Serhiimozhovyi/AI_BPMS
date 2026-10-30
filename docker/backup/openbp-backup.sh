@@ -1,5 +1,5 @@
 #!/bin/sh
-# Разовий бекап БД OpenBP (F4-11): pg_dump -Fc у $OPENBP_BACKUP_DIR, потім ротація старших за
+# Разовий бекап БД AI_BPMS (F4-11): pg_dump -Fc у $OPENBP_BACKUP_DIR, потім ротація старших за
 # $OPENBP_BACKUP_KEEP_DAYS днів. Підключення — стандартні PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE.
 # Результат — один рядок у журналі контейнера і рядок у таблиці backup_runs (F6-07: Api сповіщає адміністратора про
 # збій бекапу); код виходу ≠ 0 при помилці.

@@ -81,7 +81,7 @@ public static class ResumeTokens
     /// <c>/webhook/resume/{token}</c> (режим <c>webhook</c>) або сторінка <c>/form/resume/{token}</c> (режим <c>form</c>);
     /// без публічної адреси — відносний шлях (у листі він не спрацює: задайте змінну для воркера).
     /// </summary>
-    /// <param name="publicUrl">Публічна адреса OpenBP або <c>null</c>.</param>
+    /// <param name="publicUrl">Публічна адреса AI_BPMS або <c>null</c>.</param>
     /// <param name="token">Токен.</param>
     /// <param name="kind"><see cref="WebhookKind"/> або <see cref="FormKind"/>.</param>
     public static string UrlFor(string? publicUrl, string token, string kind = WebhookKind)
@@ -105,7 +105,7 @@ public static class ResumeTokens
     /// <param name="db">Контекст БД.</param>
     /// <param name="executionId">Виконання (рядок <c>executions</c> уже існує).</param>
     /// <param name="workflow">Версія сценарію, яку виконує це виконання.</param>
-    /// <param name="publicUrl">Публічна адреса OpenBP (<c>OPENBP_PUBLIC_URL</c>) або <c>null</c>.</param>
+    /// <param name="publicUrl">Публічна адреса AI_BPMS (<c>OPENBP_PUBLIC_URL</c>) або <c>null</c>.</param>
     /// <param name="time">Годинник для <c>created_at</c>.</param>
     /// <param name="ct">Скасування.</param>
     public static async Task<IReadOnlyDictionary<string, string>> EnsureAsync(

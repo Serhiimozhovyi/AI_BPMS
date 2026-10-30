@@ -5,7 +5,7 @@ using OpenBP.Application.Auth.Oidc;
 
 namespace OpenBP.Application.Tests;
 
-/// <summary>F4-14: claims токенів Entra ID і Keycloak → користувач OpenBP, мапінг ролей, домени пошти.</summary>
+/// <summary>F4-14: claims токенів Entra ID і Keycloak → користувач AI_BPMS, мапінг ролей, домени пошти.</summary>
 public class OidcClaimsMapperTests
 {
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement;

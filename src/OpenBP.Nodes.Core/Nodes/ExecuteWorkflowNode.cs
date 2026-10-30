@@ -62,7 +62,7 @@ public sealed class ExecuteWorkflowNode : INode
     {
         ArgumentNullException.ThrowIfNull(ctx);
         var launcher = _launcher ?? throw new CoreNodeException(
-            "Підсценарії тут недоступні: їх виконує воркер OpenBP. Запустіть сценарій на сервері.");
+            "Підсценарії тут недоступні: їх виконує воркер AI_BPMS. Запустіть сценарій на сервері.");
 
         if (ctx.Resumption is { } resumption)
         {

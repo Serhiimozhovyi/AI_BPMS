@@ -6,7 +6,7 @@ namespace OpenBP.Cli.Tests;
 /// <summary>
 /// F8-08: підсценарії правил шаблону <c>examples/projects/psy-support</c> (docs/psy-support.md §4) через <c>openbp run --pin</c>.
 /// Читання таблиць закріплено pinData з часом відносно «зараз», вставки йдуть у таблиці CLI в пам'яті; відмову
-/// <c>insertIf</c> (unique, capacity), яку в OpenBP дає таблиця з обмеженнями, теж закріплено.
+/// <c>insertIf</c> (unique, capacity), яку в AI_BPMS дає таблиця з обмеженнями, теж закріплено.
 /// </summary>
 public sealed class PsySupportTemplateRuleTests : IDisposable
 {

@@ -4,7 +4,7 @@ namespace OpenBP.Application.Projects;
 
 /// <summary>
 /// Оболонка застосунку проєкту (F8-14, docs/projects.md §3.9): назва, значок, головна сторінка і меню розділів.
-/// Користувач лише з роллю застосунку бачить її без меню OpenBP; editor — у рамці проєкту.
+/// Користувач лише з роллю застосунку бачить її без меню AI_BPMS; editor — у рамці проєкту.
 /// </summary>
 /// <param name="Title">Назва застосунку в шапці.</param>
 public sealed record ProjectApp(string Title)

@@ -76,7 +76,7 @@ public sealed class NotificationChannelService(
             CreatedAt = now,
             Event = "test",
             Subject = "test",
-            Title = "Тестове сповіщення OpenBP",
+            Title = "Тестове сповіщення AI_BPMS",
             Details = new JsonObject { ["channel"] = row.Name }.ToJsonString(),
         }, ct);
     }

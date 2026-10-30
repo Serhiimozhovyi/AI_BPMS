@@ -71,7 +71,7 @@ test('кнопка «Увійти через …» → провайдер → п
   await page.goto('/login?returnUrl=%2Fexecutions');
   await page.getByTestId('login-provider-kit').click();
   await expect(page).toHaveURL(/\/login\?oidcError=OIDC_EMAIL_NOT_ALLOWED$/);
-  await expect(page.getByTestId('login-oidc-error')).toContainText('не має доступу до OpenBP');
+  await expect(page.getByTestId('login-oidc-error')).toContainText('не має доступу до AI_BPMS');
 
   // Аварійний вхід паролем: ?password показує форму поруч із кнопкою.
   await page.goto('/login?password');

@@ -111,7 +111,7 @@ const FLOW_KINDS: ReadonlySet<BusinessEdgeKind> = new Set(['flow', 'alt']);
 
 /**
  * Колонка кроку вузла — найдовший шлях від джерел за переходами. Зовнішній крок стає в колонку першого
- * зв'язаного вузла: так дія людини в Кіті стоїть над кроком OpenBP, який її читає чи записує.
+ * зв'язаного вузла: так дія людини в Кіті стоїть над кроком AI_BPMS, який її читає чи записує.
  */
 function assignColumns(view: BusinessView): Map<string, number> {
   const columns = new Map<string, number>();

@@ -115,7 +115,7 @@ builder.Services.AddOpenBpNotifications(int.TryParse(
     ? notifyEverySec : 30);
 builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 
-// MCP-сервер OpenBP (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
+// MCP-сервер AI_BPMS (F3-03, architecture.md §4): tools/resources поверх тих самих сервісів, що й REST.
 builder.Services.AddOpenBpMcpServer();
 
 // Health-checks (F4-08): /health/live і /health/ready (БД і міграції).

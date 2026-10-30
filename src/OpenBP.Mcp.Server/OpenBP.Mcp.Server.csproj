@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- MCP-сервер OpenBP (/mcp, docs/architecture.md §4): tools і resources поверх application-шару.
+  <!-- MCP-сервер AI_BPMS (/mcp, docs/architecture.md §4): tools і resources поверх application-шару.
        Окремий проєкт, бо Application уже залежить від OpenBP.Mcp (клієнт); хостить його OpenBP.Api. -->
 
   <ItemGroup>

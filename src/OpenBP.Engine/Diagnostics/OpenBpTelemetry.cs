@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace OpenBP.Engine.Diagnostics;
 
 /// <summary>
-/// Трейси OpenTelemetry (F6-18, docs/admin/README.md §10): один <see cref="ActivitySource"/> на весь OpenBP.
+/// Трейси OpenTelemetry (F6-18, docs/admin/README.md §10): один <see cref="ActivitySource"/> на весь AI_BPMS.
 /// Span-и: виконання (<see cref="ExecutionSpan"/>, воркер), вузол (<see cref="NodeSpan"/>, движок), виклик MCP tool
 /// (<see cref="McpToolSpan"/>) і HTTP до моделі (<see cref="LlmSpan"/>). Атрибути — лише ідентифікатори й назви:
 /// параметри вузлів, items, аргументи tool'ів, промпти й credentials у span-и не потрапляють, а помилка дає статус
@@ -64,7 +64,7 @@ public static class OpenBpTelemetry
     /// <summary>Атрибут (семантичні конвенції GenAI): запитана модель.</summary>
     public const string GenAiModel = "gen_ai.request.model";
 
-    /// <summary>Джерело span-ів OpenBP.</summary>
+    /// <summary>Джерело span-ів AI_BPMS.</summary>
     public static readonly ActivitySource Source = new(SourceName);
 
     /// <summary>

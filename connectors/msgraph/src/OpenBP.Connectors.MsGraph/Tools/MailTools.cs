@@ -11,7 +11,7 @@ namespace OpenBP.Connectors.MsGraph.Tools;
 /// <summary>
 /// Tools пошти Microsoft Graph (Outlook / Exchange Online), описані вручну; описи — англійською (їх читають ШІ-агенти).
 /// Колекції — <c>structuredContent</c> <c>{ "result": [...] }</c> (у <c>mcp.tool</c> — <c>itemsPath = result</c>, у
-/// <c>mcp.poll</c> — <c>keyField = id</c>); вміст вкладення — <c>resource</c>-блок (у OpenBP — binary item).
+/// <c>mcp.poll</c> — <c>keyField = id</c>); вміст вкладення — <c>resource</c>-блок (у AI_BPMS — binary item).
 /// <see cref="ConnectorException"/> → результат з <c>isError</c>.
 /// </summary>
 /// <param name="graph">Клієнт Graph.</param>

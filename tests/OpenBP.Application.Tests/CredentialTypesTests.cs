@@ -77,7 +77,7 @@ public sealed class CredentialTypesTests
         Assert.Equal(["postgres", "mysql"], database["engine"]!["enum"]!.AsArray().Select(v => (string)v!));
         Assert.Equal("db.example.com", (string)database["host"]!["examples"]![0]!);
         Assert.False(string.IsNullOrWhiteSpace((string?)CredentialTypes.Find(CredentialTypes.TelegramBot)!.Schema["properties"]!["token"]!["description"]));
-        // Поля, якими керує OpenBP, у формі не показуються.
+        // Поля, якими керує AI_BPMS, у формі не показуються.
         Assert.Null(CredentialTypes.Find(CredentialTypes.OAuth2ClientCredentials)!.Schema["properties"]!["accessToken"]);
     }
 

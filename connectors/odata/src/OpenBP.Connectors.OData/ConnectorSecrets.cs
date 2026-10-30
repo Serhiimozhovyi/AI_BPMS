@@ -19,7 +19,7 @@ public enum AuthKind
 }
 
 /// <summary>
-/// Доступ до сервісу OData — **лише** зі змінних середовища (OpenBP передає їх з загального credential'а через
+/// Доступ до сервісу OData — **лише** зі змінних середовища (AI_BPMS передає їх з загального credential'а через
 /// <c>credential.map</c> маніфесту): client credentials (<c>ODATA_TOKEN_URL</c>, <c>ODATA_CLIENT_ID</c>,
 /// <c>ODATA_CLIENT_SECRET</c>, необов'язково <c>ODATA_SCOPES</c>, <c>ODATA_AUDIENCE</c>), токен (<c>ODATA_TOKEN</c>) або
 /// <c>ODATA_USERNAME</c>/<c>ODATA_PASSWORD</c>. Секрети, видані токени й заголовок Basic ніколи не потрапляють у відповіді
@@ -69,7 +69,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
     /// <param name="variable">Назва.</param>
     /// <exception cref="ConnectorException">Змінну не задано.</exception>
     public string Require(string variable) =>
-        Get(variable) ?? throw new ConnectorException($"Не задано змінну середовища {variable} (облікові дані підключення в OpenBP).");
+        Get(variable) ?? throw new ConnectorException($"Не задано змінну середовища {variable} (облікові дані підключення в AI_BPMS).");
 
     /// <summary>Запам'ятовує виданий токен чи заголовок, щоб <see cref="Scrub"/> прибирав і їх.</summary>
     /// <param name="value">Access token, значення заголовка.</param>

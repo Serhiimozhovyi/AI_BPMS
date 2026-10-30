@@ -90,7 +90,7 @@ describe('AssistantPanelComponent', () => {
     expect(host.querySelector('[data-testid="describe-process"]')).toBeNull();
     expect(host.querySelector('[data-testid="assistant-mcp"]')?.textContent).toContain('через MCP');
     expect(host.querySelector('[data-testid="assistant-mcp-prompt"]')?.textContent?.trim()).toBe(
-      'Поясни сценарій «Заявки» і збережи пояснення в OpenBP',
+      'Поясни сценарій «Заявки» і збережи пояснення в AI_BPMS',
     );
   });
 });

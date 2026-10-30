@@ -19,7 +19,7 @@ public enum CredentialFieldKind
     /// <summary>Об'єкт «назва → секретне значення» (заголовки, змінні середовища).</summary>
     SecretMap = 3,
 
-    /// <summary>Керує OpenBP (токени OAuth2): користувач не задає, UI не показує.</summary>
+    /// <summary>Керує AI_BPMS (токени OAuth2): користувач не задає, UI не показує.</summary>
     Managed = 4,
 }
 
@@ -80,7 +80,7 @@ public static class CredentialTypes
     /// <summary>Користувач і пароль (HTTP Basic).</summary>
     public const string Basic = "basic";
 
-    /// <summary>OAuth2 client credentials: токен отримує й оновлює OpenBP.</summary>
+    /// <summary>OAuth2 client credentials: токен отримує й оновлює AI_BPMS.</summary>
     public const string OAuth2ClientCredentials = OAuth2Credential.ClientCredentialsType;
 
     /// <summary>Підключення до бази даних.</summary>
@@ -113,7 +113,7 @@ public static class CredentialTypes
                 new("username", "Користувач", CredentialFieldKind.Text, true),
                 new("password", "Пароль", CredentialFieldKind.Secret, false),
             ]),
-        Build(OAuth2ClientCredentials, "OAuth2: сервісний клієнт (client credentials)", "Доступ сервісу до сервісу без входу користувача (Keycloak, Entra ID…): OpenBP сам отримує й оновлює токен.",
+        Build(OAuth2ClientCredentials, "OAuth2: сервісний клієнт (client credentials)", "Доступ сервісу до сервісу без входу користувача (Keycloak, Entra ID…): AI_BPMS сам отримує й оновлює токен.",
             [
                 new("tokenUrl", "Адреса токена", CredentialFieldKind.Url, true, "Token endpoint провайдера.", "https://sso.example.com/realms/main/protocol/openid-connect/token"),
                 new("clientId", "Client ID", CredentialFieldKind.Text, true, "Ідентифікатор сервісного клієнта."),
@@ -152,7 +152,7 @@ public static class CredentialTypes
             [new("apiKey", "API-ключ (Google AI Studio)", CredentialFieldKind.Secret, true)]),
         Build("openai", "LLM: OpenAI", "Вузол ai.llm з провайдером openai.",
             [new("apiKey", "API-ключ", CredentialFieldKind.Secret, true)]),
-        Build(OAuth2Credential.Type, "OAuth2 (authorization code)", "Вхід через провайдера (Microsoft, Google…): кнопка «Підключити» отримує токен, OpenBP оновлює його сам. Для HTTP-конектора додає Authorization: Bearer.",
+        Build(OAuth2Credential.Type, "OAuth2 (authorization code)", "Вхід через провайдера (Microsoft, Google…): кнопка «Підключити» отримує токен, AI_BPMS оновлює його сам. Для HTTP-конектора додає Authorization: Bearer.",
             [
                 new("authorizationUrl", "Адреса авторизації", CredentialFieldKind.Url, true),
                 new("tokenUrl", "Адреса токена", CredentialFieldKind.Url, true),

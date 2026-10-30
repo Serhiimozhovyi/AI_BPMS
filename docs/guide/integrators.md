@@ -1,6 +1,6 @@
 # Посібник інтегратора
 
-Як працювати з OpenBP з інших систем: REST API, webhook-и, MCP для ШІ-агентів, вбудований редактор, власні
+Як працювати з AI_BPMS з інших систем: REST API, webhook-и, MCP для ШІ-агентів, вбудований редактор, власні
 конектори і перенесення сценаріїв між середовищами (CI/CD). Приклади нижче перевірено на продакшн-розгортанні з `docker-compose.prod.yml`.
 
 ```bash
@@ -24,7 +24,7 @@ curl -fsS -b cookies.txt -H 'content-type: application/json' \
   -d '{"name":"crm-sync"}' "$OPENBP_URL/api/v1/api-keys"          # → { "id", "name", "key": "obp_…" }
 ```
 
-Якщо OpenBP налаштовано на вхід через Keycloak чи Entra ID, замість ключа приймається і access token провайдера
+Якщо AI_BPMS налаштовано на вхід через Keycloak чи Entra ID, замість ключа приймається і access token провайдера
 ([docs/admin/oidc.md](../admin/oidc.md)).
 
 ## 2. REST API
@@ -40,7 +40,7 @@ curl -fsS -b cookies.txt -H 'content-type: application/json' \
 curl -fsS -X POST "$OPENBP_URL/api/v1/workflows" \
   -H "Authorization: Bearer $OPENBP_API_KEY" -H 'content-type: application/json' \
   --data @examples/hello-manual.json
-# → { "id": "01a1…", "name": "Привіт, OpenBP", "version": 1, "active": false, "definition": { … }, … }
+# → { "id": "01a1…", "name": "Привіт, AI_BPMS", "version": 1, "active": false, "definition": { … }, … }
 ```
 
 Запустити і прочитати результат:
@@ -74,7 +74,7 @@ curl -N "$OPENBP_URL/api/v1/executions/<executionId>/events" -H "Authorization: 
 
 Тригер «Webhook» (`core.webhook`) приймає запити на `$OPENBP_URL/webhook/<path>`, коли сценарій активний. Тіло, query
 і заголовки стають першим item'ом: `{ "body", "query", "headers" }`. Відповідь — 202 `{ "executionId" }`, тобто
-OpenBP ставить виконання в чергу й не чекає його завершення.
+AI_BPMS ставить виконання в чергу й не чекає його завершення.
 
 Захистіть webhook секретом: облікові дані типу «Webhook: токен у заголовку» (`{ "token": "…" }`) і в тригері
 `auth: { "type": "header", "credentialId": "<id>" }`. Заголовок за замовчуванням — `X-Webhook-Token` (`headerName` —
@@ -92,7 +92,7 @@ curl -sS -X POST "$OPENBP_URL/webhook/orders" \
 
 ## 4. MCP для ШІ-агентів
 
-OpenBP — MCP-сервер на `$OPENBP_URL/mcp` (Streamable HTTP, без серверних сесій), з тим самим API-ключем. Агент бачить
+AI_BPMS — MCP-сервер на `$OPENBP_URL/mcp` (Streamable HTTP, без серверних сесій), з тим самим API-ключем. Агент бачить
 конектори й типи вузлів, збирає, перевіряє й запускає сценарії: `describe_connectors`, `describe_nodes`,
 `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `list_workflow_groups`,
 `create_workflow_group`, `move_workflow`, `run_workflow`, `get_execution`, `list_executions`, `cancel_execution`,
@@ -158,11 +158,11 @@ curl -sS -X POST "$OPENBP_URL/mcp" -H "Authorization: Bearer $OPENBP_API_KEY" \
 
 ## 6. Свій конектор
 
-Інтеграції в OpenBP — лише MCP-сервери. Для своєї системи з REST чи OData API є Connector Kit — шаблон .NET-проєкту
+Інтеграції в AI_BPMS — лише MCP-сервери. Для своєї системи з REST чи OData API є Connector Kit — шаблон .NET-проєкту
 (MIT, можна робити закритим):
 
 ```bash
-dotnet new install <репозиторій OpenBP>/tools/connector-template
+dotnet new install <репозиторій AI_BPMS>/tools/connector-template
 dotnet new openbp-connector -n Acme.Crm
 cd Acme.Crm && dotnet test
 ```
@@ -171,9 +171,9 @@ cd Acme.Crm && dotnet test
   (`Connector:Source = openapi:<url>` / `odata:<url>`), зокрема для 1С.
 - Адреса API — `Connector:BaseUrl`, автентифікація — `Connector:Auth:Type` (`none`, `basic`, `bearer`, `api-key`),
   секрети — лише змінні середовища `CONNECTOR_*`.
-- Запуск: stdio (OpenBP сам стартує процес) або `--http http://0.0.0.0:8080` — окремим сервісом.
+- Запуск: stdio (AI_BPMS сам стартує процес) або `--http http://0.0.0.0:8080` — окремим сервісом.
 
-Підключення в OpenBP — «Конектори» → «Додати MCP-сервер» (роль admin) або REST:
+Підключення в AI_BPMS — «Конектори» → «Додати MCP-сервер» (роль admin) або REST:
 
 ```bash
 curl -fsS -X POST "$OPENBP_URL/api/v1/connectors" \
@@ -183,7 +183,7 @@ curl -fsS -X POST "$OPENBP_URL/api/v1/connectors" \
 ```
 
 Для секретних заголовків http-конектора — облікові дані «Конектор HTTP: заголовки» і `"credentialId"` у тілі. Як
-запустити конектор контейнером поруч з OpenBP — [docs/admin/README.md §7](../admin/README.md#7-конектори-й-облікові-дані).
+запустити конектор контейнером поруч з AI_BPMS — [docs/admin/README.md §7](../admin/README.md#7-конектори-й-облікові-дані).
 Повний шлях «від нуля за годину» — [tools/connector-template/README.md](../../tools/connector-template/README.md),
 контракт — [docs/connectors.md §5](../connectors.md#5-connector-kit-toolsconnector-template).
 
@@ -215,7 +215,7 @@ openbp activate <новий id>
 ```
 
 Коди виходу: 0 — успіх; 1 — імпорт без відповідників (CLI друкує, чого бракує: вид, id, назва, тип); 2 — помилка
-аргументів або відповідь OpenBP з помилкою (зокрема 422 `WORKFLOW_INVALID` зі списком помилок). Імпорт завжди створює
+аргументів або відповідь AI_BPMS з помилкою (зокрема 422 `WORKFLOW_INVALID` зі списком помилок). Імпорт завжди створює
 новий неактивний сценарій; змінні (`$vars`), яких у приймачі немає, CLI перелічує окремо — додайте їх у
 Налаштуваннях.
 
@@ -239,7 +239,7 @@ openbp import-project bundle.json --project <id>                                
 Приклад GitHub Actions: при зміні файлів у `workflows/` на гілці `main` імпортувати й активувати їх на prod.
 
 ```yaml
-name: Розкотити сценарії OpenBP
+name: Розкотити сценарії AI_BPMS
 on:
   push:
     branches: [main]

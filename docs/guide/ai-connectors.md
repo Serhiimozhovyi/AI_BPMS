@@ -1,20 +1,20 @@
-# Підключити Claude і ChatGPT до OpenBP
+# Підключити Claude і ChatGPT до AI_BPMS
 
-OpenBP — MCP-сервер. Підключений ШІ-агент бачить ваші конектори й типи вузлів, збирає сценарії зі слів, перевіряє й
+AI_BPMS — MCP-сервер. Підключений ШІ-агент бачить ваші конектори й типи вузлів, збирає сценарії зі слів, перевіряє й
 запускає їх, читає журнал, пояснює процеси простими словами, приймає рішення в задачах — з тими самими правами, що й
-користувач, чий ключ він використовує. Окремого ключа Anthropic чи OpenAI в самому OpenBP для цього не потрібно:
+користувач, чий ключ він використовує. Окремого ключа Anthropic чи OpenAI в самому AI_BPMS для цього не потрібно:
 модель працює на боці Claude чи ChatGPT. Повний довідник tools і resources — [docs/mcp-server.md](../mcp-server.md).
 
 Коротко, що де працює:
 
-| Клієнт | Як підключити | OpenBP на `localhost` | Статус |
+| Клієнт | Як підключити | AI_BPMS на `localhost` | Статус |
 |---|---|---|---|
 | Claude Code (CLI, IDE) | `claude mcp add` з заголовком | так | працює |
 | Claude Desktop | міст `mcp-remote` у `claude_desktop_config.json` | так | працює |
 | claude.ai (веб, Desktop, мобільний) — «Custom connector» | URL + «Request headers» | ні, потрібна публічна HTTPS-адреса | лише якщо вашій організації відкрито бета «Request headers» |
 | Codex (CLI, IDE) від OpenAI | `config.toml` з `bearer_token_env_var` | так | працює |
 | OpenAI API (Responses, tool `mcp`) | `server_url` + `authorization` | ні, потрібна публічна HTTPS-адреса | працює |
-| ChatGPT (веб, Desktop) — Developer mode | — | — | **поки не працює**: ChatGPT уміє лише OAuth або «без автентифікації», а `/mcp` OpenBP приймає тільки API-ключ (див. [§4.1](#41-chatgpt-веб-і-desktop)) |
+| ChatGPT (веб, Desktop) — Developer mode | — | — | **поки не працює**: ChatGPT уміє лише OAuth або «без автентифікації», а `/mcp` AI_BPMS приймає тільки API-ключ (див. [§4.1](#41-chatgpt-веб-і-desktop)) |
 
 ## 1. Що дає підключення
 
@@ -39,7 +39,7 @@ OpenBP — MCP-сервер. Підключений ШІ-агент бачить
 2. **API-ключ.** Увійдіть цим користувачем → «Налаштування» → «API-ключі» → назва (наприклад, `claude-desktop`) →
    за потреби обмежте ключ одним проєктом замість «Увесь інстанс» → «Створити ключ». Ключ `obp_…` показується **один
    раз**: скопіюйте його в менеджер паролів. На кожен клієнт — свій ключ.
-3. **Адреса MCP** — блок «Підключити ШІ-агента» на тій самій сторінці: `<адреса OpenBP>/mcp`, наприклад
+3. **Адреса MCP** — блок «Підключити ШІ-агента» на тій самій сторінці: `<адреса AI_BPMS>/mcp`, наприклад
    `https://openbp.example.com/mcp`. Там же готовий JSON-фрагмент із ключем для клієнтів, що розуміють `type: http`.
 4. **Перевірка без агента:**
 
@@ -56,8 +56,8 @@ OpenBP — MCP-сервер. Підключений ШІ-агент бачить
 токени Keycloak / Entra ID для `/mcp` не діють. Транспорт — Streamable HTTP без серверних сесій.
 
 **Де стоїть OpenBP.** Хмарні клієнти (claude.ai, ChatGPT, OpenAI API) ходять до `/mcp` зі своїх серверів, тому
-OpenBP має бути доступний з інтернету за HTTPS ([reverse proxy](../admin/README.md#3-https-через-reverse-proxy)). Локальний
-OpenBP (`http://localhost:…`) бачать лише клієнти на тому самому комп'ютері: Claude Code, Claude Desktop через
+AI_BPMS має бути доступний з інтернету за HTTPS ([reverse proxy](../admin/README.md#3-https-через-reverse-proxy)). Локальний
+AI_BPMS (`http://localhost:…`) бачать лише клієнти на тому самому комп'ютері: Claude Code, Claude Desktop через
 `mcp-remote`, Codex. Не відкривайте `/mcp` назовні без HTTPS.
 
 ## 3. Claude
@@ -84,12 +84,12 @@ claude mcp list          # openbp: … ✓ Connected
 }
 ```
 
-Локальний OpenBP — та сама команда з `http://localhost:<порт>/mcp` (порт веб-інтерфейсу: `/mcp` проксується на Api).
+Локальний AI_BPMS — та сама команда з `http://localhost:<порт>/mcp` (порт веб-інтерфейсу: `/mcp` проксується на Api).
 У сесії `/mcp` показує стан сервера і його tools.
 
 ### 3.2 Claude Desktop (через `mcp-remote`)
 
-Найпростіший спосіб для Desktop, який працює і з локальним OpenBP. Потрібен Node.js 18+ (`node -v`).
+Найпростіший спосіб для Desktop, який працює і з локальним AI_BPMS. Потрібен Node.js 18+ (`node -v`).
 
 1. Claude Desktop → Settings → Developer → **Edit Config** (відкриється `claude_desktop_config.json`).
 2. Додайте:
@@ -116,10 +116,10 @@ claude mcp list          # openbp: … ✓ Connected
 
 ### 3.3 claude.ai — custom connector (веб, Desktop, мобільний)
 
-Так OpenBP з'являється в усіх клієнтах Claude вашого акаунта, а не лише на одному комп'ютері. Умови:
+Так AI_BPMS з'являється в усіх клієнтах Claude вашого акаунта, а не лише на одному комп'ютері. Умови:
 
-- OpenBP доступний з інтернету за HTTPS;
-- у діалозі «Add custom connector» є розділ **«Request headers»** — це бета, відкрита не всім організаціям. OAuth OpenBP
+- AI_BPMS доступний з інтернету за HTTPS;
+- у діалозі «Add custom connector» є розділ **«Request headers»** — це бета, відкрита не всім організаціям. OAuth AI_BPMS
   поки не підтримує, тож без «Request headers» підключити його як custom connector не вийде — користуйтеся
   [Claude Desktop](#32-claude-desktop-через-mcp-remote) або [Claude Code](#31-claude-code).
 
@@ -127,11 +127,11 @@ claude mcp list          # openbp: … ✓ Connected
 «Add» → «Custom»):
 
 1. «Customize → Connectors» → **«Add custom connector»**.
-2. Назва — `OpenBP`, «MCP server URL» — `https://openbp.example.com/mcp`.
+2. Назва — `AI_BPMS`, «MCP server URL» — `https://openbp.example.com/mcp`.
 3. «Authentication» — **«No sign-in»**.
 4. «Request headers» → `authorization`, значення — `Bearer obp_ваш_ключ` (саме з `Bearer ` і пробілом: Claude надсилає
    значення як є), «Required».
-5. «Add». У чаті «+» → «Connectors» → увімкніть OpenBP для розмови.
+5. «Add». У чаті «+» → «Connectors» → увімкніть AI_BPMS для розмови.
 
 Змінити ключ потім не можна: видаліть конектор і додайте знову. В «Customize → Connectors» можна заблокувати окремі
 tools (наприклад, `cancel_execution`) або дозволити їх без підтвердження.
@@ -142,11 +142,11 @@ tools (наприклад, `cancel_execution`) або дозволити їх б
 
 ChatGPT підключає власні MCP-сервери в **Developer mode** (Pro, Plus, Business, Enterprise, Education): Settings →
 Apps → Advanced settings → Developer mode → «Create app». Але автентифікація там — лише **OAuth** або **«No
-Authentication»**; власного заголовка з API-ключем немає. `/mcp` OpenBP приймає тільки API-ключ, тому напряму ChatGPT
-до OpenBP зараз не підключається.
+Authentication»**; власного заголовка з API-ключем немає. `/mcp` AI_BPMS приймає тільки API-ключ, тому напряму ChatGPT
+до AI_BPMS зараз не підключається.
 
 Не обходьте це, відкриваючи `/mcp` без автентифікації чи ставлячи проксі, що підставляє ключ за публічною адресою:
-тоді будь-хто з адресою зможе змінювати й запускати ваші сценарії. Щоб ChatGPT запрацював, OpenBP має отримати OAuth для
+тоді будь-хто з адресою зможе змінювати й запускати ваші сценарії. Щоб ChatGPT запрацював, AI_BPMS має отримати OAuth для
 `/mcp` (вхід через Keycloak / Entra ID чи власний сервер авторизації) — це окрема задача розробки.
 
 До того часу ті самі можливості від OpenAI дають Codex і OpenAI API нижче.
@@ -173,7 +173,7 @@ codex            # у сесії /mcp покаже openbp і його tools
 
 ### 4.3 OpenAI API (Responses, tool `mcp`)
 
-Для власного агента на OpenAI API; OpenBP має бути доступний з інтернету.
+Для власного агента на OpenAI API; AI_BPMS має бути доступний з інтернету.
 
 ```json
 {
@@ -185,7 +185,7 @@ codex            # у сесії /mcp покаже openbp і його tools
     "authorization": "obp_ваш_ключ",
     "require_approval": { "never": { "tool_names": ["describe_connectors", "describe_nodes", "list_workflows", "get_workflow", "validate_workflow"] } }
   }],
-  "input": "Які сценарії в OpenBP зараз активні?"
+  "input": "Які сценарії в AI_BPMS зараз активні?"
 }
 ```
 
@@ -197,7 +197,7 @@ OpenAI не зберігає `authorization`, його треба передав
 Помічник у редакторі і вузол `ai.llm` вміють працювати з локальною Ollama без жодного ключа.
 
 1. Установіть модель на комп'ютері з Ollama: `ollama pull qwen3:14b` (для 18 ГБ пам'яті; `qwen3:8b` — легша й швидша, але гірше справляється зі складними процесами).
-2. «Підключення → Облікові дані» → тип **LLM: Ollama (локально)**. Якщо OpenBP працює в Docker, а Ollama на тому ж Mac, залиште адресу порожньою: `http://host.docker.internal:11434`. Контекст за замовчуванням — 16384 токени (більше контексту — більше пам'яті).
+2. «Підключення → Облікові дані» → тип **LLM: Ollama (локально)**. Якщо AI_BPMS працює в Docker, а Ollama на тому ж Mac, залиште адресу порожньою: `http://host.docker.internal:11434`. Контекст за замовчуванням — 16384 токени (більше контексту — більше пам'яті).
 3. «Налаштування → Помічник»: «Додати модель», оберіть ці облікові дані — поле «Модель» запропонує встановлені моделі зі списку. Можна підключити кілька моделей (наприклад, Google Gemini і локальну Ollama) і позначити «Основна»: її використовують побудова з опису, чат і пояснення сценаріїв.
 
 Не обирайте тип «OpenAI-сумісний» для Ollama: він не передає розмір контексту, і Ollama мовчки обрізає запит.
@@ -208,9 +208,9 @@ OpenAI не зберігає `authorization`, його треба передав
 
 | Запит | Що агент зробить |
 |---|---|
-| «Які конектори підключені до OpenBP і що вони вміють?» | `describe_connectors` |
+| «Які конектори підключені до AI_BPMS і що вони вміють?» | `describe_connectors` |
 | «Зроби сценарій: коли в Кіті з'являється нова угода, напиши менеджеру в Telegram, чат 42» | `describe_nodes` + `describe_connectors` → складе сценарій → `validate_workflow` (виправить помилки сам) → `create_workflow` → `run_workflow` з тестовою угодою → покаже кроки |
-| «Поясни сценарій «Заявка з Telegram → 1С» і збережи пояснення в OpenBP» | `get_workflow` → `save_workflow_explanation`; текст з'явиться в картці «Пояснення процесу» |
+| «Поясни сценарій «Заявка з Telegram → 1С» і збережи пояснення в AI_BPMS» | `get_workflow` → `save_workflow_explanation`; текст з'явиться в картці «Пояснення процесу» |
 | «Чому впало останнє виконання сценарію «Рахунки»? Виправ і перезапусти з кроку, що впав» | `list_executions` → `get_execution` → `update_workflow` → `resume_execution` |
 | «Додай перед відправкою погодження керівником з коментарем» | `get_workflow` → вузол `core.approval` → `update_workflow` |
 | «Розклади процес на етапи зі строками й розміть схему для бізнес-вигляду» | `update_workflow` з `stages[]` і бізнес-атрибутами |

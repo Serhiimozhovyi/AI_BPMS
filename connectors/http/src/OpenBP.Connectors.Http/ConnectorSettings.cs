@@ -2,7 +2,7 @@ namespace OpenBP.Connectors.Http;
 
 /// <summary>
 /// Обмеження на адреси: змінні середовища <see cref="AllowedHostsVariable"/> і <see cref="AllowPrivateVariable"/>
-/// (OpenBP передає їх через credential конектора, поле <c>env</c>). Секретів тут немає.
+/// (AI_BPMS передає їх через credential конектора, поле <c>env</c>). Секретів тут немає.
 /// </summary>
 /// <param name="environment">Джерело змінних (за замовчуванням — середовище процесу; у тестах — словник).</param>
 public sealed class ConnectorSettings(Func<string, string?> environment)

@@ -38,7 +38,7 @@
     },
     "auth": {
       "title": "Хто може надіслати",
-      "description": "none — будь-хто за посиланням; login — лише користувач OpenBP після входу; token — посилання з ?token=…, токен — у credential { token }.",
+      "description": "none — будь-хто за посиланням; login — лише користувач AI_BPMS після входу; token — посилання з ?token=…, токен — у credential { token }.",
       "type": "string",
       "enum": ["none", "login", "token"],
       "default": "none"

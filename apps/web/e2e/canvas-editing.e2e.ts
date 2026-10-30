@@ -55,11 +55,11 @@ const DESCRIPTORS = [
 const TEMPLATES = [
   {
     id: 'hello-manual',
-    name: 'Привіт, OpenBP',
+    name: 'Привіт, AI_BPMS',
     description: 'Ручний запуск, Set і Code.',
     definition: {
       formatVersion: 1,
-      name: 'Привіт, OpenBP',
+      name: 'Привіт, AI_BPMS',
       settings: { timezone: 'Europe/Kyiv', executionTimeoutSec: 60, errorWorkflowId: null, saveSuccessfulData: true },
       nodes: [
         { id: 'n_start', name: 'Старт', type: 'core.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} },

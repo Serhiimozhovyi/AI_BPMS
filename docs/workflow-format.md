@@ -250,13 +250,13 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   файл), `number`, `integer`, `boolean` — прапорець, `enum` або `oneOf` з `const`/`title` — список, масив з `items.enum` —
   кілька значень. `title` — підпис, `description` — підказка, `required`, `minLength`/`maxLength`, `minimum`/`maximum`,
   `pattern` перевіряються і на сторінці, і на сервері. Порожні поля вважаються незаповненими.
-- `auth`: `none` (типово) — будь-хто за посиланням; `login` — лише користувач OpenBP (без сесії сторінка веде на вхід і
+- `auth`: `none` (типово) — будь-хто за посиланням; `login` — лише користувач AI_BPMS (без сесії сторінка веде на вхід і
   повертає на форму); `token` — посилання `/form/{path}?token=…`, значення токена — у credential типу `form.token`
   (`credentialId`); без токена чи з чужим — 401.
 - `onSubmit`: `message` — текст після надсилання (типово «Дякуємо! Форму надіслано.»), `redirectUrl` — перейти на адресу
   `http(s)://…`.
 - Item тригера: `{ "fields": { … }, "submittedAt": "ISO 8601", "submittedBy"?: { "id", "email" } }` (`submittedBy` — коли
-  надсилав користувач OpenBP). Файл з поля `format: binary` — у `binary` під назвою поля (`BinaryRef` зі сховищем
+  надсилав користувач AI_BPMS). Файл з поля `format: binary` — у `binary` під назвою поля (`BinaryRef` зі сховищем
   `postgres`), у `fields` — назва файлу; один файл на поле. Ліміти сервера — розмір тіла (`OPENBP_FORM_MAX_BODY_MB`,
   типово 10) і кількість файлів (`OPENBP_FORM_MAX_FILES`, типово 10), docs/admin/env.md.
 - `core.wait` v3 з `mode: "form"` показує ту саму сторінку за `$execution.resumeUrl` (`/form/resume/{token}`); що на ній —
@@ -277,7 +277,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 Чекати не часу, а події в зовнішній системі (задачу закрили, оплата надійшла) — `mcp.waitFor` (F5-03): перевіряє умову
 над відповіддю tool'а конектора з інтервалом, між перевірками виконання теж у `waiting`; виходи `done` і `timeout`
 (docs/connectors.md §3.1). Різниця з `core.wait` у режимі `webhook`: там умову перевіряє сам сценарій через tool, тут
-зовнішня система чи людина викликає OpenBP.
+зовнішня система чи людина викликає AI_BPMS.
 
 ### Погодження (`core.approval`)
 
@@ -286,8 +286,8 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 
 - Параметри: `title` (обов'язковий), `description`, `decisions: [{ key, label }]` (до 8; типово `approve` «Погодити» і
   `reject` «Відхилити»), `fields` — JSON Schema даних до рішення (коментар тощо; ті самі типи полів, що в
-  `core.formTrigger`, без файлів), `assignee` — рівно одне з `userId` (користувач OpenBP), `role` (`viewer` | `editor` |
-  `admin` — усі з цією роллю або вищою) чи `expression` (email користувача OpenBP або зовнішній id, напр. Telegram id;
+  `core.formTrigger`, без файлів), `assignee` — рівно одне з `userId` (користувач AI_BPMS), `role` (`viewer` | `editor` |
+  `admin` — усі з цією роллю або вищою) чи `expression` (email користувача AI_BPMS або зовнішній id, напр. Telegram id;
   можна вираз), `maxWaitSec` (до 90 днів, типово 90 днів), `escalateTo` — виконавець тієї ж форми. Вирази в
   `title`/`description`/`fields`/`assignee` обчислюються, коли виконання доходить до вузла.
 - Виходи фіксовані: `timeout` (індекс 0), далі `decision0…decision7` — рішення `i` веде на вихід `i + 1`, тож індекси
@@ -315,7 +315,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
 ```
 
 Відмінність від `mcp.waitFor`: там умову перевіряє сценарій через tool зовнішньої системи (задачу закрили в Кіті), тут
-рішення приймає людина в OpenBP або за посиланням; у сценарії можна поєднувати обидва.
+рішення приймає людина в AI_BPMS або за посиланням; у сценарії можна поєднувати обидва.
 
 ### Підсценарії (`core.executeWorkflow`, `core.workflowTrigger`)
 
@@ -543,7 +543,7 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   "business": {
     "lanes": [
       { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" },
-      { "id": "openbp", "name": "OpenBP", "description": "сценарій" }
+      { "id": "openbp", "name": "AI_BPMS", "description": "сценарій" }
     ],
     "steps": [
       { "id": "s_approve", "title": "Погоджувач тисне «Погодити» у формі", "subtitle": "статус задачі", "lane": "kit",
@@ -740,7 +740,7 @@ Item — `{ "json": { … }, "binary"?: { "<ключ>": BinaryRef } }`. Байт
 «Імпорт» сам розпізнає n8n (`connections` — об'єкт за назвами вузлів або типи `n8n-nodes-base.*` / `@n8n/*`), перетворює,
 імпортує і показує `notes`. Код n8n не використовується — лише формат його JSON.
 
-| n8n | OpenBP |
+| n8n | AI_BPMS |
 | --- | --- |
 | Manual Trigger, Schedule Trigger (cron, хвилини/години/дні/тижні/місяці), Webhook | `core.manualTrigger`, `core.schedule`, `core.webhook` |
 | Code (JavaScript) | `core.code`; `$input`, `$('Назва')`, legacy `items` і результат `[{ json }]` емулюються обгорткою |

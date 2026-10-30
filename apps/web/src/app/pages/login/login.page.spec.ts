@@ -53,7 +53,7 @@ describe('LoginPage', () => {
 
   it('форма українською: email, пароль, «Увійти»', async () => {
     const { host } = await setup();
-    expect(host.textContent).toContain('Вхід до OpenBP');
+    expect(host.textContent).toContain('Вхід до AI_BPMS');
     expect(host.querySelector('[data-testid="login-password"]')?.getAttribute('type')).toBe(
       'password',
     );

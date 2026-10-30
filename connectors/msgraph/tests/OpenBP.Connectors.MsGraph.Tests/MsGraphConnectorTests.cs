@@ -138,7 +138,7 @@ public sealed class MsGraphConnectorTests : IAsyncLifetime
 
         var file = await client.CallToolAsync("get_attachment", new Dictionary<string, object?>(args) { ["attachment_id"] = "att-1" });
         Assert.NotEqual(true, file.IsError);
-        Assert.Null(file.StructuredContent); // інакше OpenBP узяв би structuredContent, а не файл
+        Assert.Null(file.StructuredContent); // інакше AI_BPMS узяв би structuredContent, а не файл
         var blob = Assert.IsType<BlobResourceContents>(Assert.IsType<EmbeddedResourceBlock>(Assert.Single(file.Content)).Resource);
         Assert.Equal("sku;qty\nW-1;20\n"u8.ToArray(), blob.DecodedData.ToArray());
         Assert.Equal("text/csv", blob.MimeType);

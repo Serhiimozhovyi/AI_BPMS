@@ -78,7 +78,7 @@ public static class ConnectorHost
         options.ServerInfo = new Implementation { Name = ServerName, Version = "1.0.0" };
 
     /// <summary>
-    /// <c>chat_id</c> усіх tools — з анотацією <c>x-openbp-options</c> (docs/connectors.md §2): у формі OpenBP чат обирається
+    /// <c>chat_id</c> усіх tools — з анотацією <c>x-openbp-options</c> (docs/connectors.md §2): у формі AI_BPMS чат обирається
     /// з чатів останніх оновлень <c>get_updates</c>; ввести id чи вираз можна, як і раніше.
     /// </summary>
     /// <param name="options">Налаштування MCP-сервера з уже зареєстрованими tools.</param>

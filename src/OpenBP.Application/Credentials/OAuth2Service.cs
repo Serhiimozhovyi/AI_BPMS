@@ -37,7 +37,7 @@ public sealed class OAuth2Service(OpenBpDbContext db, ICurrentUser currentUser, 
 
     /// <summary>Починає підключення: повертає адресу авторизації провайдера.</summary>
     /// <param name="credentialId">Credential типу <c>oauth2</c>.</param>
-    /// <param name="redirectUri">Адреса callback'а OpenBP, зареєстрована у провайдера.</param>
+    /// <param name="redirectUri">Адреса callback'а AI_BPMS, зареєстрована у провайдера.</param>
     /// <param name="ct">Скасування.</param>
     /// <exception cref="NotFoundException">Credential'а немає.</exception>
     /// <exception cref="CredentialValidationException">Тип не <c>oauth2</c> або немає адреси авторизації.</exception>

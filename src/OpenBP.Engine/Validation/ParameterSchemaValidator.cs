@@ -18,7 +18,7 @@ public static partial class ParameterSchemaValidator
 
     /// <summary>
     /// Тексти порушень українською за правилом «що сталося → що зробити» (F3-57). JsonSchema.Net тримає шаблони
-    /// глобально; інших користувачів у процесах OpenBP немає (схеми tool'ів і outputSchema — теж через нього).
+    /// глобально; інших користувачів у процесах AI_BPMS немає (схеми tool'ів і outputSchema — теж через нього).
     /// </summary>
     static ParameterSchemaValidator()
     {

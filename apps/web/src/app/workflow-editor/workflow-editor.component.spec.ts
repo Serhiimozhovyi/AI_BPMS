@@ -1426,10 +1426,10 @@ describe('WorkflowEditorComponent', () => {
 
     click(host, '[data-testid="start-template"]');
     const template = {
-      ...emptyWorkflowDefinition('Привіт, OpenBP'),
+      ...emptyWorkflowDefinition('Привіт, AI_BPMS'),
       nodes: [{ id: 'n_start', name: 'Старт', type: 'core.manualTrigger', typeVersion: 1, position: [0, 0] as [number, number], parameters: {} }],
     };
-    http.expectOne('/api/v1/workflows/templates').flush([{ id: 'hello-manual', name: 'Привіт, OpenBP', description: 'Найпростіший сценарій', definition: template }]);
+    http.expectOne('/api/v1/workflows/templates').flush([{ id: 'hello-manual', name: 'Привіт, AI_BPMS', description: 'Найпростіший сценарій', definition: template }]);
     await render(fixture);
     expect(host.querySelector('[data-template="hello-manual"]')?.textContent).toContain('Найпростіший сценарій');
     click(host, '[data-template="hello-manual"]');

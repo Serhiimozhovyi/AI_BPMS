@@ -7,21 +7,21 @@ using OpenBP.Shared.Workflow;
 
 namespace OpenBP.Application.Workflows;
 
-/// <summary>Зауваження перетворення n8n → OpenBP.</summary>
+/// <summary>Зауваження перетворення n8n → AI_BPMS.</summary>
 /// <param name="Level"><c>replace</c> — вузол не перенесено, на його місці заглушка, яку треба замінити;
 /// <c>check</c> — перенесено, але поведінку варто перевірити.</param>
-/// <param name="Node">Назва вузла (однакова в n8n і OpenBP) або <c>null</c> для сценарію загалом.</param>
+/// <param name="Node">Назва вузла (однакова в n8n і AI_BPMS) або <c>null</c> для сценарію загалом.</param>
 /// <param name="Message">Що сталося і що зробити.</param>
 public sealed record N8nConversionNote(string Level, string? Node, string Message);
 
 /// <summary>Результат <c>POST /workflows/convert/n8n</c>: тіло для <c>POST /workflows/import</c> і зауваження.</summary>
-/// <param name="Definition">Сценарій у форматі OpenBP.</param>
+/// <param name="Definition">Сценарій у форматі AI_BPMS.</param>
 /// <param name="Manifest">Конектори й credentials, які треба вибрати при імпорті (з назвами credentials n8n).</param>
 /// <param name="Notes">Зауваження: спершу <c>replace</c>, потім <c>check</c>.</param>
 public sealed record N8nConversion(WorkflowDefinition Definition, WorkflowManifest Manifest, IReadOnlyList<N8nConversionNote> Notes);
 
 /// <summary>
-/// Перетворює експорт сценарію n8n (JSON з «Download» чи буфера обміну) у формат OpenBP (docs/workflow-format.md
+/// Перетворює експорт сценарію n8n (JSON з «Download» чи буфера обміну) у формат AI_BPMS (docs/workflow-format.md
 /// §«Імпорт з n8n»). Код n8n не використовується — лише відомий формат його JSON. Вузли без відповідника стають
 /// заглушками <c>core.code</c> з тією самою назвою і зв'язками, тож граф зберігається, а список
 /// <see cref="N8nConversionNote"/> каже, що замінити.
@@ -40,7 +40,7 @@ public static partial class N8nWorkflowConverter
 
     /// <summary>
     /// Чи схожий JSON на експорт n8n: <c>nodes</c> — масив, <c>connections</c> — об'єкт за назвами вузлів
-    /// (в OpenBP — масив ребер), або типи вузлів n8n (<c>n8n-nodes-base.*</c>, <c>@n8n/*</c>).
+    /// (в AI_BPMS — масив ребер), або типи вузлів n8n (<c>n8n-nodes-base.*</c>, <c>@n8n/*</c>).
     /// </summary>
     /// <param name="json">Вміст файлу.</param>
     public static bool IsN8n(JsonNode? json) =>
@@ -62,7 +62,7 @@ public static partial class N8nWorkflowConverter
         return new Conversion(workflow).Run();
     }
 
-    /// <summary>Вираз n8n (<c>={{ … }}</c>) → вираз OpenBP; рядок без <c>=</c> — літерал.</summary>
+    /// <summary>Вираз n8n (<c>={{ … }}</c>) → вираз AI_BPMS; рядок без <c>=</c> — літерал.</summary>
     internal static string Expression(string value, Action<string>? note = null, string? timezone = null)
     {
         if (!value.StartsWith('='))
@@ -76,7 +76,7 @@ public static partial class N8nWorkflowConverter
         var rewritten = RewriteLuxon(text, "$now", timezone, note);
         if (rewritten != text)
         {
-            note?.Invoke("Дату Luxon ($now.setZone(…).toISODate()/toFormat(…), $today) замінено еквівалентом на Date: в OpenBP $now — звичайний Date, а пояс — пояс сценарію.");
+            note?.Invoke("Дату Luxon ($now.setZone(…).toISODate()/toFormat(…), $today) замінено еквівалентом на Date: в AI_BPMS $now — звичайний Date, а пояс — пояс сценарію.");
             text = rewritten;
         }
 
@@ -84,12 +84,12 @@ public static partial class N8nWorkflowConverter
         {
             if (AllItemsRegex().IsMatch(text))
             {
-                note("Вираз з $('…').all() не перенесено: у виразах OpenBP є лише $node[\"Назва\"].json (item з тим самим індексом).");
+                note("Вираз з $('…').all() не перенесено: у виразах AI_BPMS є лише $node[\"Назва\"].json (item з тим самим індексом).");
             }
 
             if (LuxonRegex().IsMatch(text))
             {
-                note("Вираз використовує Luxon ($now.setZone/toISODate/toFormat/plus/minus, DateTime): в OpenBP $now — звичайний Date, перепишіть вираз.");
+                note("Вираз використовує Luxon ($now.setZone/toISODate/toFormat/plus/minus, DateTime): в AI_BPMS $now — звичайний Date, перепишіть вираз.");
             }
         }
 
@@ -122,7 +122,7 @@ public static partial class N8nWorkflowConverter
             };
             if (replacement is not null && zone is not null && timezone is not null && !zone.Equals(timezone, StringComparison.OrdinalIgnoreCase))
             {
-                note?.Invoke($"Пояс «{zone}» у виразі відрізняється від пояса сценарію «{timezone}»: OpenBP рахує дату в поясі сценарію — змініть його в налаштуваннях сценарію.");
+                note?.Invoke($"Пояс «{zone}» у виразі відрізняється від пояса сценарію «{timezone}»: AI_BPMS рахує дату в поясі сценарію — змініть його в налаштуваннях сценарію.");
             }
 
             return replacement ?? m.Value;
@@ -252,9 +252,9 @@ public static partial class N8nWorkflowConverter
     [GeneratedRegex("[^A-Za-z0-9._~/-]+")]
     private static partial Regex PathCharsRegex();
 
-    /// <summary>Вузол OpenBP, у який перетворено вузол n8n.</summary>
+    /// <summary>Вузол AI_BPMS, у який перетворено вузол n8n.</summary>
     /// <summary>
-    /// Вузол OpenBP, у який перетворено вузол n8n. <paramref name="Outputs"/> — виходи n8n; <paramref name="Prefix"/> і
+    /// Вузол AI_BPMS, у який перетворено вузол n8n. <paramref name="Outputs"/> — виходи n8n; <paramref name="Prefix"/> і
     /// <paramref name="Suffix"/> — службові вузли до й після (Execute Once, розгортання відповіді HTTP, очікування
     /// відповіді погодження): вхідні зв'язки йдуть у перший, вихідні — з останнього.
     /// </summary>
@@ -341,7 +341,7 @@ public static partial class N8nWorkflowConverter
                 if (Bool(n8n["disabled"]))
                 {
                     node["disabled"] = true;
-                    _notes.Add(new(Check, name, "У n8n вузол вимкнено; в OpenBP вимкнення діє лише для тригерів — видаліть вузол, якщо він не потрібен."));
+                    _notes.Add(new(Check, name, "У n8n вузол вимкнено; в AI_BPMS вимкнення діє лише для тригерів — видаліть вузол, якщо він не потрібен."));
                 }
 
                 var prefix = mapped.Prefix;
@@ -532,7 +532,7 @@ public static partial class N8nWorkflowConverter
 
             if (otherTypes.Count > 0)
             {
-                _notes.Add(new(Check, null, $"З'єднання підвузлів n8n ({string.Join(", ", otherTypes)}) не переносяться: в OpenBP модель і tools задаються в самому вузлі ai.llm / ai.agent."));
+                _notes.Add(new(Check, null, $"З'єднання підвузлів n8n ({string.Join(", ", otherTypes)}) не переносяться: в AI_BPMS модель і tools задаються в самому вузлі ai.llm / ai.agent."));
             }
 
             var names = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -546,10 +546,10 @@ public static partial class N8nWorkflowConverter
             var kept = new List<(string From, int Output, string To, int Input)>();
             foreach (var edge in edges.Distinct())
             {
-                // Цикли в OpenBP заборонені (DAG): ребро, що замикає цикл, відкидаємо.
+                // Цикли в AI_BPMS заборонені (DAG): ребро, що замикає цикл, відкидаємо.
                 if (Reaches(kept, edge.To, edge.From))
                 {
-                    _notes.Add(new(Check, names[edge.From], $"Зв'язок «{names[edge.From]}» → «{names[edge.To]}» утворює цикл і не перенесений: цикли в OpenBP заборонені, повторення — через core.loop."));
+                    _notes.Add(new(Check, names[edge.From], $"Зв'язок «{names[edge.From]}» → «{names[edge.To]}» утворює цикл і не перенесений: цикли в AI_BPMS заборонені, повторення — через core.loop."));
                     continue;
                 }
 
@@ -688,7 +688,7 @@ public static partial class N8nWorkflowConverter
                 "Тригер RSS не переноситься: поставте core.schedule, далі mcp.tool rss_read (конектор «HTTP і RSS») і відсікайте вже бачені записи таблицею даних чи кодом.",
             _ when type.StartsWith("@n8n/n8n-nodes-langchain.", StringComparison.Ordinal) =>
                 "ШІ-вузол n8n без прямого відповідника: замініть на ai.llm (одна відповідь моделі) або ai.agent (агент з tools).",
-            _ => "Вузол n8n без відповідника в OpenBP: замініть його вузлом OpenBP або mcp.tool відповідного конектора.",
+            _ => "Вузол n8n без відповідника в AI_BPMS: замініть його вузлом AI_BPMS або mcp.tool відповідного конектора.",
         };
 
         private Mapped Placeholder(string type, string name, string reason)
@@ -728,7 +728,7 @@ public static partial class N8nWorkflowConverter
             }
 
             note(found.Count > 0
-                ? $"Код використовує те, чого в пісочниці OpenBP немає: {string.Join(", ", found.Distinct())} — перепишіть ці місця. Ліміт виконання коду — 5 с."
+                ? $"Код використовує те, чого в пісочниці AI_BPMS немає: {string.Join(", ", found.Distinct())} — перепишіть ці місця. Ліміт виконання коду — 5 с."
                 : "Код перенесено з емуляцією $input і $('…'); перевірте його тестовим запуском. Ліміт виконання коду — 5 с.");
         }
 
@@ -791,7 +791,7 @@ public static partial class N8nWorkflowConverter
 
             if (path != raw.Trim('/'))
             {
-                note($"Шлях webhook-а «{raw}» змінено на «{path}»: в OpenBP шлях без параметрів і пробілів.");
+                note($"Шлях webhook-а «{raw}» змінено на «{path}»: в AI_BPMS шлях без параметрів і пробілів.");
             }
 
             var method = (Str(p["httpMethod"]) ?? "GET").ToUpperInvariant();
@@ -806,7 +806,7 @@ public static partial class N8nWorkflowConverter
                     _ => "immediately",
                 },
             };
-            note("Адреса webhook-а в OpenBP інша (/webhook/<шлях>): оновіть її в системі, що викликає сценарій.");
+            note("Адреса webhook-а в AI_BPMS інша (/webhook/<шлях>): оновіть її в системі, що викликає сценарій.");
             return new("core.webhook", 1, parameters, 1);
         }
 
@@ -1082,7 +1082,7 @@ public static partial class N8nWorkflowConverter
                     note("Видалення в n8n — за фільтром, у core.dataTable — за ключем: вкажіть key.");
                     break;
                 default:
-                    reason = $"Операції «{Str(p["operation"])}» таблиці даних в OpenBP немає.";
+                    reason = $"Операції «{Str(p["operation"])}» таблиці даних в AI_BPMS немає.";
                     return null;
             }
 
@@ -1341,7 +1341,7 @@ public static partial class N8nWorkflowConverter
             }
             else if (wait is null)
             {
-                note("У n8n очікування не обмежене, в OpenBP — доба (Telegram тримає непідтверджені оновлення 24 год).");
+                note("У n8n очікування не обмежене, в AI_BPMS — доба (Telegram тримає непідтверджені оновлення 24 год).");
             }
 
             note("«Send and Wait» перенесено двома вузлами: mcp.tool send_approval і mcp.waitFor get_approval (кожну хвилину, умова answered). Вихід «Без відповіді» (timeout) з'єднано туди ж, куди й відповідь: вираз $json.data.approved переписано на $json.approved (без відповіді поля немає, тож це «не погоджено»). Бот не повинен мати webhook (get_approval читає оновлення через getUpdates).");

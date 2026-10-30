@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openbp.dev/schemas/connector.schema.json",
   "title": "connector.json",
-  "description": "Маніфест конектора для каталогу OpenBP (F6-16, docs/connectors.md §5.1): як встановити MCP-сервер одним кліком.",
+  "description": "Маніфест конектора для каталогу AI_BPMS (F6-16, docs/connectors.md §5.1): як встановити MCP-сервер одним кліком.",
   "type": "object",
   "required": ["id", "name", "description", "transport"],
   "properties": {
@@ -17,7 +17,7 @@
     "icon": { "description": "Іконка в каталозі: емодзі або коротка позначка.", "type": "string", "maxLength": 8 },
     "transport": { "description": "Транспорт за замовчуванням.", "enum": ["stdio", "http"] },
     "stdio": {
-      "description": "Налаштування для stdio: OpenBP запускає процес сам.",
+      "description": "Налаштування для stdio: AI_BPMS запускає процес сам.",
       "type": "object",
       "required": ["command"],
       "additionalProperties": false,

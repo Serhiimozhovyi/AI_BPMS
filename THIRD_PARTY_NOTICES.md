@@ -14,7 +14,7 @@
 
 Пакети NuGet конектора (код не копіюється, лише залежності):
 
-- [Npgsql](https://github.com/npgsql/npgsql) 10.0 — драйвер PostgreSQL (уже використовується в OpenBP). Ліцензія
+- [Npgsql](https://github.com/npgsql/npgsql) 10.0 — драйвер PostgreSQL (уже використовується в AI_BPMS). Ліцензія
   PostgreSQL License, © The Npgsql Development Team.
 - [MySqlConnector](https://github.com/mysql-net/MySqlConnector) 2.6 — драйвер MySQL і MariaDB. Обрано замість
   `MySql.Data` (GPL-2.0 з винятком FOSS) через ліцензію MIT і повністю асинхронний ввід-вивід. Ліцензія MIT, © Bradley Grainger.
@@ -32,4 +32,4 @@
   і `OpenTelemetry.Exporter.OpenTelemetryProtocol` (експорт трейсів за OTLP). Ліцензія Apache 2.0, © The OpenTelemetry Authors.
 
 Образ `bitnamilegacy/minio` (сервер MinIO, AGPL-3.0) — лише опційний сервіс профілю `s3` у `docker-compose.prod.yml` і
-контейнер тестів; у збірку OpenBP не входить.
+контейнер тестів; у збірку AI_BPMS не входить.

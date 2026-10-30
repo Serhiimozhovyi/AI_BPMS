@@ -1,7 +1,7 @@
 @if (connectivity.offline()) {
   <div class="shell-offline" role="alert" data-testid="offline-banner">
     <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
-    <span class="shell-offline__text" i18n="@@app.offline">Немає зв’язку із сервером OpenBP</span>
+    <span class="shell-offline__text" i18n="@@app.offline">Немає зв’язку із сервером AI_BPMS</span>
     <button type="button" class="shell-offline__retry" data-testid="offline-retry" [disabled]="connectivity.checking()" (click)="connectivity.retry()" i18n="@@app.offline.retry">Повторити</button>
   </div>
 }
@@ -120,9 +120,9 @@
 </ng-template>
 @if (!bare()) {
   <mat-toolbar class="shell-top">
-    <a class="shell-brand" routerLink="/" aria-label="OpenBP — на головну" i18n-aria-label="@@app.brand.home">
-      <span class="shell-brand__sign" aria-hidden="true">BP</span>
-      <span class="shell-brand__name" i18n="@@app.brand">Open<b>BP</b></span>
+    <a class="shell-brand" routerLink="/" aria-label="AI_BPMS — на головну" i18n-aria-label="@@app.brand.home">
+      <span class="shell-brand__sign" aria-hidden="true">AI</span>
+      <span class="shell-brand__name" i18n="@@app.brand">AI_<b>BPMS</b></span>
     </a>
     @if (user()) {
       @if (mobile()) {

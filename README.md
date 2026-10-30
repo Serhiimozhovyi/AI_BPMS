@@ -1,15 +1,17 @@
-# OpenBP
+# AI_BPMS
 
 [![CI](https://github.com/Serhiimozhovyi/OpenBP_builder/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Serhiimozhovyi/OpenBP_builder/actions/workflows/ci.yml)
 
-MCP-native BPMS-конструктор: процеси на канвасі, інтеграції з будь-якими системами через Model Context Protocol, сам OpenBP — MCP-сервер для Claude/GPT/власних агентів. Self-hosted, .NET + Angular.
+MCP-native BPMS-конструктор: процеси на канвасі, інтеграції з будь-якими системами через Model Context Protocol, сам AI_BPMS — MCP-сервер для Claude/GPT/власних агентів. Self-hosted, .NET + Angular.
+
+Раніше продукт називався OpenBP: ця назва лишилась у внутрішніх іменах коду (простори імен і проєкти `OpenBP.*`, змінні середовища `OPENBP_*`, база `openbp`, MCP-сервер `openbp`), щоб не ламати наявні встановлення.
 
 - Що будуємо: [docs/PRD.md](docs/PRD.md)
 - Чому так: [ADR-001 стек](docs/adr/ADR-001-stack.md) · [ADR-002 MCP-native](docs/adr/ADR-002-mcp-native.md)
 - Як влаштовано: [docs/architecture.md](docs/architecture.md)
 - Формат сценарію: [docs/workflow-format.md](docs/workflow-format.md)
 - Вузли і конектори: [docs/connectors.md](docs/connectors.md)
-- OpenBP як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
+- AI_BPMS як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
 - Користувачам (вхід, задачі, форми, журнал, імпорт з n8n, Telegram): [docs/guide/users.md](docs/guide/users.md) · підключити Claude і ChatGPT через MCP: [docs/guide/ai-connectors.md](docs/guide/ai-connectors.md)
 - Авторам сценаріїв: [docs/guide/authors.md](docs/guide/authors.md) · інтеграторам (REST, webhook, MCP, вбудовування, свій конектор): [docs/guide/integrators.md](docs/guide/integrators.md)
 - Адміністратору: встановлення, HTTPS, користувачі, бекапи, оновлення — [docs/admin/README.md](docs/admin/README.md) · змінні середовища — [docs/admin/env.md](docs/admin/env.md)

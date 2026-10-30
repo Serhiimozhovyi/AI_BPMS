@@ -6,7 +6,7 @@
 2. **`mcp.tool`** / **`mcp.poll`** — універсальні вузли; їхні «підтипи» з'являються автоматично з кожного підключеного MCP-сервера.
 3. **`ai.llm`** — виклик мовної моделі зі structured output; **`ai.agent`** — ШІ-агент, що сам викликає tools конекторів (F6-12).
 
-Інтеграційних вузлів у коді OpenBP **немає**. Потрібен Telegram — підключаємо MCP-сервер Telegram. Потрібна 1С — пишемо MCP-сервер за Connector Kit.
+Інтеграційних вузлів у коді AI_BPMS **немає**. Потрібен Telegram — підключаємо MCP-сервер Telegram. Потрібна 1С — пишемо MCP-сервер за Connector Kit.
 
 ## 1. Контракт вузла (C#)
 
@@ -96,7 +96,7 @@ public sealed class IfNode : INode
 - Будь-яке поле `arguments` може бути рядком `{{ }}`; після обчислення значення приводиться до типу зі схеми (рядок → число/об'єкт/масив за потреби).
 - Результат: `structuredContent` → один item; інакше по item на `content`-блок. `isError: true` у відповіді — помилка вузла (retry/continueOnFail як звичайно); текст відповіді — у `details`.
 - До виклику перевіряються обов'язкові аргументи з `inputSchema` (якщо tools конектора вже отримано): порожній — «Поле «chat_id» порожнє. Вкажіть значення або вираз, що його повертає.». Недоступність і таймаут конектора — теж `McpToolException` з підказкою (причина — `InnerException`).
-- Необов'язковий `itemsPath` (шлях через крапку у `structuredContent`, напр. `result` або `data.orders`) розгортає масив у item на елемент: об'єкт → `json` як є, інше → `{ "value": … }`. Якщо `structuredContent` не об'єкт (tool повернув колекцію), OpenBP загортає його у `{ "result": [ … ] }`, тож для списку `itemsPath` = `result`. Якщо `structuredContent` немає або за шляхом не масив — помилка вузла.
+- Необов'язковий `itemsPath` (шлях через крапку у `structuredContent`, напр. `result` або `data.orders`) розгортає масив у item на елемент: об'єкт → `json` як є, інше → `{ "value": … }`. Якщо `structuredContent` не об'єкт (tool повернув колекцію), AI_BPMS загортає його у `{ "result": [ … ] }`, тож для списку `itemsPath` = `result`. Якщо `structuredContent` немає або за шляхом не масив — помилка вузла.
 - Палітра (F3-96): секція «Конектори» — записи каталогу (значок, назва, «підключено»/«не підключено»), далі «Власні конектори» — підключення без запису каталогу. Клік відкриває сторінку конектора: «← Назад», групи «Події» (пресети тригерів `triggers`) і «Дії» («Ресурс → Операція» з кешу tools підключення, а без нього — з `actions` маніфесту). Вибір дії чи події додає вузол: єдине підключення підставляється, з кількох береться останнє використане в сценарії (інакше перше за назвою), а без підключень відкривається діалог «Нове підключення» (скасування — вузол не додається). Те саме меню — у швидкому додаванні «+» (для тригера — конектори з подіями, для кроку — з діями). Конкретну дію можна змінити в панелі вузла зі списку «Дія» з пошуком і описом. Пошук у палітрі знаходить і дії та події, зокрема непідключених конекторів —
   за `title`, ім'ям і `description` tool'а («надіслати повідомлення» → «Telegram → Надіслати повідомлення»); до 5
   останніх обраних дій — у секції «Часті дії». Зміна дії скидає `arguments` (з попередженням, якщо вони непорожні), а
@@ -259,13 +259,13 @@ Function calling провайдерів: `openai`/`openai-compatible` — `tools
 
 Шаблон .NET-проєкту MCP-сервера над REST/OData (`dotnet new openbp-connector -n My.Connector`, ліцензія MIT).
 Живе поза `OpenBP.sln`: власні `Directory.Build.props`/`Directory.Packages.props` (ті самі версії пакетів, що в
-OpenBP) і `.editorconfig`; CI створює з нього проєкт і проганяє `build -warnaserror`, `format`, `test`.
+AI_BPMS) і `.editorconfig`; CI створює з нього проєкт і проганяє `build -warnaserror`, `format`, `test`.
 
 - Налаштування — `appsettings.json` або змінні середовища (`Connector__BaseUrl`): `Connector:BaseUrl`,
   `Connector:Auth:Type` (`none` | `basic` | `bearer` | `api-key`), `Connector:Auth:HeaderName` (для `api-key`,
   за замовчуванням `X-API-Key`). Невалідні налаштування — помилка при старті.
 - Секрети — **лише змінні середовища**: `CONNECTOR_USERNAME`/`CONNECTOR_PASSWORD`, `CONNECTOR_TOKEN`,
-  `CONNECTOR_API_KEY`. OpenBP передає їх stdio-процесу з credential конектора `{ "env": { … } }` (architecture.md
+  `CONNECTOR_API_KEY`. AI_BPMS передає їх stdio-процесу з credential конектора `{ "env": { … } }` (architecture.md
   §10.7). У відповідях tools і текстах помилок значень секретів немає (замінюються на `***`).
 - Tools описуються вручну атрибутами `[McpServerTool]` поверх типізованого `HttpClient`; описи — англійською.
   Об'єкт → `structuredContent`; колекція — обгорткою `{ "result": [...] }` (`ListResult<T>`), щоб у `mcp.tool`
@@ -306,7 +306,7 @@ OpenBP) і `.editorconfig`; CI створює з нього проєкт і пр
 - Транспорт: stdio за замовчуванням, `--http <url>` — Streamable HTTP на `<url>/mcp`.
 - Тести: контрактний тест «`tools/list` повертає схеми, `tools/call` на мок-сервері повертає `structuredContent`,
   помилка REST → `isError` без секретів» + запуск через stdio; генератори — на petstore-подібній специфікації OpenAPI і CSDL-прикладі (3 entity sets, навігація, складений ключ).
-- README «від нуля до підключеного в OpenBP за годину».
+- README «від нуля до підключеного в AI_BPMS за годину».
 
 Перші конектори на цьому шаблоні: **1С (OData)**, **Telegram Bot API**, **Microsoft Graph (пошта, Teams)**. Готові сторонні MCP-сервери підключаються як є.
 Push-події (ресурс подій + `resources/subscribe`) — контракт у §9.2; у шаблоні заготовка з'явиться окремою задачею.
@@ -401,7 +401,7 @@ Api) плюс зовнішній JSON `{ "connectors": [маніфест, …] }
 кладуть у змінну середовища `<ціль>` (`KIT_CLIENT_SECRET`) або в заголовок: `Назва` — значення як є,
 `Назва: префікс` — `префікс значення` (`"$accessToken": "Authorization: Bearer"`). Обчислювані поля:
 
-- `$accessToken` — токен `oauth2`/`oauth2.clientCredentials`. Для `oauth2.clientCredentials` OpenBP **сам отримує** токен
+- `$accessToken` — токен `oauth2`/`oauth2.clientCredentials`. Для `oauth2.clientCredentials` AI_BPMS **сам отримує** токен
   (`grant_type=client_credentials` з `scope`/`audience`) перед реєстрацією сервера і перевидає його, коли до `expiresAt`
   лишається менше 60 с (під блокуванням рядка, як оновлення в §7); помилка провайдера пишеться в `oauthError`
   (лише код), нова спроба — не раніше ніж за 30 с. Без `$accessToken`/`$authorization` у відображенні токен не
@@ -430,7 +430,7 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
 відкриває панель: назва, налаштування, вибір наявного credential'а потрібного типу або «Нові облікові дані» з формою
 типу (підписи, підказки, «показати» для секретів, «необов'язково»). Імена змінних середовища в інтерфейсі не
 показуються. Для `oauth2.clientCredentials` форма має «Перевірити» — `POST /api/v1/credentials/check`
-(`{ type, data?, credentialId? }` → `{ ok, error? }`, лише для editor): OpenBP запитує токен у провайдера, нічого не
+(`{ type, data?, credentialId? }` → `{ ok, error? }`, лише для editor): AI_BPMS запитує токен у провайдера, нічого не
 зберігає й не повертає токен, помилка — тільки код. Сторінка «Облікові дані» показує тип людською назвою і кількість
 підключень, що використовують запис.
 
@@ -511,7 +511,7 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
   Заголовок із секретом автентифікації і `cookie` в item не потрапляють.
 - `core.formTrigger` (F6-03) — `{ path, title, description?, schema, submitLabel?, auth: none | login | token, credentialId?, onSubmit?: { message | redirectUrl } }`; api реєструє шлях у `webhooks` (`kind = form`, конфлікт — `WEBHOOK_PATH_CONFLICT`), публічна сторінка `/form/{path}` рендерить поля за JSON Schema `schema`.
   Надсилання (`POST /api/v1/forms/{path}`) перевіряється за схемою (400 `FORM_INVALID` з помилками за полями) і створює виконання з item `{ fields, submittedAt, submittedBy? }`; файли полів `format: binary` — у `binary` (сховище `postgres`).
-  `auth: login` — лише користувач OpenBP (без сесії — 401 `FORM_LOGIN_REQUIRED`, сторінка веде на вхід); `auth: token` — `?token=…` з посилання, значення — у credential `form.token` (`{ token }`), інакше 401.
+  `auth: login` — лише користувач AI_BPMS (без сесії — 401 `FORM_LOGIN_REQUIRED`, сторінка веде на вхід); `auth: token` — `?token=…` з посилання, значення — у credential `form.token` (`{ token }`), інакше 401.
   Та сама сторінка — для `core.wait` у режимі `form` (`/form/resume/{token}`). Деталі — docs/workflow-format.md «Форми».
 - `core.schedule` — `{ cron, timezone }`; api реєструє Quartz-job.
   `cron` — 5 полів crontab (`0 7 * * 1-5`, день тижня 0–7, 0 і 7 — неділя) або 6–7 полів Quartz із секундами (`0 0 7 ? * MON-FRI`); `timezone` — IANA, за замовчуванням `settings.timezone` сценарію.
@@ -526,12 +526,12 @@ scrubber виконання; поля-перемикачі `engine`, `ssl`, `in`
 
 ## 7. OAuth2 для облікових даних (F4-04)
 
-Тип облікових даних `oauth2` — вхід через провайдера за authorization code з PKCE (S256). OpenBP зберігає токени
+Тип облікових даних `oauth2` — вхід через провайдера за authorization code з PKCE (S256). AI_BPMS зберігає токени
 зашифрованими в даних credential'а й сам оновлює їх за `refresh_token`, коли до `expiresAt` лишається менше 60 с
 (під блокуванням рядка, тож кілька воркерів оновлюють один раз). Для HTTP-конектора з таким credential'ом
 у кожен запит додається `Authorization: Bearer <accessToken>`.
 
-1. Зареєструйте застосунок у провайдера з redirect URI `https://<адреса OpenBP>/api/v1/oauth2/callback`
+1. Зареєструйте застосунок у провайдера з redirect URI `https://<адреса AI_BPMS>/api/v1/oauth2/callback`
    (адреса — `OPENBP_PUBLIC_URL`, а без неї — хост, на який прийшов запит).
 2. «Облікові дані» → «Додати» → «OAuth2 (authorization code)»: адреси авторизації й токена, Client ID,
    Client secret (для публічного клієнта з PKCE — порожній), scopes через пробіл.
@@ -576,8 +576,8 @@ Push-тригери подій (`mcp.subscribe`, §9) цей контракт н
 Конектор віддає події **без polling** стандартним механізмом MCP: клієнт підписується на ресурс
 (`resources/subscribe { uri }`), сервер шле `notifications/resources/updated { uri }`, коли ресурс змінився. Обрано
 саме цей варіант, а не «тригер-tool» (довгий `tools/call` зі стрімом через `notifications/progress`: нестандартно, тримає
-сесію зайнятою, подію в `progress` не покласти без домовленостей) і не лише `POST /webhook` OpenBP від конектора (працює,
-але конектор мусить знати адресу й токен OpenBP, а запущений воркером stdio-процес — ще й пробитися до Api). Вебхук
+сесію зайнятою, подію в `progress` не покласти без домовленостей) і не лише `POST /webhook` AI_BPMS від конектора (працює,
+але конектор мусить знати адресу й токен AI_BPMS, а запущений воркером stdio-процес — ще й пробитися до Api). Вебхук
 лишається **запасним шляхом** для систем, які самі вміють слати HTTP (Telegram `set_webhook` → `core.webhook`):
 docs/consistency.md §3.
 
@@ -599,7 +599,7 @@ docs/consistency.md §3.
 
 1. **Ресурс подій** — URI на кшталт `telegram://updates`, `kit://changes/sales`, `msgraph://mail/orders@contoso.com/inbox`. `resources/read`
    віддає `TextResourceContents` з JSON: об'єкт зі списком останніх подій (`{ "result": [...] }`, від старих до нових,
-   буфер щонайменше на кілька хвилин роботи; у `mcp.subscribe` — `itemsPath = result`) або масив (OpenBP загортає його
+   буфер щонайменше на кілька хвилин роботи; у `mcp.subscribe` — `itemsPath = result`) або масив (AI_BPMS загортає його
    в `{ "result": [...] }`). Кожна подія має стабільний ключ (`keyField`: `update_id`, `id`, час зміни + id). Секретів у
    подіях немає.
 2. **Підписку**: capability `resources.subscribe = true`, обробники `resources/subscribe` / `resources/unsubscribe`, і
@@ -641,7 +641,7 @@ docs/consistency.md §3.
 (`items://changes`, опитування REST API з курсором, ключ `eventKey`). У кожному конекторі — копія `EventHub.cs` зі своїм
 простором імен (конектори — окремі проєкти без спільних залежностей).
 
-Ресурси подій конекторів OpenBP:
+Ресурси подій конекторів AI_BPMS:
 
 | Конектор | Ресурс | Звідки події | `keyField` | Налаштування |
 |---|---|---|---|---|

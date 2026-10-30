@@ -1,7 +1,7 @@
 namespace OpenBP.Connectors.Telegram;
 
 /// <summary>
-/// Токен бота — **лише** зі змінної середовища <see cref="BotTokenVariable"/> (OpenBP передає її через credential
+/// Токен бота — **лише** зі змінної середовища <see cref="BotTokenVariable"/> (AI_BPMS передає її через credential
 /// <c>{ "env": { "TELEGRAM_BOT_TOKEN": "…" } }</c> конектора). Токен стоїть у шляху запитів Bot API, тому кожен текст
 /// помилки проходить <see cref="Scrub"/>.
 /// </summary>
@@ -16,7 +16,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
     public string BotToken =>
         environment(BotTokenVariable) is { Length: > 0 } value
             ? value
-            : throw new ConnectorException($"Не задано змінну середовища {BotTokenVariable} (credential конектора в OpenBP, поле env).");
+            : throw new ConnectorException($"Не задано змінну середовища {BotTokenVariable} (credential конектора в AI_BPMS, поле env).");
 
     /// <summary>Замінює токен у тексті на <c>***</c>.</summary>
     /// <param name="text">Текст, напр. повідомлення про помилку з URL запиту.</param>

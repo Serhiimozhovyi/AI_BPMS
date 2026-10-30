@@ -1,4 +1,4 @@
-# Середовище розробки OpenBP: лише PostgreSQL (Api, воркер і web запускаються з dotnet/npm).
+# Середовище розробки AI_BPMS: лише PostgreSQL (Api, воркер і web запускаються з dotnet/npm).
 # Продакшн-розгортання з образами — docker-compose.prod.yml (README, «Продакшн»).
 name: openbp
 

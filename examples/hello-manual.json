@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "name": "Привіт, OpenBP",
+  "name": "Привіт, AI_BPMS",
   "settings": {
     "timezone": "Europe/Kyiv",
     "executionTimeoutSec": 60,
@@ -15,7 +15,7 @@
       "type": "core.set",
       "typeVersion": 1,
       "position": [240, 0],
-      "parameters": { "fields": [ { "name": "greeting", "value": "Привіт з OpenBP" } ] }
+      "parameters": { "fields": [ { "name": "greeting", "value": "Привіт з AI_BPMS" } ] }
     },
     {
       "id": "n_length",

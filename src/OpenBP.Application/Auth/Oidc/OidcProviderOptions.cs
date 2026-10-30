@@ -16,7 +16,7 @@ public sealed class OidcProviderOptions
     /// <summary>Issuer, напр. <c>https://sso.example.com/realms/astarta</c> або <c>https://login.microsoftonline.com/&lt;tenant&gt;/v2.0</c>.</summary>
     public string Authority { get; set; } = "";
 
-    /// <summary>Client id застосунку OpenBP у провайдера.</summary>
+    /// <summary>Client id застосунку AI_BPMS у провайдера.</summary>
     public string ClientId { get; set; } = "";
 
     /// <summary>Client secret (confidential client). Не логується і не повертається жодним Api.</summary>
@@ -32,7 +32,7 @@ public sealed class OidcProviderOptions
     public string? RoleClaim { get; set; }
 
     /// <summary>
-    /// Ролі OpenBP → ролі провайдера: <c>{ "admin": ["openbp-admin"], "editor": ["openbp-editor"] }</c>. Якщо задано,
+    /// Ролі AI_BPMS → ролі провайдера: <c>{ "admin": ["openbp-admin"], "editor": ["openbp-editor"] }</c>. Якщо задано,
     /// роль користувача виставляється з неї при кожному вході (без збігу — <c>viewer</c>).
     /// </summary>
     public Dictionary<string, string[]> RoleMap { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -58,7 +58,7 @@ public sealed class OidcProviderOptions
     /// <summary>Вимагати HTTPS для metadata. Вимикати лише для локального стенда.</summary>
     public bool RequireHttpsMetadata { get; set; } = true;
 
-    /// <summary>Роль OpenBP з <see cref="RoleMap"/> для ролей провайдера; <c>null</c>, якщо мапу не задано.</summary>
+    /// <summary>Роль AI_BPMS з <see cref="RoleMap"/> для ролей провайдера; <c>null</c>, якщо мапу не задано.</summary>
     /// <param name="providerRoles">Ролі з claims провайдера.</param>
     public UserRole? MapRole(IReadOnlyCollection<string> providerRoles)
     {

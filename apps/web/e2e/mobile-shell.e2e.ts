@@ -69,7 +69,7 @@ test('Api недоступний → банер з «Повторити», пі�
     return route.fulfill({ json: { items: [], page: 1, pageSize: 50, total: 0 } });
   });
   await page.goto('/workflows');
-  await expect(page.getByTestId('offline-banner')).toContainText('Немає зв’язку із сервером OpenBP');
+  await expect(page.getByTestId('offline-banner')).toContainText('Немає зв’язку із сервером AI_BPMS');
 
   retried = true;
   // «Повторити» перезавантажує сторінку, тож кнопка зникає з DOM посеред кліку — не чекаємо навігації після нього.

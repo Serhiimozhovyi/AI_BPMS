@@ -1,4 +1,4 @@
-# apps/web — Angular SPA OpenBP
+# apps/web — Angular SPA AI_BPMS
 
 Angular 22 (standalone, Signals, zoneless), Angular Material + Tailwind 4, ESLint (angular-eslint), Vitest.
 Мова інтерфейсу за замовчуванням — українська: `@angular/localize`, `sourceLocale: uk`, тексти з i18n-ключами (`i18n="@@ключ"`, `$localize`).

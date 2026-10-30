@@ -125,7 +125,7 @@ public sealed partial class NotificationDispatcher(
                     {
                         ["from"] = config["from"]?.DeepClone(),
                         ["to"] = config["to"]?.DeepClone(),
-                        ["subject"] = $"OpenBP: {notification.Title}",
+                        ["subject"] = $"AI_BPMS: {notification.Title}",
                         ["html"] = Html(notification, details),
                     }, ct);
                     break;
@@ -205,7 +205,7 @@ public sealed partial class NotificationDispatcher(
     /// <summary>Текст повідомлення: заголовок і подробиці «ключ: значення».</summary>
     internal static string Text(NotificationEntity notification, JsonObject details)
     {
-        var text = new StringBuilder("OpenBP: ").Append(notification.Title);
+        var text = new StringBuilder("AI_BPMS: ").Append(notification.Title);
         foreach (var (key, value) in details)
         {
             text.Append('\n').Append(key).Append(": ").Append(value is JsonValue v && v.TryGetValue<string>(out var s) ? s : value?.ToJsonString());

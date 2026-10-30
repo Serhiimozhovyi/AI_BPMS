@@ -18,7 +18,7 @@ namespace OpenBP.Application.Connectors;
 /// </summary>
 public static partial class ConnectorCredentialMap
 {
-    /// <summary>Токен OAuth2 (<c>accessToken</c>); для <c>oauth2.clientCredentials</c> OpenBP отримує його перед запуском сервера.</summary>
+    /// <summary>Токен OAuth2 (<c>accessToken</c>); для <c>oauth2.clientCredentials</c> AI_BPMS отримує його перед запуском сервера.</summary>
     public const string AccessToken = "$accessToken";
 
     /// <summary>Повне значення заголовка <c>Authorization</c>: Bearer за токеном, Basic за користувачем і паролем.</summary>

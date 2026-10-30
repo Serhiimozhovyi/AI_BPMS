@@ -159,7 +159,7 @@ public class WorkflowTransferTests(ApiFactory api)
         var editor = await LoginAsync(api, UserRole.Editor);
         var business = JsonNode.Parse("""
             {
-              "lanes": [ { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" }, { "id": "openbp", "name": "OpenBP" } ],
+              "lanes": [ { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" }, { "id": "openbp", "name": "AI_BPMS" } ],
               "steps": [ { "id": "s_create", "title": "Автор створює задачу", "lane": "kit",
                            "links": [ { "node": "n_hook", "direction": "in", "label": "бачить за 1–5 хв" } ] } ]
             }

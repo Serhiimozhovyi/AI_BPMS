@@ -183,7 +183,7 @@ describe('buildBusinessView', () => {
       ),
       [{ id: 'srv_kit', name: 'Кіт CRM' }],
     );
-    expect(v.lanes.map((l) => l.name)).toEqual(['Зовнішня система', 'Кіт CRM', 'Інша система', 'ШІ', 'OpenBP']);
+    expect(v.lanes.map((l) => l.name)).toEqual(['Зовнішня система', 'Кіт CRM', 'Інша система', 'ШІ', 'AI_BPMS']);
     expect(v.steps.find((s) => s.id === 'w')).toEqual(expect.objectContaining({ kind: 'wait', badge: '5 хв', lane: LANE_OPENBP }));
     expect(v.steps.some((s) => s.id === 'off')).toBe(false);
   });

@@ -11,4 +11,4 @@
 | `minLanes` | скільки доріжок у `business.lanes` |
 
 Прогін: `openbp draft-eval --workflow <id порожнього сценарію> [--cases tests/drafter-cases] [--model qwen3:14b] [--out report.md]`
-проти запущеного OpenBP (модель — з «Налаштування → Помічник»); див. `docs/workflow-drafter.md`.
+проти запущеного AI_BPMS (модель — з «Налаштування → Помічник»); див. `docs/workflow-drafter.md`.

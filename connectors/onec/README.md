@@ -1,4 +1,4 @@
-# Конектор 1С (OData) для OpenBP
+# Конектор 1С (OData) для AI_BPMS
 
 MCP-сервер над стандартним OData-інтерфейсом 1С:Підприємство 8.3 (`standard.odata`, OData v3), зроблений на шаблоні
 Connector Kit (`tools/connector-template`). Два tools описано вручну для сценаріїв PRD №1–2, решту можна згенерувати з
@@ -27,7 +27,7 @@ HTTP-статусом і текстом 1С. Пароля немає ні у в�
    - документ **Замовлення покупця** (`Document_ЗаказПокупателя`) з табличною частиною **Товари**;
    - документ **Реалізація товарів і послуг** (`Document_РеализацияТоваровУслуг`);
    - для генератора — інші об'єкти, які мають бачити агенти.
-3. Створіть окремого користувача 1С для OpenBP з правами лише на ці об'єкти (читання, а для замовлення — додавання).
+3. Створіть окремого користувача 1С для AI_BPMS з правами лише на ці об'єкти (читання, а для замовлення — додавання).
 4. Перевірте в браузері: `http://srv/trade/odata/standard.odata/Catalog_Контрагенты?$format=json&$top=1` (із
    логіном і паролем цього користувача).
 
@@ -65,18 +65,18 @@ dotnet test
 dotnet publish src/OpenBP.Connectors.OneC -c Release -o out
 ```
 
-## 3. Зареєструвати в OpenBP
+## 3. Зареєструвати в AI_BPMS
 
 «Конектори» → «Додати MCP-сервер» (роль admin):
 
-- **stdio** (OpenBP запускає процес сам):
+- **stdio** (AI_BPMS запускає процес сам):
   - команда `dotnet`, аргументи — шлях до `out/OpenBP.Connectors.OneC.dll` і
     `--Connector:BaseUrl=http://srv/trade/odata/standard.odata/`;
-  - credential конектора: `{ "env": { "ONEC_USERNAME": "openbp", "ONEC_PASSWORD": "…" } }`. OpenBP зберігає його
+  - credential конектора: `{ "env": { "ONEC_USERNAME": "openbp", "ONEC_PASSWORD": "…" } }`. AI_BPMS зберігає його
     зашифрованим і передає процесу як змінні середовища. Порожній пароль — просто не задавайте `ONEC_PASSWORD`.
 - **http** (окремий сервіс, напр. контейнер поруч із вебсервером 1С):
   - `Connector__BaseUrl=http://srv/trade/odata/standard.odata/ ONEC_USERNAME=… ONEC_PASSWORD=… dotnet out/OpenBP.Connectors.OneC.dll --http http://0.0.0.0:8080`;
-  - в OpenBP: транспорт `http`, URL `http://<хост>:8080/mcp`.
+  - в AI_BPMS: транспорт `http`, URL `http://<хост>:8080/mcp`.
 
 Натисніть «Оновити tools»: стан «Підключено» і tools `create_order`, `sales_report`.
 

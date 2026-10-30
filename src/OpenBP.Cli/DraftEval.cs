@@ -9,7 +9,7 @@ namespace OpenBP.Cli;
 
 /// <summary>
 /// <c>openbp draft-eval --workflow &lt;id&gt;</c> (F3-105) — прогін еталонних описів (<c>tests/drafter-cases</c>) через
-/// <c>POST /workflows/{id}/draft</c> запущеного OpenBP. Модель — та, що вибрана в «Налаштування → Помічник»; сценарій
+/// <c>POST /workflows/{id}/draft</c> запущеного AI_BPMS. Модель — та, що вибрана в «Налаштування → Помічник»; сценарій
 /// <c>--workflow</c> не змінюється (побудова нічого не зберігає). Друкує таблицю: валідність, збіг структури з очікуваннями,
 /// повтори (кроки <c>retry</c>), час; і підсумок. Ключ іде лише в заголовок і ніде не друкується.
 /// </summary>
@@ -222,7 +222,7 @@ internal static class DraftEval
         }
         catch (HttpRequestException ex)
         {
-            throw new CliException($"OpenBP недоступний ({http.BaseAddress}): {ex.Message}");
+            throw new CliException($"AI_BPMS недоступний ({http.BaseAddress}): {ex.Message}");
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -336,7 +336,7 @@ internal static class DraftEval
             key ??= Environment.GetEnvironmentVariable("OPENBP_API_KEY");
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.EndsWith('/') ? url : url + "/", UriKind.Absolute, out var baseUri))
             {
-                throw new CliException("Вкажіть адресу OpenBP: --url або OPENBP_URL (напр. https://openbp.example.com).", showUsage: true);
+                throw new CliException("Вкажіть адресу AI_BPMS: --url або OPENBP_URL (напр. https://openbp.example.com).", showUsage: true);
             }
 
             if (string.IsNullOrWhiteSpace(key))

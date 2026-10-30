@@ -35,7 +35,7 @@ public static class WorkerServiceCollectionExtensions
     /// </summary>
     /// <param name="services">Колекція сервісів.</param>
     /// <param name="configuration">Конфігурація.</param>
-    /// <summary>Змінна з публічною адресою OpenBP (спільна з Api, F6-01).</summary>
+    /// <summary>Змінна з публічною адресою AI_BPMS (спільна з Api, F6-01).</summary>
     public const string PublicUrlKey = "OPENBP_PUBLIC_URL";
 
     public static IServiceCollection AddOpenBpWorker(this IServiceCollection services, IConfiguration configuration)

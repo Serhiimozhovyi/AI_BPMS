@@ -12,9 +12,9 @@ import { AuthProvider, AuthService, oidcLoginHref, safeReturnUrl } from '../../a
 
 /** Повідомлення для `?oidcError=<код>`, з яким Api повертає з невдалого OIDC-входу (F4-14). */
 const OIDC_ERRORS: Record<string, string> = {
-  OIDC_EMAIL_NOT_ALLOWED: $localize`:@@login.oidc.emailNotAllowed:Пошта з цього домену не має доступу до OpenBP.`,
+  OIDC_EMAIL_NOT_ALLOWED: $localize`:@@login.oidc.emailNotAllowed:Пошта з цього домену не має доступу до AI_BPMS.`,
   OIDC_EMAIL_NOT_VERIFIED: $localize`:@@login.oidc.emailNotVerified:Провайдер не підтвердив вашу пошту. Зверніться до адміністратора.`,
-  OIDC_USER_NOT_FOUND: $localize`:@@login.oidc.notFound:Вашого користувача немає в OpenBP. Попросіть адміністратора додати вас.`,
+  OIDC_USER_NOT_FOUND: $localize`:@@login.oidc.notFound:Вашого користувача немає в AI_BPMS. Попросіть адміністратора додати вас.`,
   OIDC_ACCOUNT_CONFLICT: $localize`:@@login.oidc.conflict:Цю пошту вже прив'язано до іншого облікового запису провайдера.`,
 };
 
@@ -38,7 +38,7 @@ const OIDC_ERRORS: Record<string, string> = {
     <section class="login">
       <mat-card class="login__card w-full max-w-sm" appearance="outlined">
         <mat-card-header>
-          <mat-card-title i18n="@@login.title">Вхід до OpenBP</mat-card-title>
+          <mat-card-title i18n="@@login.title">Вхід до AI_BPMS</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           @if (oidcError()) {

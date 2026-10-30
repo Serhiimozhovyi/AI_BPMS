@@ -1,6 +1,6 @@
 # Вбудовування редактора: `<openbp-canvas>`
 
-Редактор сценарію OpenBP можна вбудувати на сторінку іншого застосунку як веб-компонент `<openbp-canvas>`.
+Редактор сценарію AI_BPMS можна вбудувати на сторінку іншого застосунку як веб-компонент `<openbp-canvas>`.
 Усередині ті самі канвас, палітра, панель вузла і тестовий запуск, що й у SPA, але без роутера, шапки й
 навігації. Компонент несе власний Angular, тож хост може бути на іншій версії Angular (наприклад, 16 у
 «Кіт 2») або взагалі без Angular. Розмітка й стилі живуть у Shadow DOM: стилі хоста не ламають канвас, а
@@ -16,7 +16,7 @@ npm run build:element      # → dist/element/openbp-canvas.js (один фай�
 
 Розмір: близько 1 МБ, у gzip близько 275 КБ. Скрипт друкує точні значення після збірки.
 
-Образ `web` (docker/web.Dockerfile) уже містить файл: він доступний за адресою `<OpenBP>/element/openbp-canvas.js`
+Образ `web` (docker/web.Dockerfile) уже містить файл: він доступний за адресою `<AI_BPMS>/element/openbp-canvas.js`
 з `Cache-Control: no-cache`. Скрипт підключається звичайним `<script>`, тож його можна віддавати й з будь-якого
 іншого статичного хостингу.
 
@@ -26,7 +26,7 @@ npm run build:element      # → dist/element/openbp-canvas.js (один фай�
 |---|---|---|
 | `workflow-id` | `workflowId` | Id сценарію. Зміна перезавантажує редактор, а незбережені зміни попереднього сценарію відправляються. |
 | `api-base` | `apiBase` | Корінь Api, напр. `https://openbp.example.com`. Порожньо — той самий origin, що й сторінка. |
-| `token` | `token` | API-ключ OpenBP або OIDC access token для `Authorization: Bearer`. Без нього — cookie сесії. |
+| `token` | `token` | API-ключ AI_BPMS або OIDC access token для `Authorization: Bearer`. Без нього — cookie сесії. |
 | `readonly` | `readonly` | Лише перегляд: без палітри, редагування, запусків і збереження; вузли можна виділяти й дивитися. |
 | `locale` | `locale` | Мова інтерфейсу. Зараз є лише `uk`, інші значення показують українську. |
 | `view` | `view` | `business` разом з `execution-id` — етапи виконання замість редактора (F7-05). Інше значення або без `execution-id` — редактор сценарію. |
@@ -92,8 +92,8 @@ export class WorkflowsModule {}
 ></openbp-canvas>
 ```
 
-`token` краще передавати властивістю (`[token]`), а не атрибутом: так його не видно в DOM. Якщо OpenBP і хост
-входять через той самий Keycloak, передавайте access token хоста: OpenBP приймає його як `Bearer`, коли провайдер
+`token` краще передавати властивістю (`[token]`), а не атрибутом: так його не видно в DOM. Якщо AI_BPMS і хост
+входять через той самий Keycloak, передавайте access token хоста: AI_BPMS приймає його як `Bearer`, коли провайдер
 налаштовано з `AcceptBearer` і клієнт хоста (напр. `KitWeb`) є в `BearerAudiences` ([admin/oidc.md](admin/oidc.md)).
 Токен живе кілька хвилин, тож після оновлення токена в хості передайте новий: `[token]` робить це сам.
 
@@ -108,7 +108,7 @@ export class WorkflowsModule {}
 
   Потік подій виконання (SSE) з токеном іде через `fetch` із заголовком `Authorization`, бо браузерний
   `EventSource` заголовків не має.
-- **Cookie сесії:** працює, коли редактор і OpenBP на тому самому сайті, наприклад `kit.example.com` і
+- **Cookie сесії:** працює, коли редактор і AI_BPMS на тому самому сайті, наприклад `kit.example.com` і
   `openbp.example.com`. Cookie `openbp.auth` має `SameSite=Lax`, тож на сторінки іншого сайту браузер її не
   надішле. Для іншого origin того самого сайту теж потрібен `OPENBP_CORS_ORIGINS`.
 - Ролі ті самі, що в UI: viewer бачить, editor редагує й запускає. Для перегляду без змін на будь-якій ролі

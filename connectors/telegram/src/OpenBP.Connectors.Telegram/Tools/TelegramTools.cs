@@ -127,7 +127,7 @@ public sealed partial class TelegramTools(BotApiClient api)
     /// <param name="drop_pending_updates">Відкинути накопичені оновлення.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "set_webhook", Title = "Set webhook", Idempotent = true, UseStructuredContent = true, Destructive = false, OpenWorld = true)]
-    [Description("Makes Telegram deliver updates to an HTTPS URL (e.g. an OpenBP core.webhook trigger) instead of get_updates. Telegram sends secret_token in the X-Telegram-Bot-Api-Secret-Token header of every request. Returns { ok: true }.")]
+    [Description("Makes Telegram deliver updates to an HTTPS URL (e.g. an AI_BPMS core.webhook trigger) instead of get_updates. Telegram sends secret_token in the X-Telegram-Bot-Api-Secret-Token header of every request. Returns { ok: true }.")]
     public Task<OkResult> SetWebhook(
         [Description("Public HTTPS URL that receives updates, e.g. https://openbp.example.com/webhook/telegram/bot.")] string url,
         [Description("Optional secret, 1-256 characters A-Z a-z 0-9 _ -; sent back in the X-Telegram-Bot-Api-Secret-Token header.")] string? secret_token = null,

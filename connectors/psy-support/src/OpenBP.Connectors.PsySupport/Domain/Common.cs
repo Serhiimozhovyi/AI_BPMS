@@ -8,7 +8,7 @@ using OpenBP.Connectors.PsySupport.Data;
 
 namespace OpenBP.Connectors.PsySupport.Domain;
 
-/// <summary>Повідомлення, яке сценарій OpenBP надсилає через Telegram-конектор (docs/psy-support.md §1).</summary>
+/// <summary>Повідомлення, яке сценарій AI_BPMS надсилає через Telegram-конектор (docs/psy-support.md §1).</summary>
 /// <param name="ChatId">Кому.</param>
 /// <param name="Text">Текст (HTML-розмітка Telegram).</param>
 /// <param name="ReplyMarkup">Кнопки або <c>null</c>.</param>

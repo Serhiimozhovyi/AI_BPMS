@@ -10,7 +10,7 @@ public enum FormAuth
     /// <summary>Будь-хто за посиланням.</summary>
     None,
 
-    /// <summary>Лише користувач OpenBP після входу (cookie-сесія або API-ключ).</summary>
+    /// <summary>Лише користувач AI_BPMS після входу (cookie-сесія або API-ключ).</summary>
     Login,
 
     /// <summary>Посилання з токеном <c>?token=…</c>; значення — у credential <c>{ token }</c>.</summary>
