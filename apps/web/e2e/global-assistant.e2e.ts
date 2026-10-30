@@ -163,7 +163,7 @@ test('F3-110: іконка → розмова з контекстом сторі
 test('F3-110: viewer іконки не бачить', async ({ page }) => {
   await new FakeApi().install(page, 'viewer');
   await page.goto('/workflows');
-  await expect(page.getByTestId('current-user')).toBeVisible();
+  await expect(page.getByTestId('user-menu')).toBeVisible();
   await expect(page.getByTestId('global-assistant-toggle')).toHaveCount(0);
 });
 

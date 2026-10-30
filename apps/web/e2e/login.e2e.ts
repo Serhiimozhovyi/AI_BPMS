@@ -41,11 +41,13 @@ test('сторінка без сесії → вхід → повернення �
   await expect(page.getByTestId('login-error')).toContainText('Невірний email або пароль');
   await expect(page).toHaveURL(/\/login/);
 
-  // Правильний пароль — назад на /settings, у тулбарі email і «Вийти».
+  // Правильний пароль — назад на /settings, у меню аватара email і «Вийти» (F9-04).
   await page.getByTestId('login-password').fill(PASSWORD);
   await page.getByTestId('login-password').press('Enter');
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Налаштування');
+  await expect(page.getByTestId('user-menu')).toHaveText('A');
+  await page.getByTestId('user-menu').click();
   await expect(page.getByTestId('current-user')).toHaveText(USER.email);
 
   // Вихід — знову сторінка входу; повернутися на сторінку без входу не можна.

@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { CardTableDirective } from '../../shared/card-table.directive';
+import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
@@ -23,7 +24,7 @@ import {
 @Component({
   selector: 'app-tasks-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatProgressBarModule, EmptyStateComponent, CardTableDirective],
+  imports: [DatePipe, RouterLink, ChipComponent, MatProgressBarModule, EmptyStateComponent, CardTableDirective],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@tasks.title">Задачі</h1>
@@ -85,12 +86,12 @@ import {
                 <td class="p-2">
                   <a class="underline" [routerLink]="['/tasks', t.id]" data-testid="task-link">{{ t.title }}</a>
                   @if (t.escalated) {
-                    <span class="ml-2 text-xs opacity-70" i18n="@@tasks.escalated">ескалація</span>
+                    <bp-chip class="ml-2" tone="orange" i18n="@@tasks.escalated">ескалація</bp-chip>
                   }
                 </td>
                 <td class="p-2">{{ t.workflowName }}</td>
                 <td class="p-2">{{ assignee(t) }}</td>
-                <td class="p-2" data-testid="task-status">{{ statusLabel(t.status) }}{{ t.decision ? ' · ' + t.decision : '' }}</td>
+                <td class="p-2" data-testid="task-status"><bp-chip [tone]="statusTone(t.status)">{{ statusLabel(t.status) }}{{ t.decision ? ' · ' + t.decision : '' }}</bp-chip></td>
                 <td class="p-2">{{ t.dueAt ? (t.dueAt | date: 'dd.MM.yyyy HH:mm') : '—' }}</td>
               </tr>
             }
@@ -107,6 +108,19 @@ export class TasksPage implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly statuses = TASK_STATUSES;
+
+  protected statusTone(status: TaskStatus): ChipTone {
+    switch (status) {
+      case 'open':
+        return 'blue';
+      case 'done':
+        return 'green';
+      case 'expired':
+        return 'orange';
+      default:
+        return 'gray';
+    }
+  }
   protected readonly scope = signal<'mine' | 'all'>('mine');
   protected readonly status = signal<TaskStatus | null>('open');
   protected readonly tasks = signal<TaskSummary[]>([]);

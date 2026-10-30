@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -9,7 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, Router, RouterLink, convertToParamMap } from '@angular/router';
 import { combineLatest, of } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
-import { BADGE_CLASSES, CellView, DisplayColumn, cellView } from '../../projects/page-format';
+import { BADGE_CLASSES, BADGE_TONES, CellView, DisplayColumn, cellView } from '../../projects/page-format';
 import {
   PageAction,
   PageActionResult,
@@ -49,6 +50,7 @@ interface DrawerState {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     NgTemplateOutlet,
+    ChipComponent,
     RouterLink,
     MatButtonModule,
     MatFormFieldModule,
@@ -122,7 +124,7 @@ interface DrawerState {
                           <dt class="opacity-70">{{ c.label }}</dt>
                           <dd [attr.data-field]="c.column">
                             @if (cell.color) {
-                              <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)">{{ cell.text }}</span>
+                              <bp-chip [tone]="tone(cell.color)">{{ cell.text }}</bp-chip>
                             } @else {
                               {{ cell.text }}
                             }
@@ -195,7 +197,7 @@ interface DrawerState {
                             @let cell = cellOf(row, c);
                             <td class="p-2">
                               @if (cell.color) {
-                                <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)" [attr.data-badge]="cell.color">{{ cell.text }}</span>
+                                <bp-chip [tone]="tone(cell.color)" [attr.data-badge]="cell.color">{{ cell.text }}</bp-chip>
                               } @else {
                                 {{ cell.text }}
                               }
@@ -250,7 +252,7 @@ interface DrawerState {
                   <dt class="opacity-70">{{ c.label }}</dt>
                   <dd [attr.data-field]="c.column">
                     @if (cell.color) {
-                      <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)">{{ cell.text }}</span>
+                      <bp-chip [tone]="tone(cell.color)">{{ cell.text }}</bp-chip>
                     } @else {
                       {{ cell.text }}
                     }
@@ -429,6 +431,10 @@ export class AppPagePage implements OnInit {
 
   badge(color: keyof typeof BADGE_CLASSES): string {
     return BADGE_CLASSES[color];
+  }
+
+  tone(color: keyof typeof BADGE_TONES): ChipTone {
+    return BADGE_TONES[color];
   }
 
   pages(rows: PageRows): number {

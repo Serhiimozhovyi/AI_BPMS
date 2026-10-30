@@ -105,7 +105,7 @@ import { ProposalCardComponent } from './proposal-card.component';
   styles: `
     .ga {
       position: fixed;
-      top: 60px;
+      top: 52px;
       right: 0;
       bottom: 0;
       z-index: 60;

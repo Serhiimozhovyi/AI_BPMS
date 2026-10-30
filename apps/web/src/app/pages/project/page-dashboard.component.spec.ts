@@ -189,7 +189,7 @@ describe('PageDashboardComponent (F8-18)', () => {
     const row = q('[data-block="2"] [data-row="b1"]')!;
     expect(row.textContent).toContain('Марія');
     expect(row.querySelector('[data-field="status"]')?.textContent?.trim()).toBe('Активний');
-    expect(row.querySelector('[data-field="status"] span')?.className).toContain('bg-ac-green');
+    expect(row.querySelector('[data-field="status"] bp-chip')?.getAttribute('data-tone')).toBe('green');
     expect(q('[data-block="2"] [data-testid="block-all"]')?.textContent).toContain('Усі');
     expect(q('[data-block="2"] [data-testid="block-all"]')?.textContent).toContain('(7)');
     expect(q('[data-block="2"] [data-testid="block-all"]')?.getAttribute('href')).toBe('/projects/p1/app/bookings');

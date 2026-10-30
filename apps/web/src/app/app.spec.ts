@@ -4,12 +4,13 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { App, isBareUrl } from './app';
+import { App, isBareUrl, userInitials } from './app';
 import { formMatcher, routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
 import { ConnectivityService } from './connectivity/connectivity.service';
 import { AuthService, UserInfo } from './auth/auth.service';
 import { BehaviorSubject } from 'rxjs';
+import { AppBarService } from './layout/app-bar.service';
 import { ProjectContextService } from './projects/project-context.service';
 
 const admin: UserInfo = { id: 'u1', email: 'admin@firma.ua', role: 'admin' };
@@ -38,7 +39,7 @@ describe('App', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(TestBed.inject(Router).url).toBe('/form/hr/leave');
-    expect((fixture.nativeElement as HTMLElement).querySelector('mat-toolbar')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.shell-top')).toBeNull();
   });
 
   it('створюється', () => {
@@ -47,7 +48,7 @@ describe('App', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('показує навігацію українською, email і «Вийти» після входу', async () => {
+  it('показує навігацію українською, email і «Вийти» в меню аватара після входу (F9-04)', async () => {
     configure();
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -55,6 +56,14 @@ describe('App', () => {
     const nav = host.querySelector('nav');
     expect(nav?.textContent).toContain('Сценарії');
     expect(nav?.textContent).toContain('Підключення');
+    const avatar = host.querySelector<HTMLButtonElement>('[data-testid="user-menu"]')!;
+    expect(avatar.textContent?.trim()).toBe('A');
+    expect(avatar.getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('[data-testid="logout"]')).toBeNull();
+    avatar.click();
+    fixture.detectChanges();
+    expect(avatar.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="current-user"]')?.textContent).toContain('admin@firma.ua');
     expect(host.querySelector('[data-testid="logout"]')?.textContent).toContain('Вийти');
   });
@@ -75,6 +84,8 @@ describe('App', () => {
     const router = TestBed.inject(Router);
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="user-menu"]')!.click();
+    fixture.detectChanges();
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="logout"]')!.click();
     TestBed.inject(HttpTestingController).expectOne({ method: 'POST', url: '/api/v1/auth/logout' }).flush(null, { status: 204, statusText: 'No Content' });
 
@@ -332,5 +343,104 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     const retry = vi.spyOn(connectivity, 'retry').mockImplementation(() => undefined);
     host.querySelector<HTMLButtonElement>('[data-testid="offline-retry"]')!.click();
     expect(retry).toHaveBeenCalled();
+  });
+});
+
+describe('App: верхнє меню як у Кіт CRM (F9-04)', () => {
+  it('ініціали аватара з email', () => {
+    expect(userInitials('admin@firma.ua')).toBe('A');
+    expect(userInitials('olena.bondar@firma.ua')).toBe('OB');
+    expect(userInitials('ivan_petro-k@firma.ua')).toBe('IP');
+    expect(userInitials(null)).toBe('');
+  });
+
+  it('меню аватара: стрілки між пунктами, Escape і клік поза ним закривають', async () => {
+    configure();
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    const avatar = host.querySelector<HTMLButtonElement>('[data-testid="user-menu"]')!;
+    avatar.click();
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r));
+    const items = [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((i) => i.dataset['testid'])).toEqual(['change-password', 'logout']);
+    expect(document.activeElement).toBe(items[0]);
+    host.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(items[1]);
+    host.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(items[0]);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(avatar);
+
+    avatar.click();
+    fixture.detectChanges();
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    document.body.click();
+    fixture.detectChanges();
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    host.remove();
+  });
+
+  it('стрілки прокрутки з’являються, коли пункти меню не вміщаються', async () => {
+    configure();
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="nav-scroll-end"]')).toBeNull();
+
+    const nav = host.querySelector<HTMLElement>('nav.shell-nav')!;
+    Object.defineProperty(nav, 'clientWidth', { configurable: true, value: 400 });
+    Object.defineProperty(nav, 'scrollWidth', { configurable: true, value: 900 });
+    const scrollBy = vi.fn();
+    nav.scrollBy = scrollBy as never;
+    nav.dispatchEvent(new Event('scroll'));
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="nav-scroll-start"]')).toBeNull();
+    host.querySelector<HTMLButtonElement>('[data-testid="nav-scroll-end"]')!.click();
+    expect(scrollBy).toHaveBeenCalledWith({ left: 280, behavior: 'smooth' });
+
+    nav.scrollLeft = 500;
+    nav.dispatchEvent(new Event('scroll'));
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="nav-scroll-start"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="nav-scroll-end"]')).toBeNull();
+  });
+
+  it('користувач лише застосунку: назва й меню застосунку в тій самій смузі', async () => {
+    configure({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
+    const fixture = TestBed.createComponent(App);
+    const harness = await RouterTestingHarness.create();
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    await harness.navigateByUrl('/');
+    TestBed.inject(HttpTestingController)
+      .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
+      .flush([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 2, role: 'viewer', appRole: 'operator', app: { title: 'Кабінет' } }]);
+    TestBed.inject(AppBarService).bar.set({
+      projectId: 'p1',
+      title: 'Кабінет',
+      iconName: 'psychology',
+      emoji: null,
+      menu: [
+        { label: '', pages: [{ key: 'today', name: 'Сьогодні' }] },
+        { label: 'Записи', pages: [{ key: 'bookings', name: 'Записи' }] },
+      ],
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const top = host.querySelector('.shell-top')!;
+    expect(top.querySelector('[data-testid="shell-title"]')?.textContent).toBe('Кабінет');
+    expect(top.querySelector('[data-testid="shell-icon"]')?.textContent).toBe('psychology');
+    expect(top.querySelector('[data-testid="shell-group"]')?.textContent).toBe('Записи');
+    const links = [...top.querySelectorAll<HTMLAnchorElement>('[data-testid="shell-nav"] a')];
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/projects/p1/app/today', '/projects/p1/app/bookings']);
+    expect(top.querySelector('[data-testid="shell-tasks"]')).toBeNull();
+    expect(top.querySelector('[data-testid="user-menu"]')?.textContent?.trim()).toBe('O');
   });
 });
