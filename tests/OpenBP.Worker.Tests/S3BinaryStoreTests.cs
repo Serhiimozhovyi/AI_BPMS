@@ -140,7 +140,7 @@ public sealed class S3BinaryStoreTests(MinioFixture minio)
         using var client = Client();
         foreach (var key in new[] { "secret", "0123456789abcdef0123456789abcdef", "secret/0123456789abcdef0123456789abcdef" })
         {
-            await SeedAsync(client, options.Bucket, key, "secret");
+            await SeedAsync(client, options.Bucket!, key, "secret");
         }
 
         await Assert.ThrowsAsync<BinaryNotFoundException>(() =>
