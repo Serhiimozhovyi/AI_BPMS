@@ -14,7 +14,7 @@ test('порожні «Конектори» → «Відкрити катало�
   await page.goto('/connectors');
   await expect(page.getByTestId('empty-title')).toContainText('Ще немає жодного MCP-сервера');
   await page.getByTestId('empty-action').click();
-  await expect(page.getByTestId('tab-catalog')).toHaveClass(/mat-button-toggle-checked/);
+  await expect(page.getByTestId('tab-catalog')).toHaveAttribute('aria-selected', 'true');
   await expect(page).toHaveURL(/tab=catalog/);
 });
 

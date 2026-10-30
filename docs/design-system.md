@@ -49,6 +49,22 @@ Figma «Atoms / Buttons» `1710:6222`. Стилі — `apps/web/src/theme/_butto
 
 Малий розмір (32 px замість 40 px) — `bpSize="sm"`. Директива `BpButtonDirective` (`shared/button.directive.ts`) додає лише класи `bp-btn-*`; її треба додати в `imports` компонента. Стани: hover, pressed, disabled, focus-visible (кільце `--bp-tonal`). Приклад усіх варіантів — `/dev/kit` (лише dev-збірка).
 
+## Вкладки (`bp-tabs`, F9-03)
+
+Figma «Atoms / Tabs» `3251:37133`. Компонент `apps/web/src/app/shared/tabs/tabs.component.ts`, стилі — `apps/web/src/theme/_tabs.scss`.
+
+| Вид | `variant` | Де | Активна |
+|---|---|---|---|
+| Сегментні «пігулки» | `pills` | фільтри й перемикачі виду (період в «Огляді», вид і виходи даних вузла) | фон `--bp-tonal`, текст `--bp-primary` |
+| Підкреслені | `underline` (типовий) | розділи сторінки (проєкт, застосунок, «Підключення», панель вузла) | текст і підкреслення 2px `--bp-primary` |
+| Зі значком | `icon` | вкладки картки («Підключити ШІ-агента») | фон `--bp-tonal`, текст `--bp-primary` |
+
+- Режим посилань: у вкладки є `link` (+ `queryParams`), активну визначає адреса. Режим значення: `[(value)]`.
+- ARIA `tablist`/`tab`, `aria-selected`, одна вкладка в порядку Tab; ←/→ (↑/↓), Home/End. У режимі значення стрілки одразу вибирають вкладку, у режимі посилань — лише фокусують.
+- Коли вкладки не вміщаються — горизонтальна прокрутка й кнопки ‹ ›.
+- Модифікатори: `bp-tabs--stretch` (рівні частки на всю ширину), `bp-tabs--sm` (дрібні пігулки).
+- Кожна вкладка має `data-tab="<value>"`, `testId` — для тестів.
+
 ## Поля, списки, перемикачі (F9-05)
 
 Стилі — `apps/web/src/theme/_fields.scss` (`fields.overrides()` — токени Material, `fields.global()` — правила без токенів), без правки шаблонів. Figma: «FIELDS» `2605:13160`, «DROP WINDOW» `2322:8183`, «Atoms / Selectors» `1710:6019`, «Calendars» `3811:88118`.

@@ -45,7 +45,7 @@ describe('ProjectAppPage (F8-04)', () => {
     const { fixture, http, host, navigate } = await setup('viewer');
     http.expectOne('/api/v1/projects/p1/pages').flush([page('slots', 'Слоти'), page('bookings', 'Записи')]);
     await render(fixture);
-    expect([...host.querySelectorAll('[data-page]')].map((a) => a.textContent?.trim())).toEqual(['Слоти', 'Записи']);
+    expect([...host.querySelectorAll('[data-tab]')].map((a) => a.textContent?.trim())).toEqual(['Слоти', 'Записи']);
     expect(navigate).toHaveBeenCalledWith(['slots'], expect.objectContaining({ replaceUrl: true }));
   });
 
