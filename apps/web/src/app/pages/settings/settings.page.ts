@@ -8,7 +8,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
-import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -21,6 +20,7 @@ import { AssistantSection } from '../../settings/assistant-section.component';
 import { AuditSection } from '../../settings/audit-section.component';
 import { NotificationChannelsSection } from '../../settings/notification-channels-section.component';
 import { VariablesSection } from '../../settings/variables-section.component';
+import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 
 export interface SettingsSectionItem {
   id: 'api-keys' | 'agent' | 'variables' | 'assistant' | 'notifications' | 'audit';
@@ -34,7 +34,7 @@ export interface SettingsSectionItem {
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, NgTemplateOutlet, ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, MatTabsModule, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection],
+  imports: [DatePipe, NgTemplateOutlet, ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, BpTabsComponent, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
@@ -180,17 +180,22 @@ export interface SettingsSectionItem {
         Агент зможе описувати конектори, створювати й запускати сценарії та тестувати вузли.
       </p>
       <p class="mb-2 font-mono text-sm" data-testid="mcp-url">{{ mcpUrl }}</p>
-      <mat-tab-group class="max-w-3xl" animationDuration="0ms" data-testid="mcp-tabs">
-        <mat-tab label="Claude Desktop">
-          <ng-container *ngTemplateOutlet="snippet; context: { $implicit: desktopConfig(), id: 'desktop' }" />
-        </mat-tab>
-        <mat-tab label="Claude Code">
-          <ng-container *ngTemplateOutlet="snippet; context: { $implicit: claudeCodeCommand(), id: 'code' }" />
-        </mat-tab>
-        <mat-tab label="Інше" i18n-label="@@settings.mcp.other">
-          <ng-container *ngTemplateOutlet="snippet; context: { $implicit: config(), id: 'other' }" />
-        </mat-tab>
-      </mat-tab-group>
+      <div class="max-w-3xl">
+        <bp-tabs variant="icon" [tabs]="mcpTabs" [(value)]="mcpTab" label="Клієнт ШІ-агента" i18n-label="@@settings.mcp.clients" testId="mcp-tabs" />
+        <div role="tabpanel">
+          @switch (mcpTab()) {
+            @case ('code') {
+              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: claudeCodeCommand(), id: 'code' }" />
+            }
+            @case ('other') {
+              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: config(), id: 'other' }" />
+            }
+            @default {
+              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: desktopConfig(), id: 'desktop' }" />
+            }
+          }
+        </div>
+      </div>
     </ng-template>
 
     <ng-template #snippet let-text let-id="id">
@@ -248,6 +253,13 @@ export class SettingsPage implements OnInit {
   protected readonly projects = inject(ProjectContextService);
   /** Проєкт нового ключа (F6-14); порожньо — весь інстанс. */
   readonly keyProject = signal('');
+  /** Вкладка клієнта в «Підключити ШІ-агента». */
+  readonly mcpTab = signal<string | null>('desktop');
+  readonly mcpTabs: BpTab[] = [
+    { value: 'desktop', icon: '🖥️', label: 'Claude Desktop' },
+    { value: 'code', icon: '⌨️', label: 'Claude Code' },
+    { value: 'other', icon: '🔌', label: $localize`:@@settings.mcp.other:Інше` },
+  ];
 
   readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
 

@@ -7,6 +7,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectTransferApiService, downloadBundle } from '../../projects/project-transfer-api.service';
+import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 import {
   OVERVIEW_RANGES,
   Overview,
@@ -24,28 +25,14 @@ import {
 @Component({
   selector: 'app-overview-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatProgressBarModule, RouterLink],
+  imports: [DatePipe, MatButtonModule, MatProgressBarModule, RouterLink, BpTabsComponent],
   template: `
     <section class="p-6">
       <div class="mb-4 flex flex-wrap items-center gap-4">
         @if (!projectId) {
           <h1 class="mat-font-headline-sm" i18n="@@overview.title">Огляд</h1>
         }
-        <div class="flex gap-1" role="group" aria-label="Період" i18n-aria-label="@@overview.range.label">
-          @for (r of ranges; track r) {
-            <button
-              type="button"
-              [attr.data-range]="r"
-              [attr.aria-pressed]="range() === r"
-              [class.font-semibold]="range() === r"
-              [class.underline]="range() === r"
-              mat-stroked-button
-              (click)="select(r)"
-            >
-              {{ rangeLabel(r) }}
-            </button>
-          }
-        </div>
+        <bp-tabs variant="pills" [tabs]="rangeTabs" [value]="range()" (valueChange)="select($any($event))" label="Період" i18n-label="@@overview.range.label" />
         @if (projectId && canExport()) {
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <input
@@ -231,6 +218,7 @@ export class OverviewPage implements OnInit {
   });
 
   readonly rangeLabel = overviewRangeLabel;
+  readonly rangeTabs: BpTab[] = OVERVIEW_RANGES.map((r) => ({ value: r, label: overviewRangeLabel(r) }));
   readonly duration = formatDuration;
   readonly rate = formatRate;
 

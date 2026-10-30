@@ -4,10 +4,11 @@ import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, RouterLink, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
+import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 import { WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
 
 /** Вкладка сторінки проєкту: сегмент URL `/projects/:id/<path>`. */
@@ -27,7 +28,7 @@ interface ProjectTab {
 @Component({
   selector: 'app-project-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, RouterLinkActive, RouterOutlet, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [ReactiveFormsModule, RouterLink, RouterOutlet, BpTabsComponent, MatButtonModule, MatFormFieldModule, MatInputModule],
   template: `
     @if (!shellOnly()) {
     <section class="px-6 pt-6">
@@ -65,17 +66,7 @@ interface ProjectTab {
         <p role="alert" class="mb-2 text-red-700" data-testid="project-error">{{ error() }}</p>
       }
 
-      <nav class="ac-tabs mt-3" aria-label="Вкладки проєкту" i18n-aria-label="@@project.tabs.label" data-testid="project-tabs">
-        @for (t of visibleTabs(); track t.path) {
-          <a
-            class="ac-tab"
-            [routerLink]="t.path"
-            routerLinkActive="active"
-            [attr.data-testid]="t.testId"
-            >{{ t.label }}</a
-          >
-        }
-      </nav>
+      <bp-tabs class="mt-3" [tabs]="tabItems()" label="Вкладки проєкту" i18n-label="@@project.tabs.label" testId="project-tabs" />
     </section>
     }
     <router-outlet />
@@ -113,6 +104,7 @@ export class ProjectPage implements OnInit {
       ? this.tabs.filter((t) => t.path === 'overview' || t.path === 'app')
       : this.tabs,
   );
+  readonly tabItems = computed<BpTab[]>(() => this.visibleTabs().map((t) => ({ value: t.path, label: t.label, link: t.path, testId: t.testId })));
 
   /** Користувач лише застосунку, чий проєкт має оболонку (F8-18): рамки проєкту немає — лише оболонка застосунку. */
   readonly shellOnly = computed(() => {

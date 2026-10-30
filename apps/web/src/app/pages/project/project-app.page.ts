@@ -6,6 +6,7 @@ import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { AppBarService } from '../../layout/app-bar.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage, ProjectPagesApiService } from '../../projects/project-pages-api.service';
+import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 
 /**
  * `/projects/:id/app` — вкладка «Застосунок» (F8-04): меню сторінок застосунку, які бачить користувач (за ролями
@@ -17,7 +18,7 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
 @Component({
   selector: 'app-project-app-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, BpTabsComponent],
   template: `
     @if (inBar()) {
       <div class="px-6 pt-4" data-testid="app-shell">
@@ -96,11 +97,7 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
           <a class="mb-2 ml-4 inline-block" data-testid="app-settings-link" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
         }
         @if (pages().length > 1) {
-          <nav class="ac-tabs mb-3" aria-label="Сторінки застосунку" i18n-aria-label="@@project.app.nav" data-testid="app-nav">
-            @for (p of pages(); track p.id) {
-              <a class="ac-tab" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
-            }
-          </nav>
+          <bp-tabs class="mb-3" [tabs]="pageTabs()" label="Сторінки застосунку" i18n-label="@@project.app.nav" testId="app-nav" />
         }
       </section>
       <router-outlet />
@@ -118,6 +115,7 @@ export class ProjectAppPage implements OnInit {
 
   readonly projectId = this.route.parent?.snapshot.paramMap.get('id') ?? '';
   readonly pages = signal<ProjectPage[]>([]);
+  readonly pageTabs = computed<BpTab[]>(() => this.pages().map((p) => ({ value: p.key, label: p.name, link: [p.key] })));
   readonly loaded = signal(false);
   readonly error = signal<string | null>(null);
   /** Відкрито конструктор: меню сторінок і посилання на нього зайві. */
