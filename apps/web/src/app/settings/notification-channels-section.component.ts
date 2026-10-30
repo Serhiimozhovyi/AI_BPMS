@@ -18,6 +18,7 @@ import {
   channelTypeLabel,
   notificationEventLabel,
 } from './notification-channels-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /** Чернетка форми каналу: поля всіх типів, у запит іде лише потрібне вибраному типу. */
 interface ChannelDraft {
@@ -92,7 +93,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
 @Component({
   selector: 'app-notification-channels-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <div class="mb-2 flex items-center gap-4">
       <h2 class="text-lg font-semibold" i18n="@@notifications.title">Сповіщення</h2>
@@ -234,7 +235,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
                 <td class="whitespace-nowrap p-2">
                   <button mat-button type="button" data-action="test" [disabled]="testing() === c.id" (click)="test(c)" i18n="@@notifications.test">Перевірити</button>
                   <button mat-button type="button" data-action="edit" (click)="startEdit(c)" i18n="@@notifications.edit">Змінити</button>
-                  <button mat-button type="button" data-action="delete" (click)="remove(c)" i18n="@@notifications.delete">Видалити</button>
+                  <button bpVariant="danger" mat-button type="button" data-action="delete" (click)="remove(c)" i18n="@@notifications.delete">Видалити</button>
                 </td>
               </tr>
             }

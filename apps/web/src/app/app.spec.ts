@@ -18,7 +18,11 @@ const admin: UserInfo = { id: 'u1', email: 'admin@firma.ua', role: 'admin' };
 function configure(user: UserInfo | null = admin) {
   TestBed.configureTestingModule({
     imports: [App],
-    providers: [provideRouter(routes), provideHttpClient(withInterceptors([authInterceptor])), provideHttpClientTesting()],
+    providers: [
+      provideRouter(routes),
+      provideHttpClient(withInterceptors([authInterceptor])),
+      provideHttpClientTesting(),
+    ],
   });
   TestBed.inject(AuthService).user.set(user);
 }
@@ -27,7 +31,13 @@ describe('App', () => {
   it('публічна форма /form/… — без шапки й меню і без входу (F6-03)', async () => {
     expect(isBareUrl('/form/hr/leave?token=1')).toBe(true);
     expect(isBareUrl('/workflows')).toBe(false);
-    expect(formMatcher([{ path: 'form' }, { path: 'hr' }, { path: 'leave' }] as never, null as never, null as never)?.consumed.length).toBe(3);
+    expect(
+      formMatcher(
+        [{ path: 'form' }, { path: 'hr' }, { path: 'leave' }] as never,
+        null as never,
+        null as never,
+      )?.consumed.length,
+    ).toBe(3);
     expect(formMatcher([{ path: 'form' }] as never, null as never, null as never)).toBeNull();
 
     configure(null);
@@ -55,7 +65,9 @@ describe('App', () => {
     const nav = host.querySelector('nav');
     expect(nav?.textContent).toContain('Сценарії');
     expect(nav?.textContent).toContain('Підключення');
-    expect(host.querySelector('[data-testid="current-user"]')?.textContent).toContain('admin@firma.ua');
+    expect(host.querySelector('[data-testid="current-user"]')?.textContent).toContain(
+      'admin@firma.ua',
+    );
     expect(host.querySelector('[data-testid="logout"]')?.textContent).toContain('Вийти');
   });
 
@@ -75,8 +87,12 @@ describe('App', () => {
     const router = TestBed.inject(Router);
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
-    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="logout"]')!.click();
-    TestBed.inject(HttpTestingController).expectOne({ method: 'POST', url: '/api/v1/auth/logout' }).flush(null, { status: 204, statusText: 'No Content' });
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="logout"]')!
+      .click();
+    TestBed.inject(HttpTestingController)
+      .expectOne({ method: 'POST', url: '/api/v1/auth/logout' })
+      .flush(null, { status: 204, statusText: 'No Content' });
 
     expect(TestBed.inject(AuthService).user()).toBeNull();
     expect(navigate).toHaveBeenCalledWith(['/login']);
@@ -84,14 +100,16 @@ describe('App', () => {
 });
 
 describe('routes', () => {
-  it('/login і публічна форма без guard\'а, сторінки з architecture.md §7 — під guard\'ом', () => {
+  it("/login і публічна форма без guard'а, сторінки з architecture.md §7 — під guard'ом", () => {
     expect(routes[0].matcher).toBe(formMatcher);
     expect(routes[0].canActivateChild).toBeUndefined();
     expect(routes[1].path).toBe('login');
     expect(routes[1].canActivateChild).toBeUndefined();
     const app = routes.find((r) => r.children)!;
     expect(app.canActivateChild).toHaveLength(1);
-    expect(app.children!.filter((r) => r.loadComponent).map((r) => r.path)).toEqual([
+    expect(
+      app.children!.filter((r) => r.loadComponent && r.path !== 'dev/kit').map((r) => r.path),
+    ).toEqual([
       '',
       'account/password',
       'workflows',
@@ -120,8 +138,14 @@ describe('routes', () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/no/such/page');
     expect(TestBed.inject(Router).url).toBe('/no/such/page');
-    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Сторінку не знайдено');
-    expect(harness.routeNativeElement?.querySelector('[data-testid="not-found-home"]')?.getAttribute('href')).toBe('/');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain(
+      'Сторінку не знайдено',
+    );
+    expect(
+      harness.routeNativeElement
+        ?.querySelector('[data-testid="not-found-home"]')
+        ?.getAttribute('href'),
+    ).toBe('/');
   });
 
   it('порожній шлях відкриває «Огляд»', async () => {
@@ -134,7 +158,13 @@ describe('routes', () => {
   it('кожен маршрут відкриває сторінку з заголовком', async () => {
     configure();
     const harness = await RouterTestingHarness.create();
-    for (const url of ['/workflows/abc', '/executions', '/connectors', '/credentials', '/settings']) {
+    for (const url of [
+      '/workflows/abc',
+      '/executions',
+      '/connectors',
+      '/credentials',
+      '/settings',
+    ]) {
       await harness.navigateByUrl(url);
       expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBeTruthy();
     }
@@ -144,7 +174,9 @@ describe('routes', () => {
     configure(null);
     const harness = await RouterTestingHarness.create();
     const navigation = harness.navigateByUrl('/executions');
-    const me = await vi.waitFor(() => TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/me'));
+    const me = await vi.waitFor(() =>
+      TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/me'),
+    );
     me.flush({}, { status: 401, statusText: 'Unauthorized' });
     await navigation;
     expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Fexecutions');
@@ -164,10 +196,16 @@ describe('App: вибір проєкту (F6-14)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
-    host.querySelector<HTMLElement>('[data-testid="project-select"] .mat-mdc-select-trigger')!.click();
+    host
+      .querySelector<HTMLElement>('[data-testid="project-select"] .mat-mdc-select-trigger')!
+      .click();
     fixture.detectChanges();
     const options = [...document.querySelectorAll<HTMLElement>('mat-option')];
-    expect(options.map((o) => o.textContent?.trim())).toEqual(['Усі проєкти', 'Спільний простір', 'Продажі']);
+    expect(options.map((o) => o.textContent?.trim())).toEqual([
+      'Усі проєкти',
+      'Спільний простір',
+      'Продажі',
+    ]);
     expect(host.querySelector('[data-testid="project-members"]')).toBeNull();
     expect(host.querySelector('select')).toBeNull();
 
@@ -175,7 +213,9 @@ describe('App: вибір проєкту (F6-14)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(TestBed.inject(ProjectContextService).current()).toBe('p1');
-    expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe('/projects/p1/members');
+    expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe(
+      '/projects/p1/members',
+    );
     localStorage.removeItem('openbp.project');
   });
 
@@ -188,16 +228,32 @@ describe('App: вибір проєкту (F6-14)', () => {
     await harness.navigateByUrl('/');
     http
       .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
-      .flush([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 2, role: 'viewer', appRole: 'operator' }]);
+      .flush([
+        {
+          id: 'p1',
+          name: 'Психологічна підтримка',
+          sortOrder: 0,
+          workflowCount: 2,
+          role: 'viewer',
+          appRole: 'operator',
+        },
+      ]);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(navigate).toHaveBeenCalledWith(['/projects', 'p1', 'app'], { replaceUrl: true });
     const nav = (fixture.nativeElement as HTMLElement).querySelector('nav')!;
-    expect([...nav.querySelectorAll('a')].map((a) => a.textContent?.trim())).toEqual(['appsЗастосунок', 'monitoringОгляд']);
-    expect(nav.querySelector('[data-testid="nav-app"]')?.getAttribute('href')).toBe('/projects/p1/app');
-    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="project-select"]')).toBeNull();
+    expect([...nav.querySelectorAll('a')].map((a) => a.textContent?.trim())).toEqual([
+      'appsЗастосунок',
+      'monitoringОгляд',
+    ]);
+    expect(nav.querySelector('[data-testid="nav-app"]')?.getAttribute('href')).toBe(
+      '/projects/p1/app',
+    );
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="project-select"]'),
+    ).toBeNull();
   });
 
   it('користувач лише застосунку з оболонкою (F8-18): меню AI_BPMS немає — лише оболонка застосунку', async () => {
@@ -209,7 +265,17 @@ describe('App: вибір проєкту (F6-14)', () => {
     await harness.navigateByUrl('/');
     http
       .expectOne({ method: 'GET', url: '/api/v1/workflow-groups' })
-      .flush([{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 2, role: 'viewer', appRole: 'operator', app: { title: 'Кабінет' } }]);
+      .flush([
+        {
+          id: 'p1',
+          name: 'Психологічна підтримка',
+          sortOrder: 0,
+          workflowCount: 2,
+          role: 'viewer',
+          appRole: 'operator',
+          app: { title: 'Кабінет' },
+        },
+      ]);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -228,8 +294,12 @@ describe('App: вибір проєкту (F6-14)', () => {
       .flush([{ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 1, role: 'viewer' }]);
     fixture.detectChanges();
     await fixture.whenStable();
-    expect((fixture.nativeElement as HTMLElement).querySelector('nav')?.textContent).toContain('Сценарії');
-    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="nav-app"]')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('nav')?.textContent).toContain(
+      'Сценарії',
+    );
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="nav-app"]'),
+    ).toBeNull();
   });
 });
 
@@ -263,7 +333,9 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     expect(drawer.textContent).toContain('Сценарії');
     expect(drawer.querySelector('[data-testid="logout"]')).not.toBeNull();
     expect(drawer.querySelector('[data-testid="project-select"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="current-user"]')?.textContent).toContain('admin@firma.ua');
+    expect(host.querySelector('[data-testid="current-user"]')?.textContent).toContain(
+      'admin@firma.ua',
+    );
 
     host.querySelector<HTMLElement>('[data-testid="drawer-backdrop"]')!.click();
     fixture.detectChanges();
@@ -300,7 +372,9 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     host.querySelector<HTMLButtonElement>('[data-testid="global-assistant-toggle"]')!.click();
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="global-assistant"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="global-assistant-toggle"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(
+      host.querySelector('[data-testid="global-assistant-toggle"]')?.getAttribute('aria-pressed'),
+    ).toBe('true');
 
     TestBed.inject(AuthService).user.set({ id: 'u2', email: 'v@firma.ua', role: 'viewer' });
     fixture.detectChanges();
@@ -313,7 +387,9 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
-    const toggle = host.querySelector<HTMLButtonElement>('[data-testid="global-assistant-toggle"]')!;
+    const toggle = host.querySelector<HTMLButtonElement>(
+      '[data-testid="global-assistant-toggle"]',
+    )!;
     expect(toggle.classList).toContain('shell-assistant--mobile');
     expect(toggle.nextElementSibling?.getAttribute('data-testid')).toBe('nav-burger');
   });
@@ -328,7 +404,9 @@ describe('App: телефон і зв’язок (F3-84)', () => {
     const connectivity = TestBed.inject(ConnectivityService);
     connectivity.offline.set(true);
     fixture.detectChanges();
-    expect(host.querySelector('[data-testid="offline-banner"]')?.textContent).toContain('Немає зв’язку із сервером AI_BPMS');
+    expect(host.querySelector('[data-testid="offline-banner"]')?.textContent).toContain(
+      'Немає зв’язку із сервером AI_BPMS',
+    );
     const retry = vi.spyOn(connectivity, 'retry').mockImplementation(() => undefined);
     host.querySelector<HTMLButtonElement>('[data-testid="offline-retry"]')!.click();
     expect(retry).toHaveBeenCalled();

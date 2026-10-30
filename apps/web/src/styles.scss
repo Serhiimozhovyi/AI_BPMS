@@ -2,6 +2,7 @@
 // Кольори й типографіка — з палітри «Colour palette» і «Typography / Desktop»;
 // Angular Material отримує їх через системні токени, Tailwind — через `@theme` у tailwind.css.
 @use 'theme/openbp-theme' as theme;
+@use 'theme/buttons' as buttons;
 
 :root {
   @include theme.tokens();
@@ -10,7 +11,10 @@
 html {
   height: 100%;
   @include theme.material();
+  @include buttons.buttons();
 }
+
+@include buttons.button-styles();
 
 body {
   color-scheme: light;

@@ -46,6 +46,7 @@ import { BuilderDashboardComponent } from './builder/builder-dashboard.component
 import { BuilderListOptionsComponent, ListExtras } from './builder/builder-list-options.component';
 import { BuilderUserFiltersComponent } from './builder/builder-user-filters.component';
 import { PagePreviewComponent } from './builder/page-preview.component';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 
@@ -57,7 +58,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 @Component({
   selector: 'app-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent],
+  imports: [BpButtonDirective, MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent],
   template: `
     <div class="grid gap-6 px-6 pb-8 pt-2 xl:grid-cols-2">
     <section class="min-w-0" data-testid="page-builder">
@@ -335,7 +336,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         <button mat-flat-button type="button" data-testid="b-save" [disabled]="saving()" (click)="save()" i18n="@@builder.save">Зберегти</button>
         <a mat-button [routerLink]="['/projects', projectId, 'app']" i18n="@@builder.cancel">Скасувати</a>
         @if (editing()) {
-          <button mat-button type="button" data-testid="b-delete" (click)="remove()" i18n="@@builder.delete">Видалити сторінку</button>
+          <button bpVariant="danger" mat-button type="button" data-testid="b-delete" (click)="remove()" i18n="@@builder.delete">Видалити сторінку</button>
         }
       </div>
     </section>
