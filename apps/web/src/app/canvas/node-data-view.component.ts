@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, input, linkedSignal, output, signal } from '@angular/core';
 import { ExecutionItem } from '../executions/executions-api.service';
+import { BpTab, BpTabsComponent } from '../shared/tabs/tabs.component';
 import { PathSegment, SchemaField, accessorPath, buildSchema, itemsTable, sampleText } from './data-schema';
 
 /** Порт вузла з items для показу. */
@@ -28,20 +29,14 @@ export interface DataFieldPick {
 @Component({
   selector: 'app-node-data-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, BpTabsComponent],
   template: `
     <section class="data" [attr.data-side]="side()">
       <header class="data__header">
         <h3 class="data__title">{{ title() }}</h3>
         <ng-content select="[dataHeader]" />
         @if (ports().length > 0) {
-          <span class="data__views" role="group" i18n-aria-label="@@nodedata.views" aria-label="Вид даних">
-            @for (v of views; track v) {
-              <button type="button" class="data__view" [class.data__view--on]="view() === v" [attr.aria-pressed]="view() === v" [attr.data-testid]="side() + '-view-' + v" (click)="setView(v)">
-                {{ viewLabel(v) }}
-              </button>
-            }
-          </span>
+          <bp-tabs class="bp-tabs--sm" variant="pills" [tabs]="viewTabs()" [value]="view()" (valueChange)="setView($any($event))" label="Вид даних" i18n-label="@@nodedata.views" />
         }
       </header>
       <ng-content select="[dataNote]" />
@@ -49,13 +44,7 @@ export interface DataFieldPick {
         <ng-content select="[dataEmpty]" />
       } @else {
         @if (ports().length > 1) {
-          <div class="data__ports" role="tablist">
-            @for (p of ports(); track $index) {
-              <button type="button" role="tab" class="data__port" [class.data__port--on]="port() === $index" [attr.aria-selected]="port() === $index" [attr.data-testid]="side() + '-port'" (click)="port.set($index)">
-                {{ p.label }} · {{ itemsLabel(p.items.length) }}
-              </button>
-            }
-          </div>
+          <bp-tabs class="data__ports bp-tabs--sm" variant="pills" [tabs]="portTabs()" [value]="'' + port()" (valueChange)="port.set(+$any($event))" label="Виходи" i18n-label="@@nodedata.ports" />
         } @else {
           <div class="data__port-label" [attr.data-testid]="side() + '-port'">{{ current().label }} · {{ itemsLabel(current().items.length) }}</div>
         }
@@ -170,39 +159,8 @@ export interface DataFieldPick {
       font-size: 14px;
     }
 
-    .data__views {
-      display: inline-flex;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius-sm);
-      overflow: hidden;
-    }
-
-    .data__view,
-    .data__port {
-      padding: 2px 8px;
-      border: 0;
-      background: var(--ac-white);
-      color: var(--ac-vivid);
-      font: 400 12px/18px Ubuntu, sans-serif;
-      cursor: pointer;
-    }
-
-    .data__view--on,
-    .data__port--on {
-      background: var(--ac-button);
-      color: var(--ac-kit);
-    }
-
     .data__ports {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
       margin-bottom: 6px;
-    }
-
-    .data__port {
-      border: 1px solid var(--ac-line);
-      border-radius: 12px;
     }
 
     .data__port-label {
@@ -356,6 +314,10 @@ export class NodeDataViewComponent {
   protected readonly json = computed(() => JSON.stringify(this.current().items, null, 2));
   /** Test id тіла — сумісний з попереднім блоком «Останній запуск» (`node-run-input`/`node-run-output`). */
   protected readonly testId = computed(() => `node-run-${this.side()}`);
+  protected readonly viewTabs = computed<BpTab[]>(() => this.views.map((v) => ({ value: v, label: this.viewLabel(v), testId: `${this.side()}-view-${v}` })));
+  protected readonly portTabs = computed<BpTab[]>(() =>
+    this.ports().map((p, i) => ({ value: String(i), label: `${p.label} · ${this.itemsLabel(p.items.length)}`, testId: `${this.side()}-port` })),
+  );
 
   protected setView(view: DataView): void {
     this.view.set(view);

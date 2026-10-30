@@ -119,12 +119,12 @@ describe('OverviewPage', () => {
 
   it('перемикач періоду перечитує дані', async () => {
     const { fixture, http, host } = await setup();
-    host.querySelector<HTMLButtonElement>('[data-range="7d"]')!.click();
+    host.querySelector<HTMLButtonElement>('[data-tab="7d"]')!.click();
     const req = http.expectOne((r) => r.url === '/api/v1/overview');
     expect(req.request.params.get('range')).toBe('7d');
     req.flush({ ...day, range: '7d', total: 300 });
     await render(fixture);
-    expect(host.querySelector('[data-range="7d"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[data-tab="7d"]')?.getAttribute('aria-selected')).toBe('true');
     expect(host.querySelector('[data-testid="stat-total"]')?.textContent).toContain('300');
   });
 

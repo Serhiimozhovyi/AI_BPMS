@@ -2,6 +2,7 @@
 // Кольори й типографіка — з палітри «Colour palette» і «Typography / Desktop»;
 // Angular Material отримує їх через системні токени, Tailwind — через `@theme` у tailwind.css.
 @use 'theme/openbp-theme' as theme;
+@use 'theme/tabs';
 @use 'theme/fields';
 
 :root {
@@ -178,43 +179,6 @@ a {
 .opacity-60,
 .opacity-70 {
   opacity: 0.8;
-}
-
-// Вкладки AC-Kit (сторінка проєкту, сторінки застосунку): P2 Cool Grey 4, активна — Kit із підкресленням 2px по лінії Line.
-.ac-tabs {
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--ac-line);
-  scrollbar-width: none;
-}
-
-.ac-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  margin-bottom: -1px;
-  padding: 0 16px;
-  border-bottom: 2px solid transparent;
-  color: var(--ac-cool-grey-4);
-  font: 500 14px/20px Ubuntu, sans-serif;
-  white-space: nowrap;
-  text-decoration: none;
-
-  &:hover {
-    color: var(--ac-vivid);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--ac-kit);
-    outline-offset: -2px;
-  }
-
-  &.active {
-    border-bottom-color: var(--ac-kit);
-    color: var(--ac-kit);
-  }
 }
 
 // Бічне меню оболонки застосунку: пункти на Cool Grey, активний — Kit на Buttun.

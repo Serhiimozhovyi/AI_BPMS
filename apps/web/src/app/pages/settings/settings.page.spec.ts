@@ -120,7 +120,7 @@ describe('SettingsPage', () => {
     expect(copy).toHaveBeenCalledWith(expect.stringContaining('"mcp-remote"'));
 
     const labels = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
-    expect(labels.map((t) => t.textContent?.trim())).toEqual(['Claude Desktop', 'Claude Code', 'Інше']);
+    expect(labels.map((t) => t.querySelector('.bp-tab__label')?.textContent?.trim())).toEqual(['Claude Desktop', 'Claude Code', 'Інше']);
     labels[1].click();
     await render(fixture);
     expect(host.querySelector('[data-testid="mcp-config-code"]')?.textContent).toContain('claude mcp add --transport http openbp');

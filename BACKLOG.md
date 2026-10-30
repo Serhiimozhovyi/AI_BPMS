@@ -1523,7 +1523,7 @@
 - DoD: Vitest на директиву; Playwright-знімок сторінки-зразка кнопок (`/dev/kit` за прапорцем dev або сторінка в тестах); axe зелений.
 
 ### F9-03 · Вкладки трьох видів
-- model: `sonnet` · status: `ready` · depends: F9-01
+- model: `sonnet` · status: `done` · depends: F9-01
 - Що: Figma «Atoms / Tabs» `3251:37133` і «MENU/Tabs» `2113:7737`, `2114:7277`: (1) сегментні «пігулки» для фільтрів (Усі/Активні/Чернетки), (2) підкреслені вкладки розділів сторінки, (3) вкладки з іконкою для карток (як «Основна інформація · Контакти · Адреси»). Спільний компонент `bp-tabs` (`apps/web/src/app/shared/tabs/`): режим посилань (`routerLink`) і режим значення, ARIA `tablist`, стрілки ←/→, Home/End, прокрутка зі стрілками при переповненні. Замінити `ac-tabs` (project, project-app), `mat-tab-group` (workflow-editor, node-data-view), вкладки налаштувань і підключень.
 - DoD: Vitest компонента (клавіатура, aria-selected, переповнення); наявні e2e (`connections-tabs`, `settings-sections`, `workflow-groups`) зелені; axe зелений.
 

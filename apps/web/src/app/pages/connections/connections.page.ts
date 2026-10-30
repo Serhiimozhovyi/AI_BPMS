@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { ConnectorsPage } from '../connectors/connectors.page';
 import { CredentialsPage } from '../credentials/credentials.page';
+import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 
 export type ConnectionsTab = 'connected' | 'catalog' | 'credentials';
 
@@ -18,17 +18,11 @@ const TABS: readonly ConnectionsTab[] = ['connected', 'catalog', 'credentials'];
 @Component({
   selector: 'app-connections-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonToggleModule, ConnectorsPage, CredentialsPage],
+  imports: [BpTabsComponent, ConnectorsPage, CredentialsPage],
   template: `
     <section class="p-6 pb-0">
-      <div class="flex items-center gap-4">
-        <h1 class="mat-font-headline-sm" i18n="@@connections.title">Підключення</h1>
-        <mat-button-toggle-group [value]="tab()" (change)="show($event.value)" data-testid="connections-tabs" aria-label="Розділ підключень" i18n-aria-label="@@connections.tabs">
-          <mat-button-toggle value="connected" data-testid="tab-connected" i18n="@@connections.tab.connected">Підключено</mat-button-toggle>
-          <mat-button-toggle value="catalog" data-testid="tab-catalog" i18n="@@connections.tab.catalog">Каталог</mat-button-toggle>
-          <mat-button-toggle value="credentials" data-testid="tab-credentials" i18n="@@connections.tab.credentials">Облікові дані</mat-button-toggle>
-        </mat-button-toggle-group>
-      </div>
+      <h1 class="mat-font-headline-sm" i18n="@@connections.title">Підключення</h1>
+      <bp-tabs class="mt-3" [tabs]="tabs" [value]="tab()" (valueChange)="show($any($event))" label="Розділ підключень" i18n-label="@@connections.tabs" testId="connections-tabs" />
     </section>
     @if (tab() === 'credentials') {
       <app-credentials-page [embedded]="true" />
@@ -45,6 +39,12 @@ const TABS: readonly ConnectionsTab[] = ['connected', 'catalog', 'credentials'];
 export class ConnectionsPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+
+  readonly tabs: BpTab[] = [
+    { value: 'connected', testId: 'tab-connected', label: $localize`:@@connections.tab.connected:Підключено` },
+    { value: 'catalog', testId: 'tab-catalog', label: $localize`:@@connections.tab.catalog:Каталог` },
+    { value: 'credentials', testId: 'tab-credentials', label: $localize`:@@connections.tab.credentials:Облікові дані` },
+  ];
 
   private readonly query = toSignal(this.route.queryParamMap.pipe(map((q) => ({ tab: q.get('tab'), catalog: q.get('catalog') }))), {
     initialValue: { tab: null as string | null, catalog: null as string | null },
