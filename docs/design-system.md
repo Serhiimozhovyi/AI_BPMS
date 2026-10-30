@@ -49,6 +49,56 @@ Figma «Atoms / Buttons» `1710:6222`. Стилі — `apps/web/src/theme/_butto
 
 Малий розмір (32 px замість 40 px) — `bpSize="sm"`. Директива `BpButtonDirective` (`shared/button.directive.ts`) додає лише класи `bp-btn-*`; її треба додати в `imports` компонента. Стани: hover, pressed, disabled, focus-visible (кільце `--bp-tonal`). Приклад усіх варіантів — `/dev/kit` (лише dev-збірка).
 
+
+## Типографіка
+
+Джерело — Figma «Typography - Desktop» `1710:6146`, шрифт Ubuntu. Токени у `apps/web/src/theme/_typography.scss` (shorthand `font`), класи `.bp-h1…` і `.bp-p4`, ті самі розміри для `h1…h6` і Tailwind `text-*`.
+
+| Токен / клас | Вага · розмір/міжряддя | Де |
+|---|---|---|
+| `--bp-font-h1` | 700 · 28/34 | заголовок екрана-входу, великі числа |
+| `--bp-font-h2` | 700 · 26/34 | `text-3xl` |
+| `--bp-font-h3` | 500 · 24/29 | заголовок сторінки (`.mat-font-headline-sm`), `text-2xl` |
+| `--bp-font-h4` | 500 · 20/28 | заголовок діалогу, `text-xl` |
+| `--bp-font-h6` | 500 · 16/20 | заголовок блоку |
+| `--bp-font-h7` | 500 · 14/18 | вкладки, пункти меню, підписи кнопок |
+| `--bp-font-p1` | 400 · 18/22 | `text-lg` |
+| `--bp-font-p2` | 400 · 16/20 | `text-base` |
+| `--bp-font-p3` | 400 · 14/20 | основний текст, `text-sm` |
+| `--bp-font-p4` | 400 · 12/16 | підписи, заголовки колонок, `text-xs` |
+
+## Іконки
+
+Один набір — Material Symbols Outlined, 20 px (`--bp-icon-size`), товщина 400, без заливки; 24 px (`.bp-icon--lg`) — лише в меню й круглих кнопках дій. SVG з Figma не тягнемо (асети заблоковані, файл лише для читання), тому іконки Кіт зіставлено з Material Symbols:
+
+| Кіт CRM (Figma «Icons» `1710:5456`) | Material Symbols |
+|---|---|
+| Trash | `delete` |
+| Filter | `filter_list` |
+| save / upload / Import | `save` / `upload` / `download` |
+| copy | `content_copy` |
+| edit | `edit` |
+| Calendar | `calendar_month` |
+| Share | `share` |
+| Search | `search` |
+| Settings / Settings 2 / tool | `settings` / `tune` / `build` |
+| `...` / vertical `...` | `more_horiz` / `more_vert` |
+| reload / Refresh | `refresh` |
+| Drag | `drag_indicator` |
+| Menu: BP / Sell / Service / Directory | `account_tree` / `shopping_bag` / `support_agent` / `menu_book` |
+| Bell on / bell off | `notifications` / `notifications_off` |
+| Arrows up/down/left/right | `keyboard_arrow_up/down/left/right` |
+| Double arrow | `keyboard_double_arrow_right/left` |
+| Navigation: Arrow left / × / Check / + | `arrow_back` / `close` / `check` / `add` |
+| Input: success / alert / Show / Hide / Loading / clear | `check_circle` / `error` / `visibility` / `visibility_off` / `progress_activity` / `cancel` |
+| Priority: Low / Medium / High / Critical | `keyboard_arrow_down` / `drag_handle` / `keyboard_arrow_up` / `keyboard_double_arrow_up` |
+| Task / Unchecked / ±circle | `task_alt` / `check_box_outline_blank` / `remove_circle` / `add_circle` |
+| Star_save | `star` |
+| Info / mail / phone-call / link / folder / File / Description | `info` / `mail` / `call` / `link` / `folder` / `description` / `article` |
+| Chat / send / mic / smile | `chat` / `send` / `mic` / `sentiment_satisfied` |
+| Magic / rocket / zap / Integration | `auto_awesome` / `rocket_launch` / `bolt` / `extension` |
+| home / Company / Contacts / group | `home` / `apartment` / `contacts` / `group` |
+| Line menu / maximize / minimize | `menu` / `open_in_full` / `close_fullscreen` |
 ## Вкладки (`bp-tabs`, F9-03)
 
 Figma «Atoms / Tabs» `3251:37133`. Компонент `apps/web/src/app/shared/tabs/tabs.component.ts`, стилі — `apps/web/src/theme/_tabs.scss`.

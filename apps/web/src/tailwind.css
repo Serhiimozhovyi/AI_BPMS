@@ -10,6 +10,22 @@
 @theme {
   --font-sans: "Ubuntu", ui-sans-serif, system-ui, sans-serif;
 
+  /* Шкала типографіки AC-Kit (F9-09): утиліти text-* збігаються з P4/P3/P2/P1/H4/H3/H2. */
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 20px;
+  --text-lg: 18px;
+  --text-lg--line-height: 22px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 29px;
+  --text-3xl: 26px;
+  --text-3xl--line-height: 34px;
+
   /* Палітра «Глибока бірюза» (F9-01): bg-bp-primary, text-bp-text-muted тощо. */
   --color-bp-primary: #0d736d;
   --color-bp-primary-hover: #095a56;

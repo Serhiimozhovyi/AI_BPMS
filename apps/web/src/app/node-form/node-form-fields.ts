@@ -1165,7 +1165,7 @@ export class NodeConditionFieldComponent extends FieldType<FieldTypeConfig> impl
       border-radius: 16px;
       background: var(--ac-white);
       color: var(--ac-vivid);
-      font: 400 13px/18px Ubuntu, sans-serif;
+      font: var(--bp-font-p3);
       cursor: pointer;
     }
 

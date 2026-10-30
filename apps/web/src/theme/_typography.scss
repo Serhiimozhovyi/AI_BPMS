@@ -1,0 +1,75 @@
+// Типографіка й іконки AI_BPMS (F9-09). Шкала — Figma AC-Kit «Typography - Desktop» (1710:6146), лише читання.
+// Шрифт Ubuntu; токени `--bp-font-*` задають shorthand `font`, класи `.bp-h1…` і `.bp-p4` застосовують їх.
+
+/// Токени шкали H1…P4 (вага/розмір/міжряддя Ubuntu).
+@mixin tokens() {
+  --bp-font-family: Ubuntu, sans-serif;
+  --bp-font-h1: 700 28px/34px var(--bp-font-family);
+  --bp-font-h2: 700 26px/34px var(--bp-font-family);
+  --bp-font-h3: 500 24px/29px var(--bp-font-family);
+  --bp-font-h4: 500 20px/28px var(--bp-font-family);
+  --bp-font-h6: 500 16px/20px var(--bp-font-family);
+  --bp-font-h7: 500 14px/18px var(--bp-font-family);
+  --bp-font-p1: 400 18px/22px var(--bp-font-family);
+  --bp-font-p2: 400 16px/20px var(--bp-font-family);
+  --bp-font-p3: 400 14px/20px var(--bp-font-family);
+  --bp-font-p4: 400 12px/16px var(--bp-font-family);
+  // Іконки: один розмір (20 px), outlined; 24 px — лише в меню й круглих кнопках дій.
+  --bp-icon-size: 20px;
+  --bp-icon-size-lg: 24px;
+}
+
+/// Глобальні класи шкали та іконок.
+@mixin styles() {
+  .bp-h1 { font: var(--bp-font-h1); }
+  .bp-h2 { font: var(--bp-font-h2); }
+  .bp-h3 { font: var(--bp-font-h3); }
+  .bp-h4 { font: var(--bp-font-h4); }
+  .bp-h6 { font: var(--bp-font-h6); }
+  .bp-h7 { font: var(--bp-font-h7); }
+  .bp-p1 { font: var(--bp-font-p1); }
+  .bp-p2 { font: var(--bp-font-p2); }
+  .bp-p3 { font: var(--bp-font-p3); }
+  .bp-p4 { font: var(--bp-font-p4); }
+
+  h1 { font: var(--bp-font-h1); }
+  h2 { font: var(--bp-font-h2); }
+  h3 { font: var(--bp-font-h3); }
+  h4 { font: var(--bp-font-h4); }
+  h5,
+  h6 { font: var(--bp-font-h6); }
+
+  // Заголовок сторінки — H3.
+  .mat-font-headline-sm {
+    font: var(--bp-font-h3);
+    color: var(--bp-text);
+  }
+
+  // Іконки Material Symbols Outlined: 20 px, товщина 400, без заливки; змінюється модифікатором `--lg`.
+  .material-symbols-outlined,
+  .mat-icon.material-symbols-outlined {
+    width: var(--bp-icon-size);
+    height: var(--bp-icon-size);
+    font-size: var(--bp-icon-size);
+    font-weight: 400;
+    font-variation-settings:
+      'FILL' 0,
+      'wght' 400,
+      'GRAD' 0,
+      'opsz' 20;
+    line-height: 1;
+    vertical-align: middle;
+    user-select: none;
+  }
+
+  .material-symbols-outlined.bp-icon--lg {
+    width: var(--bp-icon-size-lg);
+    height: var(--bp-icon-size-lg);
+    font-size: var(--bp-icon-size-lg);
+    font-variation-settings:
+      'FILL' 0,
+      'wght' 400,
+      'GRAD' 0,
+      'opsz' 24;
+  }
+}

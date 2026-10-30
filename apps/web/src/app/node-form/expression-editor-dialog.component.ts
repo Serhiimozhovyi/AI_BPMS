@@ -203,7 +203,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
       align-items: center;
       gap: 8px;
       margin: 0 0 4px;
-      font: 700 11px/16px Ubuntu, sans-serif;
+      font: 700 12px/16px var(--bp-font-family);
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: var(--ac-vivid);

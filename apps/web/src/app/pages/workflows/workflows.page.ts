@@ -416,7 +416,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
       border-radius: var(--ac-radius-sm);
       background: none;
       color: var(--ac-vivid);
-      font: 700 16px/22px Ubuntu, sans-serif;
+      font: var(--bp-font-h6);
       text-align: left;
       cursor: pointer;
     }

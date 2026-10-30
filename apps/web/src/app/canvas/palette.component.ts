@@ -99,7 +99,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
       border-radius: var(--ac-radius-sm);
       background: none;
       color: var(--ac-vivid);
-      font: 700 11px/16px Ubuntu, sans-serif;
+      font: 700 12px/16px var(--bp-font-family);
       text-align: left;
       text-transform: uppercase;
       cursor: pointer;
@@ -185,7 +185,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
       align-items: center;
       gap: 6px;
       margin: 4px 0 0;
-      font: 500 16px/24px Ubuntu, sans-serif;
+      font: var(--bp-font-h6);
     }
 
     .palette__page-note {

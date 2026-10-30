@@ -47,7 +47,7 @@ import { keyLabel, shortcutGroups } from './shortcuts';
     .group__title {
       margin: 0 0 8px;
       color: var(--ac-vivid);
-      font: 700 11px/16px Ubuntu, sans-serif;
+      font: 700 12px/16px var(--bp-font-family);
       text-transform: uppercase;
     }
     .group__list {
@@ -79,7 +79,7 @@ import { keyLabel, shortcutGroups } from './shortcuts';
       border: 1px solid var(--ac-line);
       border-radius: 4px;
       background: var(--ac-cool-grey-2);
-      font: 500 12px/18px Ubuntu, sans-serif;
+      font: var(--bp-font-p4);
       white-space: nowrap;
     }
     .or {

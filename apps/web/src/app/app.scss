@@ -90,7 +90,7 @@
   padding: 3px 4px 0;
   border-bottom: 3px solid transparent;
   color: rgb(255 255 255 / 0.72);
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
   white-space: nowrap;
   text-decoration: none;
 
@@ -195,7 +195,7 @@
   --mat-select-enabled-trigger-text-color: var(--bp-white);
   --mat-select-enabled-arrow-color: var(--bp-white);
   --mat-select-focused-arrow-color: var(--bp-white);
-  font: 400 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-p3);
 
   &:focus-visible {
     outline: 2px solid var(--bp-accent);
@@ -211,7 +211,7 @@
 }
 
 .shell-user__email {
-  font: 400 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-p3);
   opacity: 0.85;
 }
 
@@ -318,7 +318,7 @@
 
 .shell-menu__email {
   overflow: hidden;
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -332,7 +332,7 @@
   border: 0;
   background: transparent;
   color: var(--bp-text);
-  font: 400 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-p3);
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -390,7 +390,7 @@
   border-bottom: 2px solid var(--ac-red);
   background: var(--ac-red-15, #ffe7e7);
   color: var(--ac-vivid);
-  font: 500 14px/20px Ubuntu, sans-serif;
+  font: var(--bp-font-h7);
 }
 
 .shell-offline__text {

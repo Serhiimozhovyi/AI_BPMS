@@ -152,7 +152,7 @@ import {
     </div>
   `,
   styles: `
-    .kb { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; font: 400 13px/18px Ubuntu, sans-serif; }
+    .kb { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; font: var(--bp-font-p3); }
     .kb__label { font-size: 13px; }
     .kb__modes { display: flex; flex-wrap: wrap; gap: 4px; }
     .kb__mode { padding: 4px 10px; border: 1px solid var(--ac-line); border-radius: 14px; background: var(--ac-white); font: inherit; cursor: pointer; }
@@ -363,7 +363,7 @@ function parseRaw(text: string): unknown {
     </div>
   `,
   styles: `
-    .cm { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; font: 400 13px/18px Ubuntu, sans-serif; }
+    .cm { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; font: var(--bp-font-p3); }
     .cm__table { border-collapse: collapse; }
     .cm__table th, .cm__table td { padding: 4px; border: 1px solid var(--ac-line); text-align: left; }
     .cm__table th { background: var(--ac-cool-grey); font-weight: 500; }
@@ -457,7 +457,7 @@ export class NodeCommandsFieldComponent extends FieldType<FieldTypeConfig> imple
     </fieldset>
   `,
   styles: `
-    .mc { margin: 0 0 12px; padding: 0; border: none; font: 400 13px/18px Ubuntu, sans-serif; }
+    .mc { margin: 0 0 12px; padding: 0; border: none; font: var(--bp-font-p3); }
     .mc__label { padding: 0; font-size: 13px; }
     .mc__options { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
     .mc__option { display: flex; gap: 4px; align-items: center; }

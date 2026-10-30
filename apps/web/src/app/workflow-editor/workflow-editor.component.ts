@@ -483,7 +483,7 @@ export interface EditorErrorEvent {
     }
 
     .editor__palette-title {
-      font: 700 11px/16px Ubuntu, sans-serif;
+      font: 700 12px/16px var(--bp-font-family);
       color: var(--ac-vivid);
       text-transform: uppercase;
     }
