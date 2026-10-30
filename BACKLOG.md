@@ -1528,17 +1528,17 @@
 - DoD: Vitest компонента (клавіатура, aria-selected, переповнення); наявні e2e (`connections-tabs`, `settings-sections`, `workflow-groups`) зелені; axe зелений.
 
 ### F9-04 · Верхнє меню як у Кіт CRM
-- model: `sonnet` · status: `review` · depends: F9-01
+- model: `sonnet` · status: `done (#272)` · depends: F9-01
 - Що: Figma «Molecules / Menu» `2119:7736`, прокрутка `7860:123371`/`7860:123600`, круглі іконки праворуч. Одна смуга `--bp-shell` 52 px замість двох (верхня + навігація): логотип і назва (одна константа, назву дасть тред перейменування), пункти з іконками, активний — підкреслення `--bp-accent`, стрілки прокрутки при переповненні; праворуч круглі кнопки (асистент, завдання, сповіщення) і аватар з меню (профіль, вихід). Телефон — наявна шухляда F3-84. Оболонка застосунку проєкту (F8-18) — та сама смуга з назвою й меню застосунку.
 - DoD: e2e `mobile-shell`, `app-shell`, `login` зелені; Vitest оболонки; знімки 1440 / 1280 / 390 px у PR; axe зелений.
 
 ### F9-05 · Поля, випадні списки, перемикачі
-- model: `sonnet` · status: `ready` · depends: F9-01
+- model: `sonnet` · status: `done` · depends: F9-01
 - Що: Figma «FIELDS» `2605:13160`, «DROP WINDOW» `2322:8183`, «Atoms / Selectors» `1710:6019`, «Calendars» `3811:88118`: висота 40, радіус 8, стани default/hover/focus (рамка primary + кільце `--bp-tonal`)/error/disabled/loading/success; пошук основний і вторинний; панель випадного списку (пошук, мультивибір з галочками, стан, вкладений рівень); checkbox, radio, switch; дата й діапазон дат. Лише глобальні стилі `theme/_fields.scss` поверх Material (усі поля вже `appearance="outline"`), без правки шаблонів, крім окремих випадків.
 - DoD: Vitest не ламається; Playwright-знімок форм вузла й форми сторінки; axe зелений; initial bundle у бюджеті.
 
 ### F9-06 · Чипи, статуси й етапи
-- model: `sonnet` · status: `in review` · depends: F9-01
+- model: `sonnet` · status: `done (#270)` · depends: F9-01
 - Що: Figma «Atoms / Chips» `1710:6623` (Task, Table chips, Priority, tag з ×) і стрілки етапів `2787:14405`/`1777:6516`. Компоненти `bp-chip` (стан за семантичним кольором, пріоритет, мітка з закриттям) і `bp-stage-steps` (винести з бізнес-вигляду PR #140 і перевикористати). Застосувати: стан виконань, активність сценарію, завдання, мітки сторінок (`format: badge` F8-16), етапи F7.
 - DoD: Vitest компонентів; e2e `executions-journal`, `business-view`, `app-list` зелені; axe зелений.
 

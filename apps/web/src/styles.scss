@@ -4,6 +4,8 @@
 @use 'theme/openbp-theme' as theme;
 @use 'theme/typography';
 
+@use 'theme/fields';
+
 :root {
   @include theme.tokens();
   @include typography.tokens();
@@ -12,7 +14,10 @@
 html {
   height: 100%;
   @include theme.material();
+  @include fields.overrides();
 }
+
+@include fields.global();
 
 body {
   color-scheme: light;
@@ -80,22 +85,6 @@ main table.w-full {
 
   tbody tr:hover td {
     background: var(--ac-cool-grey-2);
-  }
-}
-
-// Нативні поля фільтрів (select, date) — у стилі полів AC-Kit.
-main select.border,
-main input.border {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--ac-line);
-  border-radius: var(--ac-radius-sm);
-  background: var(--ac-white);
-  color: var(--ac-vivid);
-
-  &:focus {
-    outline: none;
-    border-color: var(--ac-kit);
   }
 }
 
