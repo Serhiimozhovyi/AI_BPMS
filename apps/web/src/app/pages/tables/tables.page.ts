@@ -23,6 +23,7 @@ import {
   cellText,
   inputValue,
 } from '../../tables/data-tables-api.service';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 /** Колонка у формі структури: перелік значень enum — текстом через кому, обов'язковість — позначкою. */
 export interface DesignColumn extends DataColumn {
@@ -55,7 +56,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
 @Component({
   selector: 'app-tables-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, EmptyStateComponent],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
@@ -227,7 +228,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
               <span class="opacity-60" data-testid="table-project-name">· {{ projectName(t) }}</span>
               @if (canEdit()) {
                 <button mat-button type="button" data-testid="table-edit" (click)="startEdit(t)" i18n="@@tables.view.edit">Структура</button>
-                <button mat-button type="button" data-testid="table-delete" (click)="confirmingDelete.set(true)" i18n="@@tables.view.delete">
+                <button bpVariant="danger" mat-button type="button" data-testid="table-delete" (click)="confirmingDelete.set(true)" i18n="@@tables.view.delete">
                   Видалити таблицю
                 </button>
               }
@@ -235,7 +236,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
             @if (confirmingDelete()) {
               <div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg p-3 state-bad" data-testid="delete-confirm">
                 <span i18n="@@tables.view.deleteConfirm">Видалити таблицю «{{ t.name }}» з усіма рядками? Сценарії з нею почнуть падати.</span>
-                <button mat-flat-button type="button" data-testid="delete-yes" (click)="removeTable(t)" i18n="@@tables.view.deleteYes">Видалити</button>
+                <button bpVariant="danger" mat-flat-button type="button" data-testid="delete-yes" (click)="removeTable(t)" i18n="@@tables.view.deleteYes">Видалити</button>
                 <button mat-button type="button" (click)="confirmingDelete.set(false)" i18n="@@tables.view.deleteNo">Ні</button>
               </div>
             }
@@ -299,7 +300,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                         @if (canEdit()) {
                           <td class="whitespace-nowrap p-2">
                             <button mat-button type="button" data-testid="row-edit" (click)="editRow(t, r)" i18n="@@tables.row.edit">Змінити</button>
-                            <button mat-button type="button" data-testid="row-delete" (click)="removeRow(t, r)" i18n="@@tables.row.delete">Видалити</button>
+                            <button bpVariant="danger" mat-button type="button" data-testid="row-delete" (click)="removeRow(t, r)" i18n="@@tables.row.delete">Видалити</button>
                           </td>
                         }
                       </tr>

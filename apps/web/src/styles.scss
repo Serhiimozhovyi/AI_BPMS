@@ -1,9 +1,9 @@
 // Тема AI_BPMS за дизайн-системою AC-Kit (Figma «AC-Kit», лише читання).
 // Кольори й типографіка — з палітри «Colour palette» і «Typography / Desktop»;
 // Angular Material отримує їх через системні токени, Tailwind — через `@theme` у tailwind.css.
-@use 'theme/openbp-theme' as theme;
 @use 'theme/typography';
-
+@use 'theme/openbp-theme' as theme;
+@use 'theme/buttons' as buttons;
 @use 'theme/tabs';
 @use 'theme/fields';
 
@@ -15,9 +15,11 @@
 html {
   height: 100%;
   @include theme.material();
+  @include buttons.buttons();
   @include fields.overrides();
 }
 
+@include buttons.button-styles();
 @include fields.global();
 
 body {

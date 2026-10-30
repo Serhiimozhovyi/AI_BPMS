@@ -140,7 +140,7 @@ public sealed class S3BinaryStoreTests(MinioFixture minio)
         using var client = Client();
         foreach (var key in new[] { "secret", "0123456789abcdef0123456789abcdef", "secret/0123456789abcdef0123456789abcdef" })
         {
-            await client.PutObjectAsync(new Amazon.S3.Model.PutObjectRequest { BucketName = options.Bucket, Key = key, ContentBody = "secret" });
+            await SeedAsync(client, options.Bucket!, key, "secret");
         }
 
         await Assert.ThrowsAsync<BinaryNotFoundException>(() =>
@@ -256,6 +256,26 @@ public sealed class S3BinaryStoreTests(MinioFixture minio)
                 }
 
                 return await base.SendAsync(request, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Кладе «чужий» об'єкт напряму через SDK. MinIO під навантаженням (CI) іноді відповідає на запис 499 «Client disconnected
+    /// before response was ready» і нічого не пише, а SDK такі відповіді не повторює — тому повторюємо самі (запис ідемпотентний).
+    /// </summary>
+    private static async Task SeedAsync(AmazonS3Client client, string bucket, string key, string body)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await client.PutObjectAsync(new Amazon.S3.Model.PutObjectRequest { BucketName = bucket, Key = key, ContentBody = body });
+                return;
+            }
+            catch (AmazonS3Exception) when (attempt < 4)
+            {
+                await Task.Delay(200 * attempt);
             }
         }
     }

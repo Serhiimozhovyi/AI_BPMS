@@ -22,6 +22,7 @@ import { TriggerInfo, triggerInfo } from '../../workflows/trigger-types';
 import { NO_GROUP, WorkflowSection, groupSections, readCollapsed, recount, reorder, writeCollapsed } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
 import { CardTableDirective } from '../../shared/card-table.directive';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 /**
  * `/workflows`: список сценаріїв, створення, перейменування, активація, видалення, перехід у канвас (F2-15); групи
@@ -33,7 +34,7 @@ import { CardTableDirective } from '../../shared/card-table.directive';
 @Component({
   selector: 'app-workflows-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
+  imports: [BpButtonDirective, 
     CardTableDirective,
     DatePipe,
     ReactiveFormsModule,
@@ -150,7 +151,7 @@ import { CardTableDirective } from '../../shared/card-table.directive';
                     }
                     @if (s.group && deletingGroupId() === s.id) {
                       <span class="group__confirm" data-testid="group-delete-text" i18n="@@workflows.groups.delete.confirm">Видалити групу? Сценаріїв у ній: {{ s.group.workflowCount }}, вони лишаться без групи.</span>
-                      <button mat-button type="button" color="warn" data-testid="group-delete-confirm" [disabled]="busy()" (click)="deleteGroup(s.id)" i18n="@@workflows.delete.yes">Так, видалити</button>
+                      <button bpVariant="danger" mat-button type="button" data-testid="group-delete-confirm" [disabled]="busy()" (click)="deleteGroup(s.id)" i18n="@@workflows.delete.yes">Так, видалити</button>
                       <button mat-button type="button" (click)="deletingGroupId.set(null)" i18n="@@workflows.delete.no">Ні</button>
                     } @else if (renamingGroupId() !== s.id) {
                       <button mat-button type="button" data-testid="section-create" (click)="startCreate(s.group?.id ?? null)" i18n="@@workflows.groups.createHere">+ Сценарій</button>
@@ -255,7 +256,7 @@ import { CardTableDirective } from '../../shared/card-table.directive';
                             <div class="row__confirm">
                               <span i18n="@@workflows.delete.confirm">Видалити сценарій разом з історією виконань?</span>
                               <span class="whitespace-nowrap">
-                                <button mat-button type="button" color="warn" data-testid="delete-confirm" [disabled]="busy()" (click)="confirmDelete(w.id)" i18n="@@workflows.delete.yes">
+                                <button bpVariant="danger" mat-button type="button" data-testid="delete-confirm" [disabled]="busy()" (click)="confirmDelete(w.id)" i18n="@@workflows.delete.yes">
                                   Так, видалити
                                 </button>
                                 <button mat-button type="button" (click)="deletingId.set(null)" i18n="@@workflows.delete.no">Ні</button>

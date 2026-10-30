@@ -1,0 +1,195 @@
+// Кнопки за AC-Kit «Atoms / Buttons» (Figma 1710:6222, лише читання): висота 40 px (малі — 32 px), радіус 8 px, без тіні.
+// Варіанти: filled (`mat-flat-button`), outlined (`mat-stroked-button`), text (`mat-button`), круглі іконкові (`mat-icon-button`);
+// tonal і danger — атрибутом `bpVariant`, малий розмір — `bpSize="sm"` (директива `BpButtonDirective`).
+@use '@angular/material' as mat;
+
+/// Токени Material для кнопок. Вмикається в `html { }` разом з `theme.material()`.
+@mixin buttons() {
+  @include mat.button-overrides(
+    (
+      filled-container-height: 40px,
+      outlined-container-height: 40px,
+      text-container-height: 40px,
+      protected-container-height: 40px,
+      tonal-container-height: 40px,
+      filled-container-shape: var(--ac-radius),
+      outlined-container-shape: var(--ac-radius),
+      text-container-shape: var(--ac-radius),
+      protected-container-shape: var(--ac-radius),
+      tonal-container-shape: var(--ac-radius),
+      filled-container-color: var(--bp-primary),
+      filled-label-text-color: var(--bp-white),
+      tonal-container-color: var(--bp-tonal),
+      tonal-label-text-color: var(--bp-primary),
+      outlined-outline-color: var(--bp-primary),
+      outlined-label-text-color: var(--bp-primary),
+      text-label-text-color: var(--bp-primary),
+    )
+  );
+}
+
+/// Глобальні стилі кнопок: стани hover/pressed/focus-visible/disabled, варіанти й розміри.
+@mixin button-styles() {
+  .mat-mdc-button-base {
+    --bp-btn-hover: var(--bp-primary-hover);
+    --bp-btn-pressed: var(--bp-primary-pressed);
+    font-weight: 500;
+    letter-spacing: 0;
+
+    // Стани Material (шар наведення) гасимо — колір змінюється самою кнопкою, як у AC-Kit.
+    &:hover .mat-mdc-button-persistent-ripple::before {
+      opacity: 0;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bp-primary);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px var(--bp-tonal);
+    }
+  }
+
+  // filled
+  .mat-mdc-unelevated-button.mat-mdc-button-base {
+    &:not(:disabled):hover {
+      background-color: var(--bp-primary-hover);
+    }
+
+    &:not(:disabled):active {
+      background-color: var(--bp-primary-pressed);
+    }
+
+    &:disabled {
+      background-color: var(--bp-line-2);
+      color: var(--bp-text-muted);
+    }
+  }
+
+  // outlined
+  .mat-mdc-outlined-button.mat-mdc-button-base {
+    &:not(:disabled):hover {
+      background-color: var(--bp-tonal);
+      color: var(--bp-primary-hover);
+    }
+
+    &:not(:disabled):active {
+      background-color: var(--bp-tonal);
+      color: var(--bp-primary-pressed);
+    }
+
+    &:disabled {
+      border-color: var(--bp-line);
+      color: var(--bp-text-muted);
+    }
+  }
+
+  // text
+  .mat-mdc-button.mat-mdc-button-base {
+    &:not(:disabled):hover {
+      background-color: var(--bp-bg-2);
+      color: var(--bp-primary-hover);
+    }
+
+    &:not(:disabled):active {
+      background-color: var(--bp-tonal);
+      color: var(--bp-primary-pressed);
+    }
+
+    &:disabled {
+      color: var(--bp-text-muted);
+    }
+  }
+
+  // Кнопка з атрибутом `bpVariant="tonal"`: фон `--bp-tonal` + рамка primary 15%.
+  .bp-btn-tonal.mat-mdc-button-base {
+    background-color: var(--bp-tonal);
+    color: var(--bp-primary);
+    border: 1px solid color-mix(in srgb, var(--bp-primary) 30%, transparent);
+
+    &:not(:disabled):hover {
+      background-color: color-mix(in srgb, var(--bp-primary) 18%, var(--bp-white));
+      color: var(--bp-primary-hover);
+    }
+
+    &:not(:disabled):active {
+      background-color: color-mix(in srgb, var(--bp-primary) 26%, var(--bp-white));
+      color: var(--bp-primary-pressed);
+    }
+
+    &:disabled {
+      background-color: var(--bp-bg);
+      border-color: var(--bp-line-2);
+      color: var(--bp-text-muted);
+    }
+  }
+
+  // Кнопка з атрибутом `bpVariant="danger"`: червоний 15 % з рамкою; текст затемнено до ≥ 4,5:1 (axe).
+  .bp-btn-danger.mat-mdc-button-base {
+    background-color: var(--ac-red-15);
+    color: #b3261e;
+    border: 1px solid color-mix(in srgb, var(--ac-red) 60%, transparent);
+
+    &:not(:disabled):hover {
+      background-color: color-mix(in srgb, var(--ac-red) 25%, var(--bp-white));
+      color: #8c1d18;
+    }
+
+    &:not(:disabled):active {
+      background-color: color-mix(in srgb, var(--ac-red) 35%, var(--bp-white));
+      color: #7a1914;
+    }
+
+    &:focus-visible {
+      outline-color: #b3261e;
+      box-shadow: 0 0 0 4px var(--ac-red-15);
+    }
+
+    &:disabled {
+      background-color: var(--bp-bg);
+      border-color: var(--bp-line-2);
+      color: var(--bp-text-muted);
+    }
+  }
+
+  // Малий розмір — 32 px (`bpSize="sm"`).
+  .bp-btn-sm.mat-mdc-button-base:not(.mat-mdc-icon-button) {
+    --mat-button-filled-container-height: 32px;
+    --mat-button-outlined-container-height: 32px;
+    --mat-button-text-container-height: 32px;
+    --mat-button-tonal-container-height: 32px;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  // Круглі іконкові кнопки: default / hover / pressed.
+  .mat-mdc-icon-button.mat-mdc-button-base {
+    border-radius: 50%;
+    color: var(--bp-primary);
+
+    &:not(:disabled):hover {
+      background-color: var(--bp-tonal);
+      color: var(--bp-primary-hover);
+    }
+
+    &:not(:disabled):active {
+      background-color: color-mix(in srgb, var(--bp-primary) 18%, var(--bp-white));
+      color: var(--bp-primary-pressed);
+    }
+
+    &:disabled {
+      color: var(--bp-text-muted);
+    }
+
+    &.bp-btn-sm {
+      --mat-icon-button-state-layer-size: 32px;
+      width: 32px;
+      height: 32px;
+      padding: 4px;
+    }
+  }
+
+  // Кнопка закриття (×) — іконкова, сірувата.
+  .bp-btn-close.mat-mdc-icon-button {
+    color: var(--bp-text-muted);
+  }
+}
