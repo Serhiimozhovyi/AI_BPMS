@@ -1,0 +1,76 @@
+// Модальні вікна, сповіщення, підказки (F9-08) за Figma «Atoms / Modal» 2607:14939 (Snackbars 7247:33465),
+// Tooltip 4101:72215 і кнопкою закриття 4134:183358 (лише читання) у палітрі «Глибока бірюза».
+
+// Діалог: білий непрозорий контейнер, радіус 12, тінь AC-Kit; заголовок H5, дії праворуч з розділювачем.
+.mat-mdc-dialog-container {
+  --mat-dialog-container-color: var(--bp-white);
+  --mat-dialog-container-shape: var(--ac-radius-lg);
+  --mat-dialog-subhead-color: var(--bp-text);
+  --mat-dialog-supporting-text-color: var(--bp-text);
+  --mat-dialog-subhead-font: Ubuntu, sans-serif;
+  --mat-dialog-subhead-size: 18px;
+  --mat-dialog-subhead-weight: 700;
+  --mat-dialog-subhead-line-height: 24px;
+  --mat-dialog-subhead-tracking: 0;
+
+  .mdc-dialog__surface {
+    box-shadow: 0 16px 48px rgb(12 43 48 / 0.18);
+  }
+
+  .mat-mdc-dialog-actions {
+    gap: 8px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--bp-line-2);
+    justify-content: flex-end;
+  }
+}
+
+.cdk-overlay-dark-backdrop {
+  background: rgb(12 43 48 / 0.5);
+}
+
+// Кнопка закриття (×) у куті діалогу: `class="bp-dialog-close"` на `mat-icon-button`.
+.bp-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: var(--bp-text-muted);
+
+  &:hover {
+    color: var(--bp-text);
+  }
+}
+
+// Сповіщення NotifyService (F3-82): темний контейнер shell, смуга стану зліва, радіус 8.
+.ob-notify-success,
+.ob-notify-error {
+  --mat-snack-bar-container-color: var(--bp-shell);
+  --mat-snack-bar-supporting-text-color: var(--bp-white);
+  --mat-snack-bar-container-shape: var(--ac-radius);
+
+  .mdc-snackbar__surface {
+    box-shadow: 0 8px 24px rgb(12 43 48 / 0.24);
+    border-left: 4px solid var(--bp-accent);
+  }
+}
+
+.ob-notify-success {
+  --mat-snack-bar-button-color: var(--bp-accent);
+}
+
+.ob-notify-error {
+  --mat-snack-bar-button-color: var(--ac-red);
+
+  .mdc-snackbar__surface {
+    border-left-color: var(--ac-red);
+  }
+}
+
+// Підказка: темна, 12/16, радіус 6.
+.mat-mdc-tooltip {
+  --mat-tooltip-container-color: var(--bp-shell);
+  --mat-tooltip-supporting-text-color: var(--bp-white);
+  --mat-tooltip-container-shape: 6px;
+  --mat-tooltip-supporting-text-size: 12px;
+  --mat-tooltip-supporting-text-line-height: 16px;
+}

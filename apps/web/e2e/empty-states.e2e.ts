@@ -39,4 +39,8 @@ test('створення змінної показує сповіщення', as
   await page.getByTestId('var-value').fill('UA');
   await page.getByTestId('var-save').click();
   await expect(page.locator('.mat-mdc-snack-bar-container')).toContainText('Змінну «REGION» збережено');
+  // F9-08: сповіщення у кольорах shell з акцентною смугою стану.
+  const surface = page.locator('.ob-notify-success .mdc-snackbar__surface');
+  await expect(surface).toHaveCSS('background-color', 'rgb(12, 43, 48)');
+  await expect(surface).toHaveCSS('border-left-color', 'rgb(39, 199, 190)');
 });

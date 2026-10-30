@@ -28,24 +28,24 @@ import { MatButtonModule } from '@angular/material/button';
       max-width: 32rem;
       margin: 48px auto;
       padding: 32px 24px;
-      border: 1px dashed var(--ac-line);
+      border: 1px dashed var(--bp-line);
       border-radius: var(--ac-radius-lg);
-      background: var(--ac-white);
+      background: var(--bp-white);
       text-align: center;
     }
     .empty-state__icon {
       font-size: 40px;
-      color: var(--ac-kit);
+      color: var(--bp-primary);
     }
     .empty-state__title {
       margin: 0;
       font-size: 1.125rem;
       font-weight: 600;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
     .empty-state__text {
       margin: 0 0 8px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
   `,
 })

@@ -5,6 +5,7 @@
 @use 'theme/buttons' as buttons;
 @use 'theme/tabs';
 @use 'theme/tables';
+@use 'theme/overlays';
 @use 'theme/fields';
 
 :root {
@@ -53,18 +54,6 @@ a {
 .openbp-expr-hl {
   background: var(--ac-button);
   border-radius: 3px;
-}
-
-/* Сповіщення NotifyService (F3-82): кольори стану AC-Kit. */
-.ob-notify-success {
-  --mat-snack-bar-container-color: var(--ac-vivid);
-  --mat-snack-bar-supporting-text-color: var(--ac-white);
-  --mat-snack-bar-button-color: var(--ac-green);
-}
-.ob-notify-error {
-  --mat-snack-bar-container-color: var(--ac-vivid);
-  --mat-snack-bar-supporting-text-color: var(--ac-white);
-  --mat-snack-bar-button-color: var(--ac-red);
 }
 
 // Телефон: менші поля сторінок, щоб вміщалось у 390 px (F3-85).
