@@ -187,6 +187,8 @@ test('readonly: без палітри й кнопок, вузли не пере�
     const b = (await card(page, 'Поля').boundingBox())!;
     return { dx: Math.round(b.x - a.x), dy: Math.round(b.y - a.y) };
   };
+  // Вузли стоять на одній висоті: поки dy ≠ 0, канвас ще розкладає картки (інакше `before` знято до кінця рендеру).
+  await expect.poll(async () => (await offset()).dy).toBe(0);
   const before = await offset();
   await dragBy(page, card(page, 'Поля'), 150, 100);
   expect(await offset()).toEqual(before);
