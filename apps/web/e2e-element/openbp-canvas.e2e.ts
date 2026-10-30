@@ -220,7 +220,7 @@ test('стилі хоста не ламають канвас, а стилі ка
         h1Color: css(h1).color,
         h1Font: css(h1).fontFamily,
         h1Size: css(h1).fontSize,
-        rootVars: getComputedStyle(document.documentElement).getPropertyValue('--ac-kit'),
+        rootVars: getComputedStyle(document.documentElement).getPropertyValue('--bp-primary'),
       };
     });
   const before = await hostStyle();
@@ -238,9 +238,9 @@ test('стилі хоста не ламають канвас, а стилі ка
   const button = await undo.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, font: getComputedStyle(el).fontFamily }));
   expect(button.bg).not.toBe('rgb(255, 0, 0)');
   expect(button.font).toContain('Ubuntu');
-  // Тема AC-Kit — на :host елемента.
-  const kit = await page.locator('openbp-canvas').evaluate((el) => getComputedStyle(el).getPropertyValue('--ac-kit').trim());
-  expect(kit).toBe('#5f53dc');
+  // Тема AI_BPMS — на :host елемента.
+  const kit = await page.locator('openbp-canvas').evaluate((el) => getComputedStyle(el).getPropertyValue('--bp-primary').trim());
+  expect(kit).toBe('#0d736d');
 });
 
 test('невідомий сценарій → подія openbp-error з кодом Api', async ({ page }) => {
