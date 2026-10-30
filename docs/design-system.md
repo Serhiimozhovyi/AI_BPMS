@@ -49,3 +49,12 @@ Figma «Atoms / Tabs» `3251:37133`. Компонент `apps/web/src/app/shared
 - Коли вкладки не вміщаються — горизонтальна прокрутка й кнопки ‹ ›.
 - Модифікатори: `bp-tabs--stretch` (рівні частки на всю ширину), `bp-tabs--sm` (дрібні пігулки).
 - Кожна вкладка має `data-tab="<value>"`, `testId` — для тестів.
+
+## Поля, списки, перемикачі (F9-05)
+
+Стилі — `apps/web/src/theme/_fields.scss` (`fields.overrides()` — токени Material, `fields.global()` — правила без токенів), без правки шаблонів. Figma: «FIELDS» `2605:13160`, «DROP WINDOW» `2322:8183`, «Atoms / Selectors» `1710:6019`, «Calendars» `3811:88118`.
+
+- Поле `appearance="outline"`: висота 40, радіус 8, рамка `--bp-line`; hover — `--bp-primary`; focus — рамка primary + кільце `--bp-tonal`; error — червона рамка й кільце; disabled — фон `--bp-bg`.
+- Додаткові стани — класи на `mat-form-field`: `bp-field-success` (зелена рамка), `bp-field-loading` (смуга завантаження), `bp-search-secondary` (вторинний пошук на `--bp-bg-2`).
+- Панель `mat-select`/автодоповнення: радіус 8, рамка line, тінь AC-Kit; пункт 40 px, вибраний — `--bp-tonal`; вкладений рівень — клас `bp-option-nested`, порожній стан — `bp-option-empty`.
+- Checkbox, radio, switch — primary / `--bp-line-3`; календар і діапазон дат — вибрана дата primary, діапазон `--bp-tonal`.

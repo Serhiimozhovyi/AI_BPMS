@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
+import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { forkJoin } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
-import { BADGE_CLASSES, DisplayColumn, cellView } from '../../projects/page-format';
+import { BADGE_CLASSES, BADGE_TONES, DisplayColumn, cellView } from '../../projects/page-format';
 import {
   PageAction,
   PageActionResult,
@@ -31,7 +32,7 @@ export interface ExpandOpen {
 @Component({
   selector: 'app-page-expand',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule],
+  imports: [MatButtonModule, MatProgressBarModule, ChipComponent],
   template: `
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
@@ -67,7 +68,7 @@ export interface ExpandOpen {
                     @let cell = view(row, c);
                     <td class="p-1.5">
                       @if (cell.color) {
-                        <span class="rounded-full px-2 py-0.5 text-sm" [class]="badge(cell.color)">{{ cell.text }}</span>
+                        <bp-chip [tone]="tone(cell.color)">{{ cell.text }}</bp-chip>
                       } @else {
                         {{ cell.text }}
                       }
@@ -130,6 +131,10 @@ export class PageExpandComponent {
 
   protected badge(color: keyof typeof BADGE_CLASSES): string {
     return BADGE_CLASSES[color];
+  }
+
+  protected tone(color: keyof typeof BADGE_TONES): ChipTone {
+    return BADGE_TONES[color];
   }
 
   protected add(def: PageRelated, page: string, mode?: PageOpenMode): void {

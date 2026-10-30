@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -29,7 +30,7 @@ import {
 @Component({
   selector: 'app-connectors-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatCheckboxModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
+  imports: [DatePipe, ChipComponent, MatButtonModule, MatButtonToggleModule, MatCheckboxModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-4 flex items-center gap-4">
@@ -97,7 +98,7 @@ import {
                   <button mat-button type="button" (click)="select(c.id)">{{ c.name }}</button>
                 </td>
                 <td class="p-2">{{ c.transport }}</td>
-                <td class="p-2" [class]="statusClass(c.status)" data-testid="status">{{ statusLabel(c.status) }}</td>
+                <td class="p-2" data-testid="status"><bp-chip [tone]="statusTone(c.status)">{{ statusLabel(c.status) }}</bp-chip></td>
                 <td class="p-2">{{ c.toolCount }}</td>
                 <td class="p-2">{{ c.toolsCachedAt ? (c.toolsCachedAt | date: 'short') : '—' }}</td>
                 <td class="p-2">
@@ -113,7 +114,7 @@ import {
         <article data-testid="connector-detail">
           <div class="mb-2 flex items-center gap-4">
             <h2 class="text-lg font-semibold">{{ d.summary.name }}</h2>
-            <span [class]="statusClass(d.summary.status)">{{ statusLabel(d.summary.status) }}</span>
+            <bp-chip [tone]="statusTone(d.summary.status)">{{ statusLabel(d.summary.status) }}</bp-chip>
             <button
               mat-stroked-button
               type="button"
@@ -149,7 +150,7 @@ import {
               {{ d.config.url }}
             }
           </p>
-          <p class="mb-2 text-sm" data-testid="connection-state" [class]="statusClass(d.summary.status)">{{ connectionState(d.summary) }}</p>
+          <p class="mb-2 text-sm" data-testid="connection-state" [class.text-green-700]="d.summary.status === 'ok'" [class.text-red-700]="d.summary.status === 'error'">{{ connectionState(d.summary) }}</p>
           @if (detailError()) {
             <p role="alert" class="mb-2 text-red-700" data-testid="detail-error">{{ detailError() }}</p>
           }
@@ -343,14 +344,14 @@ export class ConnectorsPage implements OnInit {
     this.notify.success($localize`:@@connectors.created:Конектор «${detail.summary.name}:name:» додано.`);
   }
 
-  statusClass(status: ConnectorStatus): string {
+  statusTone(status: ConnectorStatus): ChipTone {
     switch (status) {
       case 'ok':
-        return 'text-green-700';
+        return 'green';
       case 'error':
-        return 'text-red-700';
+        return 'red';
       default:
-        return 'opacity-70';
+        return 'gray';
     }
   }
 

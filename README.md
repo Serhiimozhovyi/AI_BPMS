@@ -1,6 +1,6 @@
 # AI_BPMS
 
-[![CI](https://github.com/Serhiimozhovyi/OpenBP_builder/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Serhiimozhovyi/OpenBP_builder/actions/workflows/ci.yml)
+[![CI](https://github.com/Serhiimozhovyi/AI_BPMS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Serhiimozhovyi/AI_BPMS/actions/workflows/ci.yml)
 
 MCP-native BPMS-конструктор: процеси на канвасі, інтеграції з будь-якими системами через Model Context Protocol, сам AI_BPMS — MCP-сервер для Claude/GPT/власних агентів. Self-hosted, .NET + Angular.
 

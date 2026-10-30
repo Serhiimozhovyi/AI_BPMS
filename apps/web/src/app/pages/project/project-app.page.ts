@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { AppBarService } from '../../layout/app-bar.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage, ProjectPagesApiService } from '../../projects/project-pages-api.service';
 import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
@@ -10,14 +12,25 @@ import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
  * `/projects/:id/app` — вкладка «Застосунок» (F8-04): меню сторінок застосунку, які бачить користувач (за ролями
  * застосунку), і сама сторінка (`app/<key>[/<rowKey>]`). Без вибраної сторінки відкриває головну оболонки або першу.
  * Якщо проєкт задав оболонку `app` (F8-18) — назва, значок й меню розділів за групами (сторінки не з меню відкриваються
- * лише за посиланням), editor бачить кнопку «Конструктор».
+ * лише за посиланням), editor бачить кнопку «Конструктор». Користувачу лише застосунку оболонка показується у верхній
+ * смузі замість меню AI_BPMS (F9-04), тут — лише сторінка.
  */
 @Component({
   selector: 'app-project-app-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive, RouterOutlet, BpTabsComponent],
   template: `
-    @if (shell(); as app) {
+    @if (inBar()) {
+      <div class="px-6 pt-4" data-testid="app-shell">
+        @if (error()) {
+          <p role="alert" class="mb-2 text-red-700" data-testid="app-error">{{ error() }}</p>
+        }
+        @if (loaded() && pages().length === 0 && !error()) {
+          <p class="opacity-70" data-testid="app-empty" i18n="@@project.app.empty">Для вашої ролі сторінок застосунку немає.</p>
+        }
+        <router-outlet />
+      </div>
+    } @else if (shell(); as app) {
       <div class="px-6 pt-4 md:flex md:gap-6" data-testid="app-shell">
         <aside class="mb-3 md:mb-0 md:w-56 md:shrink-0">
           <div class="mb-3 flex items-center gap-2">
@@ -97,6 +110,8 @@ export class ProjectAppPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
+  private readonly appBar = inject(AppBarService);
 
   readonly projectId = this.route.parent?.snapshot.paramMap.get('id') ?? '';
   readonly pages = signal<ProjectPage[]>([]);
@@ -123,9 +138,28 @@ export class ProjectAppPage implements OnInit {
       .map((g) => ({ label: g.label, pages: g.pages.flatMap((key) => byKey.get(key) ?? []) }))
       .filter((g) => g.pages.length > 0);
   });
+  /** Користувач лише застосунку цього проєкту з оболонкою: меню — у верхній смузі (F9-04). */
+  readonly inBar = computed(() => !!this.shell() && this.context.appOnlyProject(this.auth.user()?.role)?.id === this.projectId);
   private redirected = false;
 
   constructor() {
+    // Оболонку у верхній смузі публікуємо, поки відкрита ця сторінка.
+    effect(() => {
+      const app = this.shell();
+      const menu = this.menu();
+      this.appBar.bar.set(
+        this.inBar() && app
+          ? {
+              projectId: this.projectId,
+              title: app.title,
+              iconName: this.iconName(),
+              emoji: this.iconName() ? null : (app.icon ?? null),
+              menu: menu.map((g) => ({ label: g.label, pages: g.pages.map((p) => ({ key: p.key, name: p.name })) })),
+            }
+          : null,
+      );
+    });
+    this.destroyRef.onDestroy(() => this.appBar.bar.set(null));
     // Застосунок відкривається на головній сторінці оболонки, а без неї — на першій сторінці меню (F8-18).
     effect(() => {
       const pages = this.pages();

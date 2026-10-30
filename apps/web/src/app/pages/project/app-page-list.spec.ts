@@ -182,7 +182,7 @@ describe('AppPagePage: список з панеллю, мітками й під�
     const badge = row.querySelector('[data-badge]')!;
     expect(badge.textContent?.trim()).toBe('Заплановано');
     expect(badge.getAttribute('data-badge')).toBe('green');
-    expect(badge.className).toContain('bg-ac-green');
+    expect(badge.getAttribute('data-tone')).toBe('green');
     expect(row.textContent).toContain('10:00');
     expect(row.textContent).toContain('3 / 8');
     expect(host.querySelector('[data-sort="registered"]')).toBeNull();
