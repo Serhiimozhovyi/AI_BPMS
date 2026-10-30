@@ -25,8 +25,6 @@ export interface BpTab {
  * Стилі — `theme/_tabs.scss`.
  */
 @Component({
-  // Префікс bp — спільні компоненти дизайн-системи (класи .bp-tabs у theme/_tabs.scss).
-  // eslint-disable-next-line @angular-eslint/component-selector
   selector: 'bp-tabs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive],
