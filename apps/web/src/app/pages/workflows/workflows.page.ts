@@ -22,6 +22,7 @@ import { TriggerInfo, triggerInfo } from '../../workflows/trigger-types';
 import { NO_GROUP, WorkflowSection, groupSections, readCollapsed, recount, reorder, writeCollapsed } from '../../workflows/workflow-groups';
 import { WorkflowDetail, WorkflowGroup, WorkflowImportResult, WorkflowSummary, WorkflowsApiService, toSummary } from '../../workflows/workflows-api.service';
 import { CardTableDirective } from '../../shared/card-table.directive';
+import { TableToolbarComponent, TableView } from '../../shared/table-toolbar/table-toolbar.component';
 import { BpButtonDirective } from '../../shared/button.directive';
 
 /**
@@ -34,7 +35,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
 @Component({
   selector: 'app-workflows-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, 
+  imports: [BpButtonDirective, TableToolbarComponent, 
     CardTableDirective,
     DatePipe,
     ReactiveFormsModule,
@@ -95,16 +96,14 @@ import { BpButtonDirective } from '../../shared/button.directive';
 
       @if (workflows().length > 0 || groups().length > 0) {
         <div class="filters">
-          <input
-            type="search"
-            class="border filters__search"
-            data-testid="workflows-search"
-            i18n-placeholder="@@workflows.search"
-            placeholder="Пошук за назвою"
-            i18n-aria-label="@@workflows.search"
-            aria-label="Пошук за назвою"
-            [value]="search()"
-            (input)="search.set($any($event.target).value)"
+          <bp-table-toolbar
+            [(search)]="search"
+            [(view)]="view"
+            searchTestId="workflows-search"
+            searchPlaceholder="Пошук за назвою"
+            i18n-searchPlaceholder="@@workflows.search"
+            ariaLabel="Дії над списком сценаріїв"
+            i18n-ariaLabel="@@workflows.toolbar"
           />
           @if (groups().length > 0) {
             <mat-chip-listbox multiple aria-label="Групи" i18n-aria-label="@@workflows.groups.filter" data-testid="group-chips">
@@ -168,7 +167,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
                     }
                   </header>
                 }
-                <table appCardTable class="w-full text-left group__table" [hidden]="!open">
+                <table appCardTable class="w-full text-left group__table" [class.bp-cards]="view() === 'cards'" [hidden]="!open">
                   <colgroup>
                     <col class="col--drag" />
                     <col />
@@ -321,11 +320,6 @@ import { BpButtonDirective } from '../../shared/button.directive';
       align-items: center;
       gap: 12px;
       margin-bottom: 16px;
-    }
-
-    .filters__search {
-      width: 280px;
-      max-width: 100%;
     }
 
     .group {
@@ -489,6 +483,7 @@ export class WorkflowsPage implements OnInit {
   readonly deletingGroupId = signal<string | null>(null);
   readonly error = signal<string | null>(null);
   readonly search = signal('');
+  readonly view = signal<TableView | null>('table');
   /** Вибрані фільтр-чіпи груп (порожньо — усі). */
   readonly chips = signal<ReadonlySet<string>>(new Set());
   private readonly collapsed = signal<Record<string, boolean>>(readCollapsed());

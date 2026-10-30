@@ -227,6 +227,19 @@ describe('WorkflowsPage', () => {
     expect((menuItem('delete-button') as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('перемикач «картки» (F9-07) вмикає картковий вигляд таблиць, «таблиця» повертає рядки', async () => {
+    const { fixture, host } = await setup();
+    const tables = () => Array.from(host.querySelectorAll<HTMLTableElement>('table[appCardTable]'));
+    expect(tables().length).toBeGreaterThan(0);
+    expect(tables().every((t) => !t.classList.contains('bp-cards'))).toBe(true);
+    host.querySelector<HTMLButtonElement>('[data-testid="view-cards"]')!.click();
+    await render(fixture);
+    expect(tables().every((t) => t.classList.contains('bp-cards'))).toBe(true);
+    host.querySelector<HTMLButtonElement>('[data-testid="view-table"]')!.click();
+    await render(fixture);
+    expect(tables().every((t) => !t.classList.contains('bp-cards'))).toBe(true);
+  });
+
   it('невдала активація: помилка з Api і перемикач повертається', async () => {
     const { fixture, http, host } = await setup();
     toggleInput(host, 'w1').click();
