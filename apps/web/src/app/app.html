@@ -54,6 +54,37 @@
         </button>
       </div>
 </ng-template>
+<ng-template #userMenu>
+  <div class="shell-user-menu">
+    <button
+      type="button"
+      class="shell-avatar"
+      data-testid="user-menu"
+      aria-haspopup="menu"
+      aria-controls="shell-user-menu"
+      [attr.aria-expanded]="userMenuOpen()"
+      [attr.aria-label]="user()?.email"
+      [title]="user()?.email ?? ''"
+      (click)="toggleUserMenu()"
+    >{{ initials() }}</button>
+    @if (userMenuOpen()) {
+      <div id="shell-user-menu" class="shell-menu" role="menu" tabindex="-1" aria-label="Обліковий запис" i18n-aria-label="@@app.userMenu" (keydown)="menuKeydown($event)">
+        <div class="shell-menu__head">
+          <span class="shell-menu__avatar" aria-hidden="true">{{ initials() }}</span>
+          <span class="shell-menu__email" data-testid="current-user">{{ user()?.email }}</span>
+        </div>
+        <a class="shell-menu__item" role="menuitem" data-testid="change-password" routerLink="/account/password" (click)="closeUserMenu()">
+          <span class="material-symbols-outlined" aria-hidden="true">key</span>
+          <span i18n="@@app.changePassword">Змінити пароль</span>
+        </a>
+        <button type="button" class="shell-menu__item" role="menuitem" data-testid="logout" (click)="logout()">
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          <span i18n="@@app.logout">Вийти</span>
+        </button>
+      </div>
+    }
+  </div>
+</ng-template>
 <ng-template #assistantButton let-mobile="mobile">
   @if (assistant.available()) {
     <button
@@ -72,7 +103,18 @@
   }
 </ng-template>
 <ng-template #navLinks>
-@if (appOnly(); as ap) {
+@if (appBar(); as bar) {
+  @for (group of bar.menu; track $index) {
+    @if (group.label) {
+      <span class="shell-nav__group" data-testid="shell-group">{{ group.label }}</span>
+    }
+    @for (p of group.pages; track p.key) {
+      <a class="shell-nav__link" [routerLink]="['/projects', bar.projectId, 'app', p.key]" routerLinkActive="active" [attr.data-page]="p.key">
+        <span>{{ p.name }}</span>
+      </a>
+    }
+  }
+} @else if (appOnly(); as ap) {
   @if (!ap.app) {
       <a class="shell-nav__link" data-testid="nav-app" [routerLink]="['/projects', ap.id, 'app']" routerLinkActive="active">
         <span class="material-symbols-outlined" aria-hidden="true">apps</span>
@@ -119,11 +161,22 @@
 }
 </ng-template>
 @if (!bare()) {
-  <mat-toolbar class="shell-top">
-    <a class="shell-brand" routerLink="/" aria-label="AI_BPMS — на головну" i18n-aria-label="@@app.brand.home">
-      <span class="shell-brand__sign" aria-hidden="true">AI</span>
-      <span class="shell-brand__name" i18n="@@app.brand">AI_<b>BPMS</b></span>
-    </a>
+  <header class="shell-top">
+    @if (appBar(); as bar) {
+      <a class="shell-brand" [routerLink]="['/projects', bar.projectId, 'app']">
+        @if (bar.iconName) {
+          <span class="shell-brand__sign material-symbols-outlined" aria-hidden="true" data-testid="shell-icon">{{ bar.iconName }}</span>
+        } @else if (bar.emoji) {
+          <span class="shell-brand__sign" aria-hidden="true" data-testid="shell-icon">{{ bar.emoji }}</span>
+        }
+        <span class="shell-brand__name shell-brand__name--app" data-testid="shell-title">{{ bar.title }}</span>
+      </a>
+    } @else {
+      <a class="shell-brand" routerLink="/" aria-label="AI_BPMS — на головну" i18n-aria-label="@@app.brand.home">
+        <span class="shell-brand__sign" aria-hidden="true">AI</span>
+        <span class="shell-brand__name" i18n="@@app.brand">AI_<b>BPMS</b></span>
+      </a>
+    }
     @if (user()) {
       @if (mobile()) {
         <ng-container *ngTemplateOutlet="assistantButton; context: { mobile: true }" />
@@ -132,31 +185,46 @@
           <span class="sr-only" i18n="@@app.menu">Меню</span>
         </button>
       } @else {
-        <ng-container *ngTemplateOutlet="projectBlock" />
-        <ng-container *ngTemplateOutlet="userBlock" />
-        <ng-container *ngTemplateOutlet="assistantButton; context: { mobile: false }" />
-      }
-    }
-  </mat-toolbar>
-  @if (user()) {
-    @if (mobile()) {
-      @if (drawerOpen()) {
-        <button type="button" class="shell-backdrop" data-testid="drawer-backdrop" tabindex="-1" aria-hidden="true" (click)="closeDrawer()"></button>
-        <aside id="shell-drawer" class="shell-drawer" data-testid="nav-drawer" role="dialog" aria-modal="true" aria-label="Меню" i18n-aria-label="@@app.menu">
-          <nav class="shell-drawer__nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+        <div class="shell-nav-wrap">
+          @if (canScrollStart()) {
+            <button type="button" class="shell-scroll shell-scroll--start" data-testid="nav-scroll-start" tabindex="-1" aria-hidden="true" (click)="scrollNav(-1)">
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+          }
+          <nav #navEl class="shell-nav" data-testid="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label" (scroll)="updateScroll()">
             <ng-container *ngTemplateOutlet="navLinks" />
           </nav>
-          <div class="shell-drawer__foot">
-            <ng-container *ngTemplateOutlet="projectBlock" />
-            <ng-container *ngTemplateOutlet="userBlock" />
-          </div>
-        </aside>
+          @if (canScrollEnd()) {
+            <button type="button" class="shell-scroll shell-scroll--end" data-testid="nav-scroll-end" tabindex="-1" aria-hidden="true" (click)="scrollNav(1)">
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+          }
+        </div>
+        <div class="shell-actions">
+          <ng-container *ngTemplateOutlet="projectBlock" />
+          <ng-container *ngTemplateOutlet="assistantButton; context: { mobile: false }" />
+          @if (!appOnly()) {
+            <a class="shell-icon-button" data-testid="shell-tasks" routerLink="/tasks" title="Мої задачі" i18n-title="@@app.tasks.title">
+              <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
+              <span class="sr-only" i18n="@@app.tasks">Мої задачі</span>
+            </a>
+          }
+          <ng-container *ngTemplateOutlet="userMenu" />
+        </div>
       }
-    } @else {
-      <nav class="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
+    }
+  </header>
+  @if (user() && mobile() && drawerOpen()) {
+    <button type="button" class="shell-backdrop" data-testid="drawer-backdrop" tabindex="-1" aria-hidden="true" (click)="closeDrawer()"></button>
+    <aside id="shell-drawer" class="shell-drawer" data-testid="nav-drawer" role="dialog" aria-modal="true" aria-label="Меню" i18n-aria-label="@@app.menu">
+      <nav class="shell-drawer__nav" data-testid="shell-nav" aria-label="Головна навігація" i18n-aria-label="@@app.nav.label">
         <ng-container *ngTemplateOutlet="navLinks" />
       </nav>
-    }
+      <div class="shell-drawer__foot">
+        <ng-container *ngTemplateOutlet="projectBlock" />
+        <ng-container *ngTemplateOutlet="userBlock" />
+      </div>
+    </aside>
   }
 }
 <main>
