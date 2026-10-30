@@ -1518,7 +1518,7 @@
 - DoD: `npm run build`, Vitest, axe e2e (`a11y.e2e.ts`) зелені; у PR знімки 3–4 сторінок до/після; бюджет initial bundle не перевищено.
 
 ### F9-02 · Кнопки за AC-Kit
-- model: `sonnet` · status: `ready` · depends: F9-01
+- model: `sonnet` · status: `done` · depends: F9-01
 - Що: Figma «Atoms / Buttons» `1710:6222`: розміри 40 і 32 px; варіанти filled, tonal (фон `--bp-tonal` + рамка), outlined, text, danger (червоний 15% з рамкою), круглі іконкові (default/hover/pressed), «Більше/Менше», кнопка закриття. Стани hover/pressed/disabled/focus-visible. Реалізація — стилі поверх `mat-flat-button`/`mat-stroked-button`/`mat-button`/`mat-icon-button` у `theme/_buttons.scss` + атрибут `bpVariant="tonal|danger"`, без нового компонента-обгортки. Пройти ~260 використань: одна головна дія на екрані — filled, другорядні — tonal/outlined, видалення — danger.
 - DoD: Vitest на директиву; Playwright-знімок сторінки-зразка кнопок (`/dev/kit` за прапорцем dev або сторінка в тестах); axe зелений.
 

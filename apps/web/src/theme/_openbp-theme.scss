@@ -111,22 +111,6 @@
     )
   );
 
-  // Кнопки AC-Kit: радіус 8px, без тіні; tonal — «Buttun 15%».
-  @include mat.button-overrides(
-    (
-      filled-container-shape: var(--ac-radius),
-      outlined-container-shape: var(--ac-radius),
-      text-container-shape: var(--ac-radius),
-      protected-container-shape: var(--ac-radius),
-      tonal-container-shape: var(--ac-radius),
-      tonal-container-color: var(--ac-button),
-      tonal-label-text-color: var(--ac-kit),
-      outlined-outline-color: var(--ac-kit),
-      outlined-label-text-color: var(--ac-kit),
-      text-label-text-color: var(--ac-kit),
-    )
-  );
-
   // Поля AC-Kit: обведення Line, радіус 4px.
   @include mat.form-field-overrides(
     (

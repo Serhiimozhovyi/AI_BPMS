@@ -102,7 +102,7 @@ describe('routes', () => {
     expect(routes[1].canActivateChild).toBeUndefined();
     const app = routes.find((r) => r.children)!;
     expect(app.canActivateChild).toHaveLength(1);
-    expect(app.children!.filter((r) => r.loadComponent).map((r) => r.path)).toEqual([
+    expect(app.children!.filter((r) => r.loadComponent && r.path !== 'dev/kit').map((r) => r.path)).toEqual([
       '',
       'account/password',
       'workflows',

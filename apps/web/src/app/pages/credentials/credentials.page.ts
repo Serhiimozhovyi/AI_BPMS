@@ -11,12 +11,13 @@ import { DOCUMENT } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { oauthLabel, usageLabel } from '../../credentials/credential-input';
 import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '../../credentials/credentials-api.service';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 /** `/credentials`: облікові дані без значень секретів — список, створення за типом, редагування, видалення (F4-02). */
 @Component({
   selector: 'app-credentials-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule, CredentialFormComponent, EmptyStateComponent],
+  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule, CredentialFormComponent, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
@@ -110,7 +111,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
                 <td class="p-2 text-right whitespace-nowrap">
                   @if (confirming() === c.id) {
                     <span class="mr-2" i18n="@@credentials.delete.confirm">Видалити?</span>
-                    <button mat-flat-button type="button" data-testid="confirm-delete" (click)="remove(c)" i18n="@@credentials.delete.yes">Так</button>
+                    <button bpVariant="danger" mat-flat-button type="button" data-testid="confirm-delete" (click)="remove(c)" i18n="@@credentials.delete.yes">Так</button>
                     <button mat-button type="button" data-testid="cancel-delete" (click)="confirming.set(null)" i18n="@@credentials.delete.no">Ні</button>
                   } @else {
                     @if (c.type === 'oauth2') {
@@ -123,7 +124,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from '..
                       </button>
                     }
                     <button mat-button type="button" data-testid="edit" (click)="editing.set(c.id)" i18n="@@credentials.edit">Змінити</button>
-                    <button mat-button type="button" data-testid="delete" (click)="confirming.set(c.id)" i18n="@@credentials.delete">Видалити</button>
+                    <button bpVariant="danger" mat-button type="button" data-testid="delete" (click)="confirming.set(c.id)" i18n="@@credentials.delete">Видалити</button>
                   }
                 </td>
               </tr>

@@ -8,6 +8,7 @@ import { AuthService } from '../auth/auth.service';
 import { NotifyService } from '../shared/notify.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { VARIABLE_KEY_PATTERN, VARIABLE_MAX_VALUE, VariableInfo, VariablesApiService } from './variables-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /**
  * Блок «Змінні» у `/settings` (F6-09): `$vars.key` у виразах і `core.code`. Список бачать усі; створює, змінює й видаляє
@@ -16,7 +17,7 @@ import { VARIABLE_KEY_PATTERN, VARIABLE_MAX_VALUE, VariableInfo, VariablesApiSer
 @Component({
   selector: 'app-variables-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [BpButtonDirective, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
   template: `
     <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.vars.title">Змінні</h2>
     <p class="mb-4 max-w-3xl opacity-70" i18n="@@settings.vars.hint">
@@ -79,7 +80,7 @@ import { VARIABLE_KEY_PATTERN, VARIABLE_MAX_VALUE, VariableInfo, VariablesApiSer
               @if (isAdmin()) {
                 <td class="whitespace-nowrap p-2">
                   <button mat-button type="button" data-testid="var-edit" (click)="edit(v)" i18n="@@settings.vars.edit">Змінити</button>
-                  <button mat-button type="button" data-testid="var-delete" (click)="remove(v)" i18n="@@settings.vars.delete">Видалити</button>
+                  <button bpVariant="danger" mat-button type="button" data-testid="var-delete" (click)="remove(v)" i18n="@@settings.vars.delete">Видалити</button>
                 </td>
               }
             </tr>

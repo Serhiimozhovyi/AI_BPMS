@@ -34,6 +34,21 @@
 - Тіні — `rgb(12 43 48 / …)`.
 - Стилі кожного компонента — окремим partial у `apps/web/src/theme/` (`_buttons.scss`, `_tabs.scss` …).
 
+## Кнопки (F9-02)
+
+Figma «Atoms / Buttons» `1710:6222`. Стилі — `apps/web/src/theme/_buttons.scss` поверх Material, окремого компонента-обгортки немає.
+
+| Вигляд | Розмітка | Коли |
+|---|---|---|
+| filled | `mat-flat-button` | одна головна дія на екрані |
+| tonal | `mat-flat-button bpVariant="tonal"` | другорядні дії поруч з головною |
+| outlined | `mat-stroked-button` | рівноцінні другорядні дії |
+| text | `mat-button` | третьорядні, «Скасувати» |
+| danger | `bpVariant="danger"` | видалення й підтвердження видалення |
+| іконкова | `mat-icon-button` (`bpVariant="close"` — ×) | дії без підпису; потрібен `aria-label` |
+
+Малий розмір (32 px замість 40 px) — `bpSize="sm"`. Директива `BpButtonDirective` (`shared/button.directive.ts`) додає лише класи `bp-btn-*`; її треба додати в `imports` компонента. Стани: hover, pressed, disabled, focus-visible (кільце `--bp-tonal`). Приклад усіх варіантів — `/dev/kit` (лише dev-збірка).
+
 ## Вкладки (`bp-tabs`, F9-03)
 
 Figma «Atoms / Tabs» `3251:37133`. Компонент `apps/web/src/app/shared/tabs/tabs.component.ts`, стилі — `apps/web/src/theme/_tabs.scss`.

@@ -1,4 +1,4 @@
-import { Injector, inject } from '@angular/core';
+import { Injector, inject, isDevMode } from '@angular/core';
 import { Router, Routes, UrlMatcher, UrlSegment } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
@@ -43,12 +43,14 @@ export const routes: Routes = [
         // Зміна пароля (F8-13); з тимчасовим паролем guard пускає лише сюди.
         path: 'account/password',
         title: $localize`:@@account.password.title:Зміна пароля`,
-        loadComponent: () => import('./pages/account/change-password.page').then((m) => m.ChangePasswordPage),
+        loadComponent: () =>
+          import('./pages/account/change-password.page').then((m) => m.ChangePasswordPage),
       },
       {
         path: 'workflows',
         title: $localize`:@@workflows.title:Сценарії`,
-        loadComponent: () => import('./pages/workflows/workflows.page').then((m) => m.WorkflowsPage),
+        loadComponent: () =>
+          import('./pages/workflows/workflows.page').then((m) => m.WorkflowsPage),
       },
       {
         path: 'workflows/:id',
@@ -56,6 +58,16 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pages/workflow-editor/workflow-editor.page').then((m) => m.WorkflowEditorPage),
       },
+      // Сторінка-зразок дизайн-системи — лише в dev-збірці (F9-02).
+      ...(isDevMode()
+        ? [
+            {
+              path: 'dev/kit',
+              title: 'Kit',
+              loadComponent: () => import('./pages/dev/kit.page').then((m) => m.DevKitPage),
+            },
+          ]
+        : []),
       {
         // Список проєктів (F8-03).
         path: 'projects',
@@ -77,16 +89,22 @@ export const routes: Routes = [
               const injector = inject(Injector);
               const router = injector.get(Router);
               const { projectDefaultTab } = await import('./pages/project/project-default-tab');
-              return router.createUrlTree(['/projects', params['id'], await projectDefaultTab(injector, params['id'] as string)]);
+              return router.createUrlTree([
+                '/projects',
+                params['id'],
+                await projectDefaultTab(injector, params['id'] as string),
+              ]);
             },
           },
           {
             path: 'overview',
-            loadComponent: () => import('./pages/overview/overview.page').then((m) => m.OverviewPage),
+            loadComponent: () =>
+              import('./pages/overview/overview.page').then((m) => m.OverviewPage),
           },
           {
             path: 'workflows',
-            loadComponent: () => import('./pages/workflows/workflows.page').then((m) => m.WorkflowsPage),
+            loadComponent: () =>
+              import('./pages/workflows/workflows.page').then((m) => m.WorkflowsPage),
           },
           {
             path: 'tables',
@@ -94,46 +112,55 @@ export const routes: Routes = [
           },
           {
             path: 'connections',
-            loadComponent: () => import('./pages/connections/connections.page').then((m) => m.ConnectionsPage),
+            loadComponent: () =>
+              import('./pages/connections/connections.page').then((m) => m.ConnectionsPage),
           },
           {
             path: 'app',
-            loadComponent: () => import('./pages/project/project-app.page').then((m) => m.ProjectAppPage),
+            loadComponent: () =>
+              import('./pages/project/project-app.page').then((m) => m.ProjectAppPage),
             // Сторінки застосунку (F8-04): список/картка/форма за ключем сторінки.
             children: [
               {
                 // Конструктор сторінок (F8-05); ключ сторінки не починається з «_», тож з `:key` не плутається.
                 path: '_builder',
-                loadComponent: () => import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
+                loadComponent: () =>
+                  import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
               },
               {
                 path: '_app',
-                loadComponent: () => import('./pages/project/app-settings.page').then((m) => m.AppSettingsPage),
+                loadComponent: () =>
+                  import('./pages/project/app-settings.page').then((m) => m.AppSettingsPage),
               },
               {
                 path: '_builder/:key',
-                loadComponent: () => import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
+                loadComponent: () =>
+                  import('./pages/project/page-builder.page').then((m) => m.PageBuilderPage),
               },
               {
                 path: ':key',
-                loadComponent: () => import('./pages/project/app-page.page').then((m) => m.AppPagePage),
+                loadComponent: () =>
+                  import('./pages/project/app-page.page').then((m) => m.AppPagePage),
               },
               {
                 path: ':key/:rowKey',
-                loadComponent: () => import('./pages/project/app-page.page').then((m) => m.AppPagePage),
+                loadComponent: () =>
+                  import('./pages/project/app-page.page').then((m) => m.AppPagePage),
               },
             ],
           },
           {
             path: 'members',
-            loadComponent: () => import('./pages/project/project-members.page').then((m) => m.ProjectMembersPage),
+            loadComponent: () =>
+              import('./pages/project/project-members.page').then((m) => m.ProjectMembersPage),
           },
         ],
       },
       {
         matcher: executionsMatcher,
         title: $localize`:@@executions.title:Виконання`,
-        loadComponent: () => import('./pages/executions/executions.page').then((m) => m.ExecutionsPage),
+        loadComponent: () =>
+          import('./pages/executions/executions.page').then((m) => m.ExecutionsPage),
       },
       {
         // Задачі погодження core.approval (F6-02); картка — і за токеном з $execution.taskUrl.
@@ -155,7 +182,8 @@ export const routes: Routes = [
         // «Підключення» (F3-99): конектори, каталог і облікові дані в одному місці; `?tab=connected|catalog|credentials`.
         path: 'connections',
         title: $localize`:@@connections.title:Підключення`,
-        loadComponent: () => import('./pages/connections/connections.page').then((m) => m.ConnectionsPage),
+        loadComponent: () =>
+          import('./pages/connections/connections.page').then((m) => m.ConnectionsPage),
       },
       {
         // Старі посилання (документація, сповіщення, шаблони): `?catalog=<id>` відкриває каталог із підсвіченим записом.
@@ -169,7 +197,8 @@ export const routes: Routes = [
       },
       {
         path: 'credentials',
-        redirectTo: () => inject(Router).createUrlTree(['/connections'], { queryParams: { tab: 'credentials' } }),
+        redirectTo: () =>
+          inject(Router).createUrlTree(['/connections'], { queryParams: { tab: 'credentials' } }),
       },
       {
         path: 'settings',

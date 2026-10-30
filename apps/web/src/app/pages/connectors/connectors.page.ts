@@ -22,6 +22,7 @@ import {
   apiErrorCode,
   apiErrorMessage,
 } from '../../connectors/connectors-api.service';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 /**
  * `/connectors`: MCP-сервери зі статусом, додавання, discovery tools і тестовий виклик (F2-14); вкладка «Каталог»
@@ -30,7 +31,7 @@ import {
 @Component({
   selector: 'app-connectors-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ChipComponent, MatButtonModule, MatButtonToggleModule, MatCheckboxModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
+  imports: [BpButtonDirective, DatePipe, ChipComponent, MatButtonModule, MatButtonToggleModule, MatCheckboxModule, MatProgressBarModule, ConnectorCatalogComponent, ConnectorFormComponent, ConnectorToolsComponent, EmptyStateComponent],
   template: `
     <section class="p-6">
       <div class="mb-4 flex items-center gap-4">
@@ -102,7 +103,7 @@ import {
                 <td class="p-2">{{ c.toolCount }}</td>
                 <td class="p-2">{{ c.toolsCachedAt ? (c.toolsCachedAt | date: 'short') : '—' }}</td>
                 <td class="p-2">
-                  <button mat-button type="button" color="warn" data-testid="row-delete" (click)="startDelete(c.id)" i18n="@@connectors.delete">Видалити</button>
+                  <button bpVariant="danger" mat-button type="button" data-testid="row-delete" (click)="startDelete(c.id)" i18n="@@connectors.delete">Видалити</button>
                 </td>
               </tr>
             }
@@ -125,7 +126,7 @@ import {
             >
               Перевірити з'єднання
             </button>
-            <button mat-button type="button" color="warn" data-testid="delete-button" [disabled]="deleting()" (click)="confirmingDelete.set(true)" i18n="@@connectors.delete">
+            <button bpVariant="danger" mat-button type="button" data-testid="delete-button" [disabled]="deleting()" (click)="confirmingDelete.set(true)" i18n="@@connectors.delete">
               Видалити
             </button>
           </div>
@@ -138,7 +139,7 @@ import {
                 </mat-checkbox>
               }
               <div class="mt-2 flex gap-2">
-                <button mat-flat-button type="button" color="warn" data-testid="delete-confirm" [disabled]="deleting()" (click)="confirmDelete(d)" i18n="@@connectors.delete.yes">Так, видалити</button>
+                <button bpVariant="danger" mat-flat-button type="button" data-testid="delete-confirm" [disabled]="deleting()" (click)="confirmDelete(d)" i18n="@@connectors.delete.yes">Так, видалити</button>
                 <button mat-button type="button" data-testid="delete-cancel" (click)="confirmingDelete.set(false)" i18n="@@connectors.delete.no">Ні</button>
               </div>
             </div>
