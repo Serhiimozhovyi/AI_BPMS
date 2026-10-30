@@ -1548,7 +1548,7 @@
 - DoD: e2e `workflows-list`, `phone-pages`, `app-list` зелені; знімки до/після; axe зелений.
 
 ### F9-08 · Модальні вікна, снекбари, підказки, порожні стани
-- model: `sonnet` · status: `ready` · depends: F9-02
+- model: `sonnet` · status: `done` · depends: F9-02
 - Що: Figma «Atoms / Modal» `2607:14939` (зокрема Snackbars `7247:33465`), Tooltip `4101:72215`, кнопка закриття `4134:183358`: заголовок і × діалогу, розкладка дій, снекбари успіху/помилки, підказка; `empty-state` у новій палітрі. Стилі в `theme/_overlays.scss`.
 - DoD: Vitest `notify.service`, `empty-state` зелені; e2e `empty-states` зелений; axe зелений.
 

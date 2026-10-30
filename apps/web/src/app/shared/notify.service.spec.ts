@@ -14,13 +14,13 @@ describe('NotifyService', () => {
   it('успіх — коротке сповіщення без кнопки', () => {
     const { service, open } = setup();
     service.success('Готово');
-    expect(open).toHaveBeenCalledWith('Готово', undefined, expect.objectContaining({ duration: NOTIFY_SUCCESS_MS }));
+    expect(open).toHaveBeenCalledWith('Готово', undefined, expect.objectContaining({ duration: NOTIFY_SUCCESS_MS, panelClass: 'ob-notify-success' }));
   });
 
   it('помилка дописує причину й тримається довше', () => {
     const { service, open } = setup();
     service.error('Не вийшло.', 'Немає доступу.');
-    expect(open).toHaveBeenCalledWith('Не вийшло. Немає доступу.', 'Закрити', expect.objectContaining({ duration: NOTIFY_ERROR_MS }));
+    expect(open).toHaveBeenCalledWith('Не вийшло. Немає доступу.', 'Закрити', expect.objectContaining({ duration: NOTIFY_ERROR_MS, panelClass: 'ob-notify-error' }));
   });
 
   it('«Скасувати» викликає undo', () => {
