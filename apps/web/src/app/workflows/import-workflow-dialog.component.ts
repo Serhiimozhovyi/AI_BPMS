@@ -46,7 +46,7 @@ export interface ParsedExport {
   n8n?: object;
 }
 
-/** Сценарій n8n: `connections` — об'єкт за назвами вузлів (в OpenBP — масив) або типи вузлів n8n. */
+/** Сценарій n8n: `connections` — об'єкт за назвами вузлів (в AI_BPMS — масив) або типи вузлів n8n. */
 export function isN8nWorkflow(value: unknown): value is { nodes: unknown[] } {
   if (!value || typeof value !== 'object') return false;
   const obj = value as { nodes?: unknown; connections?: unknown };
@@ -125,7 +125,7 @@ export const choiceKey = (u: Pick<UnmappedReference, 'kind' | 'ref'>) => `${u.ki
           </mat-form-field>
           @if (parsed()?.n8n) {
             <p class="text-amber-700" data-testid="import-n8n" i18n="@@import.n8n.detected">
-              Це сценарій n8n: його буде перетворено на формат OpenBP, вузли без відповідника стануть заглушками з поясненням.
+              Це сценарій n8n: його буде перетворено на формат AI_BPMS, вузли без відповідника стануть заглушками з поясненням.
             </p>
           }
           @if (parseError()) {

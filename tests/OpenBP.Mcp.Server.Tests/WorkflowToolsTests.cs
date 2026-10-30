@@ -189,7 +189,7 @@ public class WorkflowToolsTests(McpServerFactory mcp)
         var definition = Definition(Unique("Бізнес-розмітка"));
         definition["business"] = JsonNode.Parse("""
             {
-              "lanes": [ { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" }, { "id": "openbp", "name": "OpenBP" } ],
+              "lanes": [ { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" }, { "id": "openbp", "name": "AI_BPMS" } ],
               "steps": [ { "id": "s_go", "title": "Користувач тисне «Старт»", "subtitle": "кнопка", "lane": "kit",
                            "links": [ { "node": "n_start", "direction": "in", "label": "запускає" } ] } ]
             }

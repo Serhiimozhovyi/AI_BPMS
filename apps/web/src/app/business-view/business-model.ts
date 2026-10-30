@@ -154,7 +154,7 @@ function defaultLane(node: CanvasNode, connectorNames: ReadonlyMap<string, strin
   if (node.type === 'core.manualTrigger') return { id: LANE_USER, name: $localize`:@@business.lane.user:Користувач` };
   if (node.type === 'core.webhook') return { id: LANE_EXTERNAL, name: $localize`:@@business.lane.external:Зовнішня система` };
   if (AI_TYPES.has(node.type)) return { id: LANE_AI, name: $localize`:@@business.lane.ai:ШІ` };
-  return { id: LANE_OPENBP, name: 'OpenBP' };
+  return { id: LANE_OPENBP, name: 'AI_BPMS' };
 }
 
 function otherLane(): BusinessLane {

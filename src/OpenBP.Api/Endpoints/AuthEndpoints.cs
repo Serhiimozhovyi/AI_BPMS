@@ -73,7 +73,7 @@ public static class AuthEndpoints
                 [OidcSetup.LoginScheme(provider.Key)]);
         })
             .WithTags(OpenApiSetup.Tags.Auth).WithSummary("Почати вхід через OIDC-провайдера")
-            .WithDescription("Відкривається браузером: перенаправляє до провайдера (authorization code + PKCE). Після входу — cookie сесії і повернення на `returnUrl` (лише шлях усередині OpenBP); відмова — `/login?oidcError=<код>`.")
+            .WithDescription("Відкривається браузером: перенаправляє до провайдера (authorization code + PKCE). Після входу — cookie сесії і повернення на `returnUrl` (лише шлях усередині AI_BPMS); відмова — `/login?oidcError=<код>`.")
             .Produces(StatusCodes.Status302Found);
 
         api.MapPost("/auth/logout", async (HttpContext http) =>

@@ -38,7 +38,7 @@ describe('BusinessViewComponent', () => {
     const lanes = [...host.querySelectorAll('[data-testid="business-lane"]')].map((l) =>
       [...l.querySelectorAll('text')].map((t) => t.textContent?.trim()).join(' '),
     );
-    expect(lanes).toEqual(['Кіт 2 люди у веб-формах', 'Зовнішня система', 'OpenBP', 'Кіт CRM']);
+    expect(lanes).toEqual(['Кіт 2 люди у веб-формах', 'Зовнішня система', 'AI_BPMS', 'Кіт CRM']);
     const steps = [...host.querySelectorAll('[data-testid="business-step"]')].map((s) => [s.getAttribute('data-step'), s.getAttribute('data-kind')]);
     expect(steps).toEqual([
       ['t', 'trigger'],

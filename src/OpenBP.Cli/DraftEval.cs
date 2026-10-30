@@ -222,7 +222,7 @@ internal static class DraftEval
         }
         catch (HttpRequestException ex)
         {
-            throw new CliException($"OpenBP недоступний ({http.BaseAddress}): {ex.Message}");
+            throw new CliException($"AI_BPMS недоступний ({http.BaseAddress}): {ex.Message}");
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -336,7 +336,7 @@ internal static class DraftEval
             key ??= Environment.GetEnvironmentVariable("OPENBP_API_KEY");
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.EndsWith('/') ? url : url + "/", UriKind.Absolute, out var baseUri))
             {
-                throw new CliException("Вкажіть адресу OpenBP: --url або OPENBP_URL (напр. https://openbp.example.com).", showUsage: true);
+                throw new CliException("Вкажіть адресу AI_BPMS: --url або OPENBP_URL (напр. https://openbp.example.com).", showUsage: true);
             }
 
             if (string.IsNullOrWhiteSpace(key))

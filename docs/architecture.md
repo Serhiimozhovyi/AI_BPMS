@@ -1,4 +1,4 @@
-# Архітектура OpenBP
+# Архітектура AI_BPMS
 
 Версія 0.2 (.NET + Angular, MCP-native). Рішення: [ADR-001](adr/ADR-001-stack.md), [ADR-002](adr/ADR-002-mcp-native.md).
 
@@ -137,7 +137,7 @@ public interface IStageStore        { Task SaveStagesAsync(Guid executionId, IRe
 - Окремий проєкт `src/OpenBP.Mcp.Server` (`→ Application`), а не частина `OpenBP.Mcp`: `Application` уже залежить від `OpenBP.Mcp`, зворотна залежність дала б цикл. `OpenBP.Api` лише підключає його (`AddOpenBpMcpServer()`, `MapOpenBpMcp("/mcp")`).
 - Транспорт — Streamable HTTP у stateless-режимі SDK: без серверних сесій і прив'язки клієнта до екземпляра Api; кожен запит автентифікується окремо.
 - Автентифікація — лише API-ключ (`Authorization: Bearer obp_…`, §10.6); cookie на `/mcp` не приймається. Без ключа — 401 до MCP-обміну.
-- Помилки: `OpenBpException` → результат tool'а з `isError: true` і `structuredContent = { code, message, errors? }` (`errors` — `WorkflowValidationError[]` для `WORKFLOW_INVALID`), ті самі коди, що в REST; той самий JSON дублюється текстовим блоком. Робить це фільтр `tools/call` (`McpErrors`), тож tools не ловлять винятки самі; `ArgumentException` (напр. `definition` не об'єкт або не тієї форми) → `BAD_REQUEST`, як 400 у REST; інші винятки SDK віддає загальним `isError` без деталей. У `resources/read` помилка — JSON-RPC: `NOT_FOUND` → `ResourceNotFound` (-32002), решта → `InvalidRequest`, код OpenBP — на початку повідомлення.
+- Помилки: `OpenBpException` → результат tool'а з `isError: true` і `structuredContent = { code, message, errors? }` (`errors` — `WorkflowValidationError[]` для `WORKFLOW_INVALID`), ті самі коди, що в REST; той самий JSON дублюється текстовим блоком. Робить це фільтр `tools/call` (`McpErrors`), тож tools не ловлять винятки самі; `ArgumentException` (напр. `definition` не об'єкт або не тієї форми) → `BAD_REQUEST`, як 400 у REST; інші винятки SDK віддає загальним `isError` без деталей. У `resources/read` помилка — JSON-RPC: `NOT_FOUND` → `ResourceNotFound` (-32002), решта → `InvalidRequest`, код AI_BPMS — на початку повідомлення.
 - Реалізація (F3-03): `AddOpenBpMcpServer()` — `serverInfo.name = openbp`, `WithHttpTransport(Stateless = true)`, tools/resources з `OpenBP.Mcp.Server`; `MapOpenBpMcp("/mcp", <схема API-ключа>)` — ендпойнт з політикою лише цієї схеми, тож cookie UI ігнорується, а без ключа, з невідомим чи відкликаним ключем — 401. `ICurrentUser` у tool'і — власник ключа (ті самі права, що в REST). JSON відповідей — camelCase, переліки рядками; `null`-поля пишуться, бо `outputSchema` tools робить їх обов'язковими (F3-17). `describe_connectors` і `openbp://connectors` віддають `{ servers: [{ id, name, transport, status, tools: [{ name, title, description, inputSchema, outputSchema }] }] }` — без `config` і `credentialId`; `outputSchema` (F3-22) — форма результату tool'а, щоб агент писав вирази наступних вузлів.
 - Сценарії (F3-04): `definition` в аргументах і відповідях — JSON-об'єкт за `WorkflowJson.Options` (той самий вигляд, що в REST і файлах, невідомі поля зберігаються). `list_workflows` → `{ items, page, pageSize, total }`; `get_workflow`/`create_workflow` → `{ id, name, active, version, versionId, updatedAt, definition }`; `update_workflow` → `{ applied, plan, workflow }` (без `planId` — план, з ним — збереження, F3-116); `validate_workflow` → `{ valid, errors }` (помилки визначення — не помилка tool'а); `openbp://workflows/{id}` — `definition` поточної версії.
 - Виконання (F3-05): `run_workflow { id, startNodeId?, startItems?, wait = true, timeoutSec = 60 }` — ручний запуск через `IExecutionService.StartAsync`; з `wait` чекає фінального стану через `IExecutionEventSource` (не довше `timeoutSec`, максимум 600 с) і віддає `ExecutionDetail` з кроками; якщо час вийшов — `ExecutionDetail` як є (`queued`/`running`), без помилки; без `wait` — одразу `queued`. `get_execution`, `list_executions { workflowId?, status?, page? }` (`status` — snake_case, як у REST; невідомий → `BAD_REQUEST`), `cancel_execution`, `resume_execution { id, items? }` (F6-08); `openbp://executions/{id}` — знімок `ExecutionDetail`. Стани в JSON — snake_case (`timed_out`), кроки — вже очищені від секретів (§8).
@@ -234,7 +234,7 @@ S3-сумісне сховище (F6-18, `Storage:S3` — `Endpoint`, `Bucket`, 
 Задано бакет — воркер пише в S3, а читає за `BinaryRef.storage` (`RoutingBinaryStore`): старі посилання `local` лишаються
 читабельними. Воркери з одним бакетом бачать файли одне одного.
 
-Трейси (F6-18): `ActivitySource` `OpenBP` (`OpenBpTelemetry`) — span-и `openbp.execution` (воркер), `openbp.node`
+Трейси (F6-18): `ActivitySource` `AI_BPMS` (`OpenBpTelemetry`) — span-и `openbp.execution` (воркер), `openbp.node`
 (движок, кожна спроба), `openbp.mcp.tool` і `openbp.llm`; кожен несе `openbp.execution.id` і `openbp.workflow.id`.
 OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без нього span-и не створюються. Атрибути — лише ідентифікатори
 й назви, без параметрів, items і credentials.
@@ -250,7 +250,7 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 
 ## 8. Безпека
 
-- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів, credential'а моделі помічника (F3-60, §10.8) і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`. Загальні типи (F3-93: `telegram.bot`, `apiKey`, `bearer`, `basic`, `oauth2.clientCredentials`, `database`, `google.serviceAccount`) описують доступ до системи; у змінні середовища чи заголовки MCP-сервера їх перетворює `ConnectorCredentialMap` за `config.credentialMap` конектора (лише назви) — однаково в Api і воркері, значення живуть тільки в реєстрі MCP-серверів процесу (docs/connectors.md §5.2). Токен `oauth2.clientCredentials` OpenBP отримує сам лише для конектора, якому його передає (`$accessToken`), під блокуванням рядка `credentials`.
+- Credentials: AES-256-GCM, ключ `OPENBP_ENCRYPTION_KEY` (32 байти base64); розшифровка у воркері в момент виконання, в Api — лише для реєстрації конекторів, auth webhook-ів, credential'а моделі помічника (F3-60, §10.8) і `ICredentialService` (F4-01: перелік заповнених полів і часткова заміна). REST/UI/MCP значень не віддають; каталог типів і перевірка даних — `CredentialTypes`. Загальні типи (F3-93: `telegram.bot`, `apiKey`, `bearer`, `basic`, `oauth2.clientCredentials`, `database`, `google.serviceAccount`) описують доступ до системи; у змінні середовища чи заголовки MCP-сервера їх перетворює `ConnectorCredentialMap` за `config.credentialMap` конектора (лише назви) — однаково в Api і воркері, значення живуть тільки в реєстрі MCP-серверів процесу (docs/connectors.md §5.2). Токен `oauth2.clientCredentials` AI_BPMS отримує сам лише для конектора, якому його передає (`$accessToken`), під блокуванням рядка `credentials`.
 - Secret scrubbing: значення credentials, що потрапили у вихід вузла, замінюються на `***` перед записом у `execution_steps` і перед віддачею через SSE/MCP. Для конекторів — також обчислювані значення відображення (`Basic …`, рядок підключення), але не поля-перемикачі загальних типів (`engine`, `ssl`, `in`, `port`).
 - Jint: без CLR-interop, без мережі, з лімітами. stdio MCP-сервери — з таймаутами і лімітами пам'яті.
 - Webhook: опційна автентифікація (header-токен / Basic).
@@ -760,7 +760,7 @@ credential ті самі, що в помічника; без інструмен�
 «Помічник»; поки `pending`, вона перепитує Api кожні 5 с.
 
 **Пояснення від агента через `/mcp` (F3-73).** Модель у «Налаштуваннях → Помічник» не обов'язкова: Claude чи ChatGPT,
-підключений до OpenBP як до MCP-сервера, пише пояснення сам — `save_workflow_explanation` (або `PUT /workflows/{id}/explanation
+підключений до AI_BPMS як до MCP-сервера, пише пояснення сам — `save_workflow_explanation` (або `PUT /workflows/{id}/explanation
 { text }`, editor) зберігає його як `ready` для поточної версії з тим самим відбитком; `get_workflow_explanation` читає.
 Описи `create_workflow`/`update_workflow` підказують агенту оновлювати пояснення після збереження. Відбиток рахується
 від визначення з упорядкованими ключами (jsonb їх переставляє); збереження з тим самим відбитком (пересунули вузли)
@@ -775,7 +775,7 @@ credential ті самі, що в помічника; без інструмен�
 Розмову бачать автор і admin (чужа для інших — 404), пише в неї й вирішує пропозиції лише автор (admin — 403).
 
 **Інструменти — tools `/mcp`.** `IAssistantToolbox` реалізує `OpenBP.Mcp.Server` (`McpAssistantToolbox`): на час запиту
-піднімає MCP-сервер OpenBP у процесі з тими самими `McpServerOptions` (tools, фільтр помилок) і провайдером сервісів
+піднімає MCP-сервер AI_BPMS у процесі з тими самими `McpServerOptions` (tools, фільтр помилок) і провайдером сервісів
 запиту, а клієнт з'єднується з ним парою каналів у пам'яті. Тож помічник має рівно ті tools і права, що й зовнішній
 ШІ-агент, без окремої логіки (правило 4). Контекст сторінки (`page`, `workflowId`, `nodeId`, `executionId`, `projectId`,
 `table`) іде моделі рядком `[Контекст: …]` перед текстом людини — лише ідентифікатори, решту модель бере tools.

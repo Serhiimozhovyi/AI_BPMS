@@ -101,7 +101,7 @@ public static class TaskSync
 
     /// <summary>
     /// Виконавець: <c>userId</c> — користувач; <c>role</c> — роль; <c>expression</c> — значення як є, а якщо це email
-    /// користувача OpenBP — ще й він.
+    /// користувача AI_BPMS — ще й він.
     /// </summary>
     private static async Task AssignAsync(OpenBpDbContext db, TaskEntity task, JsonObject assignee, CancellationToken ct)
     {

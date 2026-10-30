@@ -285,7 +285,7 @@ public sealed class CredentialService(OpenBpDbContext db, ICurrentUser currentUs
         var managed = data.Select(p => p.Key).Where(fields.Contains).ToList();
         if (managed.Count > 0)
         {
-            var hint = type == OAuth2Credential.Type ? "Поле заповнює OpenBP після «Підключити»." : "Поле заповнює OpenBP, коли отримує токен.";
+            var hint = type == OAuth2Credential.Type ? "Поле заповнює AI_BPMS після «Підключити»." : "Поле заповнює AI_BPMS, коли отримує токен.";
             throw new CredentialValidationException([.. managed.Select(f => new CredentialFieldError(f, hint))]);
         }
     }

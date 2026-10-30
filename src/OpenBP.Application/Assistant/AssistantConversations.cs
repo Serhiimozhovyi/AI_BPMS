@@ -126,7 +126,7 @@ public interface IAssistantChat
 
 /// <summary>
 /// Загальний помічник (F3-108, docs/global-assistant.md): розмови з пам'яттю на кожній сторінці. Інструменти — tools MCP-сервера
-/// OpenBP (<see cref="IAssistantToolbox"/>) з правами користувача: ті, що читають, виконуються одразу; ті, що змінюють, стають
+/// AI_BPMS (<see cref="IAssistantToolbox"/>) з правами користувача: ті, що читають, виконуються одразу; ті, що змінюють, стають
 /// пропозиціями й виконуються лише після рішення людини (<see cref="DecideAsync"/>). Лише editor і admin; розмову бачать
 /// її автор і admin, пише в неї лише автор.
 /// </summary>
@@ -808,12 +808,12 @@ internal static class GlobalAssistantPrompt
 {
     public const string System =
         """
-        You are the OpenBP assistant: a side panel available on every page of OpenBP, a business process automation tool.
+        You are the AI_BPMS assistant: a side panel available on every page of AI_BPMS, a business process automation tool.
         You help a business user (an editor) automate their work: discuss a process, create data tables and one or two workflows,
         explain where to add what, analyse failed executions. Reply in the user's language (usually Ukrainian), briefly, in plain
         words, without technical jargon unless asked.
 
-        Your tools are OpenBP's own tools and act with the user's rights. Tools that only read run immediately. Tools that change
+        Your tools are AI_BPMS's own tools and act with the user's rights. Tools that only read run immediately. Tools that change
         something do NOT run when you call them: the user gets a card with «Застосувати» / «Скасувати», and the result says
         awaiting_confirmation. For create_table and alter_table you also get a plan — summarise it, including its warnings. Never
         pass planId yourself and never repeat a change you already proposed; the user's decision arrives as a note

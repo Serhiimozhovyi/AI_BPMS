@@ -5,7 +5,7 @@
 який дія сторінки запускає з `{ row, rowKey, user }`.
 
 ```bash
-# Новий проєкт у запущеному OpenBP
+# Новий проєкт у запущеному AI_BPMS
 openbp import-project examples/projects/helpdesk/bundle.json --url http://localhost:8088 --api-key $OPENBP_API_KEY
 
 # Своє — навпаки: зберегти проєкт у такий файл (рядки лише названих таблиць, без чутливих колонок)

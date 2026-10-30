@@ -16,8 +16,8 @@ namespace OpenBP.Cli;
 /// <c>openbp run &lt;file.json&gt; [--pin] [--servers servers.json] [--credentials creds.json] [--now ISO-8601]</c> — виконання сценарію без БД
 /// (docs/architecture.md §1): in-memory store, <c>core.*</c> і <c>mcp.*</c> вузли, Jint-вирази.
 /// Друкує input/output кожного вузла. Коди виходу: 0 — успіх, 1 — виконання завершилось не успіхом, 2 — помилка запуску.
-/// <c>openbp export | import | activate | export-project | import-project</c> — робота з запущеним OpenBP через REST для CI/CD (<see cref="RemoteCommands"/>):
-/// 1 — імпорт без відповідників, 2 — помилка аргументів чи відповідь OpenBP з помилкою.
+/// <c>openbp export | import | activate | export-project | import-project</c> — робота з запущеним AI_BPMS через REST для CI/CD (<see cref="RemoteCommands"/>):
+/// 1 — імпорт без відповідників, 2 — помилка аргументів чи відповідь AI_BPMS з помилкою.
 /// </summary>
 public static class CliApp
 {
@@ -55,7 +55,7 @@ public static class CliApp
           --workflow   draft-eval: сценарій, у який «будуємо» (його вміст не змінюється)
           --cases      draft-eval: тека з описами; типово tests/drafter-cases
           --model      draft-eval: підпис моделі в звіті; типово — модель з налаштувань помічника
-          --url        адреса OpenBP; типово змінна OPENBP_URL
+          --url        адреса AI_BPMS; типово змінна OPENBP_URL
           --api-key    API-ключ (Bearer); типово змінна OPENBP_API_KEY — у CI беріть його із секрету
         """;
 
@@ -68,7 +68,7 @@ public static class CliApp
     public static Task<int> RunAsync(string[] args, TextWriter stdout, TextWriter stderr, CancellationToken ct) =>
         RunAsync(args, stdout, stderr, http: null, ct);
 
-    /// <summary>Те саме з власним HTTP-обробником для команд проти OpenBP (тести — <c>WebApplicationFactory</c>).</summary>
+    /// <summary>Те саме з власним HTTP-обробником для команд проти AI_BPMS (тести — <c>WebApplicationFactory</c>).</summary>
     /// <param name="args">Аргументи командного рядка.</param>
     /// <param name="stdout">Вивід звіту.</param>
     /// <param name="stderr">Вивід помилок запуску.</param>
@@ -181,7 +181,7 @@ public static class CliApp
         await RunReport.WriteAsync(stdout, workflow, result, mode).ConfigureAwait(false);
         if (waits > 0)
         {
-            await stdout.WriteLineAsync($"Очікувань: {waits}; час CLI перемотано до {clock.GetUtcNow():yyyy-MM-ddTHH:mm:ssZ} (у OpenBP виконання чекало б у стані waiting).").ConfigureAwait(false);
+            await stdout.WriteLineAsync($"Очікувань: {waits}; час CLI перемотано до {clock.GetUtcNow():yyyy-MM-ddTHH:mm:ssZ} (у AI_BPMS виконання чекало б у стані waiting).").ConfigureAwait(false);
         }
 
         return result.Status == ExecutionStatus.Success ? Ok : ExecutionFailed;

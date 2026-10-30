@@ -1,7 +1,7 @@
 namespace OpenBP.Connectors.KitCrm;
 
 /// <summary>
-/// Доступ до Кіта — **лише** зі змінних середовища (OpenBP передає їх через credential <c>{ "env": { … } }</c>
+/// Доступ до Кіта — **лише** зі змінних середовища (AI_BPMS передає їх через credential <c>{ "env": { … } }</c>
 /// конектора): client Keycloak із service account (<c>client_credentials</c>, docs/kit-sales.md §5.1) і необов'язковий
 /// заголовок <c>FrontPagePath</c>. Секрет client'а й видані токени ніколи не потрапляють у відповіді tools і тексти
 /// помилок: <see cref="Scrub"/>.
@@ -29,7 +29,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
     public string Require(string variable) =>
         environment(variable) is { Length: > 0 } value
             ? value
-            : throw new ConnectorException($"Не задано змінну середовища {variable} (credential конектора в OpenBP, поле env).");
+            : throw new ConnectorException($"Не задано змінну середовища {variable} (credential конектора в AI_BPMS, поле env).");
 
     /// <summary><c>FrontPagePath</c> або <c>null</c>.</summary>
     public string? FrontPagePath => environment(FrontPagePathVariable) is { Length: > 0 } value ? value.Trim() : null;

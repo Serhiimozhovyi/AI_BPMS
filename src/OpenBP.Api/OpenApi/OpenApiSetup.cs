@@ -139,10 +139,10 @@ public static class OpenApiSetup
     {
         document.Info = new OpenApiInfo
         {
-            Title = "OpenBP REST API",
+            Title = "AI_BPMS REST API",
             Version = DocumentName,
             Description = """
-                REST API OpenBP: сценарії, виконання, конектори, облікові дані.
+                REST API AI_BPMS: сценарії, виконання, конектори, облікові дані.
 
                 **Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login` або входу через
                 OIDC-провайдера (`GET /api/v1/auth/oidc/{key}/login`); інтеграції — API-ключ у заголовку
@@ -175,7 +175,7 @@ public static class OpenApiSetup
         {
             Type = SecuritySchemeType.Http,
             Scheme = "bearer",
-            Description = "API-ключ OpenBP (POST /api/v1/api-keys) або access token OIDC-провайдера з OpenBp:Oidc:Providers.",
+            Description = "API-ключ AI_BPMS (POST /api/v1/api-keys) або access token OIDC-провайдера з OpenBp:Oidc:Providers.",
         };
 
         document.Components.Schemas ??= new Dictionary<string, IOpenApiSchema>();
@@ -259,7 +259,7 @@ public static class OpenApiSetup
         if (type == typeof(WorkflowDefinition))
         {
             schema.Type = JsonSchemaType.Object;
-            schema.Description = "Сценарій у форматі OpenBP: formatVersion, name, settings, nodes, connections, pinData — див. docs/workflow-format.md.";
+            schema.Description = "Сценарій у форматі AI_BPMS: formatVersion, name, settings, nodes, connections, pinData — див. docs/workflow-format.md.";
         }
 
         return Task.CompletedTask;
@@ -270,12 +270,12 @@ public static class OpenApiSetup
         public const string Workflow = """
             {
               "formatVersion": 1,
-              "name": "Привіт, OpenBP",
+              "name": "Привіт, AI_BPMS",
               "settings": { "timezone": "Europe/Kyiv", "executionTimeoutSec": 60, "errorWorkflowId": null, "saveSuccessfulData": true },
               "nodes": [
                 { "id": "n_start", "name": "Старт", "type": "core.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
                 { "id": "n_greeting", "name": "Привітання", "type": "core.set", "typeVersion": 1, "position": [240, 0],
-                  "parameters": { "fields": [ { "name": "greeting", "value": "Привіт з OpenBP" } ] } }
+                  "parameters": { "fields": [ { "name": "greeting", "value": "Привіт з AI_BPMS" } ] } }
               ],
               "connections": [ { "from": { "node": "n_start", "output": 0 }, "to": { "node": "n_greeting", "input": 0 } } ],
               "pinData": {}

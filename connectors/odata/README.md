@@ -1,4 +1,4 @@
-# Конектор OData для OpenBP
+# Конектор OData для AI_BPMS
 
 Загальний MCP-сервер над будь-яким сервісом **OData v4** (1С, Dynamics, SAP, Кіт CRM та ін.), зроблений на шаблоні
 Connector Kit (`tools/connector-template`). Без бізнес-логіки: набір сутностей обирається зі списку, решта — звичайні
@@ -28,9 +28,9 @@ Connector Kit (`tools/connector-template`). Без бізнес-логіки: н
 `$metadata`, напр. `https://erp.example.ua/odata/`. `Connector:MaxTop` (за замовчуванням 100, не більше 1000) обмежує
 розмір вибірки.
 
-Спосіб входу визначається змінними середовища, які OpenBP передає з облікових даних підключення:
+Спосіб входу визначається змінними середовища, які AI_BPMS передає з облікових даних підключення:
 
-| Спосіб | Змінні | Облікові дані в OpenBP |
+| Спосіб | Змінні | Облікові дані в AI_BPMS |
 |---|---|---|
 | OAuth2 client credentials | `ODATA_TOKEN_URL`, `ODATA_CLIENT_ID`, `ODATA_CLIENT_SECRET`, `ODATA_SCOPES`?, `ODATA_AUDIENCE`? | `oauth2.clientCredentials` (так ставить каталог) |
 | Готовий токен | `ODATA_TOKEN` | змінні вручну (`mcp.stdio`) або `bearer` у власному маніфесті |
@@ -50,7 +50,7 @@ Connector Kit (`tools/connector-template`). Без бізнес-логіки: н
 dotnet build -warnaserror
 dotnet test
 dotnet format --verify-no-changes
-dotnet run --project src/OpenBP.Connectors.OData            # stdio (так запускає OpenBP)
+dotnet run --project src/OpenBP.Connectors.OData            # stdio (так запускає AI_BPMS)
 dotnet run --project src/OpenBP.Connectors.OData -- --http http://0.0.0.0:8080   # окремий сервіс: /mcp
 ```
 

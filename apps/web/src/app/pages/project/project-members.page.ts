@@ -65,7 +65,7 @@ type MemberRole = ProjectMember['role'];
           <button mat-flat-button type="button" data-testid="member-add" [disabled]="saving() || email.invalid" (click)="add()" i18n="@@project.members.add">Додати</button>
         </div>
         <p class="-mt-2 mb-4 max-w-3xl text-sm opacity-70" i18n="@@project.members.addHint">
-          Якщо людини ще немає в OpenBP, буде створено обліковий запис з роллю viewer. Без тимчасового пароля людина входить лише
+          Якщо людини ще немає в AI_BPMS, буде створено обліковий запис з роллю viewer. Без тимчасового пароля людина входить лише
           через корпоративний вхід (OIDC).
         </p>
       }

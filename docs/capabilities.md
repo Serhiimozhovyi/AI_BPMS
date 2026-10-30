@@ -8,7 +8,7 @@
 
 ## 1. Шедулери
 
-| Можливість | Чим робиться в OpenBP | Стан | Приклад і тест |
+| Можливість | Чим робиться в AI_BPMS | Стан | Приклад і тест |
 |---|---|---|---|
 | Розклад cron | `core.schedule { cron, timezone }` | є | `examples/daily-report.json`, `examples/psy-support-scheduler.json`; `tests/OpenBP.Nodes.Core.Tests/ScheduleNodeTests.cs` |
 | Часовий пояс сценарію | `timezone` у `core.schedule`, `settings.timezone` сценарію, час у `core.code` | є | `examples/daily-report.json`; `ScheduleNodeTests.cs` (`Test_run_emits_current_time_in_node_timezone`) |
@@ -21,7 +21,7 @@
 
 ## 2. Чатботи
 
-| Можливість | Чим робиться в OpenBP | Стан | Приклад і тест |
+| Можливість | Чим робиться в AI_BPMS | Стан | Приклад і тест |
 |---|---|---|---|
 | Вхід повідомлень Telegram | `core.webhook` + конектор `connectors/telegram` | є | `examples/telegram-1c.json`; `tests/OpenBP.Nodes.Core.Tests/WebhookNodeTests.cs`, `connectors/telegram/tests/OpenBP.Connectors.Telegram.Tests/TelegramConnectorTests.cs` |
 | Клавіатури, редагування повідомлень, callback-кнопки | `reply_markup`, `edit_message_text`, `answer_callback_query` (F3-27) | є | `connectors/telegram/tests/OpenBP.Connectors.Telegram.Tests/TelegramConnectorTests.cs` (тести клавіатур); `connectors/psy-support/src/OpenBP.Connectors.PsySupport/Domain/Keyboard.cs` |
@@ -33,7 +33,7 @@
 
 ## 3. Події
 
-| Можливість | Чим робиться в OpenBP | Стан | Приклад і тест |
+| Можливість | Чим робиться в AI_BPMS | Стан | Приклад і тест |
 |---|---|---|---|
 | Вебхук як тригер | `core.webhook` з секретом у заголовку | є | `examples/telegram-1c.json`; `tests/OpenBP.Nodes.Core.Tests/WebhookNodeTests.cs` |
 | Опитування (polling) конектора за розкладом | `mcp.poll` (F1-09, F2-12) | є | `examples/kit-approval-business.json`; `tests/OpenBP.Mcp.Tests/McpPollNodeTests.cs`, `tests/OpenBP.Worker.Tests/PollJobTests.cs` |
@@ -43,7 +43,7 @@
 
 ## 4. Обробка даних
 
-| Можливість | Чим робиться в OpenBP | Стан | Приклад і тест |
+| Можливість | Чим робиться в AI_BPMS | Стан | Приклад і тест |
 |---|---|---|---|
 | Присвоєння полів | `core.set` | є | `examples/hello-manual.json`; `tests/OpenBP.Nodes.Core.Tests/SetNodeTests.cs` |
 | Код (JavaScript, Jint) | `core.code` | є | `examples/order-total.json`; `tests/OpenBP.Nodes.Core.Tests/CodeNodeTests.cs` |
@@ -57,7 +57,7 @@
 
 ## 5. Інтеграції
 
-| Можливість | Чим робиться в OpenBP | Стан | Приклад і тест |
+| Можливість | Чим робиться в AI_BPMS | Стан | Приклад і тест |
 |---|---|---|---|
 | Виклик інструментів MCP-серверів | `mcp.tool`, реєстр серверів (F1-08, F1-09) | є | `examples/servers.json`, `examples/daily-report.json`; `tests/OpenBP.Mcp.Tests/McpToolNodeTests.cs`, `McpServerRegistryTests.cs` |
 | Генерація інструментів з OpenAPI | Connector Kit (F3-11) | є | `tools/connector-template/tests/Connector.Template.Tests/OpenApi/OpenApiGeneratorTests.cs` |

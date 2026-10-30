@@ -1,7 +1,7 @@
 namespace Connector.Template;
 
 /// <summary>
-/// Секрети конектора — **лише** зі змінних середовища (OpenBP передає їх через credential <c>{ "env": { … } }</c>
+/// Секрети конектора — **лише** зі змінних середовища (AI_BPMS передає їх через credential <c>{ "env": { … } }</c>
 /// конектора). Значення ніколи не потрапляють у відповіді tools і тексти помилок: <see cref="Scrub"/>.
 /// </summary>
 /// <param name="environment">Джерело змінних (за замовчуванням — середовище процесу; у тестах — словник).</param>
@@ -27,7 +27,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
     public string Require(string variable) =>
         environment(variable) is { Length: > 0 } value
             ? value
-            : throw new ConnectorException($"Не задано змінну середовища {variable} (credential конектора в OpenBP, поле env).");
+            : throw new ConnectorException($"Не задано змінну середовища {variable} (credential конектора в AI_BPMS, поле env).");
 
     /// <summary>Замінює значення всіх секретів у тексті на <c>***</c>.</summary>
     /// <param name="text">Текст, напр. тіло відповіді REST.</param>

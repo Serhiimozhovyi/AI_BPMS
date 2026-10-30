@@ -8,7 +8,7 @@ using OpenBP.Application.Assistant;
 namespace OpenBP.Mcp.Server;
 
 /// <summary>
-/// Підключення MCP-сервера OpenBP до хоста (docs/architecture.md §4): Streamable HTTP у stateless-режимі,
+/// Підключення MCP-сервера AI_BPMS до хоста (docs/architecture.md §4): Streamable HTTP у stateless-режимі,
 /// tools і resources з цього проєкту, помилки application-шару — результатом tool'а з <c>isError</c>.
 /// </summary>
 public static class McpServerSetup

@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace Connector.Template.Events;
 
 /// <summary>
-/// Стрічка подій конектора — ресурс для push-тригера <c>mcp.subscribe</c> OpenBP (docs/connectors.md §9.2).
+/// Стрічка подій конектора — ресурс для push-тригера <c>mcp.subscribe</c> AI_BPMS (docs/connectors.md §9.2).
 /// <see cref="Uri"/> — сталий (<c>telegram://updates</c>) або шаблон із параметрами в дужках (<c>kit://changes/{entity}</c>):
 /// тоді підписуються на конкретний URI, і в кожного свій буфер і своє джерело.
 /// </summary>
@@ -96,7 +96,7 @@ public sealed class EventSink
 /// Ресурси подій MCP-сервера конектора (docs/connectors.md §9.2): <c>resources/list</c> і <c>resources/templates/list</c>
 /// зі стрічок, <c>resources/read</c> віддає буфер <c>{ "result": [...] }</c> (від старих до нових), <c>resources/subscribe</c>
 /// / <c>unsubscribe</c> і <c>notifications/resources/updated</c> усім підписаним сесіям на кожну нову порцію подій.
-/// Сповіщення — лише сигнал: OpenBP після нього читає ресурс і сам відсікає вже бачені події за <c>keyField</c>.
+/// Сповіщення — лише сигнал: AI_BPMS після нього читає ресурс і сам відсікає вже бачені події за <c>keyField</c>.
 /// Для Streamable HTTP сервер має тримати сесії (<c>HttpServerSessionMode.StatefulForInitializeClients</c>): у stateless
 /// режимі сповіщення нікуди надіслати.
 /// </summary>

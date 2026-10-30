@@ -1,7 +1,7 @@
 namespace OpenBP.Connectors.OneC;
 
 /// <summary>
-/// Логін і пароль користувача 1С — **лише** зі змінних середовища (OpenBP передає їх через credential
+/// Логін і пароль користувача 1С — **лише** зі змінних середовища (AI_BPMS передає їх через credential
 /// <c>{ "env": { … } }</c> конектора). Пароль ніколи не потрапляє у відповіді tools і тексти помилок: <see cref="Scrub"/>.
 /// </summary>
 /// <param name="environment">Джерело змінних (за замовчуванням — середовище процесу; у тестах — словник).</param>
@@ -18,7 +18,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
     public string Username =>
         environment(UsernameVariable) is { Length: > 0 } value
             ? value
-            : throw new ConnectorException($"Не задано змінну середовища {UsernameVariable} (credential конектора в OpenBP, поле env).");
+            : throw new ConnectorException($"Не задано змінну середовища {UsernameVariable} (credential конектора в AI_BPMS, поле env).");
 
     /// <summary>Пароль (порожній, якщо змінну не задано).</summary>
     public string Password => environment(PasswordVariable) ?? "";

@@ -1,4 +1,4 @@
-# Конектор Telegram Bot API для OpenBP
+# Конектор Telegram Bot API для AI_BPMS
 
 MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), зроблений на шаблоні Connector Kit
 (`tools/connector-template`). Tools описано вручну:
@@ -22,7 +22,7 @@ MCP-сервер над [Telegram Bot API](https://core.telegram.org/bots/api), 
 | `get_updates` | `getUpdates` | `offset?`, `limit?` (1–100) | `{ "result": [Update, …] }`, кожне з унікальним `update_id` |
 | `get_chat` | `getChat` | `chat_id` | `id`, `type`, `title`/`username`/`first_name` |
 
-У конструкторі OpenBP `reply_markup` редагується візуально (інлайн-кнопки чи клавіатура, `x-openbp-widget: keyboard`), `commands` — таблицею, `parse_mode` — списком, `text`/`caption` мають лічильник символів (docs/connectors.md §2).
+У конструкторі AI_BPMS `reply_markup` редагується візуально (інлайн-кнопки чи клавіатура, `x-openbp-widget: keyboard`), `commands` — таблицею, `parse_mode` — списком, `text`/`caption` мають лічильник символів (docs/connectors.md §2).
 
 `chat_id` — числовий id чату або `@username` каналу. `reply_markup` — об'єкт Bot API як є (рядок з JSON теж
 підходить), з рівно одним з полів:
@@ -54,17 +54,17 @@ dotnet test
 dotnet publish src/OpenBP.Connectors.Telegram -c Release -o out
 ```
 
-## 3. Зареєструвати в OpenBP
+## 3. Зареєструвати в AI_BPMS
 
 «Конектори» → «Додати MCP-сервер» (роль admin):
 
-- **stdio** (OpenBP запускає процес сам):
+- **stdio** (AI_BPMS запускає процес сам):
   - команда `dotnet`, аргументи — шлях до `out/OpenBP.Connectors.Telegram.dll`;
-  - credential конектора: `{ "env": { "TELEGRAM_BOT_TOKEN": "123456789:AA…" } }`. OpenBP зберігає його
+  - credential конектора: `{ "env": { "TELEGRAM_BOT_TOKEN": "123456789:AA…" } }`. AI_BPMS зберігає його
     зашифрованим і передає процесу як змінну середовища.
 - **http** (окремий сервіс, напр. контейнер):
   - `TELEGRAM_BOT_TOKEN=… dotnet out/OpenBP.Connectors.Telegram.dll --http http://0.0.0.0:8080`;
-  - в OpenBP: транспорт `http`, URL `http://<хост>:8080/mcp`.
+  - в AI_BPMS: транспорт `http`, URL `http://<хост>:8080/mcp`.
 
 Натисніть «Оновити tools»: стан «Підключено» і дев'ять tools. Інша адреса Bot API (локальний
 [Bot API server](https://github.com/tdlib/telegram-bot-api)) задається змінною `Connector__BaseUrl`.
@@ -80,12 +80,12 @@ Telegram доставляє оновлення **або** на webhook, **або
 
 Тригер «Нове повідомлення Telegram» з палітри — вузол `mcp.subscribe`: `resourceUri = telegram://updates`,
 `itemsPath = result`, `keyField = update_id`. Поки сценарій активний, конектор сам тримає long-polling `getUpdates`
-(`Connector:Events:LongPollSec`, 25 с), підтверджує отримане (`offset`) і одразу сповіщає OpenBP; без підписників
+(`Connector:Events:LongPollSec`, 25 с), підтверджує отримане (`offset`) і одразу сповіщає AI_BPMS; без підписників
 `getUpdates` не викликається. Повідомлення — у `$json.message`, натискання кнопки — у `$json.callback_query`.
 Обмеження: підтверджені оновлення tool `get_updates` уже не побачить (один споживач на бота), а з заданим webhook
 ресурс недоступний — підписка повертає помилку з поясненням; зніміть webhook tool'ом `delete_webhook`.
 
-### Webhook (миттєво; потрібна публічна HTTPS-адреса OpenBP)
+### Webhook (миттєво; потрібна публічна HTTPS-адреса AI_BPMS)
 
 1. Тригер `core.webhook`: `method = POST`, `path = telegram/orders`, автентифікація `header` з
    `headerName = X-Telegram-Bot-Api-Secret-Token` і credential `{ "token": "<довільний секрет>" }`.
@@ -112,7 +112,7 @@ Telegram доставляє оновлення **або** на webhook, **або
 
 1. Якщо webhook встановлено, зніміть його tool'ом `delete_webhook`.
 2. Тригер `mcp.poll`: сервер Telegram, tool `get_updates`, `itemsPath = result`, `keyField = update_id`,
-   `cron = */1 * * * *`. OpenBP пам'ятає оброблені `update_id` і запускає сценарій лише з новими.
+   `cron = */1 * * * *`. AI_BPMS пам'ятає оброблені `update_id` і запускає сценарій лише з новими.
 3. Повідомлення — у `$json.message`. Без `offset` Telegram віддає непідтверджені оновлення до 24 годин, тож ті
    самі `update_id` приходять кілька разів — `mcp.poll` відкидає вже бачені за `keyField`.
 

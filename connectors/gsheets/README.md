@@ -1,4 +1,4 @@
-# Конектор Google Sheets для OpenBP
+# Конектор Google Sheets для AI_BPMS
 
 MCP-сервер над [Google Sheets API v4](https://developers.google.com/sheets/api/reference/rest) на шаблоні Connector
 Kit (`tools/connector-template`). Tools — «табличний» контракт: перший рядок листа — заголовок, рядки адресуються
@@ -52,17 +52,17 @@ dotnet test
 dotnet publish src/OpenBP.Connectors.GSheets -c Release -o out
 ```
 
-## 4. Зареєструвати в OpenBP
+## 4. Зареєструвати в AI_BPMS
 
 «Конектори» → «Додати MCP-сервер» (роль admin):
 
-- **stdio** (OpenBP запускає процес сам):
+- **stdio** (AI_BPMS запускає процес сам):
   - команда `dotnet`, аргументи — шлях до `out/OpenBP.Connectors.GSheets.dll`;
   - credential конектора: `{ "env": { "GOOGLE_SERVICE_ACCOUNT_JSON": "<вміст JSON-файлу ключа повністю>" } }`.
-    OpenBP зберігає його зашифрованим і передає процесу як змінну середовища.
+    AI_BPMS зберігає його зашифрованим і передає процесу як змінну середовища.
 - **http** (окремий сервіс, напр. контейнер):
   - `GOOGLE_SERVICE_ACCOUNT_JSON="$(cat key.json)" dotnet out/OpenBP.Connectors.GSheets.dll --http http://0.0.0.0:8080`;
-  - в OpenBP: транспорт `http`, URL `http://<хост>:8080/mcp`.
+  - в AI_BPMS: транспорт `http`, URL `http://<хост>:8080/mcp`.
 
 Натисніть «Оновити tools»: стан «Підключено» і п'ять tools. Адресу API можна змінити змінною `Connector__SheetsUrl`
 (напр. для проксі), адресу обміну токена — `Connector__TokenUrl` (типово — `token_uri` з ключа).

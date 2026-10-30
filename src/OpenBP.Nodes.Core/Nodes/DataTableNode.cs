@@ -41,7 +41,7 @@ public sealed class DataTableNode(IDataTableStore? store) : INode
         Inputs: ["main"],
         Outputs: ["main"],
         ParametersSchema: NodeSchemas.Load("dataTable"),
-        Description: "Читає й записує рядки таблиці даних OpenBP: get, list, count, insert, insertIf, upsert, update, increment, delete.");
+        Description: "Читає й записує рядки таблиці даних AI_BPMS: get, list, count, insert, insertIf, upsert, update, increment, delete.");
 
     /// <inheritdoc />
     public async Task<Item[][]> ExecuteAsync(INodeContext ctx, CancellationToken ct)

@@ -48,7 +48,7 @@
 ## Промпт планованої задачі (копіювати в поле «prompt»)
 
 ```
-Ти — інженер проєкту OpenBP (репо serhiimozhovyi/openbp_builder). Виконай один цикл за docs/night-agent.md:
+Ти — інженер проєкту AI_BPMS (репо serhiimozhovyi/openbp_builder). Виконай один цикл за docs/night-agent.md:
 оновити main, прочитати CLAUDE.md і BACKLOG.md, взяти першу задачу `ready` з виконаними depends і model не вищою за твою,
 реалізувати її строго за DoD у гілці agent/<ID>-<слаг>, прогнати всі перевірки, відкрити PR за шаблоном,
 оновити статус задачі у BACKLOG.md. Нічого не мерджити, main не чіпати. Якщо задач немає або все blocked —

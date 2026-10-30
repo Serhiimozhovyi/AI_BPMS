@@ -44,7 +44,7 @@ public sealed class OpenBpResources
 
     /// <summary>JSON Schema формату workflow з <c>OpenBP.Shared</c> — джерело правди для <c>create_workflow</c>/<c>update_workflow</c>.</summary>
     [McpServerResource(UriTemplate = WorkflowSchemaUri, Name = "workflow-format", Title = "Workflow format JSON Schema", MimeType = "application/schema+json")]
-    [Description("JSON Schema of the OpenBP workflow definition (nodes, connections, settings, pinData).")]
+    [Description("JSON Schema of the AI_BPMS workflow definition (nodes, connections, settings, pinData).")]
     public static string WorkflowSchema() => WorkflowJson.Schema;
 
     /// <summary>Те саме, що <c>describe_connectors</c>.</summary>
@@ -59,7 +59,7 @@ public sealed class OpenBpResources
     /// <param name="nodes">Сервіс вузлів.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerResource(UriTemplate = NodesUri, Name = "nodes", Title = "Node types", MimeType = "application/json")]
-    [Description("Node types OpenBP can run, with ports and parameter schemas; same content as the describe_nodes tool.")]
+    [Description("Node types AI_BPMS can run, with ports and parameter schemas; same content as the describe_nodes tool.")]
     public static async Task<string> Nodes(INodeService nodes, CancellationToken ct) =>
         JsonSerializer.Serialize(await NodesDescription.BuildAsync(nodes, ct).ConfigureAwait(false), McpJson.Options);
 
@@ -68,7 +68,7 @@ public sealed class OpenBpResources
     /// <param name="id">Id сценарію.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerResource(UriTemplate = WorkflowUriTemplate, Name = "workflow", Title = "Workflow definition", MimeType = "application/json")]
-    [Description("Definition of the current version of a workflow in the OpenBP workflow format.")]
+    [Description("Definition of the current version of a workflow in the AI_BPMS workflow format.")]
     public static async Task<string> Workflow(IWorkflowService workflows, Guid id, CancellationToken ct) =>
         WorkflowDefinitions.ToJson((await workflows.GetAsync(id, ct).ConfigureAwait(false)).Definition).ToJsonString(McpJson.Options);
 

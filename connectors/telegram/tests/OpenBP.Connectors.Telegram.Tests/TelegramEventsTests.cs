@@ -30,7 +30,7 @@ public sealed class TelegramEventsTests : IAsyncLifetime
         await _app.StartAsync();
         _client = await McpClient.CreateAsync(
             new HttpClientTransport(new HttpClientTransportOptions { Endpoint = new Uri(_app.Urls.Single() + "/mcp"), TransportMode = HttpTransportMode.StreamableHttp }),
-            // Як воркер OpenBP: остання ревізія протоколу з resources/subscribe.
+            // Як воркер AI_BPMS: остання ревізія протоколу з resources/subscribe.
             new McpClientOptions { ProtocolVersion = "2025-11-25" });
     }
 

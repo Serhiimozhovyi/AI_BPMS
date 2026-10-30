@@ -1,15 +1,15 @@
 # psy-support — застосунок психологічної підтримки
 
-Бекенд бота психологічної підтримки (перенесення з n8n) з власною БД, правилами й адмінкою. В OpenBP підключається як
+Бекенд бота психологічної підтримки (перенесення з n8n) з власною БД, правилами й адмінкою. В AI_BPMS підключається як
 MCP-конектор. Проєкт — `docs/psy-support.md`, задачі F3-33…F3-35, F3-31.
 
 Один процес, три входи:
 
-- `/mcp` — MCP (Streamable HTTP) для OpenBP і ШІ-агентів; той самий набір tools — через stdio;
+- `/mcp` — MCP (Streamable HTTP) для AI_BPMS і ШІ-агентів; той самий набір tools — через stdio;
 - `/api/v1` — REST для сторінки адміністрування (cookie-сесія, ролі `coordinator` / `psychologist`);
 - `/` — Angular-адмінка (F3-35) з `wwwroot`.
 
-`psy-support` ніколи сам не пише в Telegram: tools бота повертають екран і `notifications`, а надсилає їх сценарій OpenBP
+`psy-support` ніколи сам не пише в Telegram: tools бота повертають екран і `notifications`, а надсилає їх сценарій AI_BPMS
 через `connectors/telegram`. Сповіщення від дій в адмінці потрапляють в `outbox` і забираються tool'ом `due_notifications`.
 
 ## Запуск
@@ -25,7 +25,7 @@ dotnet run --project src/OpenBP.Connectors.PsySupport -- --http http://0.0.0.0:8
 Адмінка відкривається на тій самій адресі (`/login`). Її треба зібрати один раз перед запуском:
 `cd web && npm ci && npm run build` (результат — у `src/OpenBP.Connectors.PsySupport/wwwroot`, у git не потрапляє).
 
-Міграції застосовуються під час старту. Без `--http` процес працює як stdio-MCP-сервер (так його запускає OpenBP).
+Міграції застосовуються під час старту. Без `--http` процес працює як stdio-MCP-сервер (так його запускає AI_BPMS).
 
 | Змінна | Що |
 |---|---|
@@ -35,9 +35,9 @@ dotnet run --project src/OpenBP.Connectors.PsySupport -- --http http://0.0.0.0:8
 | `PSY_ADMIN_EMAIL`, `PSY_ADMIN_PASSWORD` | перший координатор |
 | `PSY_TIMEZONE` | часовий пояс правил, типово `Europe/Kyiv` |
 
-## Підключення до OpenBP
+## Підключення до AI_BPMS
 
-HTTP-сервер у реєстрі MCP OpenBP: URL `http://psy-support:8090/mcp`, credential
+HTTP-сервер у реєстрі MCP AI_BPMS: URL `http://psy-support:8090/mcp`, credential
 `{ "headers": { "Authorization": "Bearer <PSY_MCP_TOKEN>" } }`. Або stdio: команда `dotnet`, аргумент — шлях до
 `OpenBP.Connectors.PsySupport.dll`, змінна `ConnectionStrings__PsySupport`.
 

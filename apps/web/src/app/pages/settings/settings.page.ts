@@ -81,7 +81,7 @@ export interface SettingsSectionItem {
     <ng-template #apiKeys>
       <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.apiKeys.title">API-ключі</h2>
       <p class="mb-4 opacity-70" i18n="@@settings.apiKeys.hint">
-        Ключ дає доступ до REST і MCP-сервера OpenBP з вашими правами. Зберігайте його як пароль. Ключ проєкту бачить лише
+        Ключ дає доступ до REST і MCP-сервера AI_BPMS з вашими правами. Зберігайте його як пароль. Ключ проєкту бачить лише
         сценарії, облікові дані й конектори цього проєкту.
       </p>
 
@@ -176,7 +176,7 @@ export interface SettingsSectionItem {
     <ng-template #agent>
       <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.mcp.title">Підключити ШІ-агента</h2>
       <p class="mb-2 max-w-3xl opacity-70" i18n="@@settings.mcp.hint">
-        OpenBP — MCP-сервер. Виберіть клієнта, скопіюйте фрагмент і підставте свій API-ключ (щойно створений ключ підставляється сам).
+        AI_BPMS — MCP-сервер. Виберіть клієнта, скопіюйте фрагмент і підставте свій API-ключ (щойно створений ключ підставляється сам).
         Агент зможе описувати конектори, створювати й запускати сценарії та тестувати вузли.
       </p>
       <p class="mb-2 font-mono text-sm" data-testid="mcp-url">{{ mcpUrl }}</p>

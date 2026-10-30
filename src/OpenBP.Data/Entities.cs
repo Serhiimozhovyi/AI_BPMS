@@ -555,7 +555,7 @@ public sealed class TaskEntity
     /// <summary><c>open</c> | <c>done</c> | <c>expired</c> | <c>cancelled</c> (<see cref="TaskStatuses"/>).</summary>
     public string Status { get; set; } = TaskStatuses.Open;
 
-    /// <summary>Виконавець — користувач OpenBP (з <c>userId</c> або email у <c>expression</c>).</summary>
+    /// <summary>Виконавець — користувач AI_BPMS (з <c>userId</c> або email у <c>expression</c>).</summary>
     public Guid? AssigneeUserId { get; set; }
 
     /// <summary>Виконавці за роллю: <c>viewer</c> | <c>editor</c> | <c>admin</c> (і вищі).</summary>

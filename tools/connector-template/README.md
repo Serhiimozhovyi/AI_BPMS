@@ -1,7 +1,7 @@
-# OpenBP Connector Kit — шаблон MCP-конектора
+# AI_BPMS Connector Kit — шаблон MCP-конектора
 
-Шаблон .NET-проєкту MCP-сервера над REST API, щоб підключити будь-яку систему до OpenBP
-(інтеграції в OpenBP — лише через MCP, `docs/connectors.md` §5). Ліцензія — MIT (`LICENSE`): конектори на шаблоні
+Шаблон .NET-проєкту MCP-сервера над REST API, щоб підключити будь-яку систему до AI_BPMS
+(інтеграції в AI_BPMS — лише через MCP, `docs/connectors.md` §5). Ліцензія — MIT (`LICENSE`): конектори на шаблоні
 можна робити закритими.
 
 Що всередині:
@@ -20,14 +20,14 @@
   мок-REST повертає `structuredContent`, помилка REST → `isError` без секретів, stdio-запуск; генератор OpenAPI — на
   petstore-подібній специфікації (`tests/…/OpenApi/petstore.yaml`), генератор OData — на CSDL `tests/…/OData/trade.xml`.
 
-## Від нуля до підключеного в OpenBP за годину
+## Від нуля до підключеного в AI_BPMS за годину
 
 Потрібен .NET SDK 10.
 
 ### 1. Створити проєкт (5 хв)
 
 ```bash
-dotnet new install <шлях до репозиторію OpenBP>/tools/connector-template
+dotnet new install <шлях до репозиторію AI_BPMS>/tools/connector-template
 dotnet new openbp-connector -n Acme.Crm
 cd Acme.Crm
 dotnet test
@@ -95,16 +95,16 @@ dotnet test
 dotnet publish src/Acme.Crm -c Release -o out
 ```
 
-### 4. Зареєструвати в OpenBP (10 хв)
+### 4. Зареєструвати в AI_BPMS (10 хв)
 
 У розділі «Конектори» → «Додати MCP-сервер» (потрібна роль admin):
 
-- **stdio** (OpenBP сам запускає процес на машині воркера й Api):
+- **stdio** (AI_BPMS сам запускає процес на машині воркера й Api):
   - команда `dotnet`, аргументи — шлях до `out/Acme.Crm.dll`;
   - несекретні налаштування — у змінних середовища конектора (`Connector__BaseUrl`, `Connector__Auth__Type`) або в
     `appsettings.json` поруч із dll;
   - секрети — у credential конектора у форматі `{ "env": { "CONNECTOR_TOKEN": "…" } }` (поле `credentialId`):
-    OpenBP зберігає його зашифрованим і передає процесу як змінні середовища, у конфігурації конектора й відповідях
+    AI_BPMS зберігає його зашифрованим і передає процесу як змінні середовища, у конфігурації конектора й відповідях
     API значень немає.
   - або (F3-93) — загальний тип облікових даних у `connector.json`: `"credential": { "type": "bearer", "map": { "token":
     "CONNECTOR_TOKEN" } }` і несекретні `settings[]` (`Connector__BaseUrl`, `Connector__Auth__Type`). Тоді при встановленні з
@@ -113,19 +113,19 @@ dotnet publish src/Acme.Crm -c Release -o out
     `docs/connectors.md` §5.2.
 - **http** (конектор — окремий сервіс, напр. контейнер):
   - запуск: `dotnet out/Acme.Crm.dll --http http://0.0.0.0:8080`, секрети — змінні середовища контейнера;
-  - в OpenBP: транспорт `http`, URL `http://<хост>:8080/mcp`.
+  - в AI_BPMS: транспорт `http`, URL `http://<хост>:8080/mcp`.
 
 Натисніть «Оновити tools»: стан «Підключено» і ваші tools у списку. Перевірте tool кнопкою тестового виклику, а
 потім додайте його на канвас із палітри — він з'явиться в групі вашого сервера.
 
 ### 5. Перевірити з ШІ-агентом (необов'язково)
 
-OpenBP сам є MCP-сервером: агент бачить ваш конектор через `describe_connectors` (див. «Налаштування» →
+AI_BPMS сам є MCP-сервером: агент бачить ваш конектор через `describe_connectors` (див. «Налаштування» →
 «Підключити ШІ-агента»).
 
 ## Події та звірка
 
-Система власник стану — ваша, OpenBP читає її через tools (`docs/consistency.md`). Щоб пропущену подію можна було
+Система власник стану — ваша, AI_BPMS читає її через tools (`docs/consistency.md`). Щоб пропущену подію можна було
 надолужити, дайте конектору tool **`changes_since { entity, since? }`**: заготовка `ItemTools.ChangesSince` віддає
 `{ result, cursor }` — записи, змінені строго після `since`, від старих до нових, і `cursor` (найбільший час зміни) для
 наступного виклику. Замініть `items` на свої сутності, а `ListItemsChangedAsync` — на запит до свого API (фільтр за часом
@@ -136,9 +136,9 @@ OpenBP сам є MCP-сервером: агент бачить ваш конек
 
 ## Push-події
 
-Щоб OpenBP реагував на події без опитування (вузол `mcp.subscribe`, `docs/connectors.md` §9), конектор віддає **ресурс
+Щоб AI_BPMS реагував на події без опитування (вузол `mcp.subscribe`, `docs/connectors.md` §9), конектор віддає **ресурс
 подій** (JSON зі списком останніх подій, у кожної — стабільний ключ), оголошує `resources.subscribe` і на кожну нову
-подію шле `notifications/resources/updated` підписаним сесіям; сповіщення — лише сигнал, події OpenBP читає сам і
+подію шле `notifications/resources/updated` підписаним сесіям; сповіщення — лише сигнал, події AI_BPMS читає сам і
 відсікає вже бачені за ключем. Для Streamable HTTP потрібні сесії для клієнтів з `initialize`
 (`WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.StatefulForInitializeClients)`); stdio-екземплярів може
 бути кілька одночасно. Пресет тригера для палітри — `triggers[]` у `connector.json`.
@@ -155,7 +155,7 @@ OpenBP сам є MCP-сервером: агент бачить ваш конек
 ## Розробка шаблону
 
 Шаблон живе поза `OpenBP.sln`: власні `Directory.Build.props`, `Directory.Packages.props` (ті самі версії пакетів,
-що в OpenBP) і `.editorconfig`. CI репозиторію створює з нього проєкт `dotnet new` і запускає
+що в AI_BPMS) і `.editorconfig`. CI репозиторію створює з нього проєкт `dotnet new` і запускає
 `dotnet build -warnaserror`, `dotnet format --verify-no-changes` і `dotnet test`.
 
 Сторонні залежності шаблону (MIT) — у `THIRD_PARTY_NOTICES.md` репозиторію OpenBP.

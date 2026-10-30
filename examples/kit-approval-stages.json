@@ -10,7 +10,7 @@
   "business": {
     "lanes": [
       { "id": "kit", "name": "Кіт 2", "description": "люди у веб-формах" },
-      { "id": "openbp", "name": "OpenBP", "description": "сценарій" },
+      { "id": "openbp", "name": "AI_BPMS", "description": "сценарій" },
       { "id": "notify", "name": "Сповіщення", "description": "Telegram · пошта" }
     ],
     "steps": [

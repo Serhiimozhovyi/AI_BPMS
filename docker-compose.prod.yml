@@ -1,4 +1,4 @@
-# Продакшн-розгортання OpenBP (F4-10). Змінні — у .env (scripts/gen-env.sh створює його з .env.example з
+# Продакшн-розгортання AI_BPMS (F4-10). Змінні — у .env (scripts/gen-env.sh створює його з .env.example з
 # випадковими секретами). Запуск:  docker compose -f docker-compose.prod.yml up -d --build --wait
 # Назовні відкритий лише web (OPENBP_HTTP_PORT); воркерів можна додати: --scale worker=3.
 name: openbp-prod

@@ -29,7 +29,7 @@ public enum DataColumnType
     /// <summary>Ключ рядка таблиці <see cref="DataColumn.Table"/> того самого проєкту або спільної (F8-02).</summary>
     Ref = 7,
 
-    /// <summary>Id користувача OpenBP (F8-02).</summary>
+    /// <summary>Id користувача AI_BPMS (F8-02).</summary>
     User = 8,
 }
 

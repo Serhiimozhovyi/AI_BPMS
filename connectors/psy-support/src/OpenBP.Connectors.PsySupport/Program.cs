@@ -2,7 +2,7 @@ using OpenBP.Connectors.PsySupport.Hosting;
 using OpenBP.Connectors.PsySupport.Import;
 
 // `import --dir <папка>` — одноразовий імпорт CSV з Google Sheets (§9); `--http <url>` — /mcp, /api/v1 і адмінка;
-// без аргументів — stdio-MCP (так OpenBP запускає конектор як процес).
+// без аргументів — stdio-MCP (так AI_BPMS запускає конектор як процес).
 if (args is ["import", "--dir", var dir, ..])
 {
     using var importHost = PsyHost.BuildStdio([]);

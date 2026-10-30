@@ -72,7 +72,7 @@ public sealed class TelegramConnectorTests : IAsyncLifetime
         Assert.True(tools["get_updates"].OutputSchema!.Value.GetProperty("properties").TryGetProperty("result", out _));
         Assert.All(tools.Values, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 
-        // chat_id → список чатів з get_updates у формі OpenBP (x-openbp-options, docs/connectors.md §2).
+        // chat_id → список чатів з get_updates у формі AI_BPMS (x-openbp-options, docs/connectors.md §2).
         foreach (var name in new[] { "send_message", "edit_message_text", "send_document", "send_video", "send_audio", "send_voice", "send_photo", "send_approval", "get_approval", "get_chat" })
         {
             var options = tools[name].InputSchema.GetProperty("properties").GetProperty("chat_id").GetProperty("x-openbp-options");

@@ -182,7 +182,7 @@ public sealed partial class McpServerSync(
 
         try
         {
-            // Сервер, якому OpenBP передає токен OAuth2 (F3-93), отримує вже чинний токен.
+            // Сервер, якому AI_BPMS передає токен OAuth2 (F3-93), отримує вже чинний токен.
             return await credentials.GetDataAsync(credentialId, ConnectorCredentialMap.UsesAccessToken(ReadMap(row)), ct).ConfigureAwait(false)
                 ?? throw new ConnectorConfigurationException($"Конектор «{row.Name}»: credential {credentialId} не знайдено.");
         }

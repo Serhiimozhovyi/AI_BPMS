@@ -1,13 +1,13 @@
-# OpenBP як MCP-сервер
+# AI_BPMS як MCP-сервер
 
-OpenBP сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop, Claude Code, власний агент на SDK) бачить підключені
+AI_BPMS сам є MCP-сервером (ADR-002): ШІ-агент (Claude Desktop, Claude Code, власний агент на SDK) бачить підключені
 системи, збирає й перевіряє сценарії, запускає їх і читає результати — тими самими сервісами, що й UI та REST, з тими
 самими правами (CLAUDE.md, правило 4). Код — `src/OpenBP.Mcp.Server`, наскрізний тест PRD №3 —
 `tests/OpenBP.Mcp.Server.Tests/Prd3EndToEndTests.cs`.
 
 ## 1. Підключення
 
-- **Ендпойнт:** `https://<ваш OpenBP>/mcp`, транспорт Streamable HTTP, без серверних сесій (кожен запит
+- **Ендпойнт:** `https://<ваш AI_BPMS>/mcp`, транспорт Streamable HTTP, без серверних сесій (кожен запит
   автентифікується окремо, тож Api можна масштабувати).
 - **Автентифікація:** API-ключ у заголовку `Authorization: Bearer obp_…`. Ключ створюється в UI («Налаштування» →
   «API-ключі») або `POST /api/v1/api-keys`. Показується один раз; права ключа — права його користувача:
@@ -41,7 +41,7 @@ claude mcp add --transport http openbp https://openbp.example.com/mcp \
 
 ### Claude Desktop
 
-OpenBP приймає лише API-ключ у заголовку, а OAuth для `/mcp` немає. Custom connector claude.ai можна додати лише з бета-розділом
+AI_BPMS приймає лише API-ключ у заголовку, а OAuth для `/mcp` немає. Custom connector claude.ai можна додати лише з бета-розділом
 «Request headers» ([docs/guide/ai-connectors.md §3.3](guide/ai-connectors.md#33-claudeai--custom-connector-веб-desktop-мобільний)); ChatGPT Developer mode
 заголовків не підтримує ([там же §4](guide/ai-connectors.md#4-chatgpt-та-інші-продукти-openai)). Для Claude Desktop надійніше підключати
 через локальний міст [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (потрібен Node.js). У
@@ -230,7 +230,7 @@ resolvedAt }`; виконання, зупинене `block`-правилом, �
    (`list_messages`, `list_attachments`, `get_attachment`) і Telegram (`send_message`).
 2. Складає сценарій: `mcp.poll` над `list_messages` (`filter: contains(subject,'Рахунок')`, `itemsPath = result`,
    `keyField = id`) → `mcp.tool` `list_attachments` → `mcp.tool` `get_attachment` (файл стає binary item і зберігається
-   у файловому сховищі OpenBP) → `mcp.tool` `send_message`.
+   у файловому сховищі AI_BPMS) → `mcp.tool` `send_message`.
 3. `validate_workflow` → `valid: false`, `MCP_TOOL_UNKNOWN` у `n_notify` (агент написав `send_msg`). Агент бачить код і
    вузол, виправляє на `send_message`, повторює → `valid: true`.
 4. `create_workflow` → id сценарію; сценарій одразу видно в UI і в `GET /api/v1/workflows`.

@@ -498,7 +498,7 @@ public static class MockGraphTools
             ? [new MailAttachmentInfo(InvoiceAttachmentId, InvoiceFileName, "application/pdf", InvoiceBytes.Length, false)]
             : []);
 
-    /// <summary>Вміст вкладення як <c>resource</c>-блок (у OpenBP — binary item).</summary>
+    /// <summary>Вміст вкладення як <c>resource</c>-блок (у AI_BPMS — binary item).</summary>
     [McpServerTool(Name = "get_attachment", Title = "Завантажити вкладення")]
     [Description("Повертає вміст вкладення як embedded resource.")]
     public static CallToolResult GetAttachment(

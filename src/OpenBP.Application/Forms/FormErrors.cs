@@ -24,7 +24,7 @@ public sealed class FormValidationException : OpenBpException
     public IReadOnlyList<FormFieldError> Errors { get; }
 }
 
-/// <summary>401: форма лише для користувачів OpenBP (<c>auth: login</c>), а сесії немає. Сторінка веде на <see cref="LoginUrl"/>.</summary>
+/// <summary>401: форма лише для користувачів AI_BPMS (<c>auth: login</c>), а сесії немає. Сторінка веде на <see cref="LoginUrl"/>.</summary>
 public sealed class FormLoginRequiredException : OpenBpException
 {
     /// <summary>Код помилки.</summary>

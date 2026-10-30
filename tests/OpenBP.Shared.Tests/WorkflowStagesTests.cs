@@ -14,7 +14,7 @@ public class WorkflowStagesTests
     private static JsonObject Staged()
     {
         var doc = WorkflowTestData.ExampleNode;
-        doc["business"] = JsonNode.Parse("""{ "lanes": [ { "id": "openbp", "name": "OpenBP" }, { "id": "erp", "name": "1С" } ] }""");
+        doc["business"] = JsonNode.Parse("""{ "lanes": [ { "id": "openbp", "name": "AI_BPMS" }, { "id": "erp", "name": "1С" } ] }""");
         doc["stages"] = JsonNode.Parse("""
             [
               { "id": "st_intake", "name": "Заявка", "nodes": ["n_webhook", "n_llm"], "owner": { "lane": "openbp" },

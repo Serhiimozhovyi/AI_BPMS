@@ -133,7 +133,7 @@ interface Connecting {
     @if (pending(); as p) {
       <div class="mb-6 max-w-2xl rounded-lg border border-ac-line p-4" data-testid="catalog-credential">
         <h2 class="mb-1 font-semibold" i18n="@@connectors.catalog.credentialTitle">Облікові дані для «{{ p.detail.summary.name }}»</h2>
-        <p class="mb-2 text-sm opacity-70" i18n="@@connectors.catalog.credentialHint">Конектор створено. Заповніть значення, і OpenBP перепідключиться з ними:</p>
+        <p class="mb-2 text-sm opacity-70" i18n="@@connectors.catalog.credentialHint">Конектор створено. Заповніть значення, і AI_BPMS перепідключиться з ними:</p>
         <ul class="mb-3 list-disc pl-5 text-sm">
           @for (k of p.keys; track k.name) {
             <li [attr.data-key]="k.name">

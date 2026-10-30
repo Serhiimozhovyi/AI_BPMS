@@ -465,7 +465,7 @@ public sealed class WorkflowExplainer(IDbContextFactory<OpenBpDbContext> context
     /// <summary>Системна інструкція.</summary>
     internal const string System =
         """
-        You explain an OpenBP workflow (business process automation) to a business user who does not read code.
+        You explain an AI_BPMS workflow (business process automation) to a business user who does not read code.
         Write in Ukrainian, in plain words, as plain text without Markdown symbols (no #, *, `, tables).
 
         The workflow is JSON: nodes [{ id, name, type, parameters, disabled? }] and connections [{ from: { node, output },

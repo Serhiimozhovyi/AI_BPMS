@@ -117,7 +117,7 @@ describe('business-edit (F3-68)', () => {
     expect(next.nodes[1].business).toEqual({ lane: 'connector:mail' });
     const after = viewOf(next);
     expect(after.steps.find((s) => s.id === 'n_check')?.lane).toBe('connector:mail');
-    expect(after.lanes.map((l) => l.name)).toEqual(['Користувач', 'OpenBP', 'Пошта']);
+    expect(after.lanes.map((l) => l.name)).toEqual(['Користувач', 'AI_BPMS', 'Пошта']);
   });
 
   it('перенесення в оголошену доріжку не чіпає інших; порожня доріжка — повернути за типом', () => {
@@ -213,6 +213,6 @@ describe('business-edit (F3-68)', () => {
     const { definition: added, laneId } = addLane(def, view, 'Кіт 2');
     expectBusinessOnly(def, added);
     expect(laneId).toBe('lane_4');
-    expect(viewOf(added).lanes.map((l) => l.name)).toEqual(['Користувач', 'OpenBP', 'Пошта', 'Кіт 2']);
+    expect(viewOf(added).lanes.map((l) => l.name)).toEqual(['Користувач', 'AI_BPMS', 'Пошта', 'Кіт 2']);
   });
 });

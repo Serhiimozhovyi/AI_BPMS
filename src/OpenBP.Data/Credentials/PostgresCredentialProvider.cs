@@ -38,7 +38,7 @@ public sealed class PostgresCredentialProvider(CredentialStore store, SecretScru
 
 /// <summary>
 /// Постачальник credentials, що вміє отримати токен <c>oauth2.clientCredentials</c> перед читанням (F3-93): реєстрація
-/// конектора, якому OpenBP передає <c>$accessToken</c>.
+/// конектора, якому AI_BPMS передає <c>$accessToken</c>.
 /// </summary>
 public interface IAccessTokenCredentialProvider
 {

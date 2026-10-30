@@ -118,7 +118,7 @@ const BY_TYPE: Readonly<Record<string, () => Labels>> = {
     auth: {
       values: {
         none: $localize`:@@enum.formTrigger.none:Будь-хто за посиланням`,
-        login: $localize`:@@enum.formTrigger.login:Користувачі OpenBP`,
+        login: $localize`:@@enum.formTrigger.login:Користувачі AI_BPMS`,
         token: $localize`:@@enum.formTrigger.token:За токеном`,
       },
     },

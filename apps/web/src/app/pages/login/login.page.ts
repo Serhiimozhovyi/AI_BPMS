@@ -38,7 +38,7 @@ const OIDC_ERRORS: Record<string, string> = {
     <section class="login">
       <mat-card class="login__card w-full max-w-sm" appearance="outlined">
         <mat-card-header>
-          <mat-card-title i18n="@@login.title">Вхід до OpenBP</mat-card-title>
+          <mat-card-title i18n="@@login.title">Вхід до AI_BPMS</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           @if (oidcError()) {

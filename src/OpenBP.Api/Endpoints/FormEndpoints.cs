@@ -30,7 +30,7 @@ public static class FormEndpoints
                 service.GetAsync(path, TokenOf(http.Request), http.RequestAborted))
             .WithSummary("Опис форми для сторінки /form/{path}")
             .WithDescription("`path` — шлях вузла core.formTrigger або `resume/{token}` кроку core.wait у режимі form. " +
-                "404 — форми немає (шлях невідомий чи сценарій неактивний); 401 `FORM_LOGIN_REQUIRED` з `loginUrl` — форма для користувачів OpenBP, увійдіть; " +
+                "404 — форми немає (шлях невідомий чи сценарій неактивний); 401 `FORM_LOGIN_REQUIRED` з `loginUrl` — форма для користувачів AI_BPMS, увійдіть; " +
                 "401 `UNAUTHENTICATED` — потрібен правильний токен посилання (`?token=` або заголовок `X-Form-Token`); 409 — форму очікування вже надіслано або вона неактуальна.")
             .Produces<FormDefinition>();
         forms.MapPost("/{**path}", SubmitAsync)

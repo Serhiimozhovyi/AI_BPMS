@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace OpenBP.Application.Assistant;
 
-/// <summary>Інструмент загального помічника — tool MCP-сервера OpenBP (docs/mcp-server.md).</summary>
+/// <summary>Інструмент загального помічника — tool MCP-сервера AI_BPMS (docs/mcp-server.md).</summary>
 /// <param name="Name">Назва tool'а.</param>
 /// <param name="Description">Опис для моделі.</param>
 /// <param name="InputSchema">JSON Schema аргументів.</param>

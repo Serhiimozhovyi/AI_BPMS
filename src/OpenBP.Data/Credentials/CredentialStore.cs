@@ -97,7 +97,7 @@ public sealed class CredentialStore(
 
     /// <summary>
     /// Читає й розшифровує дані credential'а; для <c>oauth2.clientCredentials</c> з <paramref name="issueAccessToken"/>
-    /// спершу отримує токен, якщо його немає або він спливає (F3-93: конектор, якому OpenBP передає <c>$accessToken</c>).
+    /// спершу отримує токен, якщо його немає або він спливає (F3-93: конектор, якому AI_BPMS передає <c>$accessToken</c>).
     /// Без запиту токен не отримується: конектор, що сам ходить по токен (Кіт CRM), не чекає на token endpoint.
     /// </summary>
     /// <param name="id">Id credential'а.</param>

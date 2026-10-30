@@ -7,7 +7,7 @@ using System.Text.Json.Nodes;
 namespace OpenBP.Cli;
 
 /// <summary>
-/// Команди проти запущеного OpenBP через REST (F6-09) — для CI/CD: <c>export</c>, <c>import</c>, <c>activate</c>.
+/// Команди проти запущеного AI_BPMS через REST (F6-09) — для CI/CD: <c>export</c>, <c>import</c>, <c>activate</c>.
 /// Адреса — <c>--url</c> або <c>OPENBP_URL</c>, ключ — <c>--api-key</c> або <c>OPENBP_API_KEY</c> (у CI краще змінна
 /// середовища з секрету, щоб ключ не потрапляв у журнал команд). Ключ іде лише в заголовок <c>Authorization: Bearer</c>
 /// і ніде не друкується.
@@ -207,7 +207,7 @@ internal static class RemoteCommands
         }
         catch (HttpRequestException ex)
         {
-            throw new CliException($"OpenBP недоступний ({http.BaseAddress}): {ex.Message}");
+            throw new CliException($"AI_BPMS недоступний ({http.BaseAddress}): {ex.Message}");
         }
     }
 
@@ -223,7 +223,7 @@ internal static class RemoteCommands
         var errors = response.Body?["errors"] is JsonArray list
             ? "\n" + string.Join("\n", list.Select(e => $"  {e!["code"]}: {e["message"]}"))
             : "";
-        throw new CliException($"OpenBP відповів {(int)response.Status}{(code is null ? "" : $" {code}")}: {detail}{errors}");
+        throw new CliException($"AI_BPMS відповів {(int)response.Status}{(code is null ? "" : $" {code}")}: {detail}{errors}");
     }
 
     private static JsonObject ReadObject(string path, string what)
@@ -312,7 +312,7 @@ internal static class RemoteCommands
             key ??= Environment.GetEnvironmentVariable("OPENBP_API_KEY");
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.EndsWith('/') ? url : url + "/", UriKind.Absolute, out var baseUri))
             {
-                throw new CliException("Вкажіть адресу OpenBP: --url або OPENBP_URL (напр. https://openbp.example.com).", showUsage: true);
+                throw new CliException("Вкажіть адресу AI_BPMS: --url або OPENBP_URL (напр. https://openbp.example.com).", showUsage: true);
             }
 
             if (string.IsNullOrWhiteSpace(key))

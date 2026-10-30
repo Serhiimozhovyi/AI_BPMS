@@ -77,7 +77,7 @@ public sealed class ConnectorTools
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "describe_connectors", Title = "Describe connectors", ReadOnly = true, UseStructuredContent = true)]
     [Description(
-        "Lists the MCP servers connected to OpenBP and the tools each one exposes (name, title, description, inputSchema, " +
+        "Lists the MCP servers connected to AI_BPMS and the tools each one exposes (name, title, description, inputSchema, " +
         "outputSchema — the shape of the item a `mcp.tool` node outputs, when the server declares it). " +
         "Use a server's id as `serverId` and a tool's name as `toolName` in `mcp.tool` / `mcp.poll` / `mcp.waitFor` nodes; " +
         "the workflow format is described by the resource openbp://schema/workflow-format.")]

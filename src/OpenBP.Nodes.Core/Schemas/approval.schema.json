@@ -11,12 +11,12 @@
     "assignee": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Кому задача: рівно одне з userId (користувач OpenBP), role (усі з цією роллю або вищою) чи expression (email користувача OpenBP або зовнішній id, напр. Telegram id; можна вираз {{ }})",
+      "description": "Кому задача: рівно одне з userId (користувач AI_BPMS), role (усі з цією роллю або вищою) чи expression (email користувача AI_BPMS або зовнішній id, напр. Telegram id; можна вираз {{ }})",
       "properties": {
         "userId": {
           "type": "string",
           "format": "uuid",
-          "description": "Id користувача OpenBP"
+          "description": "Id користувача AI_BPMS"
         },
         "role": {
           "type": "string",
@@ -31,7 +31,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 320,
-          "description": "Email користувача OpenBP або зовнішній id (Telegram id); зовнішню задачу закриває сценарій чи інтеграція з роллю editor через POST /api/v1/tasks/{id}/complete"
+          "description": "Email користувача AI_BPMS або зовнішній id (Telegram id); зовнішню задачу закриває сценарій чи інтеграція з роллю editor через POST /api/v1/tasks/{id}/complete"
         }
       },
       "minProperties": 1,

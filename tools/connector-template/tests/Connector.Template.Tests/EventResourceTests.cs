@@ -31,7 +31,7 @@ public sealed class EventResourceTests : IAsyncLifetime
             Endpoint = new Uri(_app.Urls.Single() + "/mcp"),
             TransportMode = HttpTransportMode.StreamableHttp,
         }),
-        // Як воркер OpenBP: остання ревізія протоколу з resources/subscribe (у 2026-07-28 — subscriptions/listen).
+        // Як воркер AI_BPMS: остання ревізія протоколу з resources/subscribe (у 2026-07-28 — subscriptions/listen).
         new McpClientOptions { ProtocolVersion = "2025-11-25" });
     }
 

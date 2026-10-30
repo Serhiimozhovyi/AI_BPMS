@@ -1,7 +1,7 @@
 namespace OpenBP.Connectors.MsGraph;
 
 /// <summary>
-/// Реєстрація застосунку в Entra ID — **лише** зі змінних середовища (OpenBP передає їх через credential
+/// Реєстрація застосунку в Entra ID — **лише** зі змінних середовища (AI_BPMS передає їх через credential
 /// <c>{ "env": { … } }</c> конектора). Секрет застосунку й отримані токени ніколи не потрапляють у відповіді tools і
 /// тексти помилок: <see cref="Scrub"/>.
 /// </summary>
@@ -25,7 +25,7 @@ public sealed class ConnectorSecrets(Func<string, string?> environment)
     public string Require(string variable) =>
         environment(variable) is { Length: > 0 } value
             ? value
-            : throw new ConnectorException($"Не задано змінну середовища {variable} (credential конектора в OpenBP, поле env).");
+            : throw new ConnectorException($"Не задано змінну середовища {variable} (credential конектора в AI_BPMS, поле env).");
 
     /// <summary>Запам'ятовує виданий токен, щоб <see cref="Scrub"/> прибирав і його.</summary>
     /// <param name="token">Access token.</param>

@@ -55,7 +55,7 @@ public static class ConnectorHost
 
     /// <summary>
     /// Аргумент таблиці (<c>table</c>, а в <c>changes_since</c> — <c>entity</c>) — з анотацією <c>x-openbp-options</c>
-    /// (docs/connectors.md §2): у формі OpenBP таблиця обирається зі списку <c>list_tables</c>; ввести назву чи вираз
+    /// (docs/connectors.md §2): у формі AI_BPMS таблиця обирається зі списку <c>list_tables</c>; ввести назву чи вираз
     /// можна, як і раніше.
     /// </summary>
     /// <param name="options">Налаштування MCP-сервера з уже зареєстрованими tools.</param>

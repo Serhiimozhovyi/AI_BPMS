@@ -19,7 +19,7 @@ public sealed class WorkflowBusiness
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
-/// <summary>Доріжка бізнес-вигляду: хто виконує кроки («Кіт 2», «OpenBP», «Сповіщення»).</summary>
+/// <summary>Доріжка бізнес-вигляду: хто виконує кроки («Кіт 2», «AI_BPMS», «Сповіщення»).</summary>
 public sealed class BusinessLane
 {
     /// <summary>Унікальний у межах сценарію; на нього посилаються <c>node.business.lane</c> і <c>steps[].lane</c>.</summary>

@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.1",
   "info": {
-    "title": "OpenBP REST API",
-    "description": "REST API OpenBP: сценарії, виконання, конектори, облікові дані.\n\n**Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login` або входу через\nOIDC-провайдера (`GET /api/v1/auth/oidc/{key}/login`); інтеграції — API-ключ у заголовку\n`Authorization: Bearer <ключ>` (створюється в `POST /api/v1/api-keys`) або access token налаштованого\nOIDC-провайдера. Ролі (viewer, editor, admin) перевіряються на кожному запиті: без входу — 401, без\nправ — 403.\n\n**Помилки.** `application/problem+json` (RFC 9457) з полями `code` (машинний код, напр. `NOT_FOUND`,\n`WORKFLOW_INVALID`) і `detail` (текст для людини); помилки перевірки — ще й `errors[]`\nз `{ code, message, path }`.\n\nЗначень секретів API не повертає ніколи.",
+    "title": "AI_BPMS REST API",
+    "description": "REST API AI_BPMS: сценарії, виконання, конектори, облікові дані.\n\n**Автентифікація.** UI — cookie `openbp.auth` після `POST /api/v1/auth/login` або входу через\nOIDC-провайдера (`GET /api/v1/auth/oidc/{key}/login`); інтеграції — API-ключ у заголовку\n`Authorization: Bearer <ключ>` (створюється в `POST /api/v1/api-keys`) або access token налаштованого\nOIDC-провайдера. Ролі (viewer, editor, admin) перевіряються на кожному запиті: без входу — 401, без\nправ — 403.\n\n**Помилки.** `application/problem+json` (RFC 9457) з полями `code` (машинний код, напр. `NOT_FOUND`,\n`WORKFLOW_INVALID`) і `detail` (текст для людини); помилки перевірки — ще й `errors[]`\nз `{ code, message, path }`.\n\nЗначень секретів API не повертає ніколи.",
     "version": "v1"
   },
   "servers": [
@@ -447,7 +447,7 @@
           "Вхід"
         ],
         "summary": "Почати вхід через OIDC-провайдера",
-        "description": "Відкривається браузером: перенаправляє до провайдера (authorization code + PKCE). Після входу — cookie сесії і повернення на `returnUrl` (лише шлях усередині OpenBP); відмова — `/login?oidcError=<код>`.",
+        "description": "Відкривається браузером: перенаправляє до провайдера (authorization code + PKCE). Після входу — cookie сесії і повернення на `returnUrl` (лише шлях усередині AI_BPMS); відмова — `/login?oidcError=<код>`.",
         "parameters": [
           {
             "name": "key",
@@ -7403,7 +7403,7 @@
           "Форми"
         ],
         "summary": "Опис форми для сторінки /form/{path}",
-        "description": "`path` — шлях вузла core.formTrigger або `resume/{token}` кроку core.wait у режимі form. 404 — форми немає (шлях невідомий чи сценарій неактивний); 401 `FORM_LOGIN_REQUIRED` з `loginUrl` — форма для користувачів OpenBP, увійдіть; 401 `UNAUTHENTICATED` — потрібен правильний токен посилання (`?token=` або заголовок `X-Form-Token`); 409 — форму очікування вже надіслано або вона неактуальна.",
+        "description": "`path` — шлях вузла core.formTrigger або `resume/{token}` кроку core.wait у режимі form. 404 — форми немає (шлях невідомий чи сценарій неактивний); 401 `FORM_LOGIN_REQUIRED` з `loginUrl` — форма для користувачів AI_BPMS, увійдіть; 401 `UNAUTHENTICATED` — потрібен правильний токен посилання (`?token=` або заголовок `X-Form-Token`); 409 — форму очікування вже надіслано або вона неактуальна.",
         "parameters": [
           {
             "name": "path",
@@ -14440,7 +14440,7 @@
         "examples": [
           {
             "formatVersion": 1,
-            "name": "Привіт, OpenBP",
+            "name": "Привіт, AI_BPMS",
             "settings": {
               "timezone": "Europe/Kyiv",
               "executionTimeoutSec": 60,
@@ -14472,7 +14472,7 @@
                   "fields": [
                     {
                       "name": "greeting",
-                      "value": "Привіт з OpenBP"
+                      "value": "Привіт з AI_BPMS"
                     }
                   ]
                 }
@@ -14494,7 +14494,7 @@
           }
         ],
         "type": "object",
-        "description": "Сценарій у форматі OpenBP: formatVersion, name, settings, nodes, connections, pinData — див. docs/workflow-format.md."
+        "description": "Сценарій у форматі AI_BPMS: formatVersion, name, settings, nodes, connections, pinData — див. docs/workflow-format.md."
       },
       "WorkflowDetail": {
         "required": [
@@ -15318,7 +15318,7 @@
       },
       "bearer": {
         "type": "http",
-        "description": "API-ключ OpenBP (POST /api/v1/api-keys) або access token OIDC-провайдера з OpenBp:Oidc:Providers.",
+        "description": "API-ключ AI_BPMS (POST /api/v1/api-keys) або access token OIDC-провайдера з OpenBp:Oidc:Providers.",
         "scheme": "bearer"
       }
     }

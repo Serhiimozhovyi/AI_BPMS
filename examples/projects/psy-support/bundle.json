@@ -1259,7 +1259,7 @@
           {"column": "name", "label": "Ім'я", "required": true},
           {"column": "email", "label": "Пошта"},
           {"column": "phone", "label": "Телефон (380XXXXXXXXX)", "format": "phone"},
-          {"column": "user_id", "label": "Обліковий запис OpenBP"},
+          {"column": "user_id", "label": "Обліковий запис AI_BPMS"},
           {"column": "active", "label": "Працює"}
         ],
         "onSubmit": {"operation": "insert"},
@@ -1278,7 +1278,7 @@
           {"column": "name", "label": "Ім'я"},
           {"column": "email", "label": "Пошта"},
           {"column": "phone", "label": "Телефон (380XXXXXXXXX)", "format": "phone"},
-          {"column": "user_id", "label": "Обліковий запис OpenBP"},
+          {"column": "user_id", "label": "Обліковий запис AI_BPMS"},
           {"column": "active", "label": "Працює"}
         ],
         "onSubmit": {"operation": "update"},

@@ -25,11 +25,11 @@ export const EXPLANATION_CLAMP_LINES = 6;
 /** Скільки разів перепитувати (5 хв), далі — лише за «Оновити» чи наступним збереженням. */
 const MAX_POLLS = 60;
 
-/** Що написати Claude чи ChatGPT, підключеному до OpenBP через MCP, щоб він пояснив сценарій (F3-74). */
+/** Що написати Claude чи ChatGPT, підключеному до AI_BPMS через MCP, щоб він пояснив сценарій (F3-74). */
 export function mcpExplainPrompt(name: string | null): string {
   return name
-    ? $localize`:@@explanation.mcpPrompt:Поясни сценарій «${name}:name:» і збережи пояснення в OpenBP`
-    : $localize`:@@explanation.mcpPromptNoName:Поясни цей сценарій і збережи пояснення в OpenBP`;
+    ? $localize`:@@explanation.mcpPrompt:Поясни сценарій «${name}:name:» і збережи пояснення в AI_BPMS`
+    : $localize`:@@explanation.mcpPromptNoName:Поясни цей сценарій і збережи пояснення в AI_BPMS`;
 }
 
 /**
@@ -78,7 +78,7 @@ export function mcpExplainPrompt(name: string | null): string {
             </p>
             @if (e.status !== 'pending') {
               <p class="explanation__note" i18n="@@explanation.updateViaMcp">
-                Щоб оновити, напишіть Claude чи ChatGPT, підключеному до OpenBP через MCP:
+                Щоб оновити, напишіть Claude чи ChatGPT, підключеному до AI_BPMS через MCP:
               </p>
               <p class="explanation__prompt" data-testid="explanation-mcp-prompt">
                 {{ mcpPrompt() }}
@@ -97,7 +97,7 @@ export function mcpExplainPrompt(name: string | null): string {
           }
         } @else if (e.status === 'none' || e.status === 'not_configured') {
           <p class="explanation__note" data-testid="explanation-status" i18n="@@explanation.viaMcp">
-            Пояснення ще немає. Відкрийте Claude чи ChatGPT, підключений до OpenBP через MCP, і
+            Пояснення ще немає. Відкрийте Claude чи ChatGPT, підключений до AI_BPMS через MCP, і
             напишіть:
           </p>
           <p class="explanation__prompt" data-testid="explanation-mcp-prompt">{{ mcpPrompt() }}</p>

@@ -5,7 +5,7 @@ using OpenBP.Data;
 namespace OpenBP.Application.Auth.Oidc;
 
 /// <summary>
-/// Вхід через OIDC (F4-14): знаходить або створює користувача OpenBP для облікового запису провайдера. Видачу
+/// Вхід через OIDC (F4-14): знаходить або створює користувача AI_BPMS для облікового запису провайдера. Видачу
 /// cookie чи bearer-автентифікацію робить Api.
 /// </summary>
 public interface IOidcLoginService
@@ -79,7 +79,7 @@ public sealed class OidcLoginService(OpenBpDbContext db, TimeProvider time, stri
             if (identity.Email is null || !identity.EmailVerified)
             {
                 throw new OidcLoginException(OidcLoginException.EmailNotVerifiedCode,
-                    "Провайдер не підтвердив пошту, тож користувача OpenBP не знайдено. Зверніться до адміністратора.");
+                    "Провайдер не підтвердив пошту, тож користувача AI_BPMS не знайдено. Зверніться до адміністратора.");
             }
 
             user = await db.Users.SingleOrDefaultAsync(u => u.Email == identity.Email, ct);
@@ -95,7 +95,7 @@ public sealed class OidcLoginService(OpenBpDbContext db, TimeProvider time, stri
                 if (!provider.AutoProvision)
                 {
                     throw new OidcLoginException(OidcLoginException.NotProvisionedCode,
-                        "Користувача OpenBP з такою поштою немає. Попросіть адміністратора додати вас.");
+                        "Користувача AI_BPMS з такою поштою немає. Попросіть адміністратора додати вас.");
                 }
 
                 user = new UserEntity

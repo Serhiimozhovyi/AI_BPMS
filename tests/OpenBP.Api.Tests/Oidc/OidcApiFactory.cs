@@ -82,7 +82,7 @@ public sealed partial class OidcApiFactory : WebApplicationFactory<Program>, IAs
     /// <param name="provider">Ключ провайдера.</param>
     /// <param name="username">Користувач realm'у; пароль — <c>Pass-&lt;username&gt;</c>.</param>
     /// <param name="returnUrl">Куди повернутися після входу.</param>
-    /// <returns>Клієнт OpenBP з cookie (якщо вхід вдався) і адреса, куди OpenBP перенаправив наприкінці.</returns>
+    /// <returns>Клієнт AI_BPMS з cookie (якщо вхід вдався) і адреса, куди AI_BPMS перенаправив наприкінці.</returns>
     public async Task<(HttpClient Client, string FinalLocation)> BrowserLoginAsync(string provider, string username, string returnUrl = "/workflows")
     {
         var openbp = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });

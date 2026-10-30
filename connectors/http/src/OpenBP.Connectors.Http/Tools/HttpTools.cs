@@ -34,7 +34,7 @@ public sealed class HttpTools(WebClient web)
     /// <param name="limit">Скільки записів повернути.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "rss_read", Title = "Read RSS/Atom feed", UseStructuredContent = true, ReadOnly = true, OpenWorld = true)]
-    [Description("Reads an RSS 2.0, RSS 1.0 or Atom feed and returns its entries (title, link, isoDate, pubDate, contentSnippet, content, creator, categories, guid) in feed order, newest first as the feed lists them. In an OpenBP mcp.tool node set itemsPath to \"items\" to get one item per entry.")]
+    [Description("Reads an RSS 2.0, RSS 1.0 or Atom feed and returns its entries (title, link, isoDate, pubDate, contentSnippet, content, creator, categories, guid) in feed order, newest first as the feed lists them. In an AI_BPMS mcp.tool node set itemsPath to \"items\" to get one item per entry.")]
     public Task<RssResult> RssRead(
         [Description("Feed URL, http or https.")] string url,
         [Description("Maximum number of entries, 1-500 (default 50).")] int? limit = null,

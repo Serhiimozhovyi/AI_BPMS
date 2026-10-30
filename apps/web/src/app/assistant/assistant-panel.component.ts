@@ -38,7 +38,7 @@ import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.c
         <div class="assistant__mcp" data-testid="assistant-mcp">
           <p class="assistant__mcp-text" i18n="@@assistant.viaMcp">
             Вбудованому помічнику не вибрано модель, тож він не відповідає. Питайте Claude чи
-            ChatGPT, підключений до OpenBP через MCP: він бачить сценарій, пояснює його, відповідає
+            ChatGPT, підключений до AI_BPMS через MCP: він бачить сценарій, пояснює його, відповідає
             на питання і змінює кроки. Наприклад:
           </p>
           <p class="assistant__mcp-prompt" data-testid="assistant-mcp-prompt">

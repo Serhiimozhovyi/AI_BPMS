@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { API_BASE } from '../connectors/connectors-api.service';
 
 /** Вид поля credential'а (`CredentialFieldKind`). */
-/** `managed` — поля, якими керує OpenBP (токени OAuth2); форма їх не показує. */
+/** `managed` — поля, якими керує AI_BPMS (токени OAuth2); форма їх не показує. */
 export type CredentialFieldKind = 'text' | 'secret' | 'url' | 'secretMap' | 'managed';
 
 /** Поле типу (`CredentialFieldInfo`). */

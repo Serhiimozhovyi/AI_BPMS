@@ -1,7 +1,7 @@
-# Конектор «Кіт CRM» для OpenBP
+# Конектор «Кіт CRM» для AI_BPMS
 
 MCP-сервер над OData Кіт CRM (`/odata/<Set>`), зроблений на шаблоні Connector Kit (`tools/connector-template`).
-Дає сценаріям OpenBP і ШІ-агентам угоди, задачі, контрагентів, осіб і нотатки, а для `mcp.poll` — `changes_since`.
+Дає сценаріям AI_BPMS і ШІ-агентам угоди, задачі, контрагентів, осіб і нотатки, а для `mcp.poll` — `changes_since`.
 Контекст і рішення — `docs/kit-sales.md`.
 
 | Tool | Що робить |
@@ -68,7 +68,7 @@ OpenBP. Подія — запис у формі `get_*` з `eventKey` = `id@ча
 Токен береться за client credentials і кешується до `expires_in − 30 с`; на 401 від Кіта конектор бере новий токен
 і повторює запит один раз.
 
-## 4. Зареєструвати в OpenBP
+## 4. Зареєструвати в AI_BPMS
 
 ```bash
 dotnet publish src/OpenBP.Connectors.KitCrm -c Release -o out
@@ -76,13 +76,13 @@ dotnet publish src/OpenBP.Connectors.KitCrm -c Release -o out
 
 «Конектори» → «Додати MCP-сервер» (роль admin) або картка «Кіт CRM» у каталозі:
 
-- **stdio** (OpenBP запускає процес сам):
+- **stdio** (AI_BPMS запускає процес сам):
   - команда `dotnet`, аргументи — шлях до `out/OpenBP.Connectors.KitCrm.dll`;
   - credential конектора: `{ "env": { "Connector__BaseUrl": "…", "KIT_TOKEN_URL": "…", "KIT_CLIENT_ID": "…",
-    "KIT_CLIENT_SECRET": "…" } }`. OpenBP зберігає його зашифрованим і передає процесу як змінні середовища.
+    "KIT_CLIENT_SECRET": "…" } }`. AI_BPMS зберігає його зашифрованим і передає процесу як змінні середовища.
 - **http** (окремий сервіс, напр. контейнер):
   - `KIT_TOKEN_URL=… KIT_CLIENT_ID=… KIT_CLIENT_SECRET=… dotnet out/OpenBP.Connectors.KitCrm.dll --http http://0.0.0.0:8080 --Connector:BaseUrl=…`;
-  - в OpenBP: транспорт `http`, URL `http://<хост>:8080/mcp`.
+  - в AI_BPMS: транспорт `http`, URL `http://<хост>:8080/mcp`.
 
 Натисніть «Оновити tools»: стан «Підключено» і 17 tools; виклик `list_sale_stages` повертає стадії угод. Живу
 перевірку робіть лише на dev-стенді Кіта, не на проді.

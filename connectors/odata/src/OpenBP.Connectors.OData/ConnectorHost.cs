@@ -80,7 +80,7 @@ public static class ConnectorHost
         options.ServerInfo = new Implementation { Name = ServerName, Version = "1.0.0" };
 
     /// <summary>
-    /// Аргумент <c>entitySet</c> — з анотацією <c>x-openbp-options</c> (docs/connectors.md §2): у формі OpenBP набір
+    /// Аргумент <c>entitySet</c> — з анотацією <c>x-openbp-options</c> (docs/connectors.md §2): у формі AI_BPMS набір
     /// обирається зі списку <c>list_entity_sets</c>; ввести назву чи вираз можна, як і раніше.
     /// </summary>
     /// <param name="options">Налаштування MCP-сервера з уже зареєстрованими tools.</param>

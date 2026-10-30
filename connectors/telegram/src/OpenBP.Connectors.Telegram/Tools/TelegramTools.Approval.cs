@@ -32,7 +32,7 @@ public sealed partial class TelegramTools
     /// <param name="parse_mode">Розмітка.</param>
     /// <param name="ct">Скасування.</param>
     [McpServerTool(Name = "send_approval", Title = "Send approval request", UseStructuredContent = true, Destructive = false, OpenWorld = true)]
-    [Description("Sends a message with two inline buttons (approve / reject) and returns { message_id, chat_id, token }. Then wait for the answer with get_approval (in OpenBP: mcp.waitFor on get_approval with the condition answered isTrue).")]
+    [Description("Sends a message with two inline buttons (approve / reject) and returns { message_id, chat_id, token }. Then wait for the answer with get_approval (in AI_BPMS: mcp.waitFor on get_approval with the condition answered isTrue).")]
     public Task<ApprovalRequest> SendApproval(
         [Description(ChatIdDescription)] JsonElement chat_id,
         [Description("Text of the approval request, 1-4096 characters.")] string text,

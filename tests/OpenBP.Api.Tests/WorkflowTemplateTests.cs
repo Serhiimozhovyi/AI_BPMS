@@ -48,7 +48,7 @@ public class WorkflowTemplateTests(ApiFactory api)
             catalog.Select(c => Path.GetFileNameWithoutExtension(c.GetProperty("file").GetString())),
             templates.EnumerateArray().Select(t => t.GetProperty("id").GetString()));
         Assert.Contains(templates.EnumerateArray(), t => t.GetProperty("id").GetString() == "hello-manual"
-            && t.GetProperty("name").GetString() == "Привіт, OpenBP"
+            && t.GetProperty("name").GetString() == "Привіт, AI_BPMS"
             && t.GetProperty("definition").GetProperty("nodes").GetArrayLength() == 3);
         Assert.All(templates.EnumerateArray(), t => Assert.False(string.IsNullOrWhiteSpace(t.GetProperty("description").GetString())));
     }
