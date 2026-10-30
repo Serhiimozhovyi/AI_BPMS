@@ -10,17 +10,32 @@
 @theme {
   --font-sans: "Ubuntu", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ac-kit: #5f53dc;
-  --color-ac-vivid: #261f4b;
-  --color-ac-mid: #372f6c;
-  --color-ac-button: #ebe9fd;
-  --color-ac-stone: #f9f8f8;
-  --color-ac-line: #c7c4cf;
-  --color-ac-line-2: #e3e0fc;
-  --color-ac-cool-grey: #f4f3f8;
-  --color-ac-cool-grey-2: #f2f1fd;
-  --color-ac-cool-grey-3: #bdbbd2;
-  --color-ac-cool-grey-4: #6b6580;
+  /* Палітра «Глибока бірюза» (F9-01): bg-bp-primary, text-bp-text-muted тощо. */
+  --color-bp-primary: #0d736d;
+  --color-bp-primary-hover: #095a56;
+  --color-bp-primary-pressed: #074744;
+  --color-bp-accent: #27c7be;
+  --color-bp-shell: #0c2b30;
+  --color-bp-shell-2: #12404a;
+  --color-bp-tonal: #ddf3f1;
+  --color-bp-bg: #f2f6f6;
+  --color-bp-bg-2: #e9f4f3;
+  --color-bp-line: #c3cfce;
+  --color-bp-text: #0c2b30;
+  --color-bp-text-muted: #57696b;
+
+  /* Застарілі назви — до F9-11. */
+  --color-ac-kit: #0d736d;
+  --color-ac-vivid: #0c2b30;
+  --color-ac-mid: #12404a;
+  --color-ac-button: #ddf3f1;
+  --color-ac-stone: #f8fbfb;
+  --color-ac-line: #c3cfce;
+  --color-ac-line-2: #dbe6e5;
+  --color-ac-cool-grey: #f2f6f6;
+  --color-ac-cool-grey-2: #e9f4f3;
+  --color-ac-cool-grey-3: #b4c4c3;
+  --color-ac-cool-grey-4: #57696b;
 
   --color-ac-teal: #27c7be;
   --color-ac-blue: #20aaea;

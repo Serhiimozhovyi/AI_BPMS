@@ -157,7 +157,7 @@ export const GROUP_COLORS: Record<CanvasNodeGroup, string> = {
   transform: '#27c7be',
   integration: '#20aaea',
   ai: '#b36bd4',
-  unknown: '#8d86a3',
+  unknown: '#57696b',
 };
 
 /** Id порту ngx-vflow за індексом формату: `in-0`, `out-1`. Індекси, а не назви, — щоб ребра не залежали від підписів. */
@@ -192,7 +192,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       [nodes]="nodes()"
       [edges]="edges()"
       [optimization]="{ virtualization: virtualization(), virtualizationZoomThreshold: MIN_ZOOM }"
-      background="#f4f3f8"
+      background="#f2f6f6"
       [snapGrid]="[10, 10]"
       [connection]="connectionSettings"
       (nodeDragEnd)="dragEnded()"
@@ -446,7 +446,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
         </span>
       </ng-template>
       @if (minimapOpen()) {
-        <mini-map position="bottom-left" maskColor="rgb(244 243 248 / 0.7)" strokeColor="#b9b4cc" [scaleOnHover]="false" />
+        <mini-map position="bottom-left" maskColor="rgb(242 246 246 / 0.7)" strokeColor="#b4c4c3" [scaleOnHover]="false" />
       }
     </vflow>
     <div class="controls" role="toolbar" i18n-aria-label="@@canvas.controls" aria-label="Керування канвасом" data-testid="canvas-controls">
@@ -505,7 +505,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       color: var(--ac-cool-grey-4);
       font: 500 14px/1 Ubuntu, sans-serif;
       cursor: pointer;
-      box-shadow: 0 1px 3px rgb(38 31 75 / 0.1);
+      box-shadow: 0 1px 3px rgb(12 43 48 / 0.1);
     }
 
     .controls__btn--wide {
@@ -538,7 +538,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border-left-width: 6px;
       border-radius: 8px;
       background: #fff;
-      box-shadow: 0 1px 4px rgb(38 31 75 / 0.12);
+      box-shadow: 0 1px 4px rgb(12 43 48 / 0.12);
       font: 13px/1.3 Ubuntu, sans-serif;
       user-select: none;
     }
@@ -621,7 +621,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__group {
       /* Яскравий колір групи на білому не проходить контраст AA — підмішуємо Vivid (F3-86). */
-      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #261f4b));
+      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #0c2b30));
       font-weight: 600;
       text-transform: uppercase;
     }
@@ -649,7 +649,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__icon {
       font-size: 16px;
-      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #261f4b));
+      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #0c2b30));
     }
 
     .node__type {
@@ -668,7 +668,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border: 1px solid var(--ac-cool-grey);
       border-radius: 6px;
       background: var(--ac-white);
-      box-shadow: 0 1px 4px rgb(38 31 75 / 0.12);
+      box-shadow: 0 1px 4px rgb(12 43 48 / 0.12);
     }
 
     .node:hover .node__toolbar,
@@ -835,7 +835,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .note__body code {
       padding: 0 3px;
       border-radius: 3px;
-      background: rgb(38 31 75 / 0.08);
+      background: rgb(12 43 48 / 0.08);
       font-size: 12px;
     }
 
@@ -877,7 +877,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border: 1px solid var(--ac-cool-grey);
       border-radius: 6px;
       background: var(--ac-white);
-      box-shadow: 0 1px 4px rgb(38 31 75 / 0.12);
+      box-shadow: 0 1px 4px rgb(12 43 48 / 0.12);
     }
 
     .note__swatch {

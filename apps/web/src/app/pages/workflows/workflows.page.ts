@@ -384,7 +384,7 @@ import { CardTableDirective } from '../../shared/card-table.directive';
     }
 
     .row__action {
-      color: var(--ac-kit, #5f53dc);
+      color: var(--ac-kit, #0d736d);
     }
 
     .row__action--danger:not([disabled]) {

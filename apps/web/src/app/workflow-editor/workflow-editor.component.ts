@@ -546,7 +546,7 @@ export interface EditorErrorEvent {
 
     .editor__rail-label {
       margin-top: 4px;
-      color: var(--ac-cool-grey-4, #6b6580);
+      color: var(--ac-cool-grey-4, #57696b);
       font-size: 12px;
       white-space: nowrap;
       writing-mode: vertical-rl;

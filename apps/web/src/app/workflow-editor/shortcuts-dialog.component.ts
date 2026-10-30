@@ -83,7 +83,7 @@ import { keyLabel, shortcutGroups } from './shortcuts';
       white-space: nowrap;
     }
     .or {
-      color: var(--ac-cool-grey-4, #6b6580);
+      color: var(--ac-cool-grey-4, #57696b);
       font-size: 11px;
     }
   `,

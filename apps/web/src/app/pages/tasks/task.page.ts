@@ -123,7 +123,7 @@ interface Problem {
         margin: 16px -16px -16px;
         padding: 12px 16px;
         background: var(--ac-white);
-        box-shadow: 0 -2px 8px rgb(38 31 75 / 0.12);
+        box-shadow: 0 -2px 8px rgb(12 43 48 / 0.12);
       }
 
       .task-card__decisions button {
