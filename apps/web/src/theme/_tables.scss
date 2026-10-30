@@ -1,0 +1,236 @@
+// Таблиці (F9-07) за Figma «Atoms / Table» 2815:14396 і «Реєстр продажів» 3499:77865 (лише читання) у палітрі «Глибока бірюза».
+// Стосується всіх `main table.w-full`; зверху — панель дій `bp-table-toolbar`.
+
+main table.w-full {
+  border-collapse: separate;
+  border-spacing: 0;
+
+  th {
+    padding: 8px 12px;
+    background: var(--bp-surface-2);
+    border-top: 1px solid var(--bp-line);
+    border-bottom: 1px solid var(--bp-line);
+    font: 500 12px/16px Ubuntu, sans-serif;
+    color: var(--bp-text-muted);
+  }
+
+  th:first-child {
+    border-left: 1px solid var(--bp-line);
+    border-top-left-radius: var(--ac-radius);
+  }
+
+  th:last-child {
+    border-right: 1px solid var(--bp-line);
+    border-top-right-radius: var(--ac-radius);
+  }
+
+  tbody td {
+    border-bottom: 1px solid var(--bp-line);
+    background: var(--bp-white);
+  }
+
+  tbody td:first-child {
+    border-left: 1px solid var(--bp-line);
+  }
+
+  tbody td:last-child {
+    border-right: 1px solid var(--bp-line);
+  }
+
+  tbody tr:last-child td:first-child {
+    border-bottom-left-radius: var(--ac-radius);
+  }
+
+  tbody tr:last-child td:last-child {
+    border-bottom-right-radius: var(--ac-radius);
+  }
+
+  // Наведення й вибраний рядок — --bp-bg-2; вибраний ще має смугу primary зліва.
+  tbody tr:hover td {
+    background: var(--bp-bg-2);
+  }
+
+  tbody tr.bp-row-selected td,
+  tbody tr[aria-selected='true'] td {
+    background: var(--bp-bg-2);
+  }
+
+  tbody tr.bp-row-selected td:first-child,
+  tbody tr[aria-selected='true'] td:first-child {
+    box-shadow: inset 3px 0 0 var(--bp-primary);
+  }
+
+  // Колонка галочок.
+  .bp-col-check {
+    width: 40px;
+    padding-right: 0;
+    text-align: center;
+  }
+}
+
+// Вертикальні лінії між колонками.
+main table.w-full.bp-table--grid {
+  th:not(:last-child),
+  td:not(:last-child) {
+    border-right: 1px solid var(--bp-line-2);
+  }
+}
+
+// Липка шапка: таблиця в контейнері, що прокручується.
+.bp-table-wrap {
+  max-height: 70vh;
+  overflow: auto;
+
+  table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+}
+
+// Картки замість рядків: на телефоні (F3-85, підписи полів ставить CardTableDirective) і за перемикачем «картки» (F9-07).
+@mixin card-layout() {
+  display: block;
+  width: 100%;
+  table-layout: auto;
+
+  colgroup,
+  thead {
+    display: none;
+  }
+
+  tbody {
+    display: block;
+  }
+
+  tr {
+    display: block;
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--bp-line);
+    border-radius: var(--ac-radius);
+    background: var(--bp-white);
+  }
+
+  td,
+  td:first-child,
+  td:last-child {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--bp-text-muted);
+    font-size: 13px;
+    text-align: left;
+  }
+
+  td:not([data-label]) {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  td.card-hide-mobile {
+    display: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  table[appCardTable] {
+    @include card-layout();
+  }
+}
+
+table[appCardTable].bp-cards {
+  @include card-layout();
+}
+
+// Панель над таблицею.
+.bp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bp-toolbar__view {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--bp-line);
+  border-radius: var(--ac-radius);
+  background: var(--bp-white);
+}
+
+.bp-toolbar__view button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bp-text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bp-bg-2);
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--bp-tonal);
+    color: var(--bp-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bp-primary);
+    outline-offset: 1px;
+  }
+}
+
+.bp-toolbar__search {
+  width: 280px;
+  max-width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--bp-line);
+  border-radius: var(--ac-radius);
+  background: var(--bp-white);
+  color: var(--bp-text);
+  font: 400 14px/20px Ubuntu, sans-serif;
+
+  &:hover {
+    border-color: var(--bp-primary);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--bp-primary);
+    box-shadow: 0 0 0 3px var(--bp-tonal);
+  }
+}
+
+.bp-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bp-toolbar__tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}

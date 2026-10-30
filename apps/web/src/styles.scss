@@ -4,6 +4,7 @@
 @use 'theme/openbp-theme' as theme;
 @use 'theme/buttons' as buttons;
 @use 'theme/tabs';
+@use 'theme/tables';
 @use 'theme/fields';
 
 :root {
@@ -44,56 +45,6 @@ main > :not(router-outlet) > section.p-6 {
   box-shadow: var(--ac-shadow);
 }
 
-// Таблиці AC-Kit: заголовок P4 сірим, рядки в рамці Line з радіусом 8px.
-main table.w-full {
-  border-collapse: separate;
-  border-spacing: 0;
-
-  th {
-    padding-top: 8px;
-    padding-bottom: 8px;
-    font: 400 12px/16px Ubuntu, sans-serif;
-    color: var(--ac-cool-grey-4);
-  }
-
-  tbody td {
-    border-top: 1px solid var(--ac-line);
-    background: var(--ac-white);
-  }
-
-  tbody tr:last-child td {
-    border-bottom: 1px solid var(--ac-line);
-  }
-
-  tbody td:first-child {
-    border-left: 1px solid var(--ac-line);
-  }
-
-  tbody td:last-child {
-    border-right: 1px solid var(--ac-line);
-  }
-
-  tbody tr:first-child td:first-child {
-    border-top-left-radius: var(--ac-radius);
-  }
-
-  tbody tr:first-child td:last-child {
-    border-top-right-radius: var(--ac-radius);
-  }
-
-  tbody tr:last-child td:first-child {
-    border-bottom-left-radius: var(--ac-radius);
-  }
-
-  tbody tr:last-child td:last-child {
-    border-bottom-right-radius: var(--ac-radius);
-  }
-
-  tbody tr:hover td {
-    background: var(--ac-cool-grey-2);
-  }
-}
-
 a {
   color: var(--ac-kit);
 }
@@ -114,61 +65,6 @@ a {
   --mat-snack-bar-container-color: var(--ac-vivid);
   --mat-snack-bar-supporting-text-color: var(--ac-white);
   --mat-snack-bar-button-color: var(--ac-red);
-}
-
-// Таблиця-список → картки на телефоні (F3-85): підписи полів ставить CardTableDirective.
-@media (max-width: 767.98px) {
-  table[appCardTable] {
-    display: block;
-    width: 100%;
-    table-layout: auto;
-
-    colgroup,
-    thead {
-      display: none;
-    }
-
-    tbody {
-      display: block;
-    }
-
-    tr {
-      display: block;
-      margin-bottom: 12px;
-      padding: 12px 16px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
-      background: var(--ac-white);
-    }
-
-    td {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 4px 0;
-      border: 0;
-      text-align: right;
-      overflow-wrap: anywhere;
-    }
-
-    td[data-label]::before {
-      content: attr(data-label);
-      flex: none;
-      color: var(--ac-cool-grey-4);
-      font-size: 13px;
-      text-align: left;
-    }
-
-    td:not([data-label]) {
-      justify-content: flex-start;
-      text-align: left;
-    }
-
-    td.card-hide-mobile {
-      display: none;
-    }
-  }
 }
 
 // Телефон: менші поля сторінок, щоб вміщалось у 390 px (F3-85).
