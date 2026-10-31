@@ -101,7 +101,7 @@ interface DrawerState {
               @if (r.items.length === 0) {
                 <p class="opacity-70" data-testid="app-rows-empty">{{ v.page.definition.empty ?? emptyText }}</p>
               } @else if (v.page.definition.layout === 'cards') {
-                <ul class="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3" data-testid="app-cards">
+                <ul class="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3" data-testid="app-cards">
                   @for (row of r.items; track row.key) {
                     <li class="rounded border border-bp-line p-4" [attr.data-row]="row.key">
                       <div class="flex items-start gap-2">
@@ -160,7 +160,7 @@ interface DrawerState {
                 <ng-container *ngTemplateOutlet="pager" />
               } @else {
                 <div class="overflow-x-auto">
-                  <table class="w-full max-w-5xl text-left" data-testid="app-rows">
+                  <table class="w-full text-left" data-testid="app-rows">
                     <thead>
                       <tr>
                         @if (v.page.definition.expand?.length) {

@@ -239,6 +239,11 @@ test('редактор проєкту: бокове меню з групами �
   await expect(page.locator('[data-page="today"] .side-nav__label')).toBeHidden();
   // Згорнута — вузька смуга значків, а не ширина прихованих підписів груп.
   expect((await page.locator('app-side-nav').boundingBox())!.width).toBeLessThanOrEqual(64);
+  // Звільнене місце займає головна: сітка тягнеться до правого краю (без порожньої смуги).
+  await expect(async () => {
+    const grid = (await page.getByTestId('dash-grid').boundingBox())!;
+    expect(grid.x + grid.width).toBeGreaterThan(1440 - 64);
+  }).toPass();
   await shot(page, 'editor-side-nav-collapsed');
   await page.reload();
   await expect(page.locator('[data-page="today"] .side-nav__label')).toBeHidden();
