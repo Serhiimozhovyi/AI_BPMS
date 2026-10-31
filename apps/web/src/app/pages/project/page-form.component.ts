@@ -1,3 +1,4 @@
+import { ViewAsService } from '../../auth/view-as.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
@@ -40,12 +41,15 @@ interface FieldError {
       @if (saved()) {
         <p role="status" class="mb-2" data-testid="app-form-saved" i18n="@@app.page.saved">Збережено.</p>
       }
-      <button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting() || loading() || preview()" i18n="@@app.page.submit">Зберегти</button>
+      <button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting() || loading() || preview() || readOnly()" [attr.title]="readOnly() ? readOnlyTip : null" i18n="@@app.page.submit">Зберегти</button>
     </form>
   `,
 })
 export class PageFormComponent implements OnInit {
   private readonly api = inject(ProjectPagesApiService);
+  /** Перегляд «як користувач» (F12-02): дії, що змінюють дані, неактивні. */
+  protected readonly readOnly = inject(ViewAsService).active;
+  protected readonly readOnlyTip = $localize`:@@viewAs.disabled:У режимі перегляду дані не змінюються`;
 
   readonly projectId = input.required<string>();
   readonly view = input.required<ProjectPageView>();

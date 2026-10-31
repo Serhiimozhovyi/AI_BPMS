@@ -317,6 +317,17 @@ describe('App: перегляд «як користувач» (F12-02)', () => {
     expect(host.querySelector('[data-testid="view-as-banner"]')).toBeNull();
     expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/projects', 'p1']);
   });
+
+  it('«Вийти з перегляду» повертає на сторінку, з якої перегляд увімкнули', async () => {
+    sessionStorage.setItem('openbp.viewAs', JSON.stringify({ projectId: 'p1', projectName: 'П', role: 'editor', label: 'Редактор проєкту', returnUrl: '/projects/p1/members' }));
+    const { fixture, host } = await shell({ id: 'u2', email: 'dev@firma.ua', role: 'viewer' }, [
+      { id: 'p1', name: 'П', sortOrder: 0, workflowCount: 1, role: 'editor' },
+    ]);
+    const byUrl = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    host.querySelector<HTMLButtonElement>('[data-testid="view-as-exit"]')!.click();
+    fixture.detectChanges();
+    expect(byUrl).toHaveBeenCalledWith('/projects/p1/members');
+  });
 });
 
 describe('App: телефон і зв’язок (F3-84)', () => {
