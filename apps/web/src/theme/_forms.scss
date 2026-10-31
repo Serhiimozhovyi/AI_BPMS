@@ -1,0 +1,28 @@
+// Розмітка форм (F11-01, docs/forms-designer.md): рядок полів на сітці з 12 колонок; на вузькому екрані — у стовпчик.
+// Класи ставить `formFields()` (forms/form-fields.ts) на групи formly: `pf-row` — рядок, `pf-col pf-col-N` — клітинка.
+
+.pf-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.pf-col {
+  min-width: 0;
+}
+
+@for $i from 1 through 12 {
+  .pf-col-#{$i} {
+    grid-column: span #{$i};
+  }
+}
+
+@media (max-width: 639.98px) {
+  .pf-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-col {
+    grid-column: 1 / -1;
+  }
+}

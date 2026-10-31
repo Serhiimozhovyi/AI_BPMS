@@ -1,3 +1,4 @@
+import type { FieldUi, FormLayout } from '../forms/form-layout';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -141,6 +142,10 @@ export interface PageField extends PageColumn {
   required?: boolean;
   description?: string;
   value?: unknown;
+  /** Форма: значення з рядка, вибраного в полі `ref` (F8-21); поле не показується. */
+  copyFrom?: string;
+  /** Як показати поле форми (F11-01) — стає `x-openbp-ui` у схемі. */
+  ui?: FieldUi;
 }
 
 /** Пов'язаний список картки. */
@@ -167,6 +172,8 @@ export interface PageDefinition {
   actions?: PageAction[];
   create?: PageLink;
   fields?: PageField[];
+  /** Розмітка форми (F11-01): секції з рядками полів, як `x-openbp-layout`. */
+  formLayout?: FormLayout;
   related?: PageRelated[];
   onSubmit?: { operation?: 'insert' | 'upsert' | 'update'; workflow?: string };
   then?: { page: string };

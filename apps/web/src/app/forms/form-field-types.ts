@@ -1,12 +1,12 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { FieldType, FieldTypeConfig, FormlyAttributes, FormlyFieldConfig, FormlyValidationMessage, provideFormlyCore } from '@ngx-formly/core';
-import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SELECT, PF_TEXTAREA, PublicFieldProps } from './form-fields';
+import { FieldType, FieldTypeConfig, FieldWrapper, FormlyAttributes, FormlyFieldConfig, FormlyValidationMessage, provideFormlyCore } from '@ngx-formly/core';
+import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps } from './form-fields';
 import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Типи полів публічної форми (F6-03): Angular Material у стилі AC-Kit, підказка і помилка під полем. */
@@ -21,9 +21,9 @@ type PublicField = FieldTypeConfig<PublicFieldProps>;
     <mat-form-field appearance="outline" class="w-full">
       <mat-label>{{ props.label }}</mat-label>
       @if (props.type === 'number') {
-        <input matInput type="number" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key" />
+        <input matInput type="number" [placeholder]="props.placeholder ?? ''" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key" />
       } @else {
-        <input matInput [type]="props.type ?? 'text'" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key" />
+        <input matInput [type]="props.type ?? 'text'" [placeholder]="props.placeholder ?? ''" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key" />
       }
       @if (props.description) {
         <mat-hint>{{ props.description }}</mat-hint>
@@ -41,7 +41,7 @@ export class PublicInputFieldComponent extends FieldType<PublicField> {}
   template: `
     <mat-form-field appearance="outline" class="w-full">
       <mat-label>{{ props.label }}</mat-label>
-      <textarea matInput rows="4" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key"></textarea>
+      <textarea matInput [rows]="props.rows ?? 4" [placeholder]="props.placeholder ?? ''" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key"></textarea>
       @if (props.description) {
         <mat-hint>{{ props.description }}</mat-hint>
       }
@@ -171,6 +171,84 @@ export class PublicFileFieldComponent extends FieldType<PublicField> {
   }
 }
 
+/**
+ * Секція форми з розміткою (F11-01): заголовок і опис над рядками полів; `collapsible` — заголовок стає кнопкою
+ * згортання (`collapsed` — згорнута спочатку). Згорнута секція лише ховає поля: значення й перевірки лишаються.
+ */
+@Component({
+  selector: 'app-pf-section',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <section class="pf-section" [class.pf-section--titled]="!!props.label" data-testid="form-section">
+      @if (props.label) {
+        @if (props.collapsible) {
+          <button type="button" class="pf-section__toggle" [attr.aria-expanded]="open()" (click)="open.set(!open())" data-testid="form-section-toggle">
+            <span class="material-symbols-outlined" aria-hidden="true">{{ open() ? 'expand_less' : 'expand_more' }}</span>
+            <span class="pf-section__title">{{ props.label }}</span>
+          </button>
+        } @else {
+          <h2 class="pf-section__title">{{ props.label }}</h2>
+        }
+      }
+      @if (props.description) {
+        <p class="pf-section__description">{{ props.description }}</p>
+      }
+      <div class="pf-section__body" [hidden]="!open()">
+        <ng-container #fieldComponent></ng-container>
+      </div>
+    </section>
+  `,
+  styles: `
+    .pf-section--titled {
+      margin: 0 0 16px;
+      padding: 16px 16px 0;
+      border: 1px solid var(--bp-line);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .pf-section__title {
+      margin: 0 0 4px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--bp-text);
+    }
+    .pf-section__toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0 0 4px -4px;
+      padding: 2px 4px;
+      border: 0;
+      border-radius: 8px;
+      background: none;
+      cursor: pointer;
+      color: var(--bp-text);
+    }
+    .pf-section__toggle:focus-visible {
+      outline: 2px solid var(--bp-primary);
+      outline-offset: 2px;
+    }
+    .pf-section__toggle .pf-section__title {
+      margin: 0;
+    }
+    .pf-section__description {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: var(--bp-text-muted);
+    }
+    .pf-section__body {
+      padding-top: 8px;
+    }
+  `,
+})
+export class PublicSectionWrapperComponent extends FieldWrapper<FormlyFieldConfig<SectionProps>> implements OnInit {
+  protected readonly open = signal(true);
+
+  ngOnInit(): void {
+    this.open.set(!(this.props.collapsible && this.props.collapsed));
+  }
+}
+
 /** Formly для публічної форми: типи полів і тексти помилок українською; `server` — помилка поля з відповіді Api. */
 export function providePublicForm() {
   return provideFormlyCore({
@@ -181,6 +259,7 @@ export function providePublicForm() {
       { name: PF_CHECKBOX, component: PublicCheckboxFieldComponent },
       { name: PF_FILE, component: PublicFileFieldComponent },
     ],
+    wrappers: [{ name: PF_SECTION, component: PublicSectionWrapperComponent }],
     validationMessages: [
       { name: 'required', message: $localize`:@@form.error.required:Заповніть це поле.` },
       { name: 'minLength', message: (_e: unknown, f: FormlyFieldConfig) => $localize`:@@form.error.minLength:Щонайменше ${f.props?.minLength}:min: символів.` },

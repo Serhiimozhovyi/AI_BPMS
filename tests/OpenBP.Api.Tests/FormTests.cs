@@ -93,6 +93,42 @@ public class FormTests(ApiFactory api)
         Assert.Equal("/nodes/0/parameters/schema", Assert.Single(invalid.GetProperty("errors").EnumerateArray()).GetProperty("path").GetString());
     }
 
+    [Fact]
+    public async Task Layout_annotations_activate_and_are_returned_but_bad_layout_fails_activation()
+    {
+        // F11-01: розмітка x-openbp-layout / x-openbp-ui — у схемі; дані лишаються плоскими й перевіряються як раніше.
+        var editor = await LoginAsync();
+        var path = UniquePath();
+        const string withLayout = """
+            {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string", "title": "ПІБ", "x-openbp-ui": { "placeholder": "Прізвище та ім'я" } },
+                "from": { "type": "string", "format": "date" },
+                "to": { "type": "string", "format": "date" }
+              },
+              "x-openbp-layout": { "sections": [
+                { "title": "Хто", "rows": [[{ "field": "name" }]] },
+                { "title": "Коли", "collapsible": true, "rows": [[{ "field": "from", "width": 6 }, { "field": "to", "width": 6 }]] } ] }
+            }
+            """;
+        await ActivateAsync(editor, await CreateAsync(editor, FormNode(path, schema: withLayout)));
+
+        var form = await JsonAsync(await api.CreateClient().GetAsync($"{Forms}/{path}"));
+        var sections = form.GetProperty("schema").GetProperty("x-openbp-layout").GetProperty("sections");
+        Assert.Equal(["Хто", "Коли"], sections.EnumerateArray().Select(s => s.GetProperty("title").GetString()));
+        var accepted = await api.CreateClient().PostAsync($"{Forms}/{path}", Json("""{ "fields": { "name": "Олена", "from": "2026-11-02", "to": "2026-11-06" } }"""));
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+
+        var badLayout = withLayout.Replace("\"width\": 6 }]]", "\"width\": 7 }]]", StringComparison.Ordinal);
+        var bad = await CreateAsync(editor, FormNode(UniquePath(), schema: badLayout));
+        var invalid = await AssertProblemAsync(await editor.PostAsync($"{Base}/{bad}/activate", null), HttpStatusCode.UnprocessableEntity, "WORKFLOW_INVALID");
+        var error = Assert.Single(invalid.GetProperty("errors").EnumerateArray());
+        Assert.Equal("/nodes/0/parameters/schema", error.GetProperty("path").GetString());
+        Assert.Contains("сума ширин 13", error.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
     // ---------- надсилання ----------
 
     [Fact]

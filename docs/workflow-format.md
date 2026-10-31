@@ -250,6 +250,23 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   файл), `number`, `integer`, `boolean` — прапорець, `enum` або `oneOf` з `const`/`title` — список, масив з `items.enum` —
   кілька значень. `title` — підпис, `description` — підказка, `required`, `minLength`/`maxLength`, `minimum`/`maximum`,
   `pattern` перевіряються і на сторінці, і на сервері. Порожні поля вважаються незаповненими.
+- Розмітка (F11-01, `docs/forms-designer.md`): анотація `x-openbp-layout` на корені схеми — `{ "sections": [{ "title"?,
+  "description"?, "collapsible"?, "collapsed"?, "rows": [[{ "field", "width"? }]] }] }`: секції з рядками полів на сітці
+  з 12 колонок (у рядку до 4 полів, сума `width` ≤ 12, без `width` — порівну; на телефоні — у стовпчик). Поля без місця в
+  розмітці стоять у кінці по одному в рядок; без розмітки — як раніше, одне під одним. `x-openbp-ui` на властивості —
+  `{ "placeholder"?, "rows"?, "widget"?: "radio" | "chips" }`. JSON Schema анотації ігнорує: дані форми лишаються
+  плоскими (`fields`), перевірка даних не змінюється. Посилання на поле, якого немає, повтор поля, ширина поза 1–12 чи
+  сума понад 12 — `PARAMETER_INVALID` на `/parameters/schema` під час активації `core.formTrigger`. Розмітку так само
+  показують форми `core.wait` (`form.schema`) і картка задачі `core.approval` (`fields`).
+
+```json
+"schema": { "type": "object", "required": ["name"],
+  "properties": { "name": { "type": "string", "title": "ПІБ", "x-openbp-ui": { "placeholder": "Прізвище та ім'я" } },
+                  "from": { "type": "string", "format": "date", "title": "З" }, "to": { "type": "string", "format": "date", "title": "По" } },
+  "x-openbp-layout": { "sections": [ { "rows": [[{ "field": "name" }]] },
+                                     { "title": "Дати", "rows": [[{ "field": "from", "width": 6 }, { "field": "to", "width": 6 }]] } ] } }
+```
+
 - `auth`: `none` (типово) — будь-хто за посиланням; `login` — лише користувач AI_BPMS (без сесії сторінка веде на вхід і
   повертає на форму); `token` — посилання `/form/{path}?token=…`, значення токена — у credential типу `form.token`
   (`credentialId`); без токена чи з чужим — 401.

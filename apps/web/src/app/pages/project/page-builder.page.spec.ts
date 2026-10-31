@@ -126,6 +126,40 @@ describe('PageBuilderPage (F8-05)', () => {
     expect(navigate).toHaveBeenCalledWith(['/projects', 'p1', 'app', 'my-bookings']);
   });
 
+  it('редагує наявну форму: розмітку й ui полів (F11-01) зберігає, клітинки прибраних полів відкидає', async () => {
+    const { fixture, http, host } = await setup('book');
+    const formLayout = { sections: [{ title: 'Запис', rows: [[{ field: 'name', width: 8 }, { field: 'minutes' }]] }] };
+    http.expectOne('/api/v1/projects/p1/pages/book').flush({
+      page: {
+        id: 'b',
+        key: 'book',
+        name: 'Запис',
+        kind: 'form',
+        roles: [],
+        sortOrder: 1,
+        updatedAt: '',
+        definition: {
+          table: 'bookings',
+          fields: [{ column: 'name', ui: { placeholder: 'Ім’я' } }, { column: 'minutes' }],
+          formLayout,
+          onSubmit: { operation: 'insert' },
+        },
+      },
+      tableId: 't1',
+      columns: [],
+      schema: null,
+      canEdit: true,
+    });
+    await render(fixture);
+
+    host.querySelector<HTMLInputElement>('[data-field="minutes"]')!.click();
+    await render(fixture);
+    host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
+    const body = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/book' }).request.body.definition;
+    expect(body.fields).toEqual([{ column: 'name', ui: { placeholder: 'Ім’я' } }]);
+    expect(body.formLayout).toEqual({ sections: [{ title: 'Запис', rows: [[{ field: 'name', width: 8 }]] }] });
+  });
+
   it('редагує наявну форму: зберігає display і value полів, яких форма не змінює', async () => {
     const { fixture, http, host } = await setup('book');
     http.expectOne('/api/v1/projects/p1/pages/book').flush({

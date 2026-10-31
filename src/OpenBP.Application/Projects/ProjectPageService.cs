@@ -747,6 +747,11 @@ public sealed partial class ProjectPageService(
                     break;
             }
 
+            if (field.Ui is { Count: > 0 } ui)
+            {
+                property[Forms.FormLayout.UiKey] = ui.DeepClone();
+            }
+
             properties[column.Name] = property;
             if (!update && (field.Required || c.Table.Constraints.Required.Any(r => Same(r, column.Name))))
             {
@@ -754,7 +759,13 @@ public sealed partial class ProjectPageService(
             }
         }
 
-        return new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = required };
+        var schema = new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = required };
+        if (c.Page.Definition.FormLayout is { } layout)
+        {
+            schema[Forms.FormLayout.LayoutKey] = layout.DeepClone();
+        }
+
+        return schema;
     }
 
     /// <summary>Тип поля форми за простим типом колонки: число, так/ні, дата, дата й час, перелік, текст.</summary>
@@ -962,6 +973,8 @@ public sealed partial class ProjectPageService(
                     throw Invalid($"Поле «{twice.Key}» у формі двічі.");
                 }
 
+                ValidateFormLayout(table, def);
+
                 var submit = def.OnSubmit ?? throw Invalid("Форма потребує onSubmit: { operation } або { workflow }.");
                 if ((submit.Operation is null) == (submit.Workflow is null))
                 {
@@ -982,6 +995,24 @@ public sealed partial class ProjectPageService(
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>Розмітка форми й підказки полів (F11-01): посилання лише на видимі поля форми (без <c>value</c>/<c>copyFrom</c>).</summary>
+    private static void ValidateFormLayout(DataTableInfo table, PageDefinition def)
+    {
+        var visible = (def.Fields ?? []).Where(f => !f.ServerSet).Select(f => Column(table, f.Column).Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var field in def.Fields ?? [])
+        {
+            if (Forms.FormLayout.UiError(field.Ui, $"fields/{field.Column}/ui") is { } uiError)
+            {
+                throw Invalid(uiError);
+            }
+        }
+
+        if (def.FormLayout is not null && Forms.FormLayout.Error(def.FormLayout, visible, "formLayout") is { } layoutError)
+        {
+            throw Invalid(layoutError);
         }
     }
 

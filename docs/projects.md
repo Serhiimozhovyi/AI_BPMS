@@ -272,9 +272,13 @@ mode }` — режим `mode: "drawer"` у будь-якому посиланн�
       { "column": "title", "label": "Назва", "required": true },
       { "column": "starts_at", "label": "Початок", "required": true },
       { "column": "format", "label": "Формат", "labels": { "online": "Онлайн", "offline": "Наживо" } },
-      { "column": "capacity", "label": "Місць", "format": "capacity", "description": "0 — без ліміту" },
+      { "column": "capacity", "label": "Місць", "format": "capacity", "description": "0 — без ліміту", "ui": { "placeholder": "Напр. 12" } },
       { "column": "status", "value": "planned" }
     ],
+    "formLayout": { "sections": [
+      { "rows": [[{ "field": "title" }]] },
+      { "title": "Коли і як", "rows": [[{ "field": "starts_at", "width": 6 }, { "field": "format", "width": 6 }], [{ "field": "capacity", "width": 4 }]] }
+    ] },
     "onSubmit": { "operation": "update" },
     "then": { "page": "events" }
   }
@@ -285,6 +289,14 @@ mode }` — режим `mode: "drawer"` у будь-якому посиланн�
 → дата й час у поясі застосунку, `user` → учасник проєкту) тим самим рушієм форм, що й `core.formTrigger` (F6-03).
 `format: "phone"` нормалізує значення до цифр під час збереження (F8-15). Форма зміни (з дії рядка) — `update`; форма
 створення (з `create`) — окрема сторінка з `insert`, або одна форма з `upsert`, якщо в таблиці є ключова колонка.
+
+Розмітка форми (F11-01, `docs/forms-designer.md`): `formLayout` — секції (`title`, `description`, `collapsible`,
+`collapsed`) з рядками полів на сітці з 12 колонок; клітинка — `{ field, width? }`, `field` — колонка видимого поля форми
+(не `value`/`copyFrom`), у рядку до 4 полів, сума ширин не більша за 12 (без ширини — порівну); поля без місця в
+розмітці стоять у кінці по одному в рядок; на телефоні рядок розпадається у стовпчик. `fields[].ui` — як показати
+поле: `placeholder`, `rows` (висота багаторядкового), `widget` (`radio` | `chips`, F11-07). Сервер переносить їх у
+схему форми як `x-openbp-layout` і `x-openbp-ui` — той самий рендер, що й у форм вузлів; помилка розмітки — 422 з шляхом
+(`formLayout/sections/0/rows/1/0: поля «…» немає у формі.`).
 
 Форма «ключ — значення» — усі рядки таблиці налаштувань однією формою (поле на кожен рядок; збереження — `upsert`
 змінених рядків за ключовою колонкою):

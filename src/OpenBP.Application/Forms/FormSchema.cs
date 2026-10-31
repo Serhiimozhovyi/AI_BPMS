@@ -60,7 +60,7 @@ internal static class FormSchema
         try
         {
             Compile(schema);
-            return null;
+            return FormLayout.Error(schema) is { } layoutError ? $"Розмітка форми: {layoutError}" : null;
         }
         catch (ConflictException ex)
         {
@@ -77,11 +77,41 @@ internal static class FormSchema
 
         try
         {
-            return JsonSchema.FromText(schema.ToJsonString(), new BuildOptions { SchemaRegistry = new SchemaRegistry() });
+            return JsonSchema.FromText(WithoutAnnotations(schema).ToJsonString(), new BuildOptions { SchemaRegistry = new SchemaRegistry() });
         }
         catch (Exception ex) when (ex is JsonException or JsonSchemaException or ArgumentException or InvalidOperationException)
         {
             throw new ConflictException("FORM_SCHEMA_INVALID", $"Поля форми задано некоректною JSON Schema: {ex.Message} Виправте параметр schema вузла.");
+        }
+    }
+
+    /// <summary>
+    /// Копія схеми без анотацій показу <c>x-openbp-*</c> (F11-01: <c>x-openbp-layout</c> на корені, <c>x-openbp-ui</c> на
+    /// властивостях): бібліотека JSON Schema відкидає невідомі ключові слова, а на дані вони не впливають.
+    /// </summary>
+    private static JsonObject WithoutAnnotations(JsonObject schema)
+    {
+        var copy = schema.DeepClone().AsObject();
+        Strip(copy);
+        if (copy["properties"] is JsonObject properties)
+        {
+            foreach (var (_, property) in properties)
+            {
+                if (property is JsonObject p)
+                {
+                    Strip(p);
+                }
+            }
+        }
+
+        return copy;
+
+        static void Strip(JsonObject node)
+        {
+            foreach (var key in node.Select(p => p.Key).Where(k => k.StartsWith("x-openbp-", StringComparison.Ordinal)).ToList())
+            {
+                node.Remove(key);
+            }
         }
     }
 

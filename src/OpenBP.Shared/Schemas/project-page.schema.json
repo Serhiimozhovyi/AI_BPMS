@@ -106,7 +106,72 @@
         "value": { "$ref": "#/$defs/filterValue" },
         "copyFrom": { "type": "string", "pattern": "^.+\\..+$", "description": "Форма: колонка_ref.колонка — значення з рядка, вибраного в полі ref цієї форми; поле не показується." },
         "display": { "type": "string", "pattern": "^.+\\..+$" },
-        "labels": { "$ref": "#/$defs/labels" }
+        "labels": { "$ref": "#/$defs/labels" },
+        "ui": { "$ref": "#/$defs/fieldUi" }
+      }
+    },
+    "fieldUi": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Форма: як показати поле (F11-01) — x-openbp-ui у схемі форми.",
+      "properties": {
+        "widget": { "type": "string", "enum": ["radio", "chips"] },
+        "placeholder": { "type": "string", "maxLength": 200 },
+        "rows": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "visibleIf": {
+      "type": "object",
+      "required": ["field", "operator"],
+      "additionalProperties": false,
+      "description": "Показувати, якщо поле форми задовольняє умову (F11-06).",
+      "properties": {
+        "field": { "$ref": "#/$defs/columnName" },
+        "operator": { "type": "string", "enum": ["eq", "ne", "contains", "isEmpty", "isNotEmpty", "gt", "lt"] },
+        "value": {}
+      }
+    },
+    "formLayout": {
+      "type": "object",
+      "required": ["sections"],
+      "additionalProperties": false,
+      "description": "Розмітка форми (F11-01, docs/forms-designer.md): секції з рядками полів на сітці з 12 колонок; field — колонка поля форми.",
+      "properties": {
+        "sections": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "object",
+            "required": ["rows"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "maxLength": 100 },
+              "title": { "type": "string", "maxLength": 200 },
+              "description": { "type": "string", "maxLength": 2000 },
+              "collapsible": { "type": "boolean" },
+              "collapsed": { "type": "boolean" },
+              "visibleIf": { "$ref": "#/$defs/visibleIf" },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "items": {
+                    "type": "object",
+                    "required": ["field"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "field": { "$ref": "#/$defs/columnName" },
+                      "width": { "type": "integer", "minimum": 1, "maximum": 12 },
+                      "visibleIf": { "$ref": "#/$defs/visibleIf" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "userFilter": {
@@ -261,6 +326,7 @@
         "table": { "$ref": "#/$defs/columnName" },
         "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" } },
         "keyValue": { "$ref": "#/$defs/keyValue" },
+        "formLayout": { "$ref": "#/$defs/formLayout" },
         "filter": { "$ref": "#/$defs/filters" },
         "onSubmit": {
           "type": "object",

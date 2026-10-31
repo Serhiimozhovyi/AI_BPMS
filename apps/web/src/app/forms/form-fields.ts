@@ -1,4 +1,5 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
+import { fieldUi, hasLayout, readLayout, rowWidths } from './form-layout';
 
 /**
  * JSON Schema полів публічної форми (F6-03) → поля ngx-formly і назад — у тіло надсилання. Підтримується те, що
@@ -16,6 +17,8 @@ export const PF_TEXTAREA = 'pf-textarea';
 export const PF_SELECT = 'pf-select';
 export const PF_CHECKBOX = 'pf-checkbox';
 export const PF_FILE = 'pf-file';
+/** Обгортка секції форми з розміткою (F11-01). */
+export const PF_SECTION = 'pf-section';
 
 /** Варіант списку. */
 export interface FormOption {
@@ -37,6 +40,18 @@ export interface PublicFieldProps {
   min?: number;
   max?: number;
   pattern?: string;
+  /** Текст-підказка всередині порожнього поля (`x-openbp-ui.placeholder`). */
+  placeholder?: string;
+  /** Висота багаторядкового поля в рядках (`x-openbp-ui.rows`). */
+  rows?: number;
+}
+
+/** Властивості обгортки секції. */
+export interface SectionProps {
+  label?: string;
+  description?: string;
+  collapsible?: boolean;
+  collapsed?: boolean;
 }
 
 /** Значення формату поля-файлу. */
@@ -85,18 +100,45 @@ export function isFileProperty(property: JsonSchema): boolean {
   return property['format'] === BINARY_FORMAT;
 }
 
-/** Поля форми для об'єктної схеми. Не об'єкт — порожній список. */
+/**
+ * Поля форми для об'єктної схеми. Не об'єкт — порожній список. Без розмітки — поля одне під одним; з розміткою
+ * `x-openbp-layout` (F11-01) — секції (обгортка `pf-section`) з рядками на сітці з 12 колонок (`pf-row`, `pf-col-N`).
+ * Групи без `key`, тож модель форми лишається плоскою.
+ */
 export function formFields(schema: JsonSchema | null | undefined): FormlyFieldConfig[] {
   const required = requiredOf(schema);
-  return propertiesOf(schema).map(([key, property]) => fieldFor(key, property, required.has(key)));
+  const properties = new Map(propertiesOf(schema));
+  const field = (key: string) => fieldFor(key, properties.get(key) ?? {}, required.has(key));
+  if (!hasLayout(schema)) {
+    return [...properties.keys()].map(field);
+  }
+  return readLayout(schema).sections.map((section): FormlyFieldConfig => {
+    const rows = section.rows.map((row): FormlyFieldConfig => {
+      const widths = rowWidths(row);
+      return {
+        fieldGroupClassName: 'pf-row',
+        fieldGroup: row.map((cell, i) => ({ ...field(cell.field), className: `pf-col pf-col-${widths[i]}` })),
+      };
+    });
+    const props: SectionProps = {
+      label: section.title,
+      description: section.description,
+      collapsible: section.collapsible,
+      collapsed: section.collapsible && section.collapsed,
+    };
+    return { wrappers: [PF_SECTION], props, fieldGroup: rows };
+  });
 }
 
 function fieldFor(key: string, property: JsonSchema, required: boolean): FormlyFieldConfig {
+  const ui = fieldUi(property);
   const props: PublicFieldProps = {
     label: typeof property['title'] === 'string' ? property['title'] : key,
     description: typeof property['description'] === 'string' ? property['description'] : undefined,
     required,
   };
+  if (ui.placeholder) props.placeholder = ui.placeholder;
+  if (ui.rows) props.rows = ui.rows;
   const type = typeOf(property);
   const options = optionsOf(property);
   const items = isObject(property['items']) ? property['items'] : null;

@@ -1,4 +1,4 @@
-import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SELECT, PF_TEXTAREA, PublicFieldProps, formFields, toPayload } from './form-fields';
+import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps, formFields, toPayload } from './form-fields';
 
 describe('formFields (F6-03)', () => {
   const schema = {
@@ -63,5 +63,43 @@ describe('formFields (F6-03)', () => {
 
     expect(payload.fields).toEqual({ name: 'Олена', days: 5, at: new Date('2026-10-26T10:30').toISOString(), agree: false });
     expect(payload.files).toEqual({ scan: file });
+  });
+
+  it('розмітка (F11-01): секції з рядками на сітці 12, поза розміткою — у кінець, модель плоска', () => {
+    const fields = formFields({
+      type: 'object',
+      required: ['from'],
+      properties: {
+        name: { type: 'string', title: 'ПІБ', 'x-openbp-ui': { placeholder: 'Прізвище та ім’я' } },
+        from: { type: 'string', format: 'date' },
+        to: { type: 'string', format: 'date' },
+        reason: { type: 'string', format: 'textarea', 'x-openbp-ui': { rows: 2 } },
+      },
+      'x-openbp-layout': {
+        sections: [
+          { rows: [[{ field: 'name' }]] },
+          { title: 'Дати', description: 'Включно', collapsible: true, collapsed: true, rows: [[{ field: 'from', width: 8 }, { field: 'to' }]] },
+        ],
+      },
+    });
+
+    expect(fields.map((f) => f.wrappers)).toEqual([[PF_SECTION], [PF_SECTION]]);
+    expect(fields[1].props as SectionProps).toEqual({ label: 'Дати', description: 'Включно', collapsible: true, collapsed: true });
+    const [first, second] = fields.map((s) => s.fieldGroup!.map((row) => row.fieldGroup!.map((f) => [f.key, f.className])));
+    expect(first).toEqual([[['name', 'pf-col pf-col-12']]]);
+    expect(second).toEqual([
+      [
+        ['from', 'pf-col pf-col-8'],
+        ['to', 'pf-col pf-col-4'],
+      ],
+      [['reason', 'pf-col pf-col-12']],
+    ]);
+    expect(fields.flatMap((s) => s.fieldGroup!.map((row) => row.fieldGroupClassName))).toEqual(['pf-row', 'pf-row', 'pf-row']);
+    expect(fields.every((s) => s.key === undefined && s.fieldGroup!.every((row) => row.key === undefined))).toBe(true);
+    const name = fields[0].fieldGroup![0].fieldGroup![0];
+    const reason = fields[1].fieldGroup![1].fieldGroup![0];
+    expect((name.props as PublicFieldProps).placeholder).toBe('Прізвище та ім’я');
+    expect([reason.type, (reason.props as PublicFieldProps).rows]).toEqual([PF_TEXTAREA, 2]);
+    expect((fields[1].fieldGroup![0].fieldGroup![0].props as PublicFieldProps).required).toBe(true);
   });
 });

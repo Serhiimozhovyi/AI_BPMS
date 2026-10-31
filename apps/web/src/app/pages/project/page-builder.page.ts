@@ -576,6 +576,13 @@ export class PageBuilderPage implements OnInit {
         return field;
       });
       if (kind === 'detail' && this.base.related?.length) def.related = this.base.related;
+      if (kind === 'form' && this.base.formLayout) {
+        // Розмітку (F11-01) редактор форми ще не знає — зберігаємо, прибравши клітинки полів, яких на формі вже немає.
+        const visible = new Set(def.fields.filter((f) => f.value === undefined && f.copyFrom === undefined).map((f) => f.column));
+        def.formLayout = {
+          sections: this.base.formLayout.sections.map((s) => ({ ...s, rows: s.rows.map((r) => r.filter((c) => visible.has(c.field))).filter((r) => r.length) })),
+        };
+      }
     }
 
     if (kind !== 'form') {
