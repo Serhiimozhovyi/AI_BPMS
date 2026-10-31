@@ -821,6 +821,9 @@ test('F3-62: ПКМ → «Додати нотатку», Markdown-текст, к
   await page.goto(`/workflows/${WORKFLOW_ID}`);
   await page.locator('[data-item="core.set"]').click();
   await expect(page.locator('[data-node-id]')).toHaveCount(1);
+  // Як у тесті автозбереження нотатки вище: спершу збережено доданий вузол і канвас устиг підігнати вигляд,
+  // інакше під навантаженням CI ПКМ і поле нотатки змагаються з перебудовою канвасу після додавання вузла.
+  await waitSaved(page);
 
   // ПКМ на порожньому місці канвасу → «Додати нотатку»: нова нотатка там, де клацнули, одразу з полем тексту.
   const canvas = page.locator('vflow');
