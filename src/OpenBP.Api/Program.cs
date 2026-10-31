@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using OpenBP.Ai;
 using OpenBP.Api;
+using OpenBP.Api.AiDocs;
 using OpenBP.Api.Auth;
 using OpenBP.Api.Endpoints;
 using OpenBP.Api.Errors;
@@ -135,6 +136,8 @@ app.UseAuthorization();
 
 app.MapOpenBpHealth();
 app.MapOpenBpOpenApi();
+// Інструкція для ШІ-агентів (F10-02): /llms.txt без входу, з живого реєстру MCP tools і маршрутів.
+app.MapOpenBpLlmsTxt();
 app.MapOpenBpMetrics();
 
 app.MapGroup("/api/v1").MapAuthEndpoints().MapWorkflowEndpoints().MapWorkflowGroupEndpoints().MapVariableEndpoints().MapDataTableEndpoints().MapProjectPageEndpoints().MapProjectTransferEndpoints().MapAuditEndpoints().MapNotificationEndpoints().MapExecutionEndpoints().MapConnectorEndpoints().MapCredentialEndpoints().MapNodeEndpoints().MapAssistantEndpoints().MapEvaluationEndpoints().MapFormEndpoints().MapTaskEndpoints();

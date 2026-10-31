@@ -116,6 +116,16 @@ describe('SettingsPage', () => {
     expect(host.querySelectorAll('[data-key]')).toHaveLength(2);
   });
 
+  it('блок «Підключити ШІ-агента» — адреса інструкції /llms.txt відкривається й копіюється', async () => {
+    const { copy, host } = await setup([], undefined, 'agent');
+    const link = host.querySelector<HTMLAnchorElement>('[data-testid="llms-url"]')!;
+    expect(link.textContent?.trim()).toBe(`${location.origin}/llms.txt`);
+    expect(link.getAttribute('href')).toBe(`${location.origin}/llms.txt`);
+    expect(link.getAttribute('target')).toBe('_blank');
+    host.querySelector<HTMLButtonElement>('[data-testid="copy-llms-url"]')!.click();
+    expect(copy).toHaveBeenCalledWith(`${location.origin}/llms.txt`);
+  });
+
   it('блок «Підключити ШІ-агента» — URL /mcp і заглушка ключа', async () => {
     const { fixture, copy, host } = await setup([], undefined, 'agent');
     expect(host.textContent).toContain('Підключити ШІ-агента');

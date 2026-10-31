@@ -211,6 +211,16 @@ export interface SettingsSectionItem {
           </div>
         }
       </div>
+
+      <h3 class="mb-2 mt-6 font-semibold" i18n="@@settings.llms.title">Інструкція для ШІ-агента</h3>
+      <p class="mb-2 max-w-3xl opacity-70" i18n="@@settings.llms.hint">
+        Дайте агенту цю адресу: у ній усі інструменти MCP, методи REST і покрокові рецепти роботи з AI_BPMS. Відкривається без
+        ключа й завжди відповідає цьому серверу.
+      </p>
+      <div class="flex max-w-3xl items-center gap-2">
+        <a class="flex-1 font-mono text-sm underline" [href]="llmsUrl" target="_blank" rel="noopener" data-testid="llms-url">{{ llmsUrl }}</a>
+        <button mat-stroked-button type="button" data-testid="copy-llms-url" (click)="copy(llmsUrl)" i18n="@@settings.copy">Скопіювати</button>
+      </div>
     </ng-template>
 
     <ng-template #snippet let-text let-id="id">
@@ -316,6 +326,8 @@ export class SettingsPage implements OnInit {
 
   /** Адреса `/mcp` на тому ж хості, що й UI. */
   readonly mcpUrl = `${inject(DOCUMENT).location.origin}/mcp`;
+  /** Інструкція для ШІ-агентів (F10-02). */
+  readonly llmsUrl = this.mcpUrl.replace(/\/mcp$/, '/llms.txt');
 
   /** Адреса локальна або без HTTPS — хмарним клієнтам (claude.ai, Copilot Studio, OpenAI API) не підійде. */
   readonly localUrl = isLocalMcpUrl(this.mcpUrl);

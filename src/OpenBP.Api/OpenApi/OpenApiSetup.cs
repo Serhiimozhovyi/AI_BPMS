@@ -89,6 +89,9 @@ public static class OpenApiSetup
         public const string ProjectTemplates = "Шаблони проєктів";
     }
 
+    /// <summary>Назви тегів у порядку показу (для <c>/llms.txt</c>, F10-02).</summary>
+    internal static IEnumerable<string> TagOrder => TagDescriptions.Select(t => t.Name);
+
     private static readonly (string Name, string Description)[] TagDescriptions =
     [
         (Tags.Auth, "Вхід email/паролем і сесія UI (cookie)."),
