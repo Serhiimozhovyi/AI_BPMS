@@ -684,6 +684,11 @@ items на вхід 0 вузла, що впав (`ExecutionRequest.InputOverride
     (F8-02); ролі застосунку (`workflow_groups.app_roles`, `project_members.app_role`) керують лише сторінками
     застосунку `project_pages` і не змінюють ролі `editor`/`viewer` (F8-04); чутливі колонки читають admin, editor проєкту
     й учасники з роллю застосунку.
+  - Перегляд «як користувач» (F12-01, `docs/projects.md` §4.1): заголовок `X-OpenBP-View-As` у сесії браузера admin чи
+    editor проєкту звужує права запиту до обраної ролі в одному проєкті — `ViewAsMiddleware` після автентифікації
+    перевіряє права (`IViewAsService`) і підмінює principal (`sub`/`email` — того, чиїми очима, `role: viewer`, claims
+    `view_as_*`); `ProjectAccess` бачить лише цей проєкт з цією роллю й роллю застосунку, як для ключа проєкту. Будь-який
+    запит, крім читання й виходу, — 403 `VIEW_AS_READ_ONLY`.
   - Модель готує мультитенантність: тенант — ізольований набір проєктів (окрема колонка `tenant_id` на `workflow_groups`
     і `users` поверх тих самих перевірок).
 - OIDC (F4-14): провайдери з `OpenBp:Oidc:Providers:<key>` (змінні `OpenBp__Oidc__Providers__<key>__<Поле>`; поля —

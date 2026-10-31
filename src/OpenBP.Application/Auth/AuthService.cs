@@ -76,6 +76,15 @@ public sealed class AuthService(OpenBpDbContext db, ICurrentUser currentUser, Ti
     {
         currentUser.Require(UserRole.Viewer);
         var id = currentUser.UserId!.Value;
+        if (currentUser.ViewAs is { } viewAs)
+        {
+            return new UserInfo(id, currentUser.Email ?? "", UserRole.Viewer)
+            {
+                ViewAs = new ViewAsInfo(viewAs.ProjectId, UserRoles.ToValue(viewAs.ProjectRole), viewAs.AppRole,
+                    viewAs.AsMember ? id : null, viewAs.ActorEmail),
+            };
+        }
+
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id, ct);
         var role = UserRoles.TryParse(user?.Role);
         if (user is null || role is null)

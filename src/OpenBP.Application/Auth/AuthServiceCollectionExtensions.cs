@@ -16,6 +16,7 @@ public static class AuthServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
+        services.AddScoped<IViewAsService, ViewAsService>();
         return services;
     }
 

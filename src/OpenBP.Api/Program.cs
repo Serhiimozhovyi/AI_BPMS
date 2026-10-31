@@ -132,6 +132,8 @@ app.UseExceptionHandler();
 app.UseOpenBpSwaggerUi();
 app.UseCors();
 app.UseAuthentication();
+// Перегляд «як користувач» (F12-01): після автентифікації, до сервісів — підміна principal і заборона змін.
+app.UseMiddleware<ViewAsMiddleware>();
 app.UseAuthorization();
 
 app.MapOpenBpHealth();
