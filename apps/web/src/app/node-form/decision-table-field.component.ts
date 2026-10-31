@@ -19,6 +19,7 @@ import {
 } from './decision-table';
 import { formatValue, isPlainObject, parseValue } from './node-value';
 import { NodeFieldProps } from './schema-fields';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /**
  * Правила `core.decisionTable` таблицею (F6-19): рядок — правило, колонки «якщо <вхід>» — оператор (`-` — будь-яке)
@@ -28,7 +29,7 @@ import { NodeFieldProps } from './schema-fields';
 @Component({
   selector: 'app-node-decision-rules-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule],
   template: `
     <div class="dt" [attr.data-field]="key">
       <span class="dt__label">{{ label }}</span>
@@ -110,7 +111,7 @@ import { NodeFieldProps } from './schema-fields';
           </tbody>
         </table>
       </div>
-      <button mat-stroked-button type="button" data-testid="dt-add" (click)="add()" i18n="@@dt.add">Додати правило</button>
+      <button mat-stroked-button type="button" data-testid="dt-add" (click)="add()" i18n="@@dt.add" bpVariant="tonal">Додати правило</button>
     </div>
   `,
   styles: `

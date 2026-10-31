@@ -69,7 +69,7 @@ interface Row {
         }
       </mat-radio-group>
       <div class="flex items-center gap-2">
-        <button mat-stroked-button type="button" data-testid="assistant-add" (click)="add()" i18n="@@settings.assistant.add">Додати модель</button>
+        <button mat-stroked-button type="button" data-testid="assistant-add" (click)="add()" i18n="@@settings.assistant.add" bpVariant="tonal">Додати модель</button>
         <button mat-flat-button type="button" data-testid="assistant-save" [disabled]="saving()" (click)="save()" i18n="@@settings.assistant.save">Зберегти</button>
         @if (saved()) {
           <span class="text-sm text-green-700" data-testid="assistant-saved" i18n="@@settings.assistant.saved">Збережено</span>

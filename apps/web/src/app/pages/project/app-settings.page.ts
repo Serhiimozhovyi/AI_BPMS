@@ -59,7 +59,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
           }
         </fieldset>
       }
-      <button mat-button type="button" data-testid="as-add-group" (click)="nav.set([...nav(), { label: '', pages: [] }])" i18n="@@appset.addGroup">Додати групу</button>
+      <button mat-stroked-button type="button" data-testid="as-add-group" (click)="nav.set([...nav(), { label: '', pages: [] }])" i18n="@@appset.addGroup" bpVariant="tonal">Додати групу</button>
 
       <div class="mt-6 flex flex-wrap gap-2">
         <button mat-flat-button type="button" data-testid="as-save" [disabled]="saving() || !title().trim()" (click)="save()" i18n="@@appset.save">Зберегти</button>

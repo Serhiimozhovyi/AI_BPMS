@@ -230,7 +230,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
             <button mat-button type="button" (click)="filters.set(removeAt(filters(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
-        <button mat-button type="button" data-testid="b-add-filter" (click)="filters.set([...filters(), emptyFilter()])" i18n="@@builder.addFilter">Додати умову</button>
+        <button mat-stroked-button type="button" data-testid="b-add-filter" (click)="filters.set([...filters(), emptyFilter()])" i18n="@@builder.addFilter" bpVariant="tonal">Додати умову</button>
 
         @if (kind() !== 'form') {
           <h3 class="mb-1 mt-4 font-medium" i18n="@@builder.actions">Дії над рядком</h3>
@@ -272,7 +272,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
               <button mat-button type="button" (click)="actions.set(removeAt(actions(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
             </div>
           }
-          <button mat-button type="button" data-testid="b-add-action" (click)="actions.set([...actions(), emptyAction()])" i18n="@@builder.addAction">Додати дію</button>
+          <button mat-stroked-button type="button" data-testid="b-add-action" (click)="actions.set([...actions(), emptyAction()])" i18n="@@builder.addAction" bpVariant="tonal">Додати дію</button>
         }
 
         @if (kind() === 'list' || kind() === 'calendar') {
@@ -311,7 +311,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
             <button mat-button type="button" (click)="tiles.set(removeAt(tiles(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
-        <button mat-button type="button" data-testid="b-add-tile" (click)="tiles.set([...tiles(), emptyTile()])" i18n="@@builder.addTile">Додати плитку</button>
+        <button mat-stroked-button type="button" data-testid="b-add-tile" (click)="tiles.set([...tiles(), emptyTile()])" i18n="@@builder.addTile" bpVariant="tonal">Додати плитку</button>
 
         <h3 class="mb-1 mt-4 font-medium" i18n="@@builder.charts">Діаграми</h3>
         @for (c of charts(); track $index; let i = $index) {
@@ -323,7 +323,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
             <button mat-button type="button" (click)="charts.set(removeAt(charts(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
-        <button mat-button type="button" data-testid="b-add-chart" (click)="charts.set([...charts(), emptyChart()])" i18n="@@builder.addChart">Додати діаграму</button>
+        <button mat-stroked-button type="button" data-testid="b-add-chart" (click)="charts.set([...charts(), emptyChart()])" i18n="@@builder.addChart" bpVariant="tonal">Додати діаграму</button>
       }
 
       <details class="mt-6" [open]="showJson()" (toggle)="showJson.set($any($event.target).open)">
