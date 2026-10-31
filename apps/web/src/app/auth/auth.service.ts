@@ -10,6 +10,18 @@ export interface UserInfo {
   role: 'admin' | 'editor' | 'viewer';
   /** Пароль тимчасовий (F8-13): до зміни пароля застосунок веде на `/account/password`. */
   mustChangePassword?: boolean;
+  /** Режим «переглянути як» (F12-01): є лише із заголовком `X-OpenBP-View-As`; тоді `email` і `role` — того, чиїми очима. */
+  viewAs?: ViewAsInfo;
+}
+
+/** `viewAs` у `GET /auth/me`. */
+export interface ViewAsInfo {
+  projectId: string;
+  projectRole: 'editor' | 'viewer';
+  appRole: string | null;
+  memberId: string | null;
+  /** Хто насправді переглядає. */
+  actorEmail: string;
 }
 
 /** Провайдер входу — елемент `GET /api/v1/auth/providers` (F4-14). */

@@ -29,8 +29,9 @@
   background: rgb(12 43 48 / 0.5);
 }
 
-// Кнопка закриття (×) у куті діалогу: `class="bp-dialog-close"` на `mat-icon-button`.
-.bp-dialog-close {
+// Кнопка закриття (×) у куті діалогу: `class="bp-dialog-close"` на `mat-icon-button` (подвійний клас — сильніше за
+// `position: relative` самої кнопки Material).
+.bp-dialog-close.bp-dialog-close {
   position: absolute;
   top: 12px;
   right: 12px;
