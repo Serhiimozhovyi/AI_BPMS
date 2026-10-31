@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, inject, input, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { PAGE_KIND_ICONS } from '../../projects/app-menu';
 import { PageKind } from '../../projects/project-pages-api.service';
@@ -21,7 +21,13 @@ export const SIDE_NAV_COLLAPSED_KEY = 'openbp.appNav.collapsed';
   selector: 'app-side-nav',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive],
-  host: { class: 'side-nav', '[class.side-nav--collapsed]': 'collapsed()' },
+  host: {
+    class: 'side-nav',
+    '[class.side-nav--collapsed]': 'collapsed()',
+    '[style.max-height.px]': 'maxHeight()',
+    '(window:resize)': 'fit()',
+    '(window:scroll)': 'fit()',
+  },
   template: `
     <div class="side-nav__head">
       @if (iconName(); as icon) {
@@ -153,7 +159,7 @@ export const SIDE_NAV_COLLAPSED_KEY = 'openbp.appNav.collapsed';
     }
 
     .side-nav__group {
-      padding: 12px 10px 4px;
+      padding: 8px 10px 2px;
       color: var(--bp-text-muted);
       font: 500 11px/16px var(--bp-font-family);
       letter-spacing: 0.04em;
@@ -170,8 +176,8 @@ export const SIDE_NAV_COLLAPSED_KEY = 'openbp.appNav.collapsed';
       display: flex;
       align-items: center;
       gap: 10px;
-      min-height: 36px;
-      padding: 6px 10px;
+      min-height: 32px;
+      padding: 5px 10px;
       border-radius: var(--bp-radius);
       color: var(--bp-text);
       font: var(--bp-font-p3);
@@ -233,13 +239,21 @@ export const SIDE_NAV_COLLAPSED_KEY = 'openbp.appNav.collapsed';
       color: var(--bp-text-muted);
     }
 
+    /* Панель липка й не нижча за край вікна (max-height рахує fit()): розділи прокручуються всередині, а інструменти
+       редактора лишаються видимими. */
     @media (min-width: 768px) {
       :host {
         width: 240px;
       }
 
+      .side-nav__nav {
+        min-height: 0;
+        overflow-y: auto;
+        scrollbar-width: thin;
+      }
+
       :host(.side-nav--collapsed) {
-        width: auto;
+        width: 60px;
       }
     }
 
@@ -263,6 +277,7 @@ export const SIDE_NAV_COLLAPSED_KEY = 'openbp.appNav.collapsed';
         margin: 6px 6px;
         padding: 0;
         overflow: hidden;
+        font-size: 0;
         border-top: 1px solid var(--bp-line);
       }
 
@@ -319,7 +334,9 @@ export const SIDE_NAV_COLLAPSED_KEY = 'openbp.appNav.collapsed';
     }
   `,
 })
-export class AppSideNavComponent {
+export class AppSideNavComponent implements AfterViewInit {
+  private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly destroyRef = inject(DestroyRef);
   readonly title = input.required<string>();
   /** Назва значка Material Symbols або, якщо значок оболонки — emoji, `emoji`. */
   readonly iconName = input<string | null>(null);
@@ -329,8 +346,29 @@ export class AppSideNavComponent {
   readonly canEdit = input(false);
 
   readonly collapsed = signal(readCollapsed());
+  /** Висота до нижнього краю вікна (від 768 px); `null` — без обмеження (телефон чи не в браузері). */
+  readonly maxHeight = signal<number | null>(null);
   readonly collapseLabel = $localize`:@@project.app.collapse:Згорнути меню`;
   readonly expandLabel = $localize`:@@project.app.expand:Розгорнути меню`;
+
+  ngAfterViewInit(): void {
+    this.fit();
+    // Шапка проєкту над панеллю довантажується (назва, опис) і зсуває її вниз — перераховуємо за зміною розмітки.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => this.fit());
+    observer.observe(document.body);
+    this.destroyRef.onDestroy(() => observer.disconnect());
+  }
+
+  /** Панель закінчується над нижнім краєм вікна: на 900 px «Вигляд застосунку» видно без прокрутки сторінки. */
+  fit(): void {
+    if (typeof window === 'undefined' || window.innerWidth < 768) {
+      this.maxHeight.set(null);
+      return;
+    }
+    const top = Math.max(16, this.host.nativeElement.getBoundingClientRect().top);
+    this.maxHeight.set(Math.max(240, Math.floor(window.innerHeight - top - 16)));
+  }
 
   icon(kind: PageKind): string {
     return PAGE_KIND_ICONS[kind] ?? 'article';

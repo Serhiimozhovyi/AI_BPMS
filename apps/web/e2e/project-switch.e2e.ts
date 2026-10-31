@@ -45,6 +45,8 @@ test('вибір іншого проєкту в шапці на «Учасник
   await expect(page.locator('[data-member]')).toHaveCount(1);
   await expect(page.locator('[data-member="psy@firma.ua"]')).toBeVisible();
   await expect(page.locator('[data-app-role="psychologist"]')).toBeVisible();
+  // «Прибрати» — danger: червоний текст, а не зелений primary від mat-button.
+  await expect(page.locator('[data-member="psy@firma.ua"] [data-testid="member-remove"]')).toHaveCSS('color', 'rgb(179, 38, 30)');
 
   await pickProject(page, 'Продажі');
   await expect(page).toHaveURL(/\/projects\/p2\/members$/);
