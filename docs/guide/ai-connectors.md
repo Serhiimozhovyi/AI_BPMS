@@ -1,9 +1,13 @@
-# Підключити Claude і ChatGPT до AI_BPMS
+# Підключити Claude, Copilot і ChatGPT до AI_BPMS
 
 AI_BPMS — MCP-сервер. Підключений ШІ-агент бачить ваші конектори й типи вузлів, збирає сценарії зі слів, перевіряє й
 запускає їх, читає журнал, пояснює процеси простими словами, приймає рішення в задачах — з тими самими правами, що й
 користувач, чий ключ він використовує. Окремого ключа Anthropic чи OpenAI в самому AI_BPMS для цього не потрібно:
-модель працює на боці Claude чи ChatGPT. Повний довідник tools і resources — [docs/mcp-server.md](../mcp-server.md).
+модель працює на боці Claude, Copilot чи ChatGPT. Повний довідник tools і resources — [docs/mcp-server.md](../mcp-server.md).
+
+Готові шаблони для кожного клієнта — у AI_BPMS: «Налаштування» → «Підключити ШІ-агента». Виберіть вкладку клієнта:
+там написано, куди вставити, кроки й фрагмент з адресою вашого AI_BPMS і щойно створеним ключем. Для хмарних клієнтів на
+`localhost` вкладка нагадає про публічну HTTPS-адресу.
 
 Коротко, що де працює:
 
@@ -12,6 +16,8 @@ AI_BPMS — MCP-сервер. Підключений ШІ-агент бачит�
 | Claude Code (CLI, IDE) | `claude mcp add` з заголовком | так | працює |
 | Claude Desktop | міст `mcp-remote` у `claude_desktop_config.json` | так | працює |
 | claude.ai (веб, Desktop, мобільний) — «Custom connector» | URL + «Request headers» | ні, потрібна публічна HTTPS-адреса | лише якщо вашій організації відкрито бета «Request headers» |
+| GitHub Copilot у VS Code (режим Agent) | `.vscode/mcp.json`, ключ VS Code питає сам | так | працює |
+| Microsoft Copilot Studio (агенти для Microsoft 365 Copilot і Teams) | майстер «Model Context Protocol», API key у заголовку | ні, потрібна публічна HTTPS-адреса | працює |
 | Codex (CLI, IDE) від OpenAI | `config.toml` з `bearer_token_env_var` | так | працює |
 | OpenAI API (Responses, tool `mcp`) | `server_url` + `authorization` | ні, потрібна публічна HTTPS-адреса | працює |
 | ChatGPT (веб, Desktop) — Developer mode | — | — | **поки не працює**: ChatGPT уміє лише OAuth або «без автентифікації», а `/mcp` AI_BPMS приймає тільки API-ключ (див. [§4.1](#41-chatgpt-веб-і-desktop)) |
@@ -202,7 +208,55 @@ OpenAI не зберігає `authorization`, його треба передав
 
 Не обирайте тип «OpenAI-сумісний» для Ollama: він не передає розмір контексту, і Ollama мовчки обрізає запит.
 
-## 5. Що просити в агента
+## 5. Microsoft і GitHub Copilot
+
+### 5.1 GitHub Copilot у VS Code
+
+Працює в режимі **Agent** Copilot Chat, також з локальним AI_BPMS. У `.vscode/mcp.json` проєкту (або в профілі:
+Command Palette → **«MCP: Open User Configuration»**):
+
+```json
+{
+  "inputs": [
+    { "type": "promptString", "id": "ai-bpms-key", "description": "AI_BPMS API key (obp_…)", "password": true }
+  ],
+  "servers": {
+    "openbp": {
+      "type": "http",
+      "url": "https://openbp.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${input:ai-bpms-key}" }
+    }
+  }
+}
+```
+
+1. Command Palette → **«MCP: List Servers»** → `openbp` → «Start». VS Code попросить ключ: вставте `obp_…`, він
+   збережеться в сховищі секретів VS Code. Ключа у файлі немає, тож `.vscode/mcp.json` можна комітити для команди.
+2. Copilot Chat → режим **Agent** → значок інструментів: `openbp` з переліком tools.
+
+Visual Studio 2022 (17.14+) читає той самий формат з `.mcp.json` у корені рішення; ключ там — у заголовку напряму або
+через змінну середовища. Для Copilot coding agent на github.com (Settings репозиторію → Copilot → MCP servers) потрібна
+публічна адреса, а ключ — секрет середовища `copilot` з префіксом `COPILOT_MCP_`.
+
+### 5.2 Microsoft Copilot Studio
+
+Агент Copilot Studio викликає tools AI_BPMS, і його можна опублікувати в Microsoft 365 Copilot і Teams. Copilot Studio
+ходить до `/mcp` з хмари Microsoft, тож AI_BPMS має бути доступний з інтернету за HTTPS. Транспорт — Streamable HTTP (SSE
+Copilot Studio не підтримує, AI_BPMS його й не використовує).
+
+1. Агент → **Tools** → **Add a tool** → **New tool** → **Model Context Protocol**.
+2. «Server name» — `AI_BPMS`; «Server description» — коротко, що вміє сервер (за описом оркестратор вирішує, коли
+   кликати tools), наприклад «AI_BPMS — business processes: list, build, validate, run workflows, read executions,
+   complete approval tasks»; «Server URL» — `https://openbp.example.com/mcp`.
+3. «Authentication» — **API key**, «Type» — **Header**, «Header name» — **`Authorization`**. «Create».
+4. «Add tool» → **Create a new connection** → у поле ключа вставте **`Bearer obp_ваш_ключ`** (разом із `Bearer ` і
+   пробілом: Copilot Studio надсилає значення як є). «Add to agent».
+5. Розділ Tools агента покаже tools AI_BPMS; зайві можна вимкнути.
+
+Ключ належить підключенню: кожен, хто користується агентом через це підключення, діє з правами власника ключа. Для
+агента заведіть окремого користувача з мінімальною роллю й обмежте ключ проєктом ([§2](#2-підготовка-один-раз)).
+
+## 6. Що просити в агента
 
 Агент сам обирає tools; достатньо описати задачу. Приклади, які працюють:
 
@@ -225,7 +279,7 @@ OpenAI не зберігає `authorization`, його треба передав
 - Кожна зміна агента — нова версія в «Історії» редактора, її можна переглянути й відновити.
 - Пояснення процесу після змін старіє; картка покаже готову фразу для агента — просто вставте її в чат.
 
-## 6. Безпека
+## 7. Безпека
 
 - Ключ — як пароль: не вставляйте його в чат з агентом, у репозиторій чи скриншоти. Зберігайте в конфігурації клієнта
   або змінній середовища.
@@ -240,7 +294,7 @@ OpenAI не зберігає `authorization`, його треба передав
 - Агент бачить дані кроків виконань (уже без секретів). Якщо в процесах є персональні дані, враховуйте це, обираючи
   клієнт і план.
 
-## 7. Якщо не працює
+## 8. Якщо не працює
 
 | Симптом | Що перевірити |
 |---|---|
@@ -248,6 +302,8 @@ OpenAI не зберігає `authorization`, його треба передав
 | Claude Desktop не бачить `openbp` | Перезапустіть Desktop повністю; `node -v` ≥ 18; для `http://` — `--allow-http`; журнал — Settings → Developer → openbp → «Open logs». |
 | claude.ai: «Couldn't connect» | Адреса недоступна з інтернету або без HTTPS; немає розділу «Request headers» — див. [§3.3](#33-claudeai--custom-connector-веб-desktop-мобільний). |
 | ChatGPT просить OAuth | Очікувано, див. [§4.1](#41-chatgpt-веб-і-desktop). |
+| Copilot Studio: 401 після підключення | У полі ключа немає `Bearer ` з пробілом, або «Header name» не `Authorization`. Створіть підключення заново ([§5.2](#52-microsoft-copilot-studio)). |
+| VS Code не питає ключ / 401 | «MCP: List Servers» → `openbp` → «Reset Cached Inputs» і Start знову. |
 | `FORBIDDEN` у відповіді tool'а | Роль ключа замала (наприклад, `viewer` для `update_workflow`). |
 | `NOT_FOUND` на сценарій, що є в UI | Ключ обмежено іншим проєктом. |
 | `WORKFLOW_VERSION_CONFLICT` | Сценарій щойно змінили в редакторі; агент має перечитати `get_workflow` і повторити. |
