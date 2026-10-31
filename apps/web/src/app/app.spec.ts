@@ -4,7 +4,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { App, isBareUrl, userInitials } from './app';
+import { App, isBareUrl, projectSwitchTarget, userInitials } from './app';
 import { formMatcher, routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
 import { ConnectivityService } from './connectivity/connectivity.service';
@@ -12,6 +12,7 @@ import { AuthService, UserInfo } from './auth/auth.service';
 import { BehaviorSubject } from 'rxjs';
 import { AppBarService } from './layout/app-bar.service';
 import { ProjectContextService } from './projects/project-context.service';
+import { NO_GROUP } from './workflows/workflow-groups';
 
 const admin: UserInfo = { id: 'u1', email: 'admin@firma.ua', role: 'admin' };
 
@@ -188,6 +189,18 @@ describe('App: вибір проєкту (F6-14)', () => {
     expect(TestBed.inject(ProjectContextService).current()).toBe('p1');
     expect(host.querySelector('[data-testid="project-members"]')?.getAttribute('href')).toBe('/projects/p1/members');
     localStorage.removeItem('openbp.project');
+  });
+
+  it('вибір у шапці на сторінці проєкту відкриває ту саму вкладку іншого проєкту', () => {
+    expect(projectSwitchTarget('/projects/p1/members', 'p2')).toEqual(['/projects', 'p2', 'members']);
+    expect(projectSwitchTarget('/projects/p1/tables?table=t1', 'p2')).toEqual(['/projects', 'p2', 'tables']);
+    expect(projectSwitchTarget('/projects/p1/app/bookings/7', 'p2')).toEqual(['/projects', 'p2']);
+    expect(projectSwitchTarget('/projects/p1', 'p2')).toEqual(['/projects', 'p2']);
+    expect(projectSwitchTarget('/projects/p1/members', null)).toEqual(['/projects']);
+    expect(projectSwitchTarget('/projects/p1/members', NO_GROUP)).toEqual(['/projects']);
+    expect(projectSwitchTarget('/projects/p1/members', 'p1')).toBeNull();
+    expect(projectSwitchTarget('/projects', 'p2')).toBeNull();
+    expect(projectSwitchTarget('/workflows', 'p2')).toBeNull();
   });
 
   it('користувач лише з роллю застосунку: з головної — у застосунок проєкту, меню «Застосунок» і «Огляд» (F8-04)', async () => {

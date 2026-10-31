@@ -168,9 +168,16 @@ export class App {
     el?.scrollBy?.({ left: direction * Math.max(120, el.clientWidth * 0.7), behavior: 'smooth' });
   }
 
-  /** Вибір у шапці: порожнє значення — усі проєкти. */
+  /**
+   * Вибір у шапці: порожнє значення — усі проєкти. На сторінці проєкту вибір іншого проєкту відкриває ту саму вкладку
+   * в ньому (сторінки застосунку — його типову вкладку), а «усі» чи спільний простір — список проєктів: інакше заголовок
+   * і «Учасники» лишалися б від попереднього проєкту, а вкладки фільтрувалися б уже за новим.
+   */
   protected selectProject(value: string): void {
-    this.projects.select(value === '' ? null : value);
+    const id = value === '' ? null : value;
+    this.projects.select(id);
+    const target = projectSwitchTarget(this.router.url, id);
+    if (target) void this.router.navigate(target);
   }
 
   /** Вихід: сесію закрито на Api — на сторінку входу; якщо Api недоступний, користувача все одно забуваємо. */
@@ -199,4 +206,19 @@ export function userInitials(email: string | null | undefined): string {
 /** Сторінки без шапки й меню: публічна форма. */
 export function isBareUrl(url: string): boolean {
   return url.startsWith('/form/');
+}
+
+/** Вкладки проєкту, що мають сенс в іншому проєкті; сторінки застосунку (`app/<ключ>`) у кожного свої. */
+const PORTABLE_TABS = new Set(['overview', 'workflows', 'tables', 'connections', 'members']);
+
+/**
+ * Куди перейти після вибору проєкту в шапці: `null` — лишитися (сторінка не проєкту або той самий проєкт). `id` — новий
+ * вибір: `null` — усі, {@link NO_GROUP} — спільний простір.
+ */
+export function projectSwitchTarget(url: string, id: string | null): string[] | null {
+  const match = /^\/projects\/([^/?#]+)(?:\/([^/?#]+))?/.exec(url);
+  if (!match || match[1] === id) return null;
+  if (id === null || id === NO_GROUP) return ['/projects'];
+  const tab = match[2];
+  return tab && PORTABLE_TABS.has(tab) ? ['/projects', id, tab] : ['/projects', id];
 }
