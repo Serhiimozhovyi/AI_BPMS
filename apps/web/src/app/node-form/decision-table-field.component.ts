@@ -20,6 +20,9 @@ import {
 import { formatValue, isPlainObject, parseValue } from './node-value';
 import { NodeFieldProps } from './schema-fields';
 import { BpButtonDirective } from '../shared/button.directive';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /**
  * Правила `core.decisionTable` таблицею (F6-19): рядок — правило, колонки «якщо <вхід>» — оператор (`-` — будь-яке)
@@ -29,7 +32,7 @@ import { BpButtonDirective } from '../shared/button.directive';
 @Component({
   selector: 'app-node-decision-rules-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="dt" [attr.data-field]="key">
       <span class="dt__label">{{ label }}</span>
@@ -57,18 +60,20 @@ import { BpButtonDirective } from '../shared/button.directive';
                 @for (name of inputs(); track $index; let c = $index) {
                   <td>
                     <div class="dt__cell">
-                      <select
-                        class="dt__op"
-                        [attr.aria-label]="operatorAria(r, name)"
-                        [attr.data-testid]="'dt-op-' + r + '-' + c"
-                        [value]="operatorOf(rule.when[c])"
-                        (change)="setOperator(r, c, $any($event.target).value)"
-                      >
-                        <option [value]="any" i18n="@@dt.any">- (будь-яке)</option>
-                        @for (op of operators; track op) {
-                          <option [value]="op" [selected]="operatorOf(rule.when[c]) === op">{{ opLabel(op) }}</option>
-                        }
-                      </select>
+                      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                        <mat-select
+                          [aria-label]="operatorAria(r, name)"
+                          [attr.data-testid]="'dt-op-' + r + '-' + c"
+                          [value]="operatorOf(rule.when[c])"
+                          (selectionChange)="setOperator(r, c, $event.value)"
+                        >
+                          <bp-select-search />
+                          <mat-option [value]="any" i18n="@@dt.any">- (будь-яке)</mat-option>
+                          @for (op of operators; track op) {
+                            <mat-option [value]="op">{{ opLabel(op) }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
                       @if (needsRight(rule.when[c])) {
                         <input
                           class="dt__input"
@@ -171,7 +176,10 @@ import { BpButtonDirective } from '../shared/button.directive';
       gap: 4px;
     }
 
-    .dt__op,
+    .dt__cell .mat-mdc-form-field {
+      min-width: 140px;
+    }
+
     .dt__input {
       min-width: 120px;
       min-height: 28px;

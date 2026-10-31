@@ -3,6 +3,7 @@ import { McpToolInfo } from '../connectors/connectors-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
 import { NodePanelComponent } from './node-panel.component';
 import { FAKE_COMMANDS_TOOL, FAKE_MESSAGE_TOOL, MCP_TOOL_DESCRIPTOR } from './test-schemas';
+import { chooseOption, selectValue } from '../shared/select-search/select-testing';
 
 describe('редактори віджетів у панелі вузла (F6-30)', () => {
   function mcpNode(args: Record<string, unknown>, toolName = 'send_message'): WorkflowNode {
@@ -37,7 +38,7 @@ describe('редактори віджетів у панелі вузла (F6-30)
     return found as T;
   }
 
-  function change(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string): void {
+  function change(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
     input.value = value;
     input.dispatchEvent(new Event('change'));
   }
@@ -52,7 +53,7 @@ describe('редактори віджетів у панелі вузла (F6-30)
       expect(host.querySelectorAll('[data-row]')).toHaveLength(2);
       expect(el<HTMLInputElement>(host, 'kb-text-0-0').value).toBe('Записатися');
       expect(el<HTMLInputElement>(host, 'kb-value-0-0').value).toBe('book:s1');
-      expect(el<HTMLSelectElement>(host, 'kb-action-1-0').value).toBe('url');
+      expect(selectValue(el(host, 'kb-action-1-0'))).toBe('url');
       expect(el<HTMLInputElement>(host, 'kb-value-1-0').value).toBe('https://example.com');
       expect(Array.from(host.querySelectorAll('.kb__pbtn')).map((b) => b.textContent?.trim())).toEqual(['Записатися', 'Сайт']);
     });
@@ -71,7 +72,7 @@ describe('редактори віджетів у панелі вузла (F6-30)
       el<HTMLButtonElement>(host, 'kb-add-button-0').click();
       await render(fixture);
       change(el<HTMLInputElement>(host, 'kb-text-0-1'), 'Сайт');
-      change(el<HTMLSelectElement>(host, 'kb-action-0-1'), 'url');
+      chooseOption(el(host, 'kb-action-0-1'), 'url');
       await render(fixture);
       change(el<HTMLInputElement>(host, 'kb-value-0-1'), 'https://example.com');
       await render(fixture);
@@ -112,12 +113,12 @@ describe('редактори віджетів у панелі вузла (F6-30)
       el<HTMLButtonElement>(host, 'kb-add-row').click();
       await render(fixture);
       change(el<HTMLInputElement>(host, 'kb-text-0-0'), 'Поділитися номером');
-      change(el<HTMLSelectElement>(host, 'kb-request-0-0'), 'contact');
+      chooseOption(el(host, 'kb-request-0-0'), 'contact');
       await render(fixture);
       el<HTMLButtonElement>(host, 'kb-add-button-0').click();
       await render(fixture);
       change(el<HTMLInputElement>(host, 'kb-text-0-1'), 'Де я');
-      change(el<HTMLSelectElement>(host, 'kb-request-0-1'), 'location');
+      chooseOption(el(host, 'kb-request-0-1'), 'location');
       await render(fixture);
       expect(markup()).toEqual({
         keyboard: [[{ text: 'Поділитися номером', request_contact: true }, { text: 'Де я', request_location: true }]],

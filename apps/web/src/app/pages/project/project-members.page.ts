@@ -10,6 +10,8 @@ import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectAppRole, ProjectMember, WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
 import { BpButtonDirective } from '../../shared/button.directive';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 type MemberRole = ProjectMember['role'];
 
@@ -22,7 +24,7 @@ type MemberRole = ProjectMember['role'];
 @Component({
   selector: 'app-project-members-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [BpButtonDirective, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <section class="p-6">
       @if (project(); as p) {
@@ -47,17 +49,23 @@ type MemberRole = ProjectMember['role'];
             <mat-label i18n="@@project.members.email">Email користувача</mat-label>
             <input matInput type="email" [formControl]="email" name="email" data-testid="member-email" (keydown.enter)="add()" />
           </mat-form-field>
-          <select class="border" data-testid="member-role" aria-label="Роль" i18n-aria-label="@@project.members.role" [value]="newRole()" (change)="newRole.set($any($event.target).value)">
-            <option value="editor" i18n="@@project.role.editor">Editor</option>
-            <option value="viewer" i18n="@@project.role.viewer">Viewer</option>
-          </select>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select data-testid="member-role" aria-label="Роль" i18n-aria-label="@@project.members.role" [value]="newRole()" (selectionChange)="newRole.set($event.value)">
+              <bp-select-search />
+              <mat-option value="editor" i18n="@@project.role.editor">Editor</mat-option>
+              <mat-option value="viewer" i18n="@@project.role.viewer">Viewer</mat-option>
+            </mat-select>
+          </mat-form-field>
           @if (appRoles().length > 0) {
-            <select class="border" data-testid="member-new-app-role" aria-label="Роль у застосунку" i18n-aria-label="@@project.members.col.appRole" [value]="newAppRole()" (change)="newAppRole.set($any($event.target).value)">
-              <option value="" i18n="@@project.members.noAppRole">—</option>
-              @for (r of appRoles(); track r.key) {
-                <option [value]="r.key">{{ r.name }}</option>
-              }
-            </select>
+            <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+              <mat-select data-testid="member-new-app-role" aria-label="Роль у застосунку" i18n-aria-label="@@project.members.col.appRole" [value]="newAppRole()" (selectionChange)="newAppRole.set($event.value)">
+                <bp-select-search />
+                <mat-option value="" i18n="@@project.members.noAppRole">—</mat-option>
+                @for (r of appRoles(); track r.key) {
+                  <mat-option [value]="r.key">{{ r.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
           }
           <label class="flex items-center gap-1 self-center">
             <input type="checkbox" data-testid="member-password" [checked]="withPassword()" (change)="withPassword.set($any($event.target).checked)" />
@@ -109,10 +117,13 @@ type MemberRole = ProjectMember['role'];
                 <td class="p-2">{{ m.email }}</td>
                 <td class="p-2">
                   @if (canManage()) {
-                    <select class="border" data-testid="member-role-change" [value]="m.role" (change)="changeRole(m, $any($event.target).value)">
-                      <option value="editor" i18n="@@project.role.editor">Editor</option>
-                      <option value="viewer" i18n="@@project.role.viewer">Viewer</option>
-                    </select>
+                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                      <mat-select data-testid="member-role-change" aria-label="Роль" i18n-aria-label="@@project.members.role" [value]="m.role" (selectionChange)="changeRole(m, $event.value)">
+                        <bp-select-search />
+                        <mat-option value="editor" i18n="@@project.role.editor">Editor</mat-option>
+                        <mat-option value="viewer" i18n="@@project.role.viewer">Viewer</mat-option>
+                      </mat-select>
+                    </mat-form-field>
                   } @else {
                     {{ roleLabel(m.role) }}
                   }
@@ -120,12 +131,15 @@ type MemberRole = ProjectMember['role'];
                 @if (appRoles().length > 0) {
                   <td class="p-2">
                     @if (canManage()) {
-                      <select class="border" data-testid="member-app-role" [value]="m.appRole ?? ''" (change)="changeAppRole(m, $any($event.target).value)">
-                        <option value="" i18n="@@project.members.noAppRole">—</option>
-                        @for (r of appRoles(); track r.key) {
-                          <option [value]="r.key">{{ r.name }}</option>
-                        }
-                      </select>
+                      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                        <mat-select data-testid="member-app-role" aria-label="Роль у застосунку" i18n-aria-label="@@project.members.col.appRole" [value]="m.appRole ?? ''" (selectionChange)="changeAppRole(m, $event.value)">
+                          <bp-select-search />
+                          <mat-option value="" i18n="@@project.members.noAppRole">—</mat-option>
+                          @for (r of appRoles(); track r.key) {
+                            <mat-option [value]="r.key">{{ r.name }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
                     } @else {
                       {{ appRoleName(m.appRole) }}
                     }

@@ -12,6 +12,7 @@ import { NotifyService } from '../shared/notify.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
 import { BpButtonDirective } from '../shared/button.directive';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Рядок списку моделей помічника. */
 interface Row {
@@ -29,7 +30,7 @@ interface Row {
 @Component({
   selector: 'app-assistant-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatRadioModule, MatSelectModule],
+  imports: [BpButtonDirective, FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatRadioModule, MatSelectModule, SelectSearchComponent],
   template: `
     <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.assistant.title">Помічник</h2>
     <p class="mb-4 max-w-3xl opacity-70" i18n="@@settings.assistant.hint">
@@ -50,6 +51,7 @@ interface Row {
             <mat-form-field appearance="outline" class="w-72">
               <mat-label i18n="@@settings.assistant.credential">Облікові дані моделі</mat-label>
               <mat-select [ngModel]="row.credentialId" (ngModelChange)="setCredential(i, $event)" [attr.data-testid]="'assistant-credential-' + i">
+                <bp-select-search />
                 @for (c of options(); track c.id) {
                   <mat-option [value]="c.id">{{ c.name }} · {{ c.type }}</mat-option>
                 }

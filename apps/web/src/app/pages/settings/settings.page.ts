@@ -21,6 +21,7 @@ import { AuditSection } from '../../settings/audit-section.component';
 import { NotificationChannelsSection } from '../../settings/notification-channels-section.component';
 import { VariablesSection } from '../../settings/variables-section.component';
 import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 export interface SettingsSectionItem {
   id: 'api-keys' | 'agent' | 'variables' | 'assistant' | 'notifications' | 'audit';
@@ -34,7 +35,7 @@ export interface SettingsSectionItem {
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, NgTemplateOutlet, ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, BpTabsComponent, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection],
+  imports: [DatePipe, NgTemplateOutlet, ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, BpTabsComponent, VariablesSection, AssistantSection, NotificationChannelsSection, AuditSection, SelectSearchComponent],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@settings.title">Налаштування</h1>
@@ -93,6 +94,7 @@ export interface SettingsSectionItem {
         <mat-form-field appearance="outline" class="w-64">
           <mat-label i18n="@@settings.apiKeys.scope">Дія ключа</mat-label>
           <mat-select data-testid="key-project" [value]="keyProject()" (selectionChange)="keyProject.set($event.value)">
+            <bp-select-search />
             <mat-option value="" i18n="@@settings.apiKeys.scope.all">Увесь інстанс</mat-option>
             @for (p of projects.projects(); track p.id) {
               <mat-option [value]="p.id">{{ p.name }}</mat-option>

@@ -24,6 +24,8 @@ import {
   inputValue,
 } from '../../tables/data-tables-api.service';
 import { BpButtonDirective } from '../../shared/button.directive';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 /** Колонка у формі структури: перелік значень enum — текстом через кому, обов'язковість — позначкою. */
 export interface DesignColumn extends DataColumn {
@@ -56,7 +58,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
 @Component({
   selector: 'app-tables-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, EmptyStateComponent],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, EmptyStateComponent, MatSelectModule, SelectSearchComponent],
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
@@ -93,11 +95,12 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
             @if (!designId()) {
               <mat-form-field appearance="outline" class="w-64">
                 <mat-label i18n="@@tables.form.project">Проєкт</mat-label>
-                <select matNativeControl data-testid="table-project" [value]="designProject() ?? ''" (change)="designProject.set(text($event) || null)">
+                <mat-select data-testid="table-project" [value]="designProject() ?? ''" (selectionChange)="designProject.set($event.value || null)">
+                  <bp-select-search />
                   @for (target of targets(); track target.id) {
-                    <option [value]="target.id ?? ''">{{ target.name }}</option>
+                    <mat-option [value]="target.id ?? ''">{{ target.name }}</mat-option>
                   }
-                </select>
+                </mat-select>
               </mat-form-field>
             }
           </div>
@@ -110,11 +113,12 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                 </mat-form-field>
                 <mat-form-field appearance="outline" class="w-40">
                   <mat-label i18n="@@tables.form.type">Тип</mat-label>
-                  <select matNativeControl data-testid="column-type" [value]="c.type" (change)="patchColumn(i, { type: typeOf($event) })">
+                  <mat-select data-testid="column-type" [value]="c.type" (selectionChange)="patchColumn(i, { type: $event.value })">
+                    <bp-select-search />
                     @for (t of types; track t) {
-                      <option [value]="t">{{ typeLabel(t) }}</option>
+                      <mat-option [value]="t">{{ typeLabel(t) }}</mat-option>
                     }
-                  </select>
+                  </mat-select>
                 </mat-form-field>
                 @if (c.type === 'enum') {
                   <mat-form-field appearance="outline" class="w-64">
@@ -125,12 +129,13 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                 @if (c.type === 'ref') {
                   <mat-form-field appearance="outline" class="w-56">
                     <mat-label i18n="@@tables.form.refTable">Таблиця посилання</mat-label>
-                    <select matNativeControl data-testid="column-ref" [value]="c.table ?? ''" (change)="patchColumn(i, { table: text($event) })">
-                      <option value=""></option>
+                    <mat-select data-testid="column-ref" [value]="c.table ?? ''" (selectionChange)="patchColumn(i, { table: $event.value })">
+                      <bp-select-search />
+                      <mat-option value=""></mat-option>
                       @for (r of refTargets(); track r.id) {
-                        <option [value]="r.name">{{ r.name }}</option>
+                        <mat-option [value]="r.name">{{ r.name }}</mat-option>
                       }
-                    </select>
+                    </mat-select>
                   </mat-form-field>
                 }
                 <label class="flex items-center gap-1">
@@ -444,10 +449,6 @@ export class TablesPage implements OnInit {
 
   checked(event: Event): boolean {
     return (event.target as HTMLInputElement).checked;
-  }
-
-  typeOf(event: Event): DataColumnType {
-    return (event.target as HTMLSelectElement).value as DataColumnType;
   }
 
   typeLabel(type: DataColumnType): string {

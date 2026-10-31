@@ -49,6 +49,7 @@ import {
 import { NodeCommandsFieldComponent, NodeKeyboardFieldComponent, NodeMultiChoiceFieldComponent } from './widget-fields.component';
 import { NodeDecisionRulesFieldComponent } from './decision-table-field.component';
 import { BpButtonDirective } from '../shared/button.directive';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Спільний стан форми вузла (`FormlyFormOptions.formState`): контекст підказок виразів і конектор вузла. */
 export interface NodeFormState {
@@ -87,7 +88,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
 @Component({
   selector: 'app-node-value-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatButtonModule, MatAutocompleteModule],
+  imports: [BpButtonDirective, ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatButtonModule, MatAutocompleteModule, SelectSearchComponent],
   template: `
     @if (source) {
       <div class="value__modes" role="radiogroup" [attr.aria-label]="label">
@@ -144,6 +145,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
             </mat-autocomplete>
           } @else if (mode() === 'select') {
             <mat-select [formControl]="formControl" [required]="!!props.required" [attr.data-testid]="'field-' + key">
+              <bp-select-search />
               @if (!props.required) {
                 <mat-option [value]="undefined" i18n="@@nodeform.notSet">— не задано —</mat-option>
               }

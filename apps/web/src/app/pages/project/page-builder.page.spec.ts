@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { PageBuilderPage } from './page-builder.page';
+import { chooseOption, matSelectOf, selectOptionValues, selectValue } from '../../shared/select-search/select-testing';
 
 const tables = [
   {
@@ -67,7 +68,8 @@ describe('PageBuilderPage (F8-05)', () => {
   }
 
   function pick(host: HTMLElement, selector: string, value: string, event = 'change') {
-    const el = host.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
+    const el = host.querySelector<HTMLInputElement>(selector)!;
+    if (el.tagName === 'MAT-SELECT') return chooseOption(el, value);
     el.value = value;
     el.dispatchEvent(new Event(event));
   }
@@ -77,7 +79,7 @@ describe('PageBuilderPage (F8-05)', () => {
     await render(fixture);
 
     // Таблиці й сценарії інших проєктів у виборі не з'являються.
-    expect([...host.querySelectorAll('[data-testid="b-table"] option')].map((o) => o.textContent?.trim())).toEqual(['', 'bookings']);
+    expect(matSelectOf(host.querySelector('[data-testid="b-table"]')!).options.map((o) => o.viewValue)).toEqual(['', 'bookings']);
 
     pick(host, '[data-testid="b-key"]', 'my-bookings', 'input');
     pick(host, '[data-testid="b-name"]', 'Мої записи', 'input');
@@ -89,9 +91,7 @@ describe('PageBuilderPage (F8-05)', () => {
     host.querySelector<HTMLButtonElement>('[data-testid="b-add-filter"]')!.click();
     await render(fixture);
     const filter = host.querySelector('[data-filter="0"]')!;
-    const column = filter.querySelectorAll('select')[0] as HTMLSelectElement;
-    column.value = 'status';
-    column.dispatchEvent(new Event('change'));
+    chooseOption(filter.querySelectorAll('mat-select')[0], 'status');
     await render(fixture);
     const value = host.querySelector<HTMLInputElement>('[data-filter="0"] input')!;
     value.value = 'active';
@@ -102,14 +102,11 @@ describe('PageBuilderPage (F8-05)', () => {
     const label = action.querySelector('input')!;
     label.value = 'Скасувати';
     label.dispatchEvent(new Event('input'));
-    const type = action.querySelectorAll('select')[0] as HTMLSelectElement;
-    type.value = 'workflow';
-    type.dispatchEvent(new Event('change'));
+    chooseOption(action.querySelectorAll('mat-select')[0], 'workflow');
     await render(fixture);
-    const target = host.querySelector('[data-action="0"]')!.querySelectorAll('select')[1] as HTMLSelectElement;
-    expect([...target.options].map((o) => o.value)).toEqual(['', 'cancel-booking']);
-    target.value = 'cancel-booking';
-    target.dispatchEvent(new Event('change'));
+    const target = host.querySelector('[data-action="0"]')!.querySelectorAll('mat-select')[1];
+    expect(selectOptionValues(target)).toEqual(['', 'cancel-booking']);
+    chooseOption(target, 'cancel-booking');
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
@@ -234,10 +231,8 @@ describe('PageBuilderPage (F8-05)', () => {
     await render(fixture);
 
     expect(host.querySelector('[data-user-filter="0"]')).not.toBeNull();
-    expect(host.querySelector<HTMLSelectElement>('[data-testid="b-layout"]')!.value).toBe('cards');
-    const format = host.querySelector('[data-column-format="name"]')!.querySelectorAll('select')[0] as HTMLSelectElement;
-    format.value = 'text';
-    format.dispatchEvent(new Event('change'));
+    expect(selectValue(host.querySelector('[data-testid="b-layout"]')!)).toBe('cards');
+    chooseOption(host.querySelector('[data-column-format="name"]')!.querySelectorAll('mat-select')[0], 'text');
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
@@ -251,16 +246,14 @@ describe('PageBuilderPage (F8-05)', () => {
     pick(host, '[data-testid="b-sample"]', 'calendar');
     await render(fixture);
     expect(host.querySelector<HTMLInputElement>('[data-testid="b-key"]')!.value).toBe('calendar');
-    expect(host.querySelector<HTMLSelectElement>('[data-testid="b-kind"]')!.value).toBe('calendar');
-    expect(host.querySelector<HTMLSelectElement>('[data-testid="bc-start"]')!.value).toBe('starts_at');
+    expect(selectValue(host.querySelector('[data-testid="b-kind"]')!)).toBe('calendar');
+    expect(selectValue(host.querySelector('[data-testid="bc-start"]')!)).toBe('starts_at');
 
     host.querySelector<HTMLInputElement>('[data-view="month"]')!.click();
     await render(fixture);
     pick(host, '[data-testid="bc-open"]', 'booking');
     await render(fixture);
-    const mode = host.querySelector('[data-testid="bc-open"]')!.parentElement!.querySelectorAll('select')[1] as HTMLSelectElement;
-    mode.value = 'drawer';
-    mode.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-testid="bc-open"]')!.closest('span')!.querySelectorAll('mat-select')[1], 'drawer');
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
@@ -292,9 +285,7 @@ describe('PageBuilderPage (F8-05)', () => {
 
     host.querySelector<HTMLButtonElement>('[data-testid="b-add-block"]')!.click();
     await render(fixture);
-    const kind = host.querySelector('[data-block="2"]')!.querySelectorAll('select')[0] as HTMLSelectElement;
-    kind.value = 'actions';
-    kind.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-block="2"]')!.querySelectorAll('mat-select')[0], 'actions');
     await render(fixture);
     host.querySelector<HTMLButtonElement>('[data-testid="bd-add-action-2"]')!.click();
     await render(fixture);
@@ -303,13 +294,10 @@ describe('PageBuilderPage (F8-05)', () => {
     label.value = 'Новий запис';
     label.dispatchEvent(new Event('input'));
     await render(fixture);
-    const selects = host.querySelector('[data-block-action="0"]')!.querySelectorAll('select');
-    (selects[1] as HTMLSelectElement).value = 'booking';
-    selects[1].dispatchEvent(new Event('change'));
+    const selects = host.querySelector('[data-block-action="0"]')!.querySelectorAll('mat-select');
+    chooseOption(selects[1], 'booking');
     await render(fixture);
-    const mode = host.querySelector('[data-block-action="0"]')!.querySelectorAll('select')[2] as HTMLSelectElement;
-    mode.value = 'drawer';
-    mode.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-block-action="0"]')!.querySelectorAll('mat-select')[2], 'drawer');
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-block="2"] button[aria-label="Вище"]')!.click();

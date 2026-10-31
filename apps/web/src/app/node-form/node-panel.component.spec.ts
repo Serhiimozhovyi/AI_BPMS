@@ -4,6 +4,7 @@ import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
 import { NodePanelComponent, hasCustomCommon } from './node-panel.component';
 import { DECISION_TABLE_DESCRIPTOR, FAKE_ORDER_TOOL, IF_DESCRIPTOR, MCP_TOOL_DESCRIPTOR, SET_DESCRIPTOR, SWITCH_DESCRIPTOR } from './test-schemas';
+import { chooseOption, selectValue } from '../shared/select-search/select-testing';
 
 describe('NodePanelComponent', () => {
   async function setup(node: WorkflowNode, descriptor: NodeTypeInfo | undefined, tool: McpToolInfo | null = null) {
@@ -331,9 +332,9 @@ describe('NodePanelComponent', () => {
       expect(Array.from(host.querySelectorAll('[data-testid="dt-input-col"]')).map((c) => c.textContent?.trim())).toEqual(['якщо segment', 'якщо total']);
       expect(Array.from(host.querySelectorAll('[data-testid="dt-output-col"]')).map((c) => c.textContent?.trim())).toEqual(['→ discount']);
       expect(host.querySelectorAll('[data-rule]')).toHaveLength(2);
-      expect(el<HTMLSelectElement>(host, 'dt-op-0-0').value).toBe('equals');
+      expect(selectValue(el(host, 'dt-op-0-0'))).toBe('equals');
       expect(el<HTMLInputElement>(host, 'dt-right-0-0').value).toBe('vip');
-      expect(el<HTMLSelectElement>(host, 'dt-op-0-1').value).toBe('-');
+      expect(selectValue(el(host, 'dt-op-0-1'))).toBe('-');
       expect(host.querySelector('[data-testid="dt-right-0-1"]')).toBeNull();
       expect(el<HTMLInputElement>(host, 'dt-then-1-0').value).toBe('{{ $json.total / 1000 }}');
     });
@@ -341,9 +342,7 @@ describe('NodePanelComponent', () => {
     it('правка комірок, нове правило, переміщення і видалення потрапляють у параметри', async () => {
       const { fixture, host, last } = await setup(tableNode, DECISION_TABLE_DESCRIPTOR);
 
-      const op = el<HTMLSelectElement>(host, 'dt-op-0-1');
-      op.value = 'lt';
-      op.dispatchEvent(new Event('change'));
+      chooseOption(el(host, 'dt-op-0-1'), 'lt');
       await render(fixture);
       const right = el<HTMLInputElement>(host, 'dt-right-0-1');
       right.value = '1000';

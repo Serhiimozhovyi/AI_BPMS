@@ -5,6 +5,9 @@ import { PageColumn, PageComputed, PageDefinition, PageOpenMode, PageRelated } f
 import { DataTableSummary } from '../../../tables/data-tables-api.service';
 import { BuilderUserFiltersComponent } from './builder-user-filters.component';
 import { BpButtonDirective } from '../../../shared/button.directive';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../../shared/select-search/select-search.component';
 
 /** Що конструктор списку зберігає поза основною формою: нові опції F8-14. */
 export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' | 'card' | 'expand' | 'empty'>;
@@ -16,7 +19,7 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
 @Component({
   selector: 'app-builder-list-options',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, BuilderUserFiltersComponent],
+  imports: [BpButtonDirective, MatButtonModule, BuilderUserFiltersComponent, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <h3 class="mb-1 mt-4 font-medium" i18n="@@bo.list.filters">Фільтри над списком</h3>
     <app-builder-user-filters [filters]="extras().filters ?? []" [columns]="columnNames()" (changed)="patch({ filters: $event })" />
@@ -28,11 +31,14 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
         <div class="mb-2 flex flex-wrap items-start gap-2" [attr.data-column-format]="c.column">
           <span class="w-36 pt-1 font-medium">{{ c.column }}</span>
           <input class="w-36 border p-1" placeholder="Підпис колонки" i18n-placeholder="@@bo.list.colLabel" [value]="c.label ?? ''" (input)="column(i, { label: $any($event.target).value || undefined })" />
-          <select class="border p-1" aria-label="Формат" i18n-aria-label="@@bo.list.format" [value]="c.format ?? ''" (change)="column(i, { format: $any($event.target).value || undefined })">
-            @for (f of formats; track f) {
-              <option [value]="f" [selected]="f === (c.format ?? '')">{{ f || '—' }}</option>
-            }
-          </select>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select aria-label="Формат" i18n-aria-label="@@bo.list.format" [value]="c.format ?? ''" (selectionChange)="column(i, { format: $event.value || undefined })">
+              <bp-select-search />
+              @for (f of formats; track f) {
+                <mat-option [value]="f">{{ f || '—' }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
           <textarea
             class="h-16 w-64 border p-1 text-sm"
             aria-label="Підписи значень"
@@ -49,36 +55,51 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
       <div class="mb-1 flex flex-wrap items-center gap-2" [attr.data-computed]="i">
         <input class="w-28 border p-1" placeholder="ключ" i18n-placeholder="@@bo.computed.key" [value]="x.key" (input)="computed(i, { key: $any($event.target).value })" />
         <input class="w-36 border p-1" placeholder="Підпис" i18n-placeholder="@@bo.computed.label" [value]="x.label" (input)="computed(i, { label: $any($event.target).value })" />
-        <select class="border p-1" aria-label="Таблиця" i18n-aria-label="@@bo.computed.table" [value]="x.table" (change)="computed(i, { table: $any($event.target).value, by: '' })">
-          <option value="" [selected]="!x.table">—</option>
-          @for (t of tables(); track t.id) {
-            <option [value]="t.name" [selected]="t.name === x.table">{{ t.name }}</option>
-          }
-        </select>
-        <select class="border p-1" aria-label="Зв'язок з рядком" i18n-aria-label="@@bo.computed.by" [value]="x.by" (change)="computed(i, { by: $any($event.target).value })">
-          <option value="" [selected]="!x.by">—</option>
-          @for (c of columnsOf(x.table); track c) {
-            <option [value]="c" [selected]="c === x.by">{{ c }}</option>
-          }
-        </select>
-        <select class="border p-1" aria-label="Агрегат" i18n-aria-label="@@bo.computed.aggregate" [value]="x.aggregate ?? 'count'" (change)="computed(i, { aggregate: $any($event.target).value })">
-          <option value="count" [selected]="(x.aggregate ?? 'count') === 'count'">count</option>
-          <option value="sum" [selected]="x.aggregate === 'sum'">sum</option>
-        </select>
-        @if (x.aggregate === 'sum') {
-          <select class="border p-1" aria-label="Колонка суми" i18n-aria-label="@@bo.computed.column" [value]="x.column ?? ''" (change)="computed(i, { column: $any($event.target).value || undefined })">
-            <option value="" [selected]="!x.column">—</option>
-            @for (c of columnsOf(x.table); track c) {
-              <option [value]="c" [selected]="c === x.column">{{ c }}</option>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Таблиця" i18n-aria-label="@@bo.computed.table" [value]="x.table" (selectionChange)="computed(i, { table: $event.value, by: '' })">
+            <bp-select-search />
+            <mat-option value="">—</mat-option>
+            @for (t of tables(); track t.id) {
+              <mat-option [value]="t.name">{{ t.name }}</mat-option>
             }
-          </select>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Зв'язок з рядком" i18n-aria-label="@@bo.computed.by" [value]="x.by" (selectionChange)="computed(i, { by: $event.value })">
+            <bp-select-search />
+            <mat-option value="">—</mat-option>
+            @for (c of columnsOf(x.table); track c) {
+              <mat-option [value]="c">{{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Агрегат" i18n-aria-label="@@bo.computed.aggregate" [value]="x.aggregate ?? 'count'" (selectionChange)="computed(i, { aggregate: $event.value })">
+            <bp-select-search />
+            <mat-option value="count">count</mat-option>
+            <mat-option value="sum">sum</mat-option>
+          </mat-select>
+        </mat-form-field>
+        @if (x.aggregate === 'sum') {
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select aria-label="Колонка суми" i18n-aria-label="@@bo.computed.column" [value]="x.column ?? ''" (selectionChange)="computed(i, { column: $event.value || undefined })">
+              <bp-select-search />
+              <mat-option value="">—</mat-option>
+              @for (c of columnsOf(x.table); track c) {
+                <mat-option [value]="c">{{ c }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
         }
-        <select class="border p-1" aria-label="Із ліміту (колонка рядка)" i18n-aria-label="@@bo.computed.of" [value]="x.of ?? ''" (change)="computed(i, { of: $any($event.target).value || undefined })">
-          <option value="" [selected]="!x.of" i18n="@@bo.computed.noOf">без ліміту</option>
-          @for (c of columnNames(); track c) {
-            <option [value]="c" [selected]="c === x.of">з {{ c }}</option>
-          }
-        </select>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Із ліміту (колонка рядка)" i18n-aria-label="@@bo.computed.of" [value]="x.of ?? ''" (selectionChange)="computed(i, { of: $event.value || undefined })">
+            <bp-select-search />
+            <mat-option value="" i18n="@@bo.computed.noOf">без ліміту</mat-option>
+            @for (c of columnNames(); track c) {
+              <mat-option [value]="c">з {{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
         <button mat-button type="button" (click)="removeComputed(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>
     }
@@ -86,23 +107,32 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
 
     <h3 class="mb-1 mt-4 font-medium" i18n="@@bo.list.layout">Показ</h3>
     <div class="flex flex-wrap items-center gap-2">
-      <select class="border p-1" data-testid="b-layout" aria-label="Показ списку" i18n-aria-label="@@bo.list.layoutLabel" [value]="extras().layout ?? 'table'" (change)="layout($any($event.target).value)">
-        <option value="table" [selected]="(extras().layout ?? 'table') === 'table'" i18n="@@bo.layout.table">Таблиця</option>
-        <option value="cards" [selected]="extras().layout === 'cards'" i18n="@@bo.layout.cards">Картки</option>
-      </select>
+      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+        <mat-select data-testid="b-layout" aria-label="Показ списку" i18n-aria-label="@@bo.list.layoutLabel" [value]="extras().layout ?? 'table'" (selectionChange)="layout($event.value)">
+          <bp-select-search />
+          <mat-option value="table" i18n="@@bo.layout.table">Таблиця</mat-option>
+          <mat-option value="cards" i18n="@@bo.layout.cards">Картки</mat-option>
+        </mat-select>
+      </mat-form-field>
       @if (extras().layout === 'cards') {
-        <select class="border p-1" aria-label="Заголовок картки" i18n-aria-label="@@bo.card.title" [value]="extras().card?.title ?? ''" (change)="card({ title: $any($event.target).value })">
-          <option value="" [selected]="!extras().card?.title" i18n="@@bo.card.titleNone">заголовок — перша колонка</option>
-          @for (c of selectedNames(); track c) {
-            <option [value]="c" [selected]="c === extras().card?.title">{{ c }}</option>
-          }
-        </select>
-        <select class="border p-1" aria-label="Підзаголовок картки" i18n-aria-label="@@bo.card.subtitle" [value]="extras().card?.subtitle ?? ''" (change)="card({ subtitle: $any($event.target).value })">
-          <option value="" [selected]="!extras().card?.subtitle" i18n="@@bo.card.subtitleNone">без підзаголовка</option>
-          @for (c of selectedNames(); track c) {
-            <option [value]="c" [selected]="c === extras().card?.subtitle">{{ c }}</option>
-          }
-        </select>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Заголовок картки" i18n-aria-label="@@bo.card.title" [value]="extras().card?.title ?? ''" (selectionChange)="card({ title: $event.value })">
+            <bp-select-search />
+            <mat-option value="" i18n="@@bo.card.titleNone">заголовок — перша колонка</mat-option>
+            @for (c of selectedNames(); track c) {
+              <mat-option [value]="c">{{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Підзаголовок картки" i18n-aria-label="@@bo.card.subtitle" [value]="extras().card?.subtitle ?? ''" (selectionChange)="card({ subtitle: $event.value })">
+            <bp-select-search />
+            <mat-option value="" i18n="@@bo.card.subtitleNone">без підзаголовка</mat-option>
+            @for (c of selectedNames(); track c) {
+              <mat-option [value]="c">{{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
       }
       <input class="w-72 border p-1" placeholder="Текст порожнього списку" i18n-placeholder="@@bo.list.empty" [value]="extras().empty ?? ''" (input)="patch({ empty: $any($event.target).value || undefined })" />
     </div>
@@ -111,30 +141,39 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
     @for (e of extras().expand ?? []; track $index; let i = $index) {
       <div class="mb-2 flex flex-wrap items-center gap-2" [attr.data-expand]="i">
         <input class="w-36 border p-1" placeholder="Підпис" i18n-placeholder="@@bo.expand.label" [value]="e.label ?? ''" (input)="expand(i, { label: $any($event.target).value || undefined })" />
-        <select class="border p-1" aria-label="Таблиця" i18n-aria-label="@@bo.expand.table" [value]="e.table" (change)="expand(i, { table: $any($event.target).value, by: '', columns: undefined })">
-          <option value="" [selected]="!e.table">—</option>
-          @for (t of tables(); track t.id) {
-            <option [value]="t.name" [selected]="t.name === e.table">{{ t.name }}</option>
-          }
-        </select>
-        <select class="border p-1" aria-label="Зв'язок з рядком" i18n-aria-label="@@bo.expand.by" [value]="e.by" (change)="expand(i, { by: $any($event.target).value })">
-          <option value="" [selected]="!e.by">—</option>
-          @for (c of columnsOf(e.table); track c) {
-            <option [value]="c" [selected]="c === e.by">{{ c }}</option>
-          }
-        </select>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Таблиця" i18n-aria-label="@@bo.expand.table" [value]="e.table" (selectionChange)="expand(i, { table: $event.value, by: '', columns: undefined })">
+            <bp-select-search />
+            <mat-option value="">—</mat-option>
+            @for (t of tables(); track t.id) {
+              <mat-option [value]="t.name">{{ t.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Зв'язок з рядком" i18n-aria-label="@@bo.expand.by" [value]="e.by" (selectionChange)="expand(i, { by: $event.value })">
+            <bp-select-search />
+            <mat-option value="">—</mat-option>
+            @for (c of columnsOf(e.table); track c) {
+              <mat-option [value]="c">{{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
         @for (c of columnsOf(e.table); track c) {
           <label class="inline-flex items-center gap-1">
             <input type="checkbox" [checked]="expandHas(e, c)" (change)="expandColumn(i, c, $any($event.target).checked)" />
             {{ c }}
           </label>
         }
-        <select class="border p-1" aria-label="Кнопка «Додати»" i18n-aria-label="@@bo.expand.create" [value]="e.create?.page ?? ''" (change)="expand(i, { create: $any($event.target).value ? { page: $any($event.target).value, mode: e.create?.mode ?? 'drawer' } : undefined })">
-          <option value="" [selected]="!e.create" i18n="@@bo.expand.noCreate">без кнопки «Додати»</option>
-          @for (p of pageKeys(); track p) {
-            <option [value]="p" [selected]="p === e.create?.page">«Додати» → {{ p }}</option>
-          }
-        </select>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Кнопка «Додати»" i18n-aria-label="@@bo.expand.create" [value]="e.create?.page ?? ''" (selectionChange)="expand(i, { create: $event.value ? { page: $event.value, mode: e.create?.mode ?? 'drawer' } : undefined })">
+            <bp-select-search />
+            <mat-option value="" i18n="@@bo.expand.noCreate">без кнопки «Додати»</mat-option>
+            @for (p of pageKeys(); track p) {
+              <mat-option [value]="p">«Додати» → {{ p }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
         <input class="w-56 border p-1" placeholder="Коли порожньо" i18n-placeholder="@@bo.expand.empty" [value]="e.empty ?? ''" (input)="expand(i, { empty: $any($event.target).value || undefined })" />
         <button mat-button type="button" (click)="removeExpand(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>

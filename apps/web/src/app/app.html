@@ -17,6 +17,7 @@
           [value]="projects.current() ?? ''"
           (selectionChange)="selectProject($event.value)"
         >
+          <bp-select-search />
           <mat-option value="" i18n="@@app.project.all">Усі проєкти</mat-option>
           <mat-option [value]="sharedSpace" i18n="@@app.project.shared">Спільний простір</mat-option>
           @for (p of projects.projects(); track p.id) {

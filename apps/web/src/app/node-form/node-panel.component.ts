@@ -16,6 +16,7 @@ import { EMPTY_EXPRESSION_CONTEXT, ExpressionContext } from './expression-sugges
 import { NodeFormState, provideNodeForm } from './node-form-fields';
 import { OptionsConnector, ToolOptionsService } from './tool-options.service';
 import { SubscribeSourceComponent } from './subscribe-source.component';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Підключення в полі «Підключення» панелі вузла (F3-95). */
 export interface NodeConnection {
@@ -64,7 +65,7 @@ interface PanelState {
 @Component({
   selector: 'app-node-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormlyForm, ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SubscribeSourceComponent],
+  imports: [FormlyForm, ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SubscribeSourceComponent, SelectSearchComponent],
   // Кеш списків з конекторів (F3-54) — у межах панелі.
   providers: [provideNodeForm(), ToolOptionsService],
   template: `
@@ -96,6 +97,7 @@ interface PanelState {
               [attr.title]="serverId() + ' · ' + toolName()"
               (selectionChange)="connectionPicked($event.value, connectionSelect)"
             >
+              <bp-select-search />
               @for (c of connectionChoices(); track c.id) {
                 <mat-option [value]="c.id" data-testid="connection-option" [attr.data-connection]="c.id">{{ c.name }}</mat-option>
               }

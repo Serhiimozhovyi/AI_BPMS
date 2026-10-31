@@ -1,4 +1,5 @@
 import { Page, expect, test } from '@playwright/test';
+import { chooseOption } from './mat-select';
 
 /** F8-19: конструктор зручних сторінок — календар і головна збираються формою (без JSON) з живим переглядом. */
 const USER = { id: 'u1', email: 'admin@firma.ua', role: 'admin' };
@@ -76,9 +77,9 @@ test('календар і головна збираються в констру�
 
   // Календар зі зразка.
   await page.goto('/projects/p1/app/_builder');
-  await page.getByTestId('b-sample').selectOption('calendar');
-  await expect(page.getByTestId('b-kind')).toHaveValue('calendar');
-  await expect(page.getByTestId('bc-start')).toHaveValue('starts_at');
+  await chooseOption(page.getByTestId('b-sample'), 'Календар');
+  await expect(page.getByTestId('b-kind')).toContainText('Календар');
+  await expect(page.getByTestId('bc-start')).toContainText('starts_at');
   await page.getByTestId('b-name').fill('Мій розклад');
   await page.locator('[data-view="month"]').uncheck();
   await expect(page.getByTestId('builder-preview').locator('app-page-calendar')).toBeVisible();
@@ -94,17 +95,17 @@ test('календар і головна збираються в констру�
 
   // Головна зі зразка, текст блоку і кнопка «Новий слот» бічною панеллю.
   await page.goto('/projects/p1/app/_builder');
-  await page.getByTestId('b-sample').selectOption('dashboard');
-  await expect(page.getByTestId('b-kind')).toHaveValue('dashboard');
+  await chooseOption(page.getByTestId('b-sample'), 'Головна');
+  await expect(page.getByTestId('b-kind')).toContainText('Головна');
   await page.getByTestId('b-name').fill('Сьогодні');
   await page.getByTestId('b-add-block').click();
   const block = page.locator('[data-block="2"]');
-  await block.locator('select').first().selectOption('actions');
+  await chooseOption(block.locator('mat-select').first(), 'Кнопки');
   await page.getByTestId('bd-add-action-2').click();
   const action = page.locator('[data-block-action="0"]');
   await action.locator('input').first().fill('Новий слот');
-  await action.locator('select').nth(1).selectOption('calendar');
-  await action.locator('select').nth(2).selectOption('drawer');
+  await chooseOption(action.locator('mat-select').nth(1), 'calendar');
+  await chooseOption(action.locator('mat-select').nth(2), 'бічною панеллю');
   await expect(page.getByTestId('builder-preview').getByText('Вітаємо, admin@firma.ua!')).toBeVisible();
   await page.getByTestId('b-save').click();
   await expect(page).toHaveURL(/\/app\/home$/);
@@ -117,7 +118,7 @@ test('календар і головна збираються в констру�
   // Вигляд застосунку: назва, головна, меню.
   await page.goto('/projects/p1/app/_app');
   await page.getByTestId('as-title').fill('Кабінет психолога');
-  await page.getByTestId('as-home').selectOption('home');
+  await chooseOption(page.getByTestId('as-home'), 'Сьогодні');
   await page.getByTestId('as-add-group').click();
   await page.locator('[data-nav-group="0"] input').first().fill('Робота');
   await page.locator('[data-nav-page="home"]').check();

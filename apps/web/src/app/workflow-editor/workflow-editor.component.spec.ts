@@ -12,6 +12,7 @@ import { WorkflowDefinition, WorkflowDetail, emptyWorkflowDefinition } from '../
 import { EVENT_SOURCE_FACTORY, ExecutionStep } from '../executions/executions-api.service';
 import { FakeEventSource } from '../executions/fake-event-source';
 import { WorkflowEditorComponent } from './workflow-editor.component';
+import { chooseOption } from '../shared/select-search/select-testing';
 
 const workflow: WorkflowDetail = {
   id: 'w1',
@@ -1098,9 +1099,7 @@ describe('WorkflowEditorComponent', () => {
       await render(fixture);
       expect(host.querySelector('[data-testid="map-hint"]')?.textContent).toContain('Спершу клацніть у поле параметра');
 
-      const select = host.querySelector('[data-testid="input-source"]') as HTMLSelectElement;
-      select.value = 'n_hook';
-      select.dispatchEvent(new Event('change'));
+      chooseOption(host.querySelector('[data-testid="input-source"]')!, 'n_hook');
       await render(fixture);
       expect(field(host, '.body.id').title).toBe('{{ $node["Нова заявка"].json.body.id }}');
     });

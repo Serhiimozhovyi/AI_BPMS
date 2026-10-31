@@ -6,6 +6,7 @@ import { PageBlock, PageCalendar, PagePreview, ProjectPageView } from '../../../
 import { BuilderCalendarComponent } from './builder-calendar.component';
 import { BuilderDashboardComponent } from './builder-dashboard.component';
 import { PagePreviewComponent } from './page-preview.component';
+import { chooseOption } from '../../../shared/select-search/select-testing';
 
 async function render(fixture: ComponentFixture<unknown>) {
   fixture.detectChanges();
@@ -14,6 +15,7 @@ async function render(fixture: ComponentFixture<unknown>) {
 }
 
 function change(el: Element, value: string, event = 'change') {
+  if (el.tagName === 'MAT-SELECT') return chooseOption(el, value);
   (el as HTMLInputElement).value = value;
   el.dispatchEvent(new Event(event));
 }
@@ -90,16 +92,16 @@ describe('BuilderDashboardComponent (F8-19)', () => {
 
   it('зміна виду блоку лишає підпис, ширину й умову, а решту скидає', async () => {
     const { host, emitted } = await setup([{ kind: 'list', page: 'today', label: 'Сьогодні', width: 6, limit: 5, when: "{{ $user.id }}" }]);
-    change(host.querySelector('[data-block="0"] select')!, 'calendar');
+    change(host.querySelector('[data-block="0"] mat-select')!, 'calendar');
     expect(emitted.at(-1)).toEqual([{ kind: 'calendar', label: 'Сьогодні', width: 6, when: '{{ $user.id }}' }]);
   });
 
   it('кнопка блоку: сценарій, підтвердження й ролі', async () => {
     const { host, emitted, fixture } = await setup([{ kind: 'actions', width: 12, actions: [{ label: 'Скасувати', page: '' }] }]);
-    change(host.querySelector('[data-block-action="0"]')!.querySelectorAll('select')[0], 'workflow');
+    change(host.querySelector('[data-block-action="0"]')!.querySelectorAll('mat-select')[0], 'workflow');
     fixture.componentRef.setInput('blocks', emitted.at(-1));
     await render(fixture);
-    const selects = host.querySelector('[data-block-action="0"]')!.querySelectorAll('select');
+    const selects = host.querySelector('[data-block-action="0"]')!.querySelectorAll('mat-select');
     change(selects[1], 'cancel');
     fixture.componentRef.setInput('blocks', emitted.at(-1));
     await render(fixture);

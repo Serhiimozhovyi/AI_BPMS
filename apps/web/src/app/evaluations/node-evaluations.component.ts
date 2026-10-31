@@ -17,6 +17,9 @@ import {
   parseJsonField,
 } from './evaluations-api.service';
 import { BpButtonDirective } from '../shared/button.directive';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Кейс у формі: JSON-поля — текстом, налаштування перевірки — окремими полями. */
 interface CaseDraft {
@@ -83,7 +86,7 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
 @Component({
   selector: 'app-node-evaluations',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule],
+  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <section class="mt-4 flex flex-col gap-3 border-t border-bp-line pt-4" data-testid="evaluations">
       <div class="flex items-center gap-2">
@@ -126,18 +129,20 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
                   [attr.aria-label]="nameLabel"
                   (input)="edit(i, 'name', $event)"
                 />
-                <select
-                  class="rounded border border-bp-line px-2 py-1 text-sm"
-                  data-testid="case-check"
-                  [value]="c.check"
-                  [disabled]="readonly()"
-                  [attr.aria-label]="checkLabel"
-                  (change)="edit(i, 'check', $event)"
-                >
-                  @for (check of checks; track check) {
-                    <option [value]="check">{{ checkLabels[check] }}</option>
-                  }
-                </select>
+                <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                  <mat-select
+                    data-testid="case-check"
+                    [value]="c.check"
+                    [disabled]="readonly()"
+                    [aria-label]="checkLabel"
+                    (selectionChange)="editValue(i, 'check', $event.value)"
+                  >
+                    <bp-select-search />
+                    @for (check of checks; track check) {
+                      <mat-option [value]="check">{{ checkLabels[check] }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
                 @if (!readonly()) {
                   <button mat-button type="button" data-testid="case-remove" (click)="remove(i)" i18n="@@evaluations.remove" bpVariant="danger">Прибрати</button>
                 }
@@ -281,7 +286,10 @@ export class NodeEvaluationsComponent {
   }
 
   edit(index: number, field: keyof CaseDraft, event: Event): void {
-    const value = (event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value;
+    this.editValue(index, field, (event.target as HTMLInputElement | HTMLTextAreaElement).value);
+  }
+
+  editValue(index: number, field: keyof CaseDraft, value: string): void {
     this.drafts.update((list) => list.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
     this.dirty.set(true);
   }

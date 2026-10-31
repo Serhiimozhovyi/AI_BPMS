@@ -20,6 +20,7 @@ import {
   isFilled,
 } from './credential-input';
 import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './credentials-api.service';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /**
  * Форма credential'а за типом (F4-02): створення (вибір типу → поля) і редагування (перейменування, заміна полів).
@@ -29,7 +30,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
 @Component({
   selector: 'app-credential-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <!-- Не <form>: компонент вкладається у форму конектора (F4-03), а вкладені форми HTML не дозволяє. -->
     <div class="flex flex-col gap-2" data-testid="credential-form">
@@ -42,6 +43,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
         <mat-form-field appearance="outline">
           <mat-label i18n="@@credentials.form.project">Проєкт</mat-label>
           <mat-select data-testid="credential-project" [value]="projectId()" (selectionChange)="projectId.set($event.value)">
+            <bp-select-search />
             @for (t of targets(); track t.id) {
               <mat-option [value]="t.id" [attr.data-project]="t.id ?? 'shared'">{{ t.name }}</mat-option>
             }
@@ -53,6 +55,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
         <mat-form-field appearance="outline">
           <mat-label i18n="@@credentials.form.type">Тип</mat-label>
           <mat-select data-testid="credential-type" [value]="typeName()" (selectionChange)="selectType($event.value)">
+            <bp-select-search />
             @for (t of availableTypes(); track t.type) {
               <mat-option [value]="t.type" [attr.data-type]="t.type">{{ t.displayName }}</mat-option>
             }
@@ -122,6 +125,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
                 [value]="value().fields[f.name]"
                 (selectionChange)="setField(f.name, $event.value)"
               >
+                <bp-select-search />
                 @if (!f.required) {
                   <mat-option value="" i18n="@@credentials.form.notSet">— не вказано —</mat-option>
                 }

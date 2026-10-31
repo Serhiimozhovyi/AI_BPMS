@@ -23,6 +23,9 @@ import {
   toggleChoice,
 } from './widgets';
 import { BpButtonDirective } from '../shared/button.directive';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /**
  * Редактор кнопок `reply_markup` (F6-30, `x-openbp-widget: keyboard`): інлайн-кнопки під повідомленням, клавіатура
@@ -32,7 +35,7 @@ import { BpButtonDirective } from '../shared/button.directive';
 @Component({
   selector: 'app-node-keyboard-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="kb" [attr.data-field]="key">
       <span class="kb__label">{{ label }}</span>
@@ -58,10 +61,13 @@ import { BpButtonDirective } from '../shared/button.directive';
                 @for (b of row; track $index; let c = $index) {
                   <div class="kb__btn" [attr.data-button]="r + '-' + c">
                     <input class="kb__input" [attr.data-testid]="'kb-text-' + r + '-' + c" [value]="b.text" i18n-placeholder="@@kb.text" placeholder="Текст кнопки" i18n-aria-label="@@kb.text" aria-label="Текст кнопки" (change)="editInline(r, c, { text: $any($event.target).value })" />
-                    <select class="kb__input" [attr.data-testid]="'kb-action-' + r + '-' + c" i18n-aria-label="@@kb.action" aria-label="Дія кнопки" (change)="editInline(r, c, { action: $any($event.target).value })">
-                      <option value="callback" [selected]="b.action === 'callback'" i18n="@@kb.callback">Відправити боту (callback_data)</option>
-                      <option value="url" [selected]="b.action === 'url'" i18n="@@kb.url">Відкрити посилання (url)</option>
-                    </select>
+                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                      <mat-select [attr.data-testid]="'kb-action-' + r + '-' + c" [value]="b.action || 'callback'" i18n-aria-label="@@kb.action" aria-label="Дія кнопки" (selectionChange)="editInline(r, c, { action: $event.value })">
+                        <bp-select-search />
+                        <mat-option value="callback" i18n="@@kb.callback">Відправити боту (callback_data)</mat-option>
+                        <mat-option value="url" i18n="@@kb.url">Відкрити посилання (url)</mat-option>
+                      </mat-select>
+                    </mat-form-field>
                     <input
                       class="kb__input"
                       [attr.data-testid]="'kb-value-' + r + '-' + c"
@@ -95,11 +101,14 @@ import { BpButtonDirective } from '../shared/button.directive';
                 @for (b of row; track $index; let c = $index) {
                   <div class="kb__btn" [attr.data-button]="r + '-' + c">
                     <input class="kb__input" [attr.data-testid]="'kb-text-' + r + '-' + c" [value]="b.text" i18n-placeholder="@@kb.text" placeholder="Текст кнопки" i18n-aria-label="@@kb.text" aria-label="Текст кнопки" (change)="editReply(r, c, { text: $any($event.target).value })" />
-                    <select class="kb__input" [attr.data-testid]="'kb-request-' + r + '-' + c" i18n-aria-label="@@kb.request" aria-label="Що запросити" (change)="editReply(r, c, { request: $any($event.target).value })">
-                      <option value="none" [selected]="b.request === 'none'" i18n="@@kb.requestNone">Лише текст</option>
-                      <option value="contact" [selected]="b.request === 'contact'" i18n="@@kb.requestContact">Запросити контакт</option>
-                      <option value="location" [selected]="b.request === 'location'" i18n="@@kb.requestLocation">Запросити геолокацію</option>
-                    </select>
+                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                      <mat-select [attr.data-testid]="'kb-request-' + r + '-' + c" [value]="b.request || 'none'" i18n-aria-label="@@kb.request" aria-label="Що запросити" (selectionChange)="editReply(r, c, { request: $event.value })">
+                        <bp-select-search />
+                        <mat-option value="none" i18n="@@kb.requestNone">Лише текст</mat-option>
+                        <mat-option value="contact" i18n="@@kb.requestContact">Запросити контакт</mat-option>
+                        <mat-option value="location" i18n="@@kb.requestLocation">Запросити геолокацію</mat-option>
+                      </mat-select>
+                    </mat-form-field>
                     <span class="kb__tools">
                       <button type="button" class="kb__icon" [disabled]="c === 0" [attr.data-testid]="'kb-left-' + r + '-' + c" i18n-title="@@kb.left" title="Ліворуч" (click)="moveButton(r, c, -1)">←</button>
                       <button type="button" class="kb__icon" [disabled]="c === row.length - 1" [attr.data-testid]="'kb-right-' + r + '-' + c" i18n-title="@@kb.right" title="Праворуч" (click)="moveButton(r, c, 1)">→</button>

@@ -48,6 +48,7 @@ import {
   parseItems,
 } from '../../executions/executions-api.service';
 import { WorkflowDefinition, WorkflowSummary, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 /** Розмір сторінки журналу. */
 export const EXECUTIONS_PAGE_SIZE = 50;
@@ -99,6 +100,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
     NodeRunDataComponent,
     StageStripComponent,
     ChipComponent,
+    SelectSearchComponent,
   ],
   // Дати фільтра — `дд.мм.рррр` (F3-81): нативний `input[type=date]` показував би формат локалі браузера.
   providers: [
@@ -116,6 +118,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-56">
           <mat-label i18n="@@executions.filter.workflow">Сценарій</mat-label>
           <mat-select data-testid="filter-workflow" [value]="workflowId()" (selectionChange)="setWorkflow($event.value ?? '')">
+            <bp-select-search />
             <mat-option [value]="null" i18n="@@executions.filter.allWorkflows">Усі сценарії</mat-option>
             @for (w of workflows(); track w.id) {
               <mat-option [value]="w.id">{{ w.name }}</mat-option>
@@ -125,6 +128,7 @@ export function dayBoundary(date: string, endOfDay = false): string | null {
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-44">
           <mat-label i18n="@@executions.filter.status">Стан</mat-label>
           <mat-select data-testid="filter-status" [value]="status()" (selectionChange)="setStatus($event.value ?? '')">
+            <bp-select-search />
             <mat-option [value]="null" i18n="@@executions.filter.allStatuses">Усі стани</mat-option>
             @for (s of states; track s) {
               <mat-option [value]="s">{{ stateLabel(s) }}</mat-option>

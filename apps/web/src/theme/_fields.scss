@@ -40,6 +40,19 @@
     )
   );
 
+  // Пункти списку (Drop window AC-Kit, F9-14): текст 14/20, наведення й фокус — bg-2, вибраний — tonal + primary.
+  @include mat.option-overrides(
+    (
+      label-text-size: 14px,
+      label-text-line-height: 20px,
+      label-text-color: var(--bp-text),
+      hover-state-layer-color: var(--bp-bg-2),
+      focus-state-layer-color: var(--bp-bg-2),
+      selected-state-layer-color: var(--bp-tonal),
+      selected-state-label-text-color: var(--bp-primary),
+    )
+  );
+
   // Checkbox / radio / switch: primary, невибрані — рамка line-3.
   @include mat.checkbox-overrides(
     (
@@ -169,8 +182,10 @@
     padding: 4px 0;
   }
 
-  .mat-mdc-option {
-    min-height: 40px;
+  // Подвійний клас — щоб перебити `min-height: 48px` зі стилів компонента Material, які під'єднуються пізніше.
+  .mat-mdc-select-panel .mat-mdc-option,
+  .mat-mdc-autocomplete-panel .mat-mdc-option {
+    min-height: 36px;
 
     &:hover:not(.mdc-list-item--disabled) {
       background: var(--bp-bg-2);
@@ -202,8 +217,73 @@
     color: var(--bp-text-muted);
   }
 
-  // Нативні поля фільтрів (select, date) — у стилі полів AC-Kit (раніше в styles.scss).
-  main select.border,
+  // Пошук усередині випадного списку (`bp-select-search`, F9-14): липке поле над пунктами, як «Dropdown+icon».
+  .bp-select-search {
+    position: sticky;
+    top: -4px;
+    z-index: 1;
+    display: block;
+    margin-top: -4px;
+    padding: 8px 8px 4px;
+    background: var(--bp-white);
+
+    &.bp-select-search--off {
+      display: none;
+    }
+  }
+
+  .bp-select-search__box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--bp-line);
+    border-radius: 8px;
+    background: var(--bp-white);
+
+    &:focus-within {
+      border-color: var(--bp-primary);
+      box-shadow: 0 0 0 3px var(--bp-tonal);
+    }
+  }
+
+  .bp-select-search__icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--bp-text-muted);
+  }
+
+  .bp-select-search__input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--bp-text);
+    font: inherit;
+    font-size: 14px;
+
+    &::placeholder {
+      color: var(--bp-text-muted);
+    }
+  }
+
+  // Пункти, які сховав пошук.
+  .mat-mdc-option[hidden] {
+    display: none !important;
+  }
+
+  // Компактний список у рядку таблиці чи панелі (AC-Kit «2 dates 2» / таблиці): висота 32.
+  .mat-mdc-form-field.bp-field-compact {
+    --mat-form-field-container-height: 32px;
+    --mat-form-field-container-vertical-padding: 4px;
+    --mat-form-field-container-text-size: 13px;
+    --mat-select-trigger-text-size: 13px;
+  }
+
+  // Нативні поля дат — у стилі полів AC-Kit (раніше в styles.scss). Випадні списки — лише mat-select (F9-14).
   main input.border {
     min-height: 40px;
     padding: 0 12px;

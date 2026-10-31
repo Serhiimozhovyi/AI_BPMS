@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { ConnectorResource, ConnectorSummary, ConnectorsApiService, apiErrorMessage } from '../connectors/connectors-api.service';
 import { WorkflowNode } from '../workflows/workflows-api.service';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /**
  * Блок «Подія конектора» панелі вузла `mcp.subscribe` (F6-20): конектор зі списку встановлених і ресурс подій з
@@ -17,12 +18,13 @@ import { WorkflowNode } from '../workflows/workflows-api.service';
 @Component({
   selector: 'app-subscribe-source',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="source" data-testid="subscribe-source" [attr.inert]="readonly() ? '' : null">
       <mat-form-field appearance="outline" class="source__field" subscriptSizing="dynamic">
         <mat-label i18n="@@subscribe.connector">Підключення</mat-label>
         <mat-select data-testid="subscribe-connector" [value]="serverId()" (selectionChange)="connectorPicked($event.value)">
+          <bp-select-search />
           @for (c of connectors(); track c.id) {
             <mat-option [value]="c.id">{{ c.name }}</mat-option>
           }

@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { ProjectMember, WorkflowGroup } from '../../workflows/workflows-api.service';
 import { ProjectMembersPage } from './project-members.page';
+import { chooseOption } from '../../shared/select-search/select-testing';
 
 const base = '/api/v1/workflow-groups';
 const alice: ProjectMember = { userId: 'u1', email: 'alice@firma.ua', role: 'editor', globalRole: 'editor' };
@@ -45,9 +46,7 @@ describe('ProjectMembersPage', () => {
     const email = host.querySelector<HTMLInputElement>('[data-testid="member-email"]')!;
     email.value = 'bob@firma.ua';
     email.dispatchEvent(new Event('input'));
-    const role = host.querySelector<HTMLSelectElement>('[data-testid="member-role"]')!;
-    role.value = 'viewer';
-    role.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-testid="member-role"]')!, 'viewer');
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-testid="member-add"]')!.click();
@@ -67,12 +66,8 @@ describe('ProjectMembersPage', () => {
     const email = host.querySelector<HTMLInputElement>('[data-testid="member-email"]')!;
     email.value = 'olena@firma.ua';
     email.dispatchEvent(new Event('input'));
-    const role = host.querySelector<HTMLSelectElement>('[data-testid="member-role"]')!;
-    role.value = 'viewer';
-    role.dispatchEvent(new Event('change'));
-    const appRole = host.querySelector<HTMLSelectElement>('[data-testid="member-new-app-role"]')!;
-    appRole.value = 'psychologist';
-    appRole.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-testid="member-role"]')!, 'viewer');
+    chooseOption(host.querySelector('[data-testid="member-new-app-role"]')!, 'psychologist');
     await render(fixture);
 
     host.querySelector<HTMLButtonElement>('[data-testid="member-add"]')!.click();
@@ -105,9 +100,7 @@ describe('ProjectMembersPage', () => {
 
   it('змінює роль і прибирає учасника', async () => {
     const { fixture, http, host } = await setup();
-    const select = host.querySelector<HTMLSelectElement>('[data-member="bob@firma.ua"] [data-testid="member-role-change"]')!;
-    select.value = 'editor';
-    select.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-member="bob@firma.ua"] [data-testid="member-role-change"]')!, 'editor');
     const put = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
     expect(put.request.body).toEqual({ email: 'bob@firma.ua', role: 'editor', appRole: null });
     put.flush({ ...bob, role: 'editor' });
@@ -158,18 +151,14 @@ describe('ProjectMembersPage', () => {
     await render(fixture);
     expect(host.querySelectorAll('[data-app-role]')).toHaveLength(2);
 
-    const appRole = host.querySelector<HTMLSelectElement>('[data-member="alice@firma.ua"] [data-testid="member-app-role"]')!;
-    appRole.value = 'psychologist';
-    appRole.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-member="alice@firma.ua"] [data-testid="member-app-role"]')!, 'psychologist');
     const put = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
     expect(put.request.body).toEqual({ email: 'alice@firma.ua', role: 'editor', appRole: 'psychologist' });
     put.flush({ ...alice, appRole: 'psychologist' });
     http.expectOne({ method: 'GET', url: base }).flush([]);
     await render(fixture);
 
-    const role = host.querySelector<HTMLSelectElement>('[data-member="bob@firma.ua"] [data-testid="member-role-change"]')!;
-    role.value = 'editor';
-    role.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-member="bob@firma.ua"] [data-testid="member-role-change"]')!, 'editor');
     const kept = http.expectOne({ method: 'PUT', url: `${base}/p1/members` });
     expect(kept.request.body).toEqual({ email: 'bob@firma.ua', role: 'editor', appRole: 'operator' });
   });
