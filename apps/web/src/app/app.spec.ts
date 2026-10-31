@@ -257,6 +257,68 @@ describe('App: вибір проєкту (F6-14)', () => {
   });
 });
 
+describe('App: перегляд «як користувач» (F12-02)', () => {
+  afterEach(() => sessionStorage.removeItem('openbp.viewAs'));
+
+  async function shell(user: UserInfo, groups: unknown[]) {
+    configure(user);
+    const fixture = TestBed.createComponent(App);
+    const harness = await RouterTestingHarness.create();
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    await harness.navigateByUrl('/projects/p1/members');
+    const http = TestBed.inject(HttpTestingController);
+    for (let i = 0; i < 2; i++) {
+      http.match(() => true).forEach((r) => r.flush(r.request.url === '/api/v1/workflow-groups' ? groups : []));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="user-menu"]')!.click();
+    fixture.detectChanges();
+    return { fixture, host, http };
+  }
+
+  it('editor проєкту бачить «Переглянути як користувач…», viewer — ні', async () => {
+    const editor = await shell({ id: 'u2', email: 'dev@firma.ua', role: 'editor' }, [{ id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 1, role: 'editor' }]);
+    expect(editor.host.querySelector('[data-testid="view-as-open"]')?.textContent).toContain('Переглянути як користувач');
+    expect(editor.host.querySelector('[data-testid="view-as-banner"]')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const viewer = await shell({ id: 'u3', email: 'v@firma.ua', role: 'viewer' }, [
+      { id: 'p1', name: 'Продажі', sortOrder: 0, workflowCount: 1, role: 'viewer' },
+      { id: 'p2', name: 'Інше', sortOrder: 1, workflowCount: 1, role: 'viewer' },
+    ]);
+    expect(viewer.host.querySelector('[data-testid="view-as-open"]')).toBeNull();
+  });
+
+  it('у режимі перегляду — смуга з роллю й проєктом, «Вийти з перегляду» знімає режим і перечитує користувача', async () => {
+    sessionStorage.setItem('openbp.viewAs', JSON.stringify({ projectId: 'p1', projectName: 'Психологічна підтримка', role: 'viewer', appRole: 'coordinator', label: 'Координатор' }));
+    const { fixture, host, http } = await shell({ id: 'u2', email: 'dev@firma.ua', role: 'viewer' }, [
+      { id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 1, role: 'viewer', appRole: 'coordinator' },
+    ]);
+    const banner = host.querySelector('[data-testid="view-as-banner"]')!;
+    expect(banner.querySelector('[data-testid="view-as-label"]')?.textContent).toBe('Координатор');
+    expect(banner.querySelector('[data-testid="view-as-project"]')?.textContent).toBe('Психологічна підтримка');
+    expect(banner.textContent).toContain('(лише читання)');
+    expect(host.querySelector('[data-testid="view-as-open"]')).toBeNull();
+    expect(host.querySelector('[data-testid="view-as-menu-exit"]')).not.toBeNull();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="view-as-exit"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(sessionStorage.getItem('openbp.viewAs')).toBeNull();
+    const me = http.expectOne('/api/v1/auth/me');
+    expect(me.request.headers.has('X-OpenBP-View-As')).toBe(false);
+    me.flush({ id: 'u2', email: 'dev@firma.ua', role: 'editor' });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="view-as-banner"]')).toBeNull();
+    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/projects', 'p1']);
+  });
+});
+
 describe('App: телефон і зв’язок (F3-84)', () => {
   function configureMobile(matches: boolean) {
     const state = new BehaviorSubject({ matches, breakpoints: {} });

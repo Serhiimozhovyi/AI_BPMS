@@ -3,12 +3,15 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, afterRenderEffect, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { GlobalAssistantComponent } from './assistant/global-assistant.component';
 import { GlobalAssistantService } from './assistant/global-assistant.service';
 import { AuthService } from './auth/auth.service';
+import { ViewAsDialogComponent, ViewAsDialogData } from './auth/view-as-dialog.component';
+import { ViewAsMode, ViewAsService } from './auth/view-as.service';
 import { ConnectivityService } from './connectivity/connectivity.service';
 import { AppBarService } from './layout/app-bar.service';
 import { MOBILE_QUERY } from './layout/breakpoints';
@@ -30,6 +33,8 @@ export class App {
   protected readonly projects = inject(ProjectContextService);
   protected readonly connectivity = inject(ConnectivityService);
   protected readonly assistant = inject(GlobalAssistantService);
+  protected readonly viewAs = inject(ViewAsService);
+  private readonly dialog = inject(MatDialog);
   protected readonly sharedSpace = NO_GROUP;
   /** Телефон (< 768 px): навігація, проєкт і користувач — у drawer за кнопкою-бургером (F3-84). */
   protected readonly mobile = toSignal(inject(BreakpointObserver).observe(MOBILE_QUERY).pipe(map((s) => s.matches)), {
@@ -48,6 +53,17 @@ export class App {
   /** Ініціали для аватара: «olena.bondar@…» → «OB», «admin@…» → «A». */
   protected readonly initials = computed(() => userInitials(this.user()?.email));
   protected readonly userMenuOpen = signal(false);
+  /**
+   * Проєкт, який можна переглянути «як користувач» (F12-02): з адреси `/projects/:id…` або вибраний у шапці; лише для
+   * admin і editor проєкту й поза режимом перегляду.
+   */
+  protected readonly viewAsProject = computed(() => {
+    if (this.viewAs.active()) return null;
+    const id = /^\/projects\/([^/?#]+)/.exec(this.url() || this.router.url)?.[1] ?? this.projects.current();
+    const project = this.projects.projects().find((p) => p.id === id) ?? null;
+    if (!project) return null;
+    return this.user()?.role === 'admin' || project.role === 'editor' || project.role === 'admin' ? project : null;
+  });
   /** Стрілки прокрутки меню, коли пункти не вміщаються (Figma «Molecules / Menu», прокрутка). */
   protected readonly canScrollStart = signal(false);
   protected readonly canScrollEnd = signal(false);
@@ -102,6 +118,14 @@ export class App {
     effect(() => {
       if (this.user()) this.projects.reload();
       else this.projects.projects.set([]);
+    });
+    // Режим перегляду змінився — користувач і проєкти тепер інші: перечитати (перший запуск — це вже зробив guard).
+    let lastHeader = this.viewAs.header();
+    effect(() => {
+      const header = this.viewAs.header();
+      if (header === lastHeader) return;
+      lastHeader = header;
+      this.auth.me().subscribe({ next: () => this.projects.reload(), error: () => this.projects.reload() });
     });
     // Користувач лише застосунку з головної — одразу в застосунок свого проєкту (F8-04).
     effect(() => {
@@ -181,9 +205,37 @@ export class App {
     if (target) void this.router.navigate(target);
   }
 
+  /** «Переглянути як…» (F12-02): вибір ролі в діалозі → режим перегляду і перехід у проєкт. */
+  protected openViewAs(): void {
+    const project = this.viewAsProject();
+    this.userMenuOpen.set(false);
+    if (!project) return;
+    this.dialog
+      .open<ViewAsDialogComponent, ViewAsDialogData, ViewAsMode>(ViewAsDialogComponent, {
+        data: { project, isAdmin: this.user()?.role === 'admin' },
+        autoFocus: 'first-tabbable',
+      })
+      .afterClosed()
+      .subscribe((mode) => {
+        if (!mode) return;
+        this.viewAs.set(mode);
+        const app = !!mode.appRole || !!mode.memberId;
+        void this.router.navigate(app ? ['/projects', mode.projectId, 'app'] : ['/projects', mode.projectId]);
+      });
+  }
+
+  /** Вийти з перегляду: знову власні права, сторінка проєкту, який переглядали. */
+  protected exitViewAs(): void {
+    const mode = this.viewAs.mode();
+    this.userMenuOpen.set(false);
+    this.viewAs.clear();
+    if (mode) void this.router.navigate(['/projects', mode.projectId]);
+  }
+
   /** Вихід: сесію закрито на Api — на сторінку входу; якщо Api недоступний, користувача все одно забуваємо. */
   protected logout(): void {
     this.userMenuOpen.set(false);
+    this.viewAs.clear();
     this.auth.logout().subscribe({
       next: () => void this.router.navigate(['/login']),
       error: () => {

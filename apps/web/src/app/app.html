@@ -5,6 +5,19 @@
     <button type="button" class="shell-offline__retry" data-testid="offline-retry" [disabled]="connectivity.checking()" (click)="connectivity.retry()" i18n="@@app.offline.retry">Повторити</button>
   </div>
 }
+@if (viewAs.mode(); as mode) {
+  <div class="shell-view-as" role="status" data-testid="view-as-banner">
+    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+    <span class="shell-view-as__text">
+      <span i18n="@@viewAs.banner">Перегляд як</span>
+      <b data-testid="view-as-label">{{ mode.label }}</b>
+      <span aria-hidden="true">·</span>
+      <span data-testid="view-as-project">{{ mode.projectName }}</span>
+      <span class="shell-view-as__note" i18n="@@viewAs.banner.readOnly">(лише читання)</span>
+    </span>
+    <button type="button" class="shell-view-as__exit" data-testid="view-as-exit" (click)="exitViewAs()" i18n="@@viewAs.exit">Вийти з перегляду</button>
+  </div>
+}
 <ng-template #projectBlock>
 @if (!appOnly()) {
 <div class="shell-project">
@@ -76,6 +89,17 @@
           <span class="shell-menu__avatar" aria-hidden="true">{{ initials() }}</span>
           <span class="shell-menu__email" data-testid="current-user">{{ user()?.email }}</span>
         </div>
+        @if (viewAs.active()) {
+          <button type="button" class="shell-menu__item" role="menuitem" data-testid="view-as-menu-exit" (click)="exitViewAs()">
+            <span class="material-symbols-outlined" aria-hidden="true">visibility_off</span>
+            <span i18n="@@viewAs.exit">Вийти з перегляду</span>
+          </button>
+        } @else if (viewAsProject()) {
+          <button type="button" class="shell-menu__item" role="menuitem" data-testid="view-as-open" (click)="openViewAs()">
+            <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            <span i18n="@@viewAs.open">Переглянути як користувач…</span>
+          </button>
+        }
         <a class="shell-menu__item" role="menuitem" data-testid="change-password" routerLink="/account/password" (click)="closeUserMenu()">
           <span class="material-symbols-outlined" aria-hidden="true">key</span>
           <span i18n="@@app.changePassword">Змінити пароль</span>

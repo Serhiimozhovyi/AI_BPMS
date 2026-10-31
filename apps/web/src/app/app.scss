@@ -504,3 +504,53 @@
     text-overflow: ellipsis;
   }
 }
+
+// Режим «переглянути як» (F12-02): помітна смуга над меню, щоб не сплутати перегляд зі своїми правами.
+.shell-view-as {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 24px;
+  border-bottom: 2px solid var(--bp-accent);
+  background: var(--bp-tonal);
+  color: var(--bp-text);
+  font: var(--bp-font-h7);
+
+  .material-symbols-outlined {
+    color: var(--bp-primary);
+    font-size: 20px;
+  }
+}
+
+.shell-view-as__text {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.shell-view-as__note {
+  color: var(--bp-text-muted);
+}
+
+.shell-view-as__exit {
+  flex-shrink: 0;
+  padding: 4px 16px;
+  border: 1px solid var(--bp-primary);
+  border-radius: var(--bp-radius-sm);
+  background: var(--bp-white);
+  color: var(--bp-primary);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bp-bg-2);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bp-primary);
+    outline-offset: 2px;
+  }
+}

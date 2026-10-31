@@ -3,6 +3,7 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/
 import { RouteReuseStrategy, provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
+import { viewAsInterceptor } from './auth/view-as.interceptor';
 import { connectivityInterceptor } from './connectivity/connectivity.interceptor';
 import { ProjectRouteReuseStrategy } from './projects/project-route-reuse';
 
@@ -11,6 +12,6 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     { provide: RouteReuseStrategy, useClass: ProjectRouteReuseStrategy },
-    provideHttpClient(withFetch(), withInterceptors([connectivityInterceptor, authInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([connectivityInterceptor, viewAsInterceptor, authInterceptor])),
   ]
 };
