@@ -1,0 +1,11 @@
+{
+  "name": "AI_BPMS",
+  "short_name": "AI_BPMS",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#0C2B30",
+  "background_color": "#F2F6F6",
+  "display": "standalone"
+}
