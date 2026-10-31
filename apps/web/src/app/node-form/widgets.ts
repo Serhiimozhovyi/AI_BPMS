@@ -9,12 +9,12 @@ import { isExpression, isPlainObject } from './node-value';
 /** Назва анотації в JSON Schema властивості. */
 export const WIDGET_ANNOTATION = 'x-openbp-widget';
 
-/** Відомі віджети: кнопки (`reply_markup`), таблиця команд, вибір чату (це `x-openbp-options`, окремого редактора немає). */
-export type Widget = 'keyboard' | 'commands' | 'chat';
+/** Відомі віджети: кнопки (`reply_markup`), таблиця команд, вибір чату (це `x-openbp-options`, окремого редактора немає), поля форми (F11-04, конструктор у діалозі). */
+export type Widget = 'keyboard' | 'commands' | 'chat' | 'form-schema';
 
 /** Віджет з анотації або `null`, якщо її немає чи значення невідоме (поле тоді редагується звичайним способом). */
 export function parseWidget(annotation: unknown): Widget | null {
-  return annotation === 'keyboard' || annotation === 'commands' || annotation === 'chat' ? annotation : null;
+  return annotation === 'keyboard' || annotation === 'commands' || annotation === 'chat' || annotation === 'form-schema' ? annotation : null;
 }
 
 /** Не більше цього кнопок у рядку інлайн-клавіатури Telegram і не більше стільки кнопок усього. */

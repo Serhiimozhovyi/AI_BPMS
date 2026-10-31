@@ -29,6 +29,15 @@
   background: rgb(12 43 48 / 0.5);
 }
 
+// Повноекранний діалог (F11-04): конструктор форми — `panelClass: 'bp-dialog-fullscreen'`, розмір задає MatDialog.
+.bp-dialog-fullscreen .mat-mdc-dialog-surface {
+  border-radius: 0;
+}
+
+.bp-dialog-fullscreen .mat-mdc-dialog-content {
+  max-height: none;
+}
+
 // Кнопка закриття (×) у куті діалогу: `class="bp-dialog-close"` на `mat-icon-button` (подвійний клас — сильніше за
 // `position: relative` самої кнопки Material).
 .bp-dialog-close.bp-dialog-close {

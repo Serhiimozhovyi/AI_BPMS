@@ -57,6 +57,7 @@
         },
         "schema": {
           "type": "object",
+          "x-openbp-widget": "form-schema",
           "description": "Поля форми (JSON Schema), як у core.formTrigger; без полів — лише кнопка"
         },
         "submitLabel": {

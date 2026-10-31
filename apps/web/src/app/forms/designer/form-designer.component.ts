@@ -9,6 +9,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { BpButtonDirective } from '../../shared/button.directive';
 import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
+import { FormPreviewComponent } from './form-preview.component';
 import type { JsonSchema } from '../form-fields';
 import { MAX_ROW_CELLS, UI_KEY, rowWidths } from '../form-layout';
 import {
@@ -49,7 +50,14 @@ import {
 } from './form-designer.model';
 
 type Selection = { kind: 'field'; key: string } | { kind: 'section'; index: number } | null;
-type Mode = 'design' | 'json';
+type Mode = 'design' | 'preview' | 'json';
+
+/** Заголовок, опис і кнопка вузла для вкладки «Перегляд» (F11-04). */
+export interface DesignerPreviewMeta {
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+}
 /** Місце скидання: рядок `row` секції `section` (для проміжку — індекс нового рядка). */
 interface DropSpot {
   section: number;
@@ -71,12 +79,12 @@ const GRID_UNITS = 12;
 @Component({
   selector: 'bp-form-designer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CdkDrag, CdkDragHandle, CdkDragPlaceholder, CdkDropList, NgTemplateOutlet, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, BpButtonDirective, BpTabsComponent, SelectSearchComponent],
+  imports: [CdkDrag, CdkDragHandle, CdkDragPlaceholder, CdkDropList, NgTemplateOutlet, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, BpButtonDirective, BpTabsComponent, SelectSearchComponent, FormPreviewComponent],
   host: { '(keydown)': 'hostKey($event)' },
   template: `
     <div class="fd" data-testid="form-designer">
       <div class="fd__bar">
-        <bp-tabs variant="pills" [tabs]="modes" [value]="mode()" (valueChange)="setMode($any($event))" label="Режим конструктора" i18n-label="@@fd.modes" testId="fd-mode" />
+        <bp-tabs variant="pills" [tabs]="modes()" [value]="mode()" (valueChange)="setMode($any($event))" label="Режим конструктора" i18n-label="@@fd.modes" testId="fd-mode" />
         <span class="fd__spacer"></span>
         <button mat-icon-button type="button" data-testid="fd-undo" [disabled]="!canUndo()" (click)="undo()" i18n-aria-label="@@fd.undo" aria-label="Скасувати (Ctrl+Z)" i18n-title="@@fd.undo" title="Скасувати (Ctrl+Z)">
           <span class="material-symbols-outlined" aria-hidden="true">undo</span>
@@ -367,6 +375,8 @@ const GRID_UNITS = 12;
             }
           </aside>
         </div>
+      } @else if (mode() === 'preview') {
+        <bp-form-preview [schema]="currentSchema()" [title]="preview()?.title ?? ''" [description]="preview()?.description ?? ''" [submitLabel]="preview()?.submitLabel ?? ''" />
       } @else {
         <mat-form-field appearance="outline" class="w-full fd__json" subscriptSizing="dynamic">
           <mat-label i18n="@@fd.json">JSON Schema форми</mat-label>
@@ -702,14 +712,17 @@ export class FormDesignerComponent {
   /** Схема форми ззовні; зміна ззовні (не наш власний вихід) перечитує конструктор і очищає історію. */
   readonly schema = input<JsonSchema | null>(null);
   readonly schemaChange = output<JsonSchema>();
+  /** Є — з'являється вкладка «Перегляд» з цими заголовком, описом і кнопкою (панель вузла). */
+  readonly preview = input<DesignerPreviewMeta | null>(null);
 
   protected readonly kinds = FIELD_KINDS;
   protected readonly paletteId = PALETTE_ID;
   protected readonly sectionPlaceholder = $localize`:@@fd.section.untitled:Без заголовка`;
-  protected readonly modes: BpTab[] = [
-    { value: 'design', label: $localize`:@@fd.mode.design:Конструктор`, testId: 'fd-mode-design' },
-    { value: 'json', label: 'JSON', testId: 'fd-mode-json' },
-  ];
+  private readonly modeDesign: BpTab = { value: 'design', label: $localize`:@@fd.mode.design:Конструктор`, testId: 'fd-mode-design' };
+  private readonly modePreview: BpTab = { value: 'preview', label: $localize`:@@fd.mode.preview:Перегляд`, testId: 'fd-mode-preview' };
+  private readonly modeJson: BpTab = { value: 'json', label: 'JSON', testId: 'fd-mode-json' };
+  protected readonly modes = computed<BpTab[]>(() => (this.preview() ? [this.modeDesign, this.modePreview, this.modeJson] : [this.modeDesign, this.modeJson]));
+  protected readonly currentSchema = computed(() => toSchema(this.state()));
 
   protected readonly state = signal<DesignerState>(fromSchema(null));
   protected readonly selection = signal<Selection>(null);
