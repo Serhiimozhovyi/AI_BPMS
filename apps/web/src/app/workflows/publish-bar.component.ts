@@ -33,7 +33,7 @@ export function publishStateOf(workflow: Pick<WorkflowDetail, 'version' | 'publi
           @case ('changed') {
             <span class="rounded bg-[var(--bp-yellow-15)] px-1.5 text-sm" data-testid="publish-state" data-state="changed" [title]="diffText() ?? ''" i18n="@@publish.state.changed">Є неопубліковані зміни</span>
             @if (diffText(); as text) {
-              <span class="max-w-[16rem] truncate text-xs text-[var(--bp-text-muted)]" data-testid="publish-diff" [title]="text">{{ text }}</span>
+              <span class="hidden max-w-[16rem] truncate text-xs text-[var(--bp-text-muted)] min-[1600px]:block" data-testid="publish-diff" [title]="text">{{ text }}</span>
             }
           }
           @case ('never') {

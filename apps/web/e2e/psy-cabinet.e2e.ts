@@ -81,15 +81,16 @@ function viewOf(key: string, canEdit = false) {
   };
 }
 
-async function mockApi(page: Page, appRole: 'psychologist' | 'coordinator') {
+async function mockApi(page: Page, appRole: 'psychologist' | 'coordinator', editor: { nav: { label: string; pages: string[] }[] } | null = null) {
   const visible = bundle.pages.filter((p) => p.roles.includes(appRole));
+  const app = editor ? { ...bundle.project.app, nav: editor.nav } : bundle.project.app;
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
-    if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u9', email: 'olena@firma.ua', role: 'viewer' } });
+    if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u9', email: 'olena@firma.ua', role: editor ? 'admin' : 'viewer' } });
     if (path === '/api/v1/workflow-groups') {
       return route.fulfill({
-        json: [{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 13, role: 'viewer', appRole, app: bundle.project.app }],
+        json: [{ id: 'p1', name: 'Психологічна підтримка', sortOrder: 0, workflowCount: 13, role: editor ? 'admin' : 'viewer', appRole, app }],
       });
     }
     if (path === '/api/v1/projects/p1/pages') {
@@ -200,4 +201,35 @@ test('координатор: меню керування, події з уча�
   await expect(page.getByLabel('Привітання')).toBeVisible();
   await expect(page.getByLabel('Ліміт активних записів на людину')).toBeVisible();
   await shot(page, 'coordinator-texts');
+});
+
+test('редактор проєкту: бокове меню з групами й значками, без службових форм, згортається', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  // Меню, збережене на робочому Маку: група без назви загубилась, у «Керування» потрапили форми слота.
+  const nav = [
+    { label: '', pages: ['today', 'schedule'] },
+    { label: 'Записи', pages: ['bookings', 'events', 'bst'] },
+    { label: 'Розклад і матеріали', pages: ['templates', 'materials'] },
+    { label: 'Керування', pages: ['psychologists', 'texts', 'users', 'journal', 'metrics', 'slot-new', 'slot-edit'] },
+  ];
+  await mockApi(page, 'coordinator', { nav });
+  await page.goto('/projects/p1/app');
+
+  await expect(page).toHaveURL(/\/projects\/p1\/app\/today$/);
+  await expect(page.getByTestId('shell-title')).toHaveText('Кабінет психологічної підтримки');
+  await expect(page.locator('[data-testid="shell-nav"] .side-nav__label')).toHaveText([
+    'Сьогодні', 'Розклад', 'Записи', 'Події', 'Сеанси БСТ', 'Шаблони розкладу', 'Матеріали', 'Психологи', 'Тексти й налаштування', 'Користувачі бота', 'Журнал', 'Показники',
+  ]);
+  await expect(page.locator('[data-page="today"]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('shell-builder')).toBeVisible();
+  await expect(page.getByTestId('shell-settings')).toBeVisible();
+  await shot(page, 'editor-side-nav');
+
+  await page.getByTestId('shell-collapse').click();
+  await expect(page.locator('[data-page="today"] .side-nav__label')).toBeHidden();
+  await shot(page, 'editor-side-nav-collapsed');
+  await page.reload();
+  await expect(page.locator('[data-page="today"] .side-nav__label')).toBeHidden();
+  await page.getByTestId('shell-collapse').click();
+  await expect(page.locator('[data-page="today"] .side-nav__label')).toBeVisible();
 });

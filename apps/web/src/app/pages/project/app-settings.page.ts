@@ -7,6 +7,7 @@ import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage, ProjectPagesApiService } from '../../projects/project-pages-api.service';
 import { ProjectAppNavGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
 import { BpButtonDirective } from '../../shared/button.directive';
+import { menuPages } from '../../projects/app-menu';
 
 /**
  * `/projects/:id/app/_app` — налаштування оболонки застосунку (F8-19, `docs/projects.md` §3.9): назва, значок, головна
@@ -42,7 +43,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
       </div>
 
       <h3 class="mb-1 font-medium" i18n="@@appset.menu">Меню</h3>
-      <p class="mb-2 text-sm opacity-70" i18n="@@appset.menuHint">Без груп меню — усі сторінки за порядком. Сторінки, яких немає в жодній групі, у меню не показуються.</p>
+      <p class="mb-2 text-sm opacity-70" i18n="@@appset.menuHint">Без груп меню — усі сторінки за порядком. Сторінки, яких немає в жодній групі, у меню не показуються. Група без назви — пункти без підпису (наприклад, головна вгорі). Картки й форми запису, які відкриваються з інших сторінок, у меню не потрапляють.</p>
       @for (g of nav(); track $index; let i = $index) {
         <fieldset class="mb-2 rounded border border-bp-line p-2" [attr.data-nav-group]="i">
           <div class="mb-1 flex items-center gap-2">
@@ -51,7 +52,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
             <button mat-button type="button" [disabled]="i === nav().length - 1" (click)="move(i, 1)" aria-label="Нижче" i18n-aria-label="@@bd.down">↓</button>
             <button mat-button type="button" (click)="nav.set(removeAt(i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
-          @for (p of pages(); track p.key) {
+          @for (p of menuPages(); track p.key) {
             <label class="mr-4 inline-flex items-center gap-1">
               <input type="checkbox" [attr.data-nav-page]="p.key" [checked]="g.pages.includes(p.key)" (change)="togglePage(i, p.key, $any($event.target).checked)" />
               {{ p.name }}
@@ -81,6 +82,8 @@ export class AppSettingsPage implements OnInit {
 
   readonly projectId = this.route.parent?.snapshot.paramMap.get('id') ?? '';
   readonly pages = signal<ProjectPage[]>([]);
+  /** Сторінки, які можна поставити в меню (без службових). */
+  readonly menuPages = computed(() => menuPages(this.pages()));
   readonly title = signal('');
   readonly icon = signal('');
   readonly home = signal('');
@@ -133,7 +136,11 @@ export class AppSettingsPage implements OnInit {
     this.error.set(null);
     this.saved.set(false);
     this.saving.set(true);
-    const nav = this.nav().filter((g) => g.label.trim() && g.pages.length);
+    // Група без назви лишається (пункти без підпису); службові сторінки з меню прибираємо, коли список сторінок уже є.
+    const allowed = this.pages().length ? new Set(this.menuPages().map((p) => p.key)) : null;
+    const nav = this.nav()
+      .map((g) => ({ label: g.label.trim(), pages: allowed ? g.pages.filter((k) => allowed.has(k)) : g.pages }))
+      .filter((g) => g.pages.length);
     this.workflows
       .setApp(this.projectId, {
         title: this.title().trim(),

@@ -125,6 +125,33 @@ describe('ProjectAppPage (F8-04)', () => {
       expect(navigate).toHaveBeenCalledWith(['today'], expect.objectContaining({ replaceUrl: true }));
     });
 
+    it('службові форми не потрапляють у меню навіть із app.nav; пункти мають значок за типом сторінки', async () => {
+      const slotNew: ProjectPage = { ...page('slot-new', 'Слот — новий запис'), kind: 'form', definition: { table: 'slots', fields: [], onSubmit: { operation: 'insert' } } };
+      const today: ProjectPage = { ...page('today', 'Сьогодні'), kind: 'dashboard', definition: { table: '', blocks: [{ kind: 'actions', actions: [{ label: 'Додати', page: 'slot-new' } as never] }] } };
+      const { fixture, http, host } = await setup('viewer', null, { ...shell, nav: [{ label: '', pages: ['today'] }, { label: 'Записи', pages: ['bookings', 'slot-new'] }] });
+      http.expectOne('/api/v1/projects/p1/pages').flush([today, page('bookings', 'Записи'), slotNew]);
+      await render(fixture);
+      expect([...host.querySelectorAll('[data-page]')].map((a) => a.getAttribute('data-page'))).toEqual(['today', 'bookings']);
+      expect(host.querySelector('[data-page="today"] .material-symbols-outlined')?.textContent).toBe('space_dashboard');
+      expect(host.querySelector('[data-page="bookings"] .side-nav__label')?.textContent).toBe('Записи');
+    });
+
+    it('меню згортається до значків і пам’ятає це', async () => {
+      localStorage.removeItem('openbp.appNav.collapsed');
+      const { fixture, http, host } = await setup('viewer', null, shell);
+      http.expectOne('/api/v1/projects/p1/pages').flush(pages);
+      await render(fixture);
+      const nav = host.querySelector('app-side-nav')!;
+      expect(nav.classList).not.toContain('side-nav--collapsed');
+      host.querySelector<HTMLButtonElement>('[data-testid="shell-collapse"]')!.click();
+      await render(fixture);
+      expect(nav.classList).toContain('side-nav--collapsed');
+      expect(localStorage.getItem('openbp.appNav.collapsed')).toBe('1');
+      host.querySelector<HTMLButtonElement>('[data-testid="shell-collapse"]')!.click();
+      await render(fixture);
+      expect(localStorage.getItem('openbp.appNav.collapsed')).toBeNull();
+    });
+
     it('editor бачить кнопку «Конструктор», viewer — ні', async () => {
       const editor = await setup('editor', null, shell);
       editor.http.expectOne('/api/v1/projects/p1/pages').flush(pages);

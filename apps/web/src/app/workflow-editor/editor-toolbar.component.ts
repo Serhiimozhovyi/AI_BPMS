@@ -176,12 +176,13 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       white-space: nowrap;
     }
 
+    /* Назва не стискається до «Т…»: місце віддають підписи праворуч (опис змін публікації ховається на вужчих екранах). */
     .bar__title {
       display: flex;
-      flex: 1 1 120px;
+      flex: 1 1 160px;
       align-items: center;
       gap: 8px;
-      min-width: 48px;
+      min-width: min(160px, 14vw);
     }
 
     .bar__name {

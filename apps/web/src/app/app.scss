@@ -127,16 +127,15 @@
   white-space: nowrap;
 }
 
+// Стрілки стоять поруч із меню, а не поверх нього: крайній пункт (наприклад, «Налаштування») не перекривається.
 .shell-scroll {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 1;
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 48px;
+  width: 36px;
   padding: 0;
   border: 0;
+  background: transparent;
   color: var(--bp-white);
   cursor: pointer;
 
@@ -156,15 +155,11 @@
 }
 
 .shell-scroll--start {
-  left: 0;
   justify-items: start;
-  background: linear-gradient(to right, var(--bp-shell) 55%, transparent);
 }
 
 .shell-scroll--end {
-  right: 0;
   justify-items: end;
-  background: linear-gradient(to left, var(--bp-shell) 55%, transparent);
 }
 
 .shell-actions {
@@ -353,6 +348,31 @@
   .shell-top {
     gap: 16px;
     padding: 0 16px;
+  }
+}
+
+// Ноутбук (1280–1440 px): щільніше меню й вужчий перемикач проєктів, щоб усі пункти, разом із «Налаштуваннями», вміщалися.
+@media (min-width: 1101px) and (max-width: 1599.98px) {
+  .shell-top {
+    gap: 16px;
+  }
+
+  .shell-nav {
+    gap: 10px;
+  }
+
+  .shell-actions {
+    gap: 8px;
+  }
+
+  // Значок папки перед перемикачем — лише прикраса; на вужчих екранах місце віддаємо меню.
+  .shell-project > .material-symbols-outlined {
+    display: none;
+  }
+
+  .shell-project__select {
+    min-width: 150px;
+    max-width: 170px;
   }
 }
 
