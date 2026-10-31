@@ -76,7 +76,7 @@ interface AgendaItem {
       @if (d.blocks.length === 0 && !loading()) {
         <p class="opacity-70" data-testid="dash-empty" i18n="@@dash.empty">Для вашої ролі на цій сторінці нічого немає.</p>
       }
-      <div class="grid max-w-6xl grid-cols-12 gap-4" data-testid="dash-grid">
+      <div class="grid grid-cols-12 gap-4" data-testid="dash-grid">
         @for (b of d.blocks; track b.index) {
           <section class="col-span-12 rounded border border-bp-line p-4" [class]="span(b.width)" [attr.data-block]="b.index" [attr.data-kind]="b.kind">
             @if (b.label) {
