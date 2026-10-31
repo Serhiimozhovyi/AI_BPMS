@@ -85,6 +85,11 @@ export interface SettingsSectionItem {
         Ключ дає доступ до REST і MCP-сервера AI_BPMS з вашими правами. Зберігайте його як пароль. Ключ проєкту бачить лише
         сценарії, облікові дані й конектори цього проєкту.
       </p>
+      <p class="mb-4">
+        <a class="underline" href="/swagger" target="_blank" rel="noopener" data-testid="api-docs-link" i18n="@@settings.apiKeys.docs"
+          >Документація REST API (Swagger) — усі методи з описами й «Try it out»</a
+        >
+      </p>
 
       <div class="mb-4 flex flex-wrap items-start gap-2">
         <mat-form-field appearance="outline" class="w-80">

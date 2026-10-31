@@ -52,6 +52,14 @@ describe('SettingsPage', () => {
     expect(host.querySelector('[data-testid="created-key"]')).toBeNull();
   });
 
+  it('посилання на Swagger відкриває документацію REST у новій вкладці', async () => {
+    const { host } = await setup();
+    const link = host.querySelector<HTMLAnchorElement>('[data-testid="api-docs-link"]')!;
+    expect(link.getAttribute('href')).toBe('/swagger');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener');
+  });
+
   it('порожній список — підказка', async () => {
     const { host } = await setup([]);
     expect(host.querySelector('[data-testid="empty"]')).not.toBeNull();

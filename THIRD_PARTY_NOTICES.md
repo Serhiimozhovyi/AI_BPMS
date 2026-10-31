@@ -10,6 +10,13 @@
   OpenAPI 3.x для генератора tools (F3-11). Ліцензія MIT, © Microsoft Corporation.
 - [SharpYaml](https://github.com/xoofx/SharpYaml) — транзитивна залежність YamlReader. Ліцензія MIT, © Alexandre Mutel.
 
+## Swagger UI (`OpenBP.Api`, F10-01)
+
+- [Swashbuckle.AspNetCore.SwaggerUI](https://github.com/domaindrivendev/Swashbuckle.AspNetCore) 10.3 — сторінка `/swagger`
+  поверх документа `/openapi/v1.json` (генератор документа лишається `Microsoft.AspNetCore.OpenApi`). Ліцензія MIT,
+  © Richard Morris. Пакет містить зібраний [swagger-ui](https://github.com/swagger-api/swagger-ui) — ліцензія Apache 2.0,
+  © SmartBear Software.
+
 ## Конектор «База даних» (`connectors/sql`, F6-31)
 
 Пакети NuGet конектора (код не копіюється, лише залежності):
