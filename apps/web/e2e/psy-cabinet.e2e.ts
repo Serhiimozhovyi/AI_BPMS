@@ -223,10 +223,22 @@ test('редактор проєкту: бокове меню з групами �
   await expect(page.locator('[data-page="today"]')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('shell-builder')).toBeVisible();
   await expect(page.getByTestId('shell-settings')).toBeVisible();
+  // Уся панель, разом із «Вигляд застосунку», видна без прокрутки сторінки — і на 1440×900, і на нижчому вікні
+  // (розділи тоді прокручуються всередині панелі).
+  for (const height of [900, 720]) {
+    await page.setViewportSize({ width: 1440, height });
+    await expect(async () => {
+      const settings = await page.getByTestId('shell-settings').boundingBox();
+      expect(settings!.y + settings!.height).toBeLessThanOrEqual(height);
+    }).toPass();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await shot(page, 'editor-side-nav');
 
   await page.getByTestId('shell-collapse').click();
   await expect(page.locator('[data-page="today"] .side-nav__label')).toBeHidden();
+  // Згорнута — вузька смуга значків, а не ширина прихованих підписів груп.
+  expect((await page.locator('app-side-nav').boundingBox())!.width).toBeLessThanOrEqual(64);
   await shot(page, 'editor-side-nav-collapsed');
   await page.reload();
   await expect(page.locator('[data-page="today"] .side-nav__label')).toBeHidden();

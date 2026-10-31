@@ -123,7 +123,16 @@
   }
 
   // Кнопка з атрибутом `bpVariant="danger"`: червоний 15 % з рамкою; текст затемнено до ≥ 4,5:1 (axe).
+  // Колір тексту — і через токени Material: інакше `mat-button` бере свій primary (зелений текст на червоному).
   .bp-btn-danger.mat-mdc-button-base {
+    --mat-button-text-label-text-color: #b3261e;
+    --mat-button-outlined-label-text-color: #b3261e;
+    --mat-button-tonal-label-text-color: #b3261e;
+    --mat-button-text-state-layer-color: #b3261e;
+    --mat-button-outlined-state-layer-color: #b3261e;
+    --mat-button-tonal-state-layer-color: #b3261e;
+    --mat-button-text-ripple-color: rgb(179 38 30 / 0.12);
+    --mat-button-outlined-ripple-color: rgb(179 38 30 / 0.12);
     background-color: var(--bp-danger-15);
     color: #b3261e;
     border: 1px solid color-mix(in srgb, var(--bp-danger) 60%, transparent);
