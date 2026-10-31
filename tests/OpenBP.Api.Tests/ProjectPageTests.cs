@@ -288,6 +288,51 @@ public class ProjectPageTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Form_layout_and_field_ui_go_into_form_schema_and_bad_layout_is_rejected()
+    {
+        // F11-01: formLayout і fields[].ui сторінки → x-openbp-layout і x-openbp-ui у схемі форми; запис працює як раніше.
+        var (project, table, editor, psyA, _) = await SetupAsync();
+        object Page(object layout) => new
+        {
+            name = "Записатися",
+            kind = "form",
+            definition = new
+            {
+                table,
+                fields = new object[]
+                {
+                    new { column = "name", label = "Ім'я", ui = new { placeholder = "Як до вас звертатись" } },
+                    new { column = "slot", required = true },
+                    new { column = "status", value = "active" },
+                },
+                formLayout = layout,
+                onSubmit = new { operation = "insert" },
+            },
+        };
+
+        await Ok(await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/book-layout",
+            Page(new { sections = new object[] { new { title = "Запис", rows = new[] { new object[] { new { field = "name", width = 8 }, new { field = "slot" } } } } } })));
+
+        var schema = (await JsonAsync(await psyA.Client.GetAsync($"/api/v1/projects/{project}/pages/book-layout"))).GetProperty("schema");
+        Assert.Equal("Як до вас звертатись", schema.GetProperty("properties").GetProperty("name").GetProperty("x-openbp-ui").GetProperty("placeholder").GetString());
+        var row = schema.GetProperty("x-openbp-layout").GetProperty("sections")[0].GetProperty("rows")[0];
+        Assert.Equal(["name", "slot"], row.EnumerateArray().Select(c => c.GetProperty("field").GetString()).ToList());
+        await Ok(await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book-layout/submit", new { values = new { name = "Нова", slot = "s-layout" } }));
+
+        // Поле, яке ставить сервер (status), у розмітці бути не може; ширина понад 12 — теж помилка з шляхом.
+        foreach (var (layout, expected) in new (object, string)[]
+        {
+            (new { sections = new[] { new { rows = new[] { new[] { new { field = "status" } } } } } }, "formLayout/sections/0/rows/0/0: поля «status» немає у формі."),
+            (new { sections = new[] { new { rows = new[] { new[] { new { field = "name", width = 13 } } } } } }, "formLayout/sections/0/rows/0/0/width"),
+        })
+        {
+            var response = await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/book-layout", Page(layout));
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            Assert.Contains(expected, (await JsonAsync(response)).GetProperty("detail").GetString(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task Page_definition_is_validated_and_app_roles_are_managed()
     {
         var (project, table, editor, psyA, _) = await SetupAsync();

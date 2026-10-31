@@ -12073,6 +12073,16 @@
               "string"
             ]
           },
+          "formLayout": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
           "keyValue": {
             "oneOf": [
               {
@@ -12164,6 +12174,16 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "ui": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
           }
         }
       },

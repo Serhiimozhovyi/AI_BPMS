@@ -1,0 +1,74 @@
+{
+  "formatVersion": 1,
+  "name": "Заява на відпустку (форма з розміткою)",
+  "settings": {
+    "timezone": "Europe/Kyiv",
+    "executionTimeoutSec": 60,
+    "errorWorkflowId": null,
+    "saveSuccessfulData": true
+  },
+  "nodes": [
+    {
+      "id": "n_form",
+      "name": "Заява",
+      "type": "core.formTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {
+        "path": "hr/leave-request",
+        "title": "Заява на відпустку",
+        "description": "Заповніть за тиждень до відпустки.",
+        "submitLabel": "Надіслати заяву",
+        "auth": "none",
+        "onSubmit": { "message": "Дякуємо, заяву прийнято" },
+        "schema": {
+          "type": "object",
+          "required": ["name", "from", "to", "kind"],
+          "properties": {
+            "name": { "type": "string", "title": "ПІБ", "minLength": 2, "x-openbp-ui": { "placeholder": "Прізвище та ім'я" } },
+            "email": { "type": "string", "format": "email", "title": "Робоча пошта" },
+            "from": { "type": "string", "format": "date", "title": "З" },
+            "to": { "type": "string", "format": "date", "title": "По" },
+            "kind": {
+              "type": "string",
+              "title": "Вид відпустки",
+              "oneOf": [
+                { "const": "annual", "title": "Щорічна" },
+                { "const": "unpaid", "title": "За свій рахунок" }
+              ]
+            },
+            "reason": { "type": "string", "format": "textarea", "title": "Причина", "x-openbp-ui": { "rows": 2 } },
+            "scan": { "type": "string", "format": "binary", "title": "Скан заяви" }
+          },
+          "x-openbp-layout": {
+            "sections": [
+              { "title": "Хто", "rows": [[{ "field": "name", "width": 7 }, { "field": "email", "width": 5 }]] },
+              {
+                "title": "Відпустка",
+                "description": "Дати включно.",
+                "rows": [[{ "field": "from", "width": 6 }, { "field": "to", "width": 6 }], [{ "field": "kind" }], [{ "field": "reason" }]]
+              },
+              { "title": "Документи", "collapsible": true, "collapsed": true, "rows": [[{ "field": "scan" }]] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "n_summary",
+      "name": "Підсумок",
+      "type": "core.set",
+      "typeVersion": 1,
+      "position": [240, 0],
+      "parameters": {
+        "fields": [
+          { "name": "who", "value": "{{ $json.fields.name }}" },
+          { "name": "period", "value": "{{ $json.fields.from }} — {{ $json.fields.to }}" }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    { "from": { "node": "n_form", "output": 0 }, "to": { "node": "n_summary", "input": 0 } }
+  ]
+}

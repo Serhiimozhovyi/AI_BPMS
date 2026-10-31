@@ -285,6 +285,12 @@ public sealed record PageField(string Column)
 
     /// <summary>Підписи значень (<c>enum</c>, <c>boolean</c>) — у картці й у варіантах вибору форми.</summary>
     public IReadOnlyDictionary<string, string>? Labels { get; init; }
+
+    /// <summary>
+    /// Форма: підказки показу поля (F11-01) — <c>{ widget?: radio | chips, placeholder?, rows? }</c>; стають
+    /// <c>x-openbp-ui</c> властивості в схемі форми.
+    /// </summary>
+    public JsonObject? Ui { get; init; }
 }
 
 /// <summary>
@@ -555,6 +561,12 @@ public sealed record PageDefinition
 
     /// <summary>Текст порожнього списку чи календаря.</summary>
     public string? Empty { get; init; }
+
+    /// <summary>
+    /// Розмітка форми (<c>form</c>, F11-01): секції з рядками полів на сітці з 12 колонок, як <c>x-openbp-layout</c> у
+    /// схемі форми вузла (docs/forms-designer.md §3.1); <c>field</c> — назва колонки поля форми.
+    /// </summary>
+    public JsonObject? FormLayout { get; init; }
 
     /// <summary>Форма «ключ — значення» (<c>form</c>) замість <see cref="Fields"/>.</summary>
     public PageKeyValue? KeyValue { get; init; }
