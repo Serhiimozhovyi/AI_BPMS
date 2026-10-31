@@ -6,6 +6,7 @@ import { ProjectContextService } from '../../projects/project-context.service';
 import { DataRow, DataTableSummary } from '../../tables/data-tables-api.service';
 import { WorkflowGroup } from '../../workflows/workflows-api.service';
 import { TablesPage } from './tables.page';
+import { chooseOption, matSelectOf } from '../../shared/select-search/select-testing';
 
 const clients: DataTableSummary = {
   id: 't1',
@@ -113,7 +114,7 @@ describe('TablesPage', () => {
     expect(host.querySelector('[data-testid="table-form-error"]')?.textContent).toContain('1bad');
 
     type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-name"]', 'total');
-    type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-type"]', 'number', 'change');
+    chooseOption(host.querySelector('[data-testid="column-row"]:nth-child(2) [data-testid="column-type"]')!, 'number');
     click(host, 'table-save');
     const req = http.expectOne({ method: 'POST', url: '/api/v1/tables' });
     expect(req.request.body).toEqual({
@@ -226,8 +227,8 @@ describe('TablesPage', () => {
     const { fixture, http, host } = await setup('viewer', [], [psy, other], 'p1');
     click(host, 'table-add');
     await render(fixture);
-    const project = host.querySelector<HTMLSelectElement>('[data-testid="table-project"]')!;
-    expect([...project.options].map((o) => o.textContent?.trim())).toEqual(['Психологічна підтримка']);
+    const project = matSelectOf(host.querySelector('[data-testid="table-project"]')!);
+    expect(project.options.map((o) => o.viewValue)).toEqual(['Психологічна підтримка']);
     type(host, '[data-testid="table-name"]', 'Записи');
     type(host, '[data-testid="column-row"]:nth-child(1) [data-testid="column-name"]', 'slot_id');
     host.querySelector<HTMLInputElement>('[data-testid="column-row"]:nth-child(1) [data-testid="column-key"]')!.click();
@@ -236,7 +237,7 @@ describe('TablesPage', () => {
     click(host, 'column-add');
     await render(fixture);
     type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-name"]', 'status');
-    type(host, '[data-testid="column-row"]:nth-child(2) [data-testid="column-type"]', 'enum', 'change');
+    chooseOption(host.querySelector('[data-testid="column-row"]:nth-child(2) [data-testid="column-type"]')!, 'enum');
     type(host, '[data-testid="column-row"]:nth-child(3) [data-testid="column-name"]', 'phone');
     await render(fixture);
     click(host, 'table-save');

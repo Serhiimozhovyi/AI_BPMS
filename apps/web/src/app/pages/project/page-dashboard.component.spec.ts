@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PageDashboard, PageDashboardBlock, ProjectPageView } from '../../projects/project-pages-api.service';
 import { ExpandOpen } from './page-expand.component';
 import { PageDashboardComponent } from './page-dashboard.component';
+import { chooseOption, selectValue } from '../../shared/select-search/select-testing';
 
 const base = '/api/v1/projects/p1/pages/today';
 
@@ -257,10 +258,8 @@ describe('PageDashboardComponent (F8-18)', () => {
   it('спільні фільтри: типове значення з блоків видно, зміна перечитує всі блоки', async () => {
     await setup();
     expect(q('[data-filter="host"]')).not.toBeNull();
-    expect((q('[data-filter="host"]') as HTMLSelectElement).value).toBe('u1');
-    const select = q('[data-filter="host"]') as HTMLSelectElement;
-    select.value = 'u2';
-    select.dispatchEvent(new Event('change'));
+    expect(selectValue(q('[data-filter="host"]')!)).toBe('u1');
+    chooseOption(q('[data-filter="host"]')!, 'u2');
     const request = await nextRequest();
     expect(request.params.getAll('filters[host]')).toEqual(['u2']);
   });

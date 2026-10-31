@@ -6,6 +6,8 @@ import { NodeTypeInfo } from '../nodes/nodes-api.service';
 import { WorkflowDefinition } from '../workflows/workflows-api.service';
 import { BusinessConnector, buildBusinessView } from './business-model';
 import { moveStepToLane, setStepHidden, setStepSubtitle, setStepTitle } from './business-edit';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /**
  * Розділ «Бізнес-вигляд» у панелі вузла технічного вигляду (F3-68): назва й підрядок для бізнесу, доріжка і
@@ -14,7 +16,7 @@ import { moveStepToLane, setStepHidden, setStepSubtitle, setStepTitle } from './
 @Component({
   selector: 'app-business-node-fields',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatFormFieldModule, MatInputModule],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     @if (node(); as n) {
       <section class="bnf" data-testid="business-node-fields" [attr.inert]="readonly() ? '' : null">
@@ -29,12 +31,13 @@ import { moveStepToLane, setStepHidden, setStepSubtitle, setStepTitle } from './
         </mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label i18n="@@business.node.lane">Доріжка</mat-label>
-          <select matNativeControl data-testid="business-node-lane" [value]="currentLane()" (change)="lane(value($event))">
-            <option value="" i18n="@@business.node.laneDefault">За типом вузла</option>
+          <mat-select data-testid="business-node-lane" [value]="currentLane()" (selectionChange)="lane($event.value)">
+            <bp-select-search />
+            <mat-option value="" i18n="@@business.node.laneDefault">За типом вузла</mat-option>
             @for (l of lanes(); track l.id) {
-              <option [value]="l.id" [selected]="l.id === currentLane()">{{ l.name }}</option>
+              <mat-option [value]="l.id">{{ l.name }}</mat-option>
             }
-          </select>
+          </mat-select>
         </mat-form-field>
         <label class="bnf__check">
           <input type="checkbox" data-testid="business-node-hidden" [checked]="hidden()" (change)="hide($any($event.target).checked)" />

@@ -24,6 +24,7 @@ import {
 } from './workflows-api.service';
 import { BpButtonDirective } from '../shared/button.directive';
 import { MatIconModule } from '@angular/material/icon';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 export interface ImportWorkflowDialogData {
   /** Група, у яку покласти новий сценарій. */
@@ -87,7 +88,7 @@ export const choiceKey = (u: Pick<UnmappedReference, 'kind' | 'ref'>) => `${u.ki
 @Component({
   selector: 'app-import-workflow-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <h2 mat-dialog-title i18n="@@import.title">Імпорт сценарію</h2>
     <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
@@ -142,6 +143,7 @@ export const choiceKey = (u: Pick<UnmappedReference, 'kind' | 'ref'>) => `${u.ki
                 <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
                   <mat-label>{{ kindLabel(u.kind) }} «{{ u.name ?? u.ref }}»@if (u.type) { ({{ u.type }})}</mat-label>
                   <mat-select [attr.data-unmapped]="key(u)" [value]="choices()[key(u)] ?? null" (selectionChange)="choose(u, $event.value)">
+                    <bp-select-search />
                     @for (c of candidatesFor(u); track c.id) {
                       <mat-option [value]="c.id">{{ c.name }}</mat-option>
                     }

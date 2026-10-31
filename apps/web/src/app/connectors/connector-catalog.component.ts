@@ -26,6 +26,7 @@ import {
   manifestSettings,
   manifestTransports,
 } from './connectors-api.service';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Встановлений конектор, якому ще бракує облікових даних. */
 interface PendingCredential {
@@ -53,7 +54,7 @@ interface Connecting {
 @Component({
   selector: 'app-connector-catalog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, CredentialFormComponent],
+  imports: [MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, MatSelectModule, CredentialFormComponent, SelectSearchComponent],
   template: `
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
@@ -89,6 +90,7 @@ interface Connecting {
             <mat-form-field appearance="outline">
               <mat-label i18n="@@connectors.catalog.connectCredential">Облікові дані</mat-label>
               <mat-select data-testid="connect-credential" [value]="credentialChoice()" (selectionChange)="credentialChoice.set($event.value)">
+                <bp-select-search />
                 @for (o of existingCredentials(); track o.id) {
                   <mat-option [value]="o.id" [attr.data-credential]="o.id">{{ o.name }}</mat-option>
                 }

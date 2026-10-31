@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { AppSettingsPage } from './app-settings.page';
+import { chooseOption } from '../../shared/select-search/select-testing';
 
 describe('AppSettingsPage (F8-19)', () => {
   async function setup(app: object | null) {
@@ -36,7 +37,8 @@ describe('AppSettingsPage (F8-19)', () => {
   }
 
   function put(host: HTMLElement, selector: string, value: string, event = 'input') {
-    const el = host.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
+    const el = host.querySelector<HTMLInputElement>(selector)!;
+    if (el.tagName === 'MAT-SELECT') return chooseOption(el, value);
     el.value = value;
     el.dispatchEvent(new Event(event));
   }

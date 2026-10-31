@@ -121,8 +121,17 @@ Figma «Atoms / Tabs» `3251:37133`. Компонент `apps/web/src/app/shared
 
 - Поле `appearance="outline"`: висота 40, радіус 8, рамка `--bp-line`; hover — `--bp-primary`; focus — рамка primary + кільце `--bp-tonal`; error — червона рамка й кільце; disabled — фон `--bp-bg`.
 - Додаткові стани — класи на `mat-form-field`: `bp-field-success` (зелена рамка), `bp-field-loading` (смуга завантаження), `bp-search-secondary` (вторинний пошук на `--bp-bg-2`).
-- Панель `mat-select`/автодоповнення: радіус 8, рамка line, тінь AC-Kit; пункт 40 px, вибраний — `--bp-tonal`; вкладений рівень — клас `bp-option-nested`, порожній стан — `bp-option-empty`.
+- Панель `mat-select`/автодоповнення: радіус 8, рамка line, тінь AC-Kit; пункт 36 px, текст 14/20, наведення — `--bp-bg-2`, вибраний — `--bp-tonal` і текст primary; вкладений рівень — клас `bp-option-nested`, порожній стан — `bp-option-empty`.
 - Checkbox, radio, switch — primary / `--bp-line-3`; календар і діапазон дат — вибрана дата primary, діапазон `--bp-tonal`.
+
+### Випадні списки — один модуль на весь застосунок (F9-14)
+
+Як у Кіт CRM (Кіт 2 на Angular Material): **кожен** випадний список — `mat-select` у `mat-form-field appearance="outline"`. Нативний `<select>` не використовуємо: його розкривний список малює браузер чи ОС, тож він не бере ні палітру, ні шрифт, ні пошук.
+
+- Перший дочірній елемент кожного `mat-select` — `<bp-select-search />` (`apps/web/src/app/shared/select-search/`). Поле пошуку («Dropdown+icon» AC-Kit) з'являється саме, коли пунктів більше 7 (`threshold`), фокус одразу в ньому; пошук без регістру, «Нічого не знайдено», стрілки й Enter працюють зі знайденими пунктами, запит скидається при закритті. Короткі списки лишаються простими «Dropdown».
+- У рядку таблиці, панелі чи фільтрі — клас `bp-field-compact` (висота 32, текст 13) і `subscriptSizing="dynamic"`.
+- Підпис: `mat-label`, або `aria-label`, або `aria-labelledby` на id підпису поруч (`<label for>` до `mat-select` не прив'язується).
+- Тести: Vitest — `chooseOption` / `selectValue` / `selectOptionValues` з `shared/select-search/select-testing.ts`; Playwright — `chooseOption(locator, 'Підпис')` з `e2e/mat-select.ts` (замість `selectOption`).
 
 ## Таблиці й панель дій (F9-07)
 

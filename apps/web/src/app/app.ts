@@ -14,9 +14,10 @@ import { AppBarService } from './layout/app-bar.service';
 import { MOBILE_QUERY } from './layout/breakpoints';
 import { ProjectContextService } from './projects/project-context.service';
 import { NO_GROUP } from './workflows/workflow-groups';
+import { SelectSearchComponent } from './shared/select-search/select-search.component';
 
 @Component({
-  imports: [GlobalAssistantComponent, RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatButtonModule, MatSelectModule],
+  imports: [GlobalAssistantComponent, RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, MatButtonModule, MatSelectModule, SelectSearchComponent],
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './app.scss',

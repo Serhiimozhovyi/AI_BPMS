@@ -47,6 +47,9 @@ import { BuilderListOptionsComponent, ListExtras } from './builder/builder-list-
 import { BuilderUserFiltersComponent } from './builder/builder-user-filters.component';
 import { PagePreviewComponent } from './builder/page-preview.component';
 import { BpButtonDirective } from '../../shared/button.directive';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 
@@ -58,7 +61,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 @Component({
   selector: 'app-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent],
+  imports: [BpButtonDirective, MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="grid gap-6 px-6 pb-8 pt-2 xl:grid-cols-2">
     <section class="min-w-0" data-testid="page-builder">
@@ -78,30 +81,39 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         <input id="b-key" class="border p-1" data-testid="b-key" [value]="key()" [disabled]="editing()" (input)="key.set($any($event.target).value)" />
         <label for="b-name" i18n="@@builder.name">Назва в меню</label>
         <input id="b-name" class="border p-1" data-testid="b-name" [value]="name()" (input)="name.set($any($event.target).value)" />
-        <label for="b-kind" i18n="@@builder.kind">Тип</label>
-        <select id="b-kind" class="border p-1" data-testid="b-kind" [value]="kind()" [disabled]="editing()" (change)="kind.set($any($event.target).value)">
-          @for (k of kinds; track k) {
-            <option [value]="k" [selected]="k === kind()">{{ kindLabel(k) }}</option>
-          }
-        </select>
-        <label for="b-table" i18n="@@builder.table">Таблиця</label>
-        <select id="b-table" class="border p-1" data-testid="b-table" [value]="table()" (change)="table.set($any($event.target).value)">
-          <option value="" [selected]="!table()">{{ kind() === 'metrics' ? '—' : '' }}</option>
-          @for (t of tables(); track t.id) {
-            <option [value]="t.name" [selected]="t.name === table()">{{ t.name }}</option>
-          }
-        </select>
+        <label id="b-kind-label" for="b-kind" i18n="@@builder.kind">Тип</label>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select id="b-kind" aria-labelledby="b-kind-label" data-testid="b-kind" [value]="kind()" [disabled]="editing()" (selectionChange)="kind.set($event.value)">
+            <bp-select-search />
+            @for (k of kinds; track k) {
+              <mat-option [value]="k">{{ kindLabel(k) }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <label id="b-table-label" for="b-table" i18n="@@builder.table">Таблиця</label>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select id="b-table" aria-labelledby="b-table-label" data-testid="b-table" [value]="table()" (selectionChange)="table.set($event.value)">
+            <bp-select-search />
+            <mat-option value="">{{ kind() === 'metrics' ? '—' : '' }}</mat-option>
+            @for (t of tables(); track t.id) {
+              <mat-option [value]="t.name">{{ t.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
       </div>
 
       @if (!editing()) {
         <div class="mb-4 flex flex-wrap items-center gap-2">
-          <label for="b-sample" i18n="@@builder.sample">Почати зі зразка</label>
-          <select id="b-sample" class="border p-1" data-testid="b-sample" (change)="applySample($any($event.target).value); $any($event.target).value = ''">
-            <option value="" selected>—</option>
-            <option value="list" i18n="@@builder.sample.list">Список з панеллю фільтрів</option>
-            <option value="calendar" i18n="@@builder.sample.calendar">Календар</option>
-            <option value="dashboard" i18n="@@builder.sample.dashboard">Головна</option>
-          </select>
+          <label id="b-sample-label" for="b-sample" i18n="@@builder.sample">Почати зі зразка</label>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select id="b-sample" aria-labelledby="b-sample-label" data-testid="b-sample" value="" (selectionChange)="applySample($event.value); $event.source.value = ''">
+              <bp-select-search />
+              <mat-option value="">—</mat-option>
+              <mat-option value="list" i18n="@@builder.sample.list">Список з панеллю фільтрів</mat-option>
+              <mat-option value="calendar" i18n="@@builder.sample.calendar">Календар</mat-option>
+              <mat-option value="dashboard" i18n="@@builder.sample.dashboard">Головна</mat-option>
+            </mat-select>
+          </mat-form-field>
         </div>
       }
 
@@ -137,17 +149,23 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
           }
         </fieldset>
         <div class="mb-4 flex flex-wrap items-center gap-2">
-          <label for="b-sort" i18n="@@builder.sort">Сортування</label>
-          <select id="b-sort" class="border p-1" [value]="sortColumn()" (change)="sortColumn.set($any($event.target).value)">
-            <option value="" [selected]="!sortColumn()">—</option>
-            @for (c of columnNames(); track c) {
-              <option [value]="c" [selected]="c === sortColumn()">{{ c }}</option>
-            }
-          </select>
-          <select class="border p-1" aria-label="Напрямок" i18n-aria-label="@@builder.direction" [value]="sortDirection()" (change)="sortDirection.set($any($event.target).value)">
-            <option value="asc" [selected]="sortDirection() === 'asc'">↑</option>
-            <option value="desc" [selected]="sortDirection() === 'desc'">↓</option>
-          </select>
+          <label id="b-sort-label" for="b-sort" i18n="@@builder.sort">Сортування</label>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select id="b-sort" aria-labelledby="b-sort-label" [value]="sortColumn()" (selectionChange)="sortColumn.set($event.value)">
+              <bp-select-search />
+              <mat-option value="">—</mat-option>
+              @for (c of columnNames(); track c) {
+                <mat-option [value]="c">{{ c }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select aria-label="Напрямок" i18n-aria-label="@@builder.direction" [value]="sortDirection()" (selectionChange)="sortDirection.set($event.value)">
+              <bp-select-search />
+              <mat-option value="asc">↑</mat-option>
+              <mat-option value="desc">↓</mat-option>
+            </mat-select>
+          </mat-form-field>
           <label for="b-size" i18n="@@builder.pageSize">Рядків на сторінці</label>
           <input id="b-size" class="w-20 border p-1" type="number" min="1" max="200" [value]="pageSize()" (input)="pageSize.set($any($event.target).value)" />
         </div>
@@ -197,28 +215,37 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 
       @if (kind() === 'form') {
         <div class="mb-4 flex flex-wrap items-center gap-2">
-          <label for="b-submit" i18n="@@builder.onSubmit">Що робить форма</label>
-          <select id="b-submit" class="border p-1" data-testid="b-submit" [value]="submitMode()" (change)="submitMode.set($any($event.target).value)">
-            <option value="insert" [selected]="submitMode() === 'insert'" i18n="@@builder.submit.insert">Додає рядок</option>
-            <option value="upsert" [selected]="submitMode() === 'upsert'" i18n="@@builder.submit.upsert">Додає або оновлює за ключем</option>
-            <option value="update" [selected]="submitMode() === 'update'" i18n="@@builder.submit.update">Змінює рядок</option>
-            <option value="workflow" [selected]="submitMode() === 'workflow'" i18n="@@builder.submit.workflow">Запускає сценарій</option>
-          </select>
+          <label id="b-submit-label" for="b-submit" i18n="@@builder.onSubmit">Що робить форма</label>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select id="b-submit" aria-labelledby="b-submit-label" data-testid="b-submit" [value]="submitMode()" (selectionChange)="submitMode.set($event.value)">
+              <bp-select-search />
+              <mat-option value="insert" i18n="@@builder.submit.insert">Додає рядок</mat-option>
+              <mat-option value="upsert" i18n="@@builder.submit.upsert">Додає або оновлює за ключем</mat-option>
+              <mat-option value="update" i18n="@@builder.submit.update">Змінює рядок</mat-option>
+              <mat-option value="workflow" i18n="@@builder.submit.workflow">Запускає сценарій</mat-option>
+            </mat-select>
+          </mat-form-field>
           @if (submitMode() === 'workflow') {
-            <select class="border p-1" data-testid="b-submit-workflow" aria-label="Сценарій" i18n-aria-label="@@builder.workflow" [value]="submitWorkflow()" (change)="submitWorkflow.set($any($event.target).value)">
-              <option value="" [selected]="!submitWorkflow()">—</option>
-              @for (w of workflows(); track w.id) {
-                <option [value]="w.name" [selected]="w.name === submitWorkflow()">{{ w.name }}</option>
-              }
-            </select>
+            <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+              <mat-select data-testid="b-submit-workflow" aria-label="Сценарій" i18n-aria-label="@@builder.workflow" [value]="submitWorkflow()" (selectionChange)="submitWorkflow.set($event.value)">
+                <bp-select-search />
+                <mat-option value="">—</mat-option>
+                @for (w of workflows(); track w.id) {
+                  <mat-option [value]="w.name">{{ w.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
           }
-          <label for="b-then" i18n="@@builder.then">Після — перейти на</label>
-          <select id="b-then" class="border p-1" [value]="thenPage()" (change)="thenPage.set($any($event.target).value)">
-            <option value="" [selected]="!thenPage()">—</option>
-            @for (p of pageKeys(); track p) {
-              <option [value]="p" [selected]="p === thenPage()">{{ p }}</option>
-            }
-          </select>
+          <label id="b-then-label" for="b-then" i18n="@@builder.then">Після — перейти на</label>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select id="b-then" aria-labelledby="b-then-label" [value]="thenPage()" (selectionChange)="thenPage.set($event.value)">
+              <bp-select-search />
+              <mat-option value="">—</mat-option>
+              @for (p of pageKeys(); track p) {
+                <mat-option [value]="p">{{ p }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
         </div>
       }
 
@@ -237,29 +264,41 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
           @for (a of actions(); track $index; let i = $index) {
             <div class="mb-2 flex flex-wrap items-center gap-2" [attr.data-action]="i">
               <input class="w-40 border p-1" placeholder="Підпис" i18n-placeholder="@@builder.action.label" [value]="a.label" (input)="setAction(i, { label: $any($event.target).value })" />
-              <select class="border p-1" aria-label="Вид дії" i18n-aria-label="@@builder.action.type" [value]="a.type" (change)="setAction(i, { type: $any($event.target).value, target: '' })">
-                <option value="page" [selected]="a.type === 'page'" i18n="@@builder.action.page">Відкрити сторінку</option>
-                <option value="workflow" [selected]="a.type === 'workflow'" i18n="@@builder.action.workflow">Запустити сценарій</option>
-                <option value="delete" [selected]="a.type === 'delete'" i18n="@@builder.action.delete">Видалити рядок</option>
-              </select>
+              <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                <mat-select aria-label="Вид дії" i18n-aria-label="@@builder.action.type" [value]="a.type" (selectionChange)="setAction(i, { type: $event.value, target: '' })">
+                  <bp-select-search />
+                  <mat-option value="page" i18n="@@builder.action.page">Відкрити сторінку</mat-option>
+                  <mat-option value="workflow" i18n="@@builder.action.workflow">Запустити сценарій</mat-option>
+                  <mat-option value="delete" i18n="@@builder.action.delete">Видалити рядок</mat-option>
+                </mat-select>
+              </mat-form-field>
               @if (a.type === 'page') {
-                <select class="border p-1" aria-label="Сторінка" i18n-aria-label="@@builder.action.target.page" [value]="a.target" (change)="setAction(i, { target: $any($event.target).value })">
-                  <option value="" [selected]="!a.target">—</option>
-                  @for (p of pageKeys(); track p) {
-                    <option [value]="p" [selected]="p === a.target">{{ p }}</option>
-                  }
-                </select>
-                <select class="border p-1" aria-label="Як відкрити" i18n-aria-label="@@bc.mode" [value]="a.mode" (change)="setAction(i, { mode: $any($event.target).value })">
-                  <option value="navigate" [selected]="a.mode !== 'drawer'" i18n="@@bc.mode.navigate">переходом</option>
-                  <option value="drawer" [selected]="a.mode === 'drawer'" i18n="@@bc.mode.drawer">бічною панеллю</option>
-                </select>
+                <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                  <mat-select aria-label="Сторінка" i18n-aria-label="@@builder.action.target.page" [value]="a.target" (selectionChange)="setAction(i, { target: $event.value })">
+                    <bp-select-search />
+                    <mat-option value="">—</mat-option>
+                    @for (p of pageKeys(); track p) {
+                      <mat-option [value]="p">{{ p }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                  <mat-select aria-label="Як відкрити" i18n-aria-label="@@bc.mode" [value]="a.mode" (selectionChange)="setAction(i, { mode: $event.value })">
+                    <bp-select-search />
+                    <mat-option value="navigate" i18n="@@bc.mode.navigate">переходом</mat-option>
+                    <mat-option value="drawer" i18n="@@bc.mode.drawer">бічною панеллю</mat-option>
+                  </mat-select>
+                </mat-form-field>
               } @else if (a.type === 'workflow') {
-                <select class="border p-1" aria-label="Сценарій" i18n-aria-label="@@builder.action.target.workflow" [value]="a.target" (change)="setAction(i, { target: $any($event.target).value })">
-                  <option value="" [selected]="!a.target">—</option>
-                  @for (w of workflows(); track w.id) {
-                    <option [value]="w.name" [selected]="w.name === a.target">{{ w.name }}</option>
-                  }
-                </select>
+                <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                  <mat-select aria-label="Сценарій" i18n-aria-label="@@builder.action.target.workflow" [value]="a.target" (selectionChange)="setAction(i, { target: $event.value })">
+                    <bp-select-search />
+                    <mat-option value="">—</mat-option>
+                    @for (w of workflows(); track w.id) {
+                      <mat-option [value]="w.name">{{ w.name }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
               }
               <input class="w-48 border p-1" placeholder="Запитати підтвердження" i18n-placeholder="@@builder.action.confirm" [value]="a.confirm" (input)="setAction(i, { confirm: $any($event.target).value })" />
               <input class="w-56 border p-1" [placeholder]="hints.when" [attr.aria-label]="hints.whenLabel" [value]="a.when" (input)="setAction(i, { when: $any($event.target).value })" />
@@ -277,18 +316,24 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 
         @if (kind() === 'list' || kind() === 'calendar') {
           <div class="mb-4 mt-4 flex items-center gap-2">
-            <label for="b-create" i18n="@@builder.create">Кнопка «Створити» веде на форму</label>
-            <select id="b-create" class="border p-1" [value]="createPage()" (change)="createPage.set($any($event.target).value)">
-              <option value="" [selected]="!createPage()">—</option>
-              @for (p of pageKeys(); track p) {
-                <option [value]="p" [selected]="p === createPage()">{{ p }}</option>
-              }
-            </select>
+            <label id="b-create-label" for="b-create" i18n="@@builder.create">Кнопка «Створити» веде на форму</label>
+            <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+              <mat-select id="b-create" aria-labelledby="b-create-label" [value]="createPage()" (selectionChange)="createPage.set($event.value)">
+                <bp-select-search />
+                <mat-option value="">—</mat-option>
+                @for (p of pageKeys(); track p) {
+                  <mat-option [value]="p">{{ p }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
             @if (createPage()) {
-              <select class="border p-1" aria-label="Як відкрити" i18n-aria-label="@@bc.mode" [value]="createMode()" (change)="createMode.set($any($event.target).value)">
-                <option value="navigate" [selected]="createMode() !== 'drawer'" i18n="@@bc.mode.navigate">переходом</option>
-                <option value="drawer" [selected]="createMode() === 'drawer'" i18n="@@bc.mode.drawer">бічною панеллю</option>
-              </select>
+              <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                <mat-select aria-label="Як відкрити" i18n-aria-label="@@bc.mode" [value]="createMode()" (selectionChange)="createMode.set($event.value)">
+                  <bp-select-search />
+                  <mat-option value="navigate" i18n="@@bc.mode.navigate">переходом</mat-option>
+                  <mat-option value="drawer" i18n="@@bc.mode.drawer">бічною панеллю</mat-option>
+                </mat-select>
+              </mat-form-field>
             }
           </div>
         }
@@ -298,10 +343,13 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
           <div class="mb-2 flex flex-wrap items-center gap-2" [attr.data-tile]="i">
             <input class="w-40 border p-1" placeholder="Підпис" i18n-placeholder="@@builder.tile.label" [value]="t.label" (input)="setTile(i, { label: $any($event.target).value })" />
             <input class="w-24 border p-1" placeholder="ключ" i18n-placeholder="@@builder.tile.key" [value]="t.key" (input)="setTile(i, { key: $any($event.target).value })" />
-            <select class="border p-1" aria-label="Що показує плитка" i18n-aria-label="@@builder.tile.mode" [value]="t.mode" (change)="setTile(i, { mode: $any($event.target).value })">
-              <option value="aggregate" [selected]="t.mode === 'aggregate'" i18n="@@builder.tile.aggregate">Агрегат</option>
-              <option value="expression" [selected]="t.mode === 'expression'" i18n="@@builder.tile.expression">Вираз над плитками</option>
-            </select>
+            <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+              <mat-select aria-label="Що показує плитка" i18n-aria-label="@@builder.tile.mode" [value]="t.mode" (selectionChange)="setTile(i, { mode: $event.value })">
+                <bp-select-search />
+                <mat-option value="aggregate" i18n="@@builder.tile.aggregate">Агрегат</mat-option>
+                <mat-option value="expression" i18n="@@builder.tile.expression">Вираз над плитками</mat-option>
+              </mat-select>
+            </mat-form-field>
             @if (t.mode === 'expression') {
               <input class="w-72 border p-1" [placeholder]="hints.expression" [attr.aria-label]="hints.expressionLabel" [value]="t.expression" (input)="setTile(i, { expression: $any($event.target).value })" />
             } @else {
@@ -357,42 +405,57 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
     </div>
 
     <ng-template #filterTpl let-row let-columns="columns" let-set="set">
-      <select class="border p-1" aria-label="Колонка умови" i18n-aria-label="@@builder.filter.column" [value]="row.column" (change)="set({ column: $any($event.target).value })">
-        <option value="" [selected]="!row.column">—</option>
-        @for (c of columns; track c) {
-          <option [value]="c" [selected]="c === row.column">{{ c }}</option>
-        }
-      </select>
-      <select class="border p-1" aria-label="Оператор" i18n-aria-label="@@builder.filter.operator" [value]="row.operator" (change)="set({ operator: $any($event.target).value })">
-        @for (o of operators; track o) {
-          <option [value]="o" [selected]="o === row.operator">{{ o }}</option>
-        }
-      </select>
+      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+        <mat-select aria-label="Колонка умови" i18n-aria-label="@@builder.filter.column" [value]="row.column" (selectionChange)="set({ column: $event.value })">
+          <bp-select-search />
+          <mat-option value="">—</mat-option>
+          @for (c of columns; track c) {
+            <mat-option [value]="c">{{ c }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+        <mat-select aria-label="Оператор" i18n-aria-label="@@builder.filter.operator" [value]="row.operator" (selectionChange)="set({ operator: $event.value })">
+          <bp-select-search />
+          @for (o of operators; track o) {
+            <mat-option [value]="o">{{ o }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
       @if (!valueless(row.operator)) {
         <input class="w-48 border p-1" [placeholder]="hints.value" [attr.aria-label]="hints.value" [value]="row.value" (input)="set({ value: $any($event.target).value })" />
       }
     </ng-template>
 
     <ng-template #aggregateTpl let-row let-set="set">
-      <select class="border p-1" aria-label="Агрегат" i18n-aria-label="@@builder.aggregate" [value]="row.aggregate" (change)="set({ aggregate: $any($event.target).value })">
-        @for (a of aggregates; track a) {
-          <option [value]="a" [selected]="a === row.aggregate">{{ a }}</option>
-        }
-      </select>
-      @if (row.aggregate !== 'count') {
-        <select class="border p-1" aria-label="Числова колонка" i18n-aria-label="@@builder.aggregate.column" [value]="row.column" (change)="set({ column: $any($event.target).value })">
-          <option value="" [selected]="!row.column">—</option>
-          @for (c of numberColumns(row.table); track c) {
-            <option [value]="c" [selected]="c === row.column">{{ c }}</option>
+      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+        <mat-select aria-label="Агрегат" i18n-aria-label="@@builder.aggregate" [value]="row.aggregate" (selectionChange)="set({ aggregate: $event.value })">
+          <bp-select-search />
+          @for (a of aggregates; track a) {
+            <mat-option [value]="a">{{ a }}</mat-option>
           }
-        </select>
+        </mat-select>
+      </mat-form-field>
+      @if (row.aggregate !== 'count') {
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Числова колонка" i18n-aria-label="@@builder.aggregate.column" [value]="row.column" (selectionChange)="set({ column: $event.value })">
+            <bp-select-search />
+            <mat-option value="">—</mat-option>
+            @for (c of numberColumns(row.table); track c) {
+              <mat-option [value]="c">{{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
       }
-      <select class="border p-1" aria-label="Таблиця" i18n-aria-label="@@builder.aggregate.table" [value]="row.table" (change)="set({ table: $any($event.target).value })">
-        <option value="" [selected]="!row.table" i18n="@@builder.aggregate.pageTable">таблиця сторінки</option>
-        @for (t of tables(); track t.id) {
-          <option [value]="t.name" [selected]="t.name === row.table">{{ t.name }}</option>
-        }
-      </select>
+      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+        <mat-select aria-label="Таблиця" i18n-aria-label="@@builder.aggregate.table" [value]="row.table" (selectionChange)="set({ table: $event.value })">
+          <bp-select-search />
+          <mat-option value="" i18n="@@builder.aggregate.pageTable">таблиця сторінки</mat-option>
+          @for (t of tables(); track t.id) {
+            <mat-option [value]="t.name">{{ t.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
     </ng-template>
   `,
 })

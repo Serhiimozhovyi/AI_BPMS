@@ -8,6 +8,9 @@ import { ProjectPage, ProjectPagesApiService } from '../../projects/project-page
 import { ProjectAppNavGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
 import { BpButtonDirective } from '../../shared/button.directive';
 import { menuPages } from '../../projects/app-menu';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 /**
  * `/projects/:id/app/_app` — налаштування оболонки застосунку (F8-19, `docs/projects.md` §3.9): назва, значок, головна
@@ -16,7 +19,7 @@ import { menuPages } from '../../projects/app-menu';
 @Component({
   selector: 'app-app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, RouterLink],
+  imports: [BpButtonDirective, MatButtonModule, RouterLink, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <section class="max-w-3xl px-6 pb-8 pt-2" data-testid="app-settings">
       <h2 class="mb-3 text-lg font-semibold" i18n="@@appset.title">Вигляд застосунку</h2>
@@ -31,13 +34,16 @@ import { menuPages } from '../../projects/app-menu';
         <input id="as-title" class="border p-1" data-testid="as-title" [value]="title()" (input)="title.set($any($event.target).value)" />
         <label for="as-icon" i18n="@@appset.icon">Значок (Material Symbols)</label>
         <input id="as-icon" class="border p-1" data-testid="as-icon" placeholder="calendar_month" [value]="icon()" (input)="icon.set($any($event.target).value)" />
-        <label for="as-home" i18n="@@appset.home">Головна сторінка</label>
-        <select id="as-home" class="border p-1" data-testid="as-home" [value]="home()" (change)="home.set($any($event.target).value)">
-          <option value="" [selected]="!home()" i18n="@@appset.homeFirst">перша в меню</option>
-          @for (p of pages(); track p.key) {
-            <option [value]="p.key" [selected]="p.key === home()">{{ p.name }}</option>
-          }
-        </select>
+        <label id="as-home-label" for="as-home" i18n="@@appset.home">Головна сторінка</label>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select id="as-home" aria-labelledby="as-home-label" data-testid="as-home" [value]="home()" (selectionChange)="home.set($event.value)">
+            <bp-select-search />
+            <mat-option value="" i18n="@@appset.homeFirst">перша в меню</mat-option>
+            @for (p of pages(); track p.key) {
+              <mat-option [value]="p.key">{{ p.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
         <label for="as-tz" i18n="@@appset.tz">Часовий пояс</label>
         <input id="as-tz" class="border p-1" data-testid="as-tz" placeholder="Europe/Kyiv" [value]="timezone()" (input)="timezone.set($any($event.target).value)" />
       </div>

@@ -16,6 +16,9 @@ import {
   assigneeLabel,
   taskStatusLabel,
 } from '../../tasks/tasks-api.service';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 /**
  * `/tasks` (F6-02): задачі погодження вузлів `core.approval` — «Мої» (виконавець — я, мій email чи моя роль) і «Усі»
@@ -24,30 +27,36 @@ import {
 @Component({
   selector: 'app-tasks-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, ChipComponent, MatProgressBarModule, EmptyStateComponent, CardTableDirective],
+  imports: [DatePipe, RouterLink, ChipComponent, MatProgressBarModule, EmptyStateComponent, CardTableDirective, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <section class="p-6">
       <h1 class="mat-font-headline-sm mb-4" i18n="@@tasks.title">Задачі</h1>
 
       <div class="mb-4 flex flex-wrap items-end gap-4" data-testid="filters">
         @if (isAdmin()) {
-          <label class="flex flex-col text-sm">
-            <span i18n="@@tasks.filter.scope">Чиї</span>
-            <select data-testid="filter-scope" class="rounded border p-1" [value]="scope()" (change)="setScope($any($event.target).value)">
-              <option value="mine" i18n="@@tasks.filter.mine">Мої</option>
-              <option value="all" i18n="@@tasks.filter.all">Усі</option>
-            </select>
-          </label>
+          <div class="flex flex-col text-sm">
+            <span id="filter-scope-label" i18n="@@tasks.filter.scope">Чиї</span>
+            <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+              <mat-select data-testid="filter-scope" aria-labelledby="filter-scope-label" [value]="scope()" (selectionChange)="setScope($event.value)">
+                <bp-select-search />
+                <mat-option value="mine" i18n="@@tasks.filter.mine">Мої</mat-option>
+                <mat-option value="all" i18n="@@tasks.filter.all">Усі</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
         }
-        <label class="flex flex-col text-sm">
-          <span i18n="@@tasks.filter.status">Статус</span>
-          <select data-testid="filter-status" class="rounded border p-1" [value]="status() ?? ''" (change)="setStatus($any($event.target).value)">
-            <option value="" i18n="@@tasks.filter.allStatuses">Усі статуси</option>
-            @for (s of statuses; track s) {
-              <option [value]="s" [selected]="s === status()">{{ statusLabel(s) }}</option>
-            }
-          </select>
-        </label>
+        <div class="flex flex-col text-sm">
+          <span id="filter-status-label" i18n="@@tasks.filter.status">Статус</span>
+          <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+            <mat-select data-testid="filter-status" aria-labelledby="filter-status-label" [value]="status() ?? ''" (selectionChange)="setStatus($event.value)">
+              <bp-select-search />
+              <mat-option value="" i18n="@@tasks.filter.allStatuses">Усі статуси</mat-option>
+              @for (s of statuses; track s) {
+                <mat-option [value]="s">{{ statusLabel(s) }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
       </div>
 
       @if (loading()) {

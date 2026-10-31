@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { AuthService } from '../../auth/auth.service';
 import { TaskSummary } from '../../tasks/tasks-api.service';
 import { TasksPage } from './tasks.page';
+import { chooseOption } from '../../shared/select-search/select-testing';
 
 describe('TasksPage (F6-02)', () => {
   const task: TaskSummary = {
@@ -50,14 +51,10 @@ describe('TasksPage (F6-02)', () => {
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="empty"]')).not.toBeNull();
 
-    const scope = host.querySelector<HTMLSelectElement>('[data-testid="filter-scope"]')!;
-    scope.value = 'all';
-    scope.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-testid="filter-scope"]')!, 'all');
     http.expectOne((r) => r.params.get('scope') === 'all' && r.params.get('status') === 'open').flush({ items: [task], page: 1, pageSize: 50, total: 1 });
 
-    const status = host.querySelector<HTMLSelectElement>('[data-testid="filter-status"]')!;
-    status.value = '';
-    status.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('[data-testid="filter-status"]')!, '');
     http.expectOne((r) => r.params.get('scope') === 'all' && !r.params.has('status')).flush({ items: [task], page: 1, pageSize: 50, total: 1 });
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="total"]')?.textContent).toContain('1');

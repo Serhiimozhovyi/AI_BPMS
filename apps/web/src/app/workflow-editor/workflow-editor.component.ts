@@ -58,6 +58,9 @@ import { WorkflowDefinition, WorkflowDetail, WorkflowNode, WorkflowTemplate, Wor
 import { WorkflowSettingsDialogComponent, WorkflowSettingsDialogData } from '../workflow-settings/workflow-settings-dialog.component';
 import { WorkflowSettings, settingsChanged } from '../workflow-settings/workflow-settings';
 import { BpTab, BpTabsComponent } from '../shared/tabs/tabs.component';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Що зберігає автозбереження: визначення разом з id сценарію, якому воно належить. */
 interface SaveRequest {
@@ -134,7 +137,7 @@ export interface EditorErrorEvent {
   selector: 'app-workflow-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'keydown($event)' },
-  imports: [RouterLink, EditorToolbarComponent, NodePanelHeaderComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent, BpTabsComponent],
+  imports: [RouterLink, EditorToolbarComponent, NodePanelHeaderComponent, MatButtonModule, MatProgressBarModule, BusinessViewComponent, BusinessNodeFieldsComponent, CanvasComponent, PaletteComponent, QuickAddComponent, CanvasContextMenuComponent, EmptyStartComponent, AssistantPanelComponent, NodePanelComponent, NodeDataViewComponent, PinnedDataEditorComponent, NodeEvaluationsComponent, BpTabsComponent, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   providers: [ExpressionTargetService, ExpressionEditorService],
   template: `
     <section class="editor">
@@ -337,15 +340,18 @@ export interface EditorErrorEvent {
                 <div #inputCol tabindex="-1" class="editor__col editor__col--data" data-testid="panel-input" [hidden]="!wide() && panelTab() !== 'input'">
                   <app-node-data-view side="input" [title]="inputTitle" [ports]="inputPorts()" [mappable]="!readonly()" [expression]="inputExpression()" (pick)="mapField($event)">
                     @if (inputSources().length > 0) {
-                      <label dataHeader class="editor__source">
-                        <span i18n="@@workfloweditor.input.node">Вузол:</span>
-                        <select class="border" data-testid="input-source" [value]="inputSource()" (change)="inputSource.set($any($event.target).value)">
-                          <option value="" i18n="@@workfloweditor.input.direct">Вхід ($json)</option>
-                          @for (o of inputSources(); track o.id) {
-                            <option [value]="o.id">{{ o.name }}</option>
-                          }
-                        </select>
-                      </label>
+                      <div dataHeader class="editor__source">
+                        <span id="input-source-label" i18n="@@workfloweditor.input.node">Вузол:</span>
+                        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                          <mat-select data-testid="input-source" aria-labelledby="input-source-label" [value]="inputSource()" (selectionChange)="inputSource.set($event.value)">
+                            <bp-select-search />
+                            <mat-option value="" i18n="@@workfloweditor.input.direct">Вхід ($json)</mat-option>
+                            @for (o of inputSources(); track o.id) {
+                              <mat-option [value]="o.id">{{ o.name }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
                     }
                     @if (!readonly() && inputPorts().length > 0) {
                       <p dataNote class="editor__map-note" [class.editor__map-note--warn]="mapHint()" data-testid="map-hint" role="status">
@@ -666,13 +672,8 @@ export interface EditorErrorEvent {
       font-size: 12px;
     }
 
-    .editor__source select {
-      min-height: 28px;
-      padding: 0 6px;
-      border: 1px solid var(--bp-line);
-      border-radius: var(--bp-radius-sm);
-      background: var(--bp-white);
-      font-size: 12px;
+    .editor__source .mat-mdc-form-field {
+      width: 180px;
     }
 
     .editor__map-note {

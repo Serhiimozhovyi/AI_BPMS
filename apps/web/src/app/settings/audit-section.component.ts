@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { AUDIT_ENTITY_TYPES, AuditApiService, AuditEntry, auditActionLabel, auditEntityLabel, auditSummary } from './audit-api.service';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Записів на сторінці журналу. */
 export const AUDIT_PAGE_SIZE = 50;
@@ -18,7 +19,7 @@ export const AUDIT_PAGE_SIZE = 50;
 @Component({
   selector: 'app-audit-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [DatePipe, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.audit.title">Журнал аудиту</h2>
     <p class="mb-4 max-w-3xl opacity-70" i18n="@@settings.audit.hint">
@@ -29,6 +30,7 @@ export const AUDIT_PAGE_SIZE = 50;
       <mat-form-field appearance="outline" class="w-56">
         <mat-label i18n="@@settings.audit.entity">Що змінено</mat-label>
         <mat-select data-testid="audit-entity" [value]="entityType()" (selectionChange)="filterBy($event.value)">
+          <bp-select-search />
           <mat-option value="" i18n="@@settings.audit.all">Усе</mat-option>
           @for (t of entityTypes; track t) {
             <mat-option [value]="t">{{ entityLabel(t) }}</mat-option>

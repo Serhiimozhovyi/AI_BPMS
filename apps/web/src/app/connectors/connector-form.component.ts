@@ -13,6 +13,7 @@ import { CredentialOption, CredentialSummary, CredentialTypeInfo, CredentialsApi
 import { ProjectContextService } from '../projects/project-context.service';
 import { ConnectorFormValue, parseKeyValues, toConnectorInput } from './connector-input';
 import { ConnectorDetail, ConnectorTransport, ConnectorsApiService, apiErrorMessage } from './connectors-api.service';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,7 +55,7 @@ export function credentialTypesFor(transport: ConnectorTransport): string[] {
 @Component({
   selector: 'app-connector-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatButtonToggleModule, CredentialFormComponent],
+  imports: [ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatButtonToggleModule, CredentialFormComponent, SelectSearchComponent],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-2" data-testid="connector-form">
       <mat-form-field appearance="outline">
@@ -69,6 +70,7 @@ export function credentialTypesFor(transport: ConnectorTransport): string[] {
         <mat-form-field appearance="outline">
           <mat-label i18n="@@connectors.form.project">Проєкт</mat-label>
           <mat-select data-testid="connector-project" [value]="projectId()" (selectionChange)="selectProject($event.value)">
+            <bp-select-search />
             @for (t of targets(); track t.id) {
               <mat-option [value]="t.id" [attr.data-project]="t.id ?? 'shared'">{{ t.name }}</mat-option>
             }
@@ -134,6 +136,7 @@ export function credentialTypesFor(transport: ConnectorTransport): string[] {
         <mat-form-field appearance="outline" class="flex-1">
           <mat-label i18n="@@connectors.form.credentialId">Облікові дані (необов'язково)</mat-label>
           <mat-select formControlName="credentialId" data-testid="connector-credential">
+            <bp-select-search />
             <mat-option value="" i18n="@@connectors.form.credential.none">— без облікових даних —</mat-option>
             @for (c of matchingCredentials(); track c.id) {
               <mat-option [value]="c.id" [attr.data-credential-option]="c.id">{{ c.name }}</mat-option>

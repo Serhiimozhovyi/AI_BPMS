@@ -10,6 +10,7 @@ import { WorkflowSummary, WorkflowValidationError, WorkflowsApiService } from '.
 import { LimitField, SettingsFormValue, WorkflowSettings, applySettings, limitErrors, settingsFormValue, timeoutError, timezones } from './workflow-settings';
 import { BpButtonDirective } from '../shared/button.directive';
 import { MatIconModule } from '@angular/material/icon';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 export interface WorkflowSettingsDialogData {
   /** Сценарій, що редагується, — його немає у виборі сценарію помилок. */
@@ -27,7 +28,7 @@ export interface WorkflowSettingsDialogData {
 @Component({
   selector: 'app-workflow-settings-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatSlideToggleModule],
+  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatSlideToggleModule, SelectSearchComponent],
   template: `
     <h2 mat-dialog-title i18n="@@workflowsettings.title">Налаштування сценарію</h2>
     <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
@@ -36,6 +37,7 @@ export interface WorkflowSettingsDialogData {
         <mat-form-field appearance="outline">
           <mat-label i18n="@@workflowsettings.timezone">Часовий пояс</mat-label>
           <mat-select data-testid="settings-timezone" [value]="value().timezone" (selectionChange)="patch({ timezone: $event.value })">
+            <bp-select-search />
             @for (z of zones(); track z) {
               <mat-option [value]="z">{{ z }}</mat-option>
             }
@@ -63,6 +65,7 @@ export interface WorkflowSettingsDialogData {
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label i18n="@@workflowsettings.errorWorkflow">Сценарій помилок</mat-label>
           <mat-select data-testid="settings-error-workflow" [value]="value().errorWorkflowId" (selectionChange)="patch({ errorWorkflowId: $event.value })">
+            <bp-select-search />
             <mat-option [value]="null" i18n="@@workflowsettings.errorWorkflow.none">Немає</mat-option>
             @for (w of errorWorkflows(); track w.id) {
               <mat-option [value]="w.id" [attr.data-id]="w.id">{{ w.name }}</mat-option>
@@ -97,6 +100,7 @@ export interface WorkflowSettingsDialogData {
           <mat-form-field appearance="outline" class="settings__action">
             <mat-label i18n="@@workflowsettings.onLimit">Понад ліміт</mat-label>
             <mat-select data-testid="settings-concurrency-on-limit" [value]="value().concurrencyOnLimit" [disabled]="!value().concurrencyMax.trim()" (selectionChange)="patch({ concurrencyOnLimit: $event.value })">
+              <bp-select-search />
               <mat-option value="queue" i18n="@@workflowsettings.onLimit.queue">Чекати в черзі</mat-option>
               <mat-option value="drop" i18n="@@workflowsettings.onLimit.drop">Відкинути</mat-option>
             </mat-select>
@@ -123,6 +127,7 @@ export interface WorkflowSettingsDialogData {
           <mat-form-field appearance="outline" class="settings__action">
             <mat-label i18n="@@workflowsettings.onLimit">Понад ліміт</mat-label>
             <mat-select data-testid="settings-throttle-on-limit" [value]="value().throttleOnLimit" [disabled]="!value().throttleLimit.trim()" (selectionChange)="patch({ throttleOnLimit: $event.value })">
+              <bp-select-search />
               <mat-option value="queue" i18n="@@workflowsettings.onLimit.queue">Чекати в черзі</mat-option>
               <mat-option value="drop" i18n="@@workflowsettings.onLimit.drop">Відкинути</mat-option>
             </mat-select>

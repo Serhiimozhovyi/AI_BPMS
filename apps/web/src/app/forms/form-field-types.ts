@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { FieldType, FieldTypeConfig, FormlyAttributes, FormlyFieldConfig, FormlyValidationMessage, provideFormlyCore } from '@ngx-formly/core';
 import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SELECT, PF_TEXTAREA, PublicFieldProps } from './form-fields';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Типи полів публічної форми (F6-03): Angular Material у стилі AC-Kit, підказка і помилка під полем. */
 
@@ -53,11 +54,12 @@ export class PublicTextareaFieldComponent extends FieldType<PublicField> {}
 @Component({
   selector: 'app-pf-select',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatFormFieldModule, MatSelectModule, FormlyAttributes, FormlyValidationMessage],
+  imports: [ReactiveFormsModule, MatFormFieldModule, MatSelectModule, FormlyAttributes, FormlyValidationMessage, SelectSearchComponent],
   template: `
     <mat-form-field appearance="outline" class="w-full">
       <mat-label>{{ props.label }}</mat-label>
       <mat-select [formControl]="formControl" [formlyAttributes]="field" [multiple]="!!props.multiple" [required]="!!props.required" [attr.data-testid]="'form-field-' + key">
+        <bp-select-search />
         @for (option of props.options ?? []; track $index) {
           <mat-option [value]="option.value">{{ option.label }}</mat-option>
         }

@@ -8,6 +8,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { WorkflowGroup } from './workflows-api.service';
 import { BpButtonDirective } from '../shared/button.directive';
 import { MatIconModule } from '@angular/material/icon';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Дані діалогу створення сценарію (F3-80). */
 export interface CreateWorkflowDialogData {
@@ -26,7 +27,7 @@ export interface CreateWorkflowResult {
 @Component({
   selector: 'app-create-workflow-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatIconModule, ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [BpButtonDirective, MatIconModule, ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <h2 mat-dialog-title i18n="@@workflows.create">Створити сценарій</h2>
     <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
@@ -42,6 +43,7 @@ export interface CreateWorkflowResult {
         <mat-form-field appearance="outline">
           <mat-label i18n="@@workflows.form.group">Група</mat-label>
           <mat-select formControlName="groupId" data-testid="create-group">
+            <bp-select-search />
             <mat-option [value]="null" i18n="@@workflows.groups.none">Без групи</mat-option>
             @for (g of data.groups; track g.id) {
               <mat-option [value]="g.id">{{ g.name }}</mat-option>

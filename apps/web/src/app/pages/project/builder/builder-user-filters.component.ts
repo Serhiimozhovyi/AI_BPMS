@@ -2,6 +2,9 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { MatButtonModule } from '@angular/material/button';
 import { PageUserFilter } from '../../../projects/project-pages-api.service';
 import { BpButtonDirective } from '../../../shared/button.directive';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../../shared/select-search/select-search.component';
 
 const KINDS: readonly PageUserFilter['kind'][] = ['select', 'chips', 'period', 'search'];
 
@@ -12,21 +15,27 @@ const KINDS: readonly PageUserFilter['kind'][] = ['select', 'chips', 'period', '
 @Component({
   selector: 'app-builder-user-filters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     @for (f of filters(); track $index; let i = $index) {
       <div class="mb-1 flex flex-wrap items-center gap-2" [attr.data-user-filter]="i">
-        <select class="border p-1" aria-label="Колонка фільтра" i18n-aria-label="@@bo.filter.column" [value]="f.column" (change)="patch(i, { column: $any($event.target).value })">
-          <option value="" [selected]="!f.column">—</option>
-          @for (c of columns(); track c) {
-            <option [value]="c" [selected]="c === f.column">{{ c }}</option>
-          }
-        </select>
-        <select class="border p-1" aria-label="Вид фільтра" i18n-aria-label="@@bo.filter.kind" [value]="f.kind" (change)="patch(i, { kind: $any($event.target).value })">
-          @for (k of kinds; track k) {
-            <option [value]="k" [selected]="k === f.kind">{{ kindName(k) }}</option>
-          }
-        </select>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Колонка фільтра" i18n-aria-label="@@bo.filter.column" [value]="f.column" (selectionChange)="patch(i, { column: $event.value })">
+            <bp-select-search />
+            <mat-option value="">—</mat-option>
+            @for (c of columns(); track c) {
+              <mat-option [value]="c">{{ c }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+          <mat-select aria-label="Вид фільтра" i18n-aria-label="@@bo.filter.kind" [value]="f.kind" (selectionChange)="patch(i, { kind: $event.value })">
+            <bp-select-search />
+            @for (k of kinds; track k) {
+              <mat-option [value]="k">{{ kindName(k) }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
         <input class="w-40 border p-1" placeholder="Підпис" i18n-placeholder="@@bo.filter.label" [value]="f.label ?? ''" (input)="patch(i, { label: $any($event.target).value || undefined })" />
         <input
           class="w-48 border p-1"

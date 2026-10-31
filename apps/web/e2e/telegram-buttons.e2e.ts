@@ -1,4 +1,5 @@
 import { Page, expect, test } from '@playwright/test';
+import { chooseOption } from './mat-select';
 
 /**
  * F6-30: крок Telegram `send_message` з редактором кнопок: інлайн-кнопки й клавіатура, збереження, перевідкриття.
@@ -110,7 +111,7 @@ test('крок Telegram: інлайн-кнопки, клавіатура з ко
   await page.getByTestId('kb-add-button-0').click();
   await page.getByTestId('kb-text-0-1').fill('Сайт');
   await page.getByTestId('kb-text-0-1').blur();
-  await page.getByTestId('kb-action-0-1').selectOption('url');
+  await chooseOption(page.getByTestId('kb-action-0-1'), 'Відкрити посилання (url)');
   await page.getByTestId('kb-value-0-1').fill('https://example.com');
   await page.getByTestId('kb-value-0-1').blur();
   await expect(page.getByTestId('kb-preview')).toContainText('Записатися');
@@ -125,14 +126,14 @@ test('крок Telegram: інлайн-кнопки, клавіатура з ко
   await openMessageNode(page);
   await expect(page.getByTestId('kb-mode-inline')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('kb-text-0-1')).toHaveValue('Сайт');
-  await expect(page.getByTestId('kb-action-0-1')).toHaveValue('url');
+  await expect(page.getByTestId('kb-action-0-1')).toContainText('Відкрити посилання (url)');
 
   // Клавіатура: контакт; інлайн-кнопки лишаються в пам'яті редактора, але у вузол іде лише активний режим.
   await page.getByTestId('kb-mode-reply').click();
   await page.getByTestId('kb-add-row').click();
   await page.getByTestId('kb-text-0-0').fill('Поділитися номером');
   await page.getByTestId('kb-text-0-0').blur();
-  await page.getByTestId('kb-request-0-0').selectOption('contact');
+  await chooseOption(page.getByTestId('kb-request-0-0'), 'Запросити контакт');
   await page.getByTestId('kb-onetime').check();
   await expect(page.getByTestId('saved')).toBeVisible();
   await expect(page.getByTestId('dirty')).toHaveCount(0);
@@ -144,6 +145,6 @@ test('крок Telegram: інлайн-кнопки, клавіатура з ко
 
   await openMessageNode(page);
   await expect(page.getByTestId('kb-mode-reply')).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByTestId('kb-request-0-0')).toHaveValue('contact');
+  await expect(page.getByTestId('kb-request-0-0')).toContainText('Запросити контакт');
   await expect(page.getByTestId('kb-onetime')).toBeChecked();
 });

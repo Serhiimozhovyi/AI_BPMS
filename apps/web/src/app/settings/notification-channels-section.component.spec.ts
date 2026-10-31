@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { NotificationChannel, channelTypeLabel } from './notification-channels-api.service';
 import { NotificationChannelsSection, channelInput } from './notification-channels-section.component';
+import { chooseOption } from '../shared/select-search/select-testing';
 
 const telegram: NotificationChannel = {
   id: 'c1',
@@ -65,9 +66,10 @@ describe('NotificationChannelsSection', () => {
   }
 
   function input(host: HTMLElement, testid: string, value: string) {
-    const el = host.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-testid="${testid}"]`)!;
+    const el = host.querySelector<HTMLInputElement>(`[data-testid="${testid}"]`)!;
+    if (el.tagName === 'MAT-SELECT') return chooseOption(el, value);
     el.value = value;
-    el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input'));
+    el.dispatchEvent(new Event('input'));
   }
 
   /** Відкриває `mat-select` і обирає варіант за підписом (варіанти — в overlay поза панеллю). */

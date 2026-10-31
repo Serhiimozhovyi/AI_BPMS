@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { PageColumn } from '../../../projects/project-pages-api.service';
 import { DataTableSummary } from '../../../tables/data-tables-api.service';
 import { BuilderListOptionsComponent, ListExtras } from './builder-list-options.component';
+import { chooseOption, selectOptionValues } from '../../../shared/select-search/select-testing';
 
 const tables = [
   { id: 't1', name: 'slots', columns: [{ name: 'starts_at', type: 'datetime' }, { name: 'status', type: 'enum' }] },
@@ -28,6 +29,7 @@ describe('BuilderListOptionsComponent (F8-19)', () => {
   }
 
   const change = (el: Element, value: string, event = 'change') => {
+    if (el.tagName === 'MAT-SELECT') return chooseOption(el, value);
     (el as HTMLInputElement).value = value;
     el.dispatchEvent(new Event(event));
   };
@@ -35,7 +37,7 @@ describe('BuilderListOptionsComponent (F8-19)', () => {
   it('формат і підписи значень колонки віддає наверх, невідомий колір відкидає', async () => {
     const { host, columnsOut } = await setup({});
     const row = host.querySelector('[data-column-format="status"]')!;
-    change(row.querySelectorAll('select')[0], 'badge');
+    change(row.querySelectorAll('mat-select')[0], 'badge');
     expect(columnsOut.at(-1)).toEqual([{ column: 'status', format: 'badge' }]);
     change(row.querySelector('textarea')!, 'open=Вільно|green\nbusy=Зайнято|pink');
     expect(columnsOut.at(-1)).toEqual([{ column: 'status', labels: { open: 'Вільно', busy: 'Зайнято' }, colors: { open: 'green' } }]);
@@ -47,8 +49,8 @@ describe('BuilderListOptionsComponent (F8-19)', () => {
     expect(extrasOut.at(-1)!.computed).toEqual([{ key: '', label: '', table: '', by: '', aggregate: 'count' }]);
     fixture.componentRef.setInput('extras', { computed: [{ key: 'booked', label: 'Записано', table: 'bookings', by: '', aggregate: 'count' }] });
     fixture.detectChanges();
-    const by = host.querySelector('[data-computed="0"]')!.querySelectorAll('select')[1] as HTMLSelectElement;
-    expect([...by.options].map((o) => o.value)).toEqual(['', 'slot_id', 'minutes']);
+    const by = host.querySelector('[data-computed="0"]')!.querySelectorAll('mat-select')[1];
+    expect(selectOptionValues(by)).toEqual(['', 'slot_id', 'minutes']);
   });
 
   it('картки: вибір показу, порожні розділи не потрапляють у результат', async () => {
@@ -71,7 +73,7 @@ describe('BuilderListOptionsComponent (F8-19)', () => {
     expect(extrasOut.at(-1)!.expand![0].columns).toEqual([{ column: 'slot_id' }, { column: 'minutes' }]);
     fixture.componentRef.setInput('extras', extrasOut.at(-1));
     fixture.detectChanges();
-    const create = host.querySelector('[data-expand="0"]')!.querySelectorAll('select')[2] as HTMLSelectElement;
+    const create = host.querySelector('[data-expand="0"]')!.querySelectorAll('mat-select')[2];
     change(create, 'booking-form');
     expect(extrasOut.at(-1)!.expand![0].create).toEqual({ page: 'booking-form', mode: 'drawer' });
   });

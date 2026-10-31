@@ -19,6 +19,7 @@ import {
   notificationEventLabel,
 } from './notification-channels-api.service';
 import { BpButtonDirective } from '../shared/button.directive';
+import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Чернетка форми каналу: поля всіх типів, у запит іде лише потрібне вибраному типу. */
 interface ChannelDraft {
@@ -93,7 +94,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
 @Component({
   selector: 'app-notification-channels-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [BpButtonDirective, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="mb-2 flex items-center gap-4">
       <h2 class="text-lg font-semibold" i18n="@@notifications.title">Сповіщення</h2>
@@ -122,6 +123,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
           <mat-form-field appearance="outline" class="w-56">
             <mat-label i18n="@@notifications.form.type">Куди</mat-label>
             <mat-select data-testid="channel-type" [value]="d.type" (selectionChange)="patch({ type: $event.value })">
+              <bp-select-search />
               @for (t of types; track t) {
                 <mat-option [value]="t">{{ typeLabel(t) }}</mat-option>
               }
@@ -133,6 +135,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
           <mat-form-field appearance="outline" class="w-72">
             <mat-label i18n="@@notifications.form.connector">Конектор</mat-label>
             <mat-select data-testid="channel-connector" [value]="d.connectorId" (selectionChange)="patch({ connectorId: $event.value })">
+              <bp-select-search />
               <mat-option value="">—</mat-option>
               @for (c of connectors(); track c.id) {
                 <mat-option [value]="c.id">{{ c.name }}</mat-option>
@@ -167,6 +170,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
             <mat-form-field appearance="outline" class="w-72">
               <mat-label i18n="@@notifications.form.credential">Заголовки з облікових даних</mat-label>
               <mat-select data-testid="channel-credential" [value]="d.credentialId" (selectionChange)="patch({ credentialId: $event.value })">
+                <bp-select-search />
                 <mat-option value="" i18n="@@notifications.form.noCredential">Без заголовків</mat-option>
                 @for (c of credentials(); track c.id) {
                   <mat-option [value]="c.id">{{ c.name }}</mat-option>

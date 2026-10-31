@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { of } from 'rxjs';
 import { ProjectPageView } from '../../projects/project-pages-api.service';
 import { AppPagePage } from './app-page.page';
+import { chooseOption, selectValue } from '../../shared/select-search/select-testing';
 
 const base = '/api/v1/projects/p1/pages';
 
@@ -129,7 +130,7 @@ describe('AppPagePage: список з панеллю, мітками й під�
   it('панель показує значення за замовчуванням з відповіді, зміна фільтра надсилає всі фільтри й знімає default', async () => {
     const { fixture, http, host } = await openList();
 
-    expect(host.querySelector<HTMLSelectElement>('select[data-filter="host"]')!.value).toBe('u1');
+    expect(selectValue(host.querySelector('mat-select[data-filter="host"]')!)).toBe('u1');
     expect(host.querySelectorAll('[data-chip]')).toHaveLength(2);
 
     host.querySelector<HTMLButtonElement>('[data-chip="planned"]')!.click();
@@ -147,24 +148,19 @@ describe('AppPagePage: список з панеллю, мітками й під�
     both.flush(rows());
     await render(fixture);
 
-    const host2 = host.querySelector<HTMLSelectElement>('select[data-filter="host"]')!;
-    host2.value = '';
-    host2.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('mat-select[data-filter="host"]')!, '');
     const cleared = http.expectOne((r) => r.url === `${base}/events/rows`);
     expect(cleared.request.params.get('filters[host]')).toBe('');
     cleared.flush(rows());
     await render(fixture);
 
-    const period = host.querySelector<HTMLSelectElement>('select[data-filter="starts_at"]')!;
-    period.value = 'week';
-    period.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('mat-select[data-filter="starts_at"]')!, 'week');
     const week = http.expectOne((r) => r.url === `${base}/events/rows`);
     expect(week.request.params.get('filters[starts_at]')).toBe('week');
     week.flush(rows());
     await render(fixture);
 
-    period.value = 'custom';
-    period.dispatchEvent(new Event('change'));
+    chooseOption(host.querySelector('mat-select[data-filter="starts_at"]')!, 'custom');
     http.expectOne((r) => r.url === `${base}/events/rows`).flush(rows());
     await render(fixture);
     const from = host.querySelector<HTMLInputElement>('[data-filter-from="starts_at"]')!;

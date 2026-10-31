@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { PageFilterValue, PageOption, PageUserFilter } from '../../projects/project-pages-api.service';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 
 /** Періоди фільтра `period`. */
 export const PERIODS = ['today', 'week', 'month'] as const;
@@ -22,7 +24,7 @@ export function emptyFilters(filters: PageUserFilter[]): Record<string, PageFilt
 @Component({
   selector: 'app-page-filters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatFormFieldModule, MatInputModule],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="mb-3 flex flex-wrap items-end gap-3" role="group" aria-label="Фільтри" i18n-aria-label="@@app.page.filters" data-testid="app-filters">
       @for (f of filters(); track f.column) {
@@ -31,12 +33,13 @@ export function emptyFilters(filters: PageUserFilter[]): Record<string, PageFilt
             @if (optionsOf(f).length) {
               <mat-form-field appearance="outline" class="w-56" subscriptSizing="dynamic">
                 <mat-label>{{ title(f) }}</mat-label>
-                <select matNativeControl [attr.data-filter]="f.column" (change)="pick(f, $any($event.target).value)">
-                  <option value="" [selected]="single(f) === ''" i18n="@@app.page.filterAll">Усі</option>
+                <mat-select [attr.data-filter]="f.column" [value]="single(f)" (selectionChange)="pick(f, $event.value)">
+                  <bp-select-search />
+                  <mat-option value="" i18n="@@app.page.filterAll">Усі</mat-option>
                   @for (o of optionsOf(f); track o.value) {
-                    <option [value]="o.value" [selected]="single(f) === o.value">{{ o.label }}</option>
+                    <mat-option [value]="o.value">{{ o.label }}</mat-option>
                   }
-                </select>
+                </mat-select>
               </mat-form-field>
             } @else {
               <mat-form-field appearance="outline" class="w-56" subscriptSizing="dynamic">
@@ -67,13 +70,14 @@ export function emptyFilters(filters: PageUserFilter[]): Record<string, PageFilt
           @case ('period') {
             <mat-form-field appearance="outline" class="w-56" subscriptSizing="dynamic">
               <mat-label>{{ title(f) }}</mat-label>
-              <select matNativeControl [attr.data-filter]="f.column" (change)="period(f, $any($event.target).value)">
-                <option value="" [selected]="periodValue(f) === ''" i18n="@@app.page.periodAll">Увесь час</option>
-                <option value="today" [selected]="periodValue(f) === 'today'" i18n="@@app.page.periodToday">Сьогодні</option>
-                <option value="week" [selected]="periodValue(f) === 'week'" i18n="@@app.page.periodWeek">Цей тиждень</option>
-                <option value="month" [selected]="periodValue(f) === 'month'" i18n="@@app.page.periodMonth">Цей місяць</option>
-                <option value="custom" [selected]="periodValue(f) === 'custom'" i18n="@@app.page.periodCustom">Від – до</option>
-              </select>
+              <mat-select [attr.data-filter]="f.column" [value]="periodValue(f)" (selectionChange)="period(f, $event.value)">
+                <bp-select-search />
+                <mat-option value="" i18n="@@app.page.periodAll">Увесь час</mat-option>
+                <mat-option value="today" i18n="@@app.page.periodToday">Сьогодні</mat-option>
+                <mat-option value="week" i18n="@@app.page.periodWeek">Цей тиждень</mat-option>
+                <mat-option value="month" i18n="@@app.page.periodMonth">Цей місяць</mat-option>
+                <mat-option value="custom" i18n="@@app.page.periodCustom">Від – до</mat-option>
+              </mat-select>
             </mat-form-field>
             @if (periodValue(f) === 'custom') {
               <mat-form-field appearance="outline" class="w-40" subscriptSizing="dynamic">
