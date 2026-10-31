@@ -32,6 +32,15 @@ public sealed class ProjectAccess(OpenBpDbContext db, ICurrentUser currentUser)
         }
 
         currentUser.Require(UserRole.Viewer);
+        if (currentUser.ViewAs is { } viewAs)
+        {
+            // Перегляд «як користувач» (F12-01): лише цей проєкт з обраною роллю, як для ключа проєкту.
+            return _scope = new ProjectScope(false, new Dictionary<Guid, UserRole> { [viewAs.ProjectId] = viewAs.ProjectRole }, null)
+            {
+                AppRoles = viewAs.AppRole is { } appRole ? new Dictionary<Guid, string> { [viewAs.ProjectId] = appRole } : new Dictionary<Guid, string>(),
+            };
+        }
+
         var role = currentUser.Role!.Value;
         var keyProject = currentUser.ApiKeyProjectId;
         if (role == UserRole.Admin)

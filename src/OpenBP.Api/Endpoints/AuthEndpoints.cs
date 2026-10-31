@@ -93,7 +93,9 @@ public static class AuthEndpoints
             .Produces(StatusCodes.Status204NoContent);
 
         api.MapGet("/auth/me", (IAuthService auth, CancellationToken ct) => auth.GetMeAsync(ct))
-            .WithTags(OpenApiSetup.Tags.Auth).WithSummary("Поточний користувач і його роль");
+            .WithTags(OpenApiSetup.Tags.Auth).WithSummary("Поточний користувач і його роль")
+            .WithDescription("Із заголовком `X-OpenBP-View-As` (F12-01) — той, чиїми очима переглядаємо проєкт: роль `viewer` і поле " +
+                             "`viewAs` (проєкт, роль у проєкті, роль застосунку, учасник, хто переглядає).");
 
         api.MapGet("/api-keys", (IApiKeyService keys, CancellationToken ct) => keys.ListAsync(ct))
             .WithTags(OpenApiSetup.Tags.ApiKeys).WithSummary("Мої API-ключі (без значень)");

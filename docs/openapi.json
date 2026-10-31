@@ -561,6 +561,7 @@
           "Вхід"
         ],
         "summary": "Поточний користувач і його роль",
+        "description": "Із заголовком `X-OpenBP-View-As` (F12-01) — той, чиїми очима переглядаємо проєкт: роль `viewer` і поле `viewAs` (проєкт, роль у проєкті, роль застосунку, учасник, хто переглядає).",
         "responses": {
           "200": {
             "description": "OK",
@@ -14301,6 +14302,16 @@
           },
           "mustChangePassword": {
             "type": "boolean"
+          },
+          "viewAs": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ViewAsInfo"
+              }
+            ]
           }
         }
       },
@@ -14378,6 +14389,41 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ViewAsInfo": {
+        "required": [
+          "projectId",
+          "projectRole",
+          "appRole",
+          "memberId",
+          "actorEmail"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectRole": {
+            "type": "string"
+          },
+          "appRole": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "memberId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "actorEmail": {
+            "type": "string"
           }
         }
       },

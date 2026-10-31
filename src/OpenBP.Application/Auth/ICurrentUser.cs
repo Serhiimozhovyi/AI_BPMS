@@ -40,6 +40,12 @@ public interface ICurrentUser
 
     /// <summary>Проєкт, до якого обмежено API-ключ запиту (F6-14); <c>null</c> — ключ на весь інстанс або сесія UI.</summary>
     Guid? ApiKeyProjectId => null;
+
+    /// <summary>
+    /// Режим перегляду «як користувач» (F12-01): <see cref="UserId"/>, <see cref="Email"/> і <see cref="Role"/> уже
+    /// підмінені на того, чиїми очима дивимось (роль — <see cref="UserRole.Viewer"/>); <c>null</c> — звичайний запит.
+    /// </summary>
+    ViewAsContext? ViewAs => null;
 }
 
 /// <summary>Перевірка прав для сервісів.</summary>
@@ -85,6 +91,10 @@ public sealed record UserInfo(Guid Id, string Email, UserRole Role, [property: J
 {
     /// <summary>Пароль тимчасовий (F8-13): UI веде на зміну пароля, доки його не змінено.</summary>
     public bool MustChangePassword { get; init; }
+
+    /// <summary>Режим перегляду «як користувач» (F12-01); <c>null</c> — звичайна сесія. У JSON поле є лише в цьому режимі.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ViewAsInfo? ViewAs { get; init; }
 }
 
 /// <summary>API-ключ у списку (<c>GET /api-keys</c>); сам ключ не зберігається і не повертається.</summary>
