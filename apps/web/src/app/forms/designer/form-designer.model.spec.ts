@@ -1,5 +1,17 @@
 import {
   DesignerHistory,
+  addFieldToRow,
+  canJoinPrevious,
+  canMerge,
+  joinPrevious,
+  mergeIntoRow,
+  normalizeWidths,
+  placeInRow,
+  resizeBoundary,
+  resizeField,
+  setRowWidths,
+  splitFromRow,
+  widthPresets,
   addField,
   addSection,
   duplicateField,
@@ -188,5 +200,99 @@ describe('модель конструктора форми (F11-02)', () => {
       steps++;
     }
     expect(steps).toBe(3);
+  });
+
+  describe('рядки з кількох полів і ширини (F11-03)', () => {
+    const cellsOf = (state: ReturnType<typeof fromSchema>, section: number) =>
+      state.layout.sections[section].rows.map((r) => r.map((c) => (c.width ? `${c.field}:${c.width}` : c.field)));
+
+    it('злиття: поле стає зліва чи справа від іншого, ширини рівні, порожній рядок зникає', () => {
+      let state = mergeIntoRow(fromSchema(schema), 'name', 'from', 'before');
+      expect(cellsOf(state, 0)).toEqual([]);
+      expect(cellsOf(state, 1)).toEqual([['name', 'from', 'to'], ['reason']]);
+      state = mergeIntoRow(fromSchema(schema), 'reason', 'to', 'after');
+      expect(cellsOf(state, 1)).toEqual([['from', 'to', 'reason']]);
+      expect(toSchema(state)['x-openbp-layout']).toEqual({
+        sections: [
+          { title: 'Хто', rows: [[{ field: 'name' }]] },
+          { title: 'Коли', rows: [[{ field: 'from' }, { field: 'to' }, { field: 'reason', visibleIf: { field: 'from', operator: 'isNotEmpty' } }]] },
+        ],
+      });
+    });
+
+    it('у межах свого рядка — лише порядок, ширини йдуть з полями', () => {
+      let state = setRowWidths(fromSchema(schema), 1, 0, [4, 8]);
+      state = mergeIntoRow(state, 'to', 'from', 'before');
+      expect(cellsOf(state, 1)[0]).toEqual(['to:8', 'from:4']);
+      expect(placeInRow(state, 'to', 1, 0, 2)).toEqual(setRowWidths(fromSchema(schema), 1, 0, [4, 8]));
+    });
+
+    it('ліміт 4 поля в рядку', () => {
+      let state = fromSchema(schema);
+      state = mergeIntoRow(state, 'reason', 'to', 'after');
+      state = mergeIntoRow(state, 'name', 'to', 'after');
+      expect(cellsOf(state, 1)).toEqual([['from', 'to', 'name', 'reason']]);
+      const extra = addField(state, 'text', 0).state;
+      expect(canMerge(extra, 'tekst', 'from')).toBe(false);
+      expect(mergeIntoRow(extra, 'tekst', 'from', 'after')).toBe(extra);
+      expect(canMerge(extra, 'name', 'from')).toBe(true);
+      const added = addFieldToRow(state, 'text', 1, 0, 1);
+      expect(cellsOf(added.state, 1)).toEqual([['from', 'to', 'name', 'reason'], ['tekst']]);
+    });
+
+    it('вихід з рядка: окремим рядком під ним; решта ширин — до суми 12', () => {
+      let state = mergeIntoRow(fromSchema(schema), 'reason', 'to', 'after');
+      state = setRowWidths(state, 1, 0, [3, 6, 3]);
+      state = splitFromRow(state, 'to');
+      expect(cellsOf(state, 1)).toEqual([['from', 'reason'], ['to']]);
+      expect(splitFromRow(state, 'to')).toBe(state);
+      state = setRowWidths(mergeIntoRow(fromSchema(schema), 'reason', 'to', 'after'), 1, 0, [2, 6, 4]);
+      expect(cellsOf(splitFromRow(state, 'to'), 1)).toEqual([['from:4', 'reason:8'], ['to']]);
+    });
+
+    it('«в один рядок із попереднім»', () => {
+      const state = fromSchema(schema);
+      expect(canJoinPrevious(state, 'reason')).toBe(true);
+      expect(cellsOf(joinPrevious(state, 'reason'), 1)).toEqual([['from', 'to', 'reason']]);
+      expect(canJoinPrevious(state, 'from')).toBe(false);
+      expect(canJoinPrevious(state, 'name')).toBe(false);
+    });
+
+    it('нормалізація й пресети ширин', () => {
+      expect(normalizeWidths([6, 6, 6])).toEqual([4, 4, 4]);
+      expect(normalizeWidths([1, 11])).toEqual([2, 10]);
+      expect(normalizeWidths([5])).toEqual([12]);
+      expect(normalizeWidths([1, 1, 1, 9])).toEqual([2, 2, 2, 6]);
+      expect(normalizeWidths([4, 4, 4, 4]).reduce((a, b) => a + b)).toBe(12);
+      expect(widthPresets(2)).toContainEqual([4, 8]);
+      expect(widthPresets(3)).toContainEqual([3, 6, 3]);
+      expect(widthPresets(1)).toEqual([]);
+      let state = setRowWidths(fromSchema(schema), 1, 0, [8, 4]);
+      expect(cellsOf(state, 1)[0]).toEqual(['from:8', 'to:4']);
+      state = setRowWidths(state, 1, 0, [6, 6]);
+      expect(cellsOf(state, 1)[0]).toEqual(['from', 'to']);
+      expect(cellsOf(setRowWidths(state, 1, 0, [9, 9]), 1)[0]).toEqual(['from', 'to']);
+    });
+
+    it('межа між клітинками й Alt+←/→: крок 1, мінімум 2', () => {
+      let state = resizeBoundary(fromSchema(schema), 1, 0, 0, 2);
+      expect(cellsOf(state, 1)[0]).toEqual(['from:8', 'to:4']);
+      state = resizeBoundary(state, 1, 0, 0, 10);
+      expect(cellsOf(state, 1)[0]).toEqual(['from:10', 'to:2']);
+      state = resizeField(state, 'to', 1);
+      expect(cellsOf(state, 1)[0]).toEqual(['from:9', 'to:3']);
+      state = resizeField(state, 'from', 1);
+      expect(cellsOf(state, 1)[0]).toEqual(['from:10', 'to:2']);
+      expect(resizeField(state, 'from', 1)).toBe(state);
+      expect(resizeField(fromSchema(schema), 'name', 1)).toEqual(fromSchema(schema));
+    });
+
+    it('undo повертає рядок як був', () => {
+      const history = new DesignerHistory<ReturnType<typeof fromSchema>>();
+      const before = fromSchema(schema);
+      history.push(before);
+      const after = mergeIntoRow(before, 'reason', 'from', 'before');
+      expect(history.undo(after)).toEqual(before);
+    });
   });
 });

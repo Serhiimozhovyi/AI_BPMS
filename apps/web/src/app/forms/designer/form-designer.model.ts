@@ -1,5 +1,5 @@
 import type { JsonSchema } from '../form-fields';
-import { FormCell, FormLayout, FormSection, UI_KEY, readLayout, writeLayout } from '../form-layout';
+import { FormCell, FormLayout, FormSection, GRID_COLUMNS, MAX_ROW_CELLS, UI_KEY, readLayout, rowWidths, writeLayout } from '../form-layout';
 
 /**
  * Модель конструктора форми (F11-02, docs/forms-designer.md §3.2): JSON Schema форми → «секції → рядки → поля» +
@@ -195,7 +195,7 @@ function takeOut(state: DesignerState, key: string): { sections: FormSection[]; 
   const row = sections[place.section].rows[place.row];
   const [cell] = row.splice(place.cell, 1);
   if (!row.length) sections[place.section].rows.splice(place.row, 1);
-  else if (row.length === 1) delete row[0].width;
+  else normalizeRow(row);
   return { sections, cell };
 }
 
@@ -257,6 +257,171 @@ export function nudgeField(state: DesignerState, key: string, delta: -1 | 1): De
   const next = place.section + delta;
   if (next < 0 || next >= sections.length) return state;
   return moveField(state, key, next, delta < 0 ? sections[next].rows.length : 0);
+}
+
+// ---------- Рядки з кількох полів і ширини (F11-03) ----------
+
+/** Найменша ширина клітинки при зміні ширин перетягуванням чи клавіатурою. */
+export const MIN_CELL_WIDTH = 2;
+
+/** Пресети ширин для рядка з `n` полів (docs/forms-designer.md §3.2). */
+export function widthPresets(n: number): number[][] {
+  switch (n) {
+    case 2:
+      return [[6, 6], [4, 8], [8, 4]];
+    case 3:
+      return [[4, 4, 4], [3, 6, 3]];
+    case 4:
+      return [[3, 3, 3, 3]];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Ширини, приведені до суми 12: пропорційно, кожна не менша за `MIN_CELL_WIDTH` (для 1 поля — 12), залишок від
+ * округлення — клітинкам з найбільшою дробовою частиною.
+ */
+export function normalizeWidths(widths: readonly number[]): number[] {
+  const n = widths.length;
+  if (n <= 1) return n ? [GRID_COLUMNS] : [];
+  const safe = widths.map((w) => (Number.isFinite(w) && w > 0 ? w : 1));
+  const sum = safe.reduce((a, b) => a + b, 0);
+  const raw = safe.map((w) => (w * GRID_COLUMNS) / sum);
+  const out = raw.map((r) => Math.max(MIN_CELL_WIDTH, Math.floor(r)));
+  let diff = GRID_COLUMNS - out.reduce((a, b) => a + b, 0);
+  const byFraction = raw.map((r, i) => ({ i, f: r - Math.floor(r) })).sort((a, b) => b.f - a.f || a.i - b.i);
+  for (let k = 0; diff > 0; k = (k + 1) % n, diff--) out[byFraction[k].i]++;
+  while (diff < 0) {
+    const i = out.indexOf(Math.max(...out));
+    out[i]--;
+    diff++;
+  }
+  return out;
+}
+
+/** Записує ширини в клітинки рядка; рівні ширини (або одне поле) — без явного `width`. */
+function applyWidths(row: FormCell[], widths: readonly number[]): void {
+  const equal = widths.every((w) => w === widths[0]) && widths[0] * widths.length === GRID_COLUMNS;
+  row.forEach((cell, i) => {
+    if (row.length === 1 || equal) delete cell.width;
+    else cell.width = widths[i];
+  });
+}
+
+/** Після зміни складу рядка: ширини знову в сумі 12 (рівні, якщо явних не було). */
+function normalizeRow(row: FormCell[]): void {
+  if (row.every((c) => !c.width)) return applyWidths(row, []);
+  applyWidths(row, normalizeWidths(rowWidths(row)));
+}
+
+/**
+ * Ставить поле `key` у наявний рядок `row` секції `section` на позицію `index` («об'єднати»). У тому самому рядку —
+ * лише змінює порядок (ширини йдуть разом з полями); в інший рядок — до 4 полів, ширини стають рівними. Індекси —
+ * як у розмітці до зміни.
+ */
+export function placeInRow(state: DesignerState, key: string, section: number, row: number, index: number): DesignerState {
+  const from = placeOf(state, key);
+  const target = state.layout.sections[section]?.rows[row];
+  if (!from || !target) return state;
+  const sections = copySections(state);
+  if (from.section === section && from.row === row) {
+    const cells = sections[section].rows[row];
+    const [cell] = cells.splice(from.cell, 1);
+    cells.splice(clampIndex(index > from.cell ? index - 1 : index, cells.length), 0, cell);
+    return withSections(state, sections);
+  }
+  if (target.length >= MAX_ROW_CELLS) return state;
+  const cells = sections[section].rows[row];
+  const [cell] = sections[from.section].rows[from.row].splice(from.cell, 1);
+  cells.splice(clampIndex(index, cells.length), 0, cell);
+  applyWidths(cells, []);
+  const source = sections[from.section].rows[from.row];
+  if (!source.length) sections[from.section].rows.splice(from.row, 1);
+  else normalizeRow(source);
+  return withSections(state, sections);
+}
+
+/** Поле `key` поруч з полем `target`: зліва (`before`) чи справа (`after`). */
+export function mergeIntoRow(state: DesignerState, key: string, target: string, side: 'before' | 'after'): DesignerState {
+  const place = placeOf(state, target);
+  if (!place || key === target) return state;
+  return placeInRow(state, key, place.section, place.row, side === 'before' ? place.cell : place.cell + 1);
+}
+
+/** Чи можна поставити поле `key` у рядок з полем `target` (ліміт 4 поля; у своєму рядку — завжди). */
+export function canMerge(state: DesignerState, key: string, target: string): boolean {
+  const a = placeOf(state, key);
+  const b = placeOf(state, target);
+  if (!a || !b || key === target) return false;
+  if (a.section === b.section && a.row === b.row) return true;
+  return state.layout.sections[b.section].rows[b.row].length < MAX_ROW_CELLS;
+}
+
+/** Поле з рядка кількох полів виходить окремим рядком одразу під ним. */
+export function splitFromRow(state: DesignerState, key: string): DesignerState {
+  const place = placeOf(state, key);
+  if (!place || state.layout.sections[place.section].rows[place.row].length < 2) return state;
+  return moveField(state, key, place.section, place.row + 1);
+}
+
+/** Окреме поле стає в кінець рядка над ним (у тій самій секції), якщо там є місце. */
+export function joinPrevious(state: DesignerState, key: string): DesignerState {
+  const place = placeOf(state, key);
+  if (!place || place.row === 0) return state;
+  const rows = state.layout.sections[place.section].rows;
+  if (rows[place.row].length !== 1 || rows[place.row - 1].length >= MAX_ROW_CELLS) return state;
+  return placeInRow(state, key, place.section, place.row - 1, rows[place.row - 1].length);
+}
+
+/** Чи доступне «В один рядок із попереднім» для поля. */
+export function canJoinPrevious(state: DesignerState, key: string): boolean {
+  return joinPrevious(state, key) !== state;
+}
+
+/** Нові ширини рядка (наприклад, пресет); некоректні — нормалізуються до суми 12. */
+export function setRowWidths(state: DesignerState, section: number, row: number, widths: readonly number[]): DesignerState {
+  const cells = state.layout.sections[section]?.rows[row];
+  if (!cells || cells.length < 2 || widths.length !== cells.length) return state;
+  const valid = widths.every((w) => Number.isInteger(w) && w >= 1) && widths.reduce((a, b) => a + b, 0) === GRID_COLUMNS;
+  const sections = copySections(state);
+  applyWidths(sections[section].rows[row], valid ? widths : normalizeWidths(widths));
+  return withSections(state, sections);
+}
+
+/**
+ * Зсуває межу між клітинками `boundary` і `boundary + 1` на `delta` колонок (додатне — ліва ширшає); жодна з двох не
+ * стає вужчою за `MIN_CELL_WIDTH`.
+ */
+export function resizeBoundary(state: DesignerState, section: number, row: number, boundary: number, delta: number): DesignerState {
+  const cells = state.layout.sections[section]?.rows[row];
+  if (!cells || boundary < 0 || boundary >= cells.length - 1 || !delta) return state;
+  const widths = rowWidths(cells);
+  const d = Math.max(MIN_CELL_WIDTH - widths[boundary], Math.min(delta, widths[boundary + 1] - MIN_CELL_WIDTH));
+  if (!d) return state;
+  widths[boundary] += d;
+  widths[boundary + 1] -= d;
+  return setRowWidths(state, section, row, widths);
+}
+
+/** Alt+←/→: ширина поля −/+1 колонка за рахунок сусіда справа (для останнього в рядку — зліва). */
+export function resizeField(state: DesignerState, key: string, delta: -1 | 1): DesignerState {
+  const place = placeOf(state, key);
+  if (!place) return state;
+  const cells = state.layout.sections[place.section].rows[place.row];
+  if (cells.length < 2) return state;
+  const last = place.cell === cells.length - 1;
+  return last
+    ? resizeBoundary(state, place.section, place.row, place.cell - 1, -delta)
+    : resizeBoundary(state, place.section, place.row, place.cell, delta);
+}
+
+/** Нове поле типу `kind` у наявному рядку на позиції `index` (якщо в рядку вже 4 поля — окремим рядком під ним). */
+export function addFieldToRow(state: DesignerState, kind: FieldKind, section: number, row: number, index: number): { state: DesignerState; key: string } {
+  const added = addField(state, kind, section, row + 1);
+  const target = state.layout.sections[section]?.rows[row];
+  if (!target || target.length >= MAX_ROW_CELLS) return added;
+  return { state: placeInRow(added.state, added.key, section, row, index), key: added.key };
 }
 
 /** Копія поля з новим ключем — окремим рядком одразу під оригіналом. */

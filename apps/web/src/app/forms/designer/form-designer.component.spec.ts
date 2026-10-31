@@ -1,4 +1,6 @@
+import { CdkDropList } from '@angular/cdk/drag-drop';
 import { Component, signal } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { TestBed } from '@angular/core/testing';
 import { FormDesignerComponent } from './form-designer.component';
 import type { JsonSchema } from '../form-fields';
@@ -184,5 +186,81 @@ describe('FormDesignerComponent (F11-02)', () => {
     expect(q('fd-card-a')).not.toBeNull();
     expect(q('fd-card-name')).toBeNull();
     expect(q<HTMLButtonElement>('fd-undo')!.disabled).toBe(true);
+  });
+
+  describe('рядки з кількох полів (F11-03)', () => {
+    const layoutOf = (schema: JsonSchema) =>
+      ((schema['x-openbp-layout'] as { sections: { rows: { field: string; width?: number }[][] }[] }) ?? { sections: [] }).sections.map((s) =>
+        s.rows.map((r) => r.map((c) => (c.width ? `${c.field}:${c.width}` : c.field))),
+      );
+
+    async function drop(ctx: Awaited<ReturnType<typeof setup>>, selector: string, data: unknown, from: { id: string; index: number }, currentIndex: number) {
+      const target = ctx.fixture.debugElement.query(By.css(selector)).injector.get(CdkDropList);
+      const previous = from.id === 'fd-palette' ? { id: 'fd-palette', data: null } : ctx.fixture.debugElement.query(By.css(`#${from.id}`)).injector.get(CdkDropList);
+      target.dropped.emit({
+        item: { data },
+        container: target,
+        previousContainer: previous,
+        previousIndex: from.index,
+        currentIndex,
+        isPointerOverContainer: true,
+        distance: { x: 0, y: 0 },
+        dropPoint: { x: 0, y: 0 },
+        event: new MouseEvent('mouseup'),
+      } as never);
+      await ctx.render();
+    }
+
+    it('поле, скинуте в рядок іншого поля, стає поруч; у проміжок — знову окремим рядком', async () => {
+      const ctx = await setup();
+      await drop(ctx, '[data-row="0:0"]', 'from', { id: 'fd-row-0-1', index: 0 }, 1);
+      expect(layoutOf(ctx.last())).toEqual([[['name', 'from']]]);
+      expect(ctx.q('fd-card-from')?.getAttribute('data-width')).toBe('6');
+      await drop(ctx, '[data-gap="0:1"]', 'from', { id: 'fd-row-0-0', index: 1 }, 0);
+      expect(ctx.last()['x-openbp-layout']).toBeUndefined();
+      expect(Object.keys(ctx.last()['properties'] as object)).toEqual(['name', 'from']);
+    });
+
+    it('тип з палітри, скинутий у рядок, додає поле поруч', async () => {
+      const ctx = await setup();
+      await drop(ctx, '[data-row="0:1"]', 'date', { id: 'fd-palette', index: 6 }, 1);
+      expect(layoutOf(ctx.last())).toEqual([[['name'], ['from', 'data']]]);
+      expect(ctx.q('fd-card-data')?.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('у рядку з 4 полів місця немає', async () => {
+      const ctx = await setup({
+        type: 'object',
+        properties: { a: { type: 'string' }, b: { type: 'string' }, c: { type: 'string' }, d: { type: 'string' }, e: { type: 'string' } },
+        'x-openbp-layout': { sections: [{ rows: [[{ field: 'a' }, { field: 'b' }, { field: 'c' }, { field: 'd' }], [{ field: 'e' }]] }] },
+      });
+      const row = ctx.fixture.debugElement.query(By.css('[data-row="0:0"]')).injector.get(CdkDropList);
+      expect(row.enterPredicate({ data: 'e' } as never, row)).toBe(false);
+      expect(row.enterPredicate({ data: 'a' } as never, row)).toBe(true);
+    });
+
+    it('пресети ширин, Alt+←/→, «Окремим рядком» і «В один рядок із попереднім»', async () => {
+      const ctx = await setup();
+      ctx.q('fd-card-from')!.click();
+      await ctx.render();
+      ctx.q('fd-join')!.click();
+      await ctx.render();
+      expect(layoutOf(ctx.last())).toEqual([[['name', 'from']]]);
+      ctx.q('fd-row-preset-4-8')!.click();
+      await ctx.render();
+      expect(layoutOf(ctx.last())).toEqual([[['name:4', 'from:8']]]);
+      expect(ctx.q('fd-row-preset-4-8')?.getAttribute('aria-pressed')).toBe('true');
+      ctx.q('fd-card-name')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true }));
+      await ctx.render();
+      expect(layoutOf(ctx.last())).toEqual([[['name:5', 'from:7']]]);
+      ctx.q('fd-card-from')!.click();
+      await ctx.render();
+      ctx.q('fd-split')!.click();
+      await ctx.render();
+      expect(ctx.last()['x-openbp-layout']).toBeUndefined();
+      ctx.q('fd-undo')!.click();
+      await ctx.render();
+      expect(layoutOf(ctx.last())).toEqual([[['name:5', 'from:7']]]);
+    });
   });
 });
