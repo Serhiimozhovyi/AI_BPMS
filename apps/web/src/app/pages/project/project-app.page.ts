@@ -1,24 +1,26 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../auth/auth.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { AppBarService } from '../../layout/app-bar.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage, ProjectPagesApiService } from '../../projects/project-pages-api.service';
 import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
+import { AppSideNavComponent, SideNavGroup } from './app-side-nav.component';
+import { menuPages } from '../../projects/app-menu';
 
 /**
  * `/projects/:id/app` — вкладка «Застосунок» (F8-04): меню сторінок застосунку, які бачить користувач (за ролями
  * застосунку), і сама сторінка (`app/<key>[/<rowKey>]`). Без вибраної сторінки відкриває головну оболонки або першу.
  * Якщо проєкт задав оболонку `app` (F8-18) — назва, значок й меню розділів за групами (сторінки не з меню відкриваються
- * лише за посиланням), editor бачить кнопку «Конструктор». Користувачу лише застосунку оболонка показується у верхній
+ * лише за посиланням, службові — ніколи) у боковому меню {@link AppSideNavComponent}, editor бачить «Конструктор». Користувачу лише застосунку оболонка показується у верхній
  * смузі замість меню AI_BPMS (F9-04), тут — лише сторінка.
  */
 @Component({
   selector: 'app-project-app-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, BpTabsComponent],
+  imports: [RouterLink, RouterOutlet, BpTabsComponent, AppSideNavComponent],
   template: `
     @if (inBar()) {
       <div class="px-6 pt-4" data-testid="app-shell">
@@ -31,29 +33,14 @@ import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
         <router-outlet />
       </div>
     } @else if (shell(); as app) {
-      <div class="px-6 pt-4 md:flex md:gap-6" data-testid="app-shell">
-        <aside class="mb-3 md:mb-0 md:w-56 md:shrink-0">
-          <div class="mb-3 flex items-center gap-2">
-            @if (iconName(); as icon) {
-              <span class="material-symbols-outlined text-2xl" aria-hidden="true" data-testid="shell-icon">{{ icon }}</span>
-            } @else if (app.icon) {
-              <span class="text-2xl" aria-hidden="true" data-testid="shell-icon">{{ app.icon }}</span>
-            }
-            <h2 class="text-lg font-semibold" data-testid="shell-title">{{ app.title }}</h2>
-          </div>
+      <div class="px-6 pt-4 md:flex md:items-start md:gap-6" data-testid="app-shell">
+        <aside class="mb-3 md:sticky md:top-4 md:mb-0 md:shrink-0">
+          <app-side-nav [title]="app.title" [iconName]="iconName()" [emoji]="iconName() ? null : (app.icon ?? null)" [groups]="menu()" [canEdit]="canEdit()" />
+        </aside>
+        <div class="min-w-0 grow">
           @if (error()) {
             <p role="alert" class="mb-2 text-red-700" data-testid="app-error">{{ error() }}</p>
           }
-          <nav class="flex flex-row flex-wrap gap-1 md:flex-col" aria-label="Розділи застосунку" i18n-aria-label="@@project.app.sections" data-testid="shell-nav">
-            @for (group of menu(); track $index) {
-              @if (group.label) {
-                <div class="mt-2 w-full px-2 text-xs uppercase opacity-60" data-testid="shell-group">{{ group.label }}</div>
-              }
-              @for (p of group.pages; track p.id) {
-                <a class="bp-side-link" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
-              }
-            }
-          </nav>
           @if (loaded() && pages().length === 0 && !error()) {
             <p class="opacity-70" data-testid="app-empty">
               @if (canEdit()) {
@@ -66,12 +53,6 @@ import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
               }
             </p>
           }
-          @if (canEdit() && !building()) {
-            <a class="bp-side-link mt-3" data-testid="shell-builder" routerLink="_builder" i18n="@@project.app.builder">Конструктор</a>
-            <a class="bp-side-link" data-testid="shell-settings" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
-          }
-        </aside>
-        <div class="min-w-0 grow">
           <router-outlet />
         </div>
       </div>
@@ -96,7 +77,7 @@ import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
           <a class="mb-2 inline-block" data-testid="app-new-page" routerLink="_builder" i18n="@@project.app.newPage">+ Нова сторінка</a>
           <a class="mb-2 ml-4 inline-block" data-testid="app-settings-link" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
         }
-        @if (pages().length > 1) {
+        @if (pageTabs().length > 1) {
           <bp-tabs class="mb-3" [tabs]="pageTabs()" label="Сторінки застосунку" i18n-label="@@project.app.nav" testId="app-nav" />
         }
       </section>
@@ -115,7 +96,7 @@ export class ProjectAppPage implements OnInit {
 
   readonly projectId = this.route.parent?.snapshot.paramMap.get('id') ?? '';
   readonly pages = signal<ProjectPage[]>([]);
-  readonly pageTabs = computed<BpTab[]>(() => this.pages().map((p) => ({ value: p.key, label: p.name, link: [p.key] })));
+  readonly pageTabs = computed<BpTab[]>(() => menuPages(this.pages()).map((p) => ({ value: p.key, label: p.name, link: [p.key] })));
   readonly loaded = signal(false);
   readonly error = signal<string | null>(null);
   /** Відкрито конструктор: меню сторінок і посилання на нього зайві. */
@@ -129,11 +110,15 @@ export class ProjectAppPage implements OnInit {
   readonly shell = computed(() => this.project()?.app ?? null);
   /** Назва значка Material Symbols, якщо значок оболонки — слово, а не emoji. */
   readonly iconName = computed(() => (/^[a-z][a-z0-9_]*$/.test(this.shell()?.icon ?? '') ? this.shell()!.icon! : null));
-  /** Групи меню з видимих користувачу сторінок: у `app.nav` — як задано, решта (не з меню) відкривається за посиланням. */
-  readonly menu = computed(() => {
-    const byKey = new Map(this.pages().map((p) => [p.key, p]));
+  /**
+   * Групи меню з видимих користувачу сторінок: у `app.nav` — як задано, решта (не з меню) відкривається за посиланням.
+   * Службові сторінки (картки, форми запису, які відкривають інші сторінки) у меню не потрапляють навіть із `app.nav`.
+   */
+  readonly menu = computed<SideNavGroup[]>(() => {
+    const visible = menuPages(this.pages());
+    const byKey = new Map(visible.map((p) => [p.key, p]));
     const nav = this.shell()?.nav;
-    if (!nav?.length) return [{ label: '', pages: this.pages() }];
+    if (!nav?.length) return [{ label: '', pages: visible }];
     return nav
       .map((g) => ({ label: g.label, pages: g.pages.flatMap((key) => byKey.get(key) ?? []) }))
       .filter((g) => g.pages.length > 0);

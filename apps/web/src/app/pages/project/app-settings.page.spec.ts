@@ -23,6 +23,7 @@ describe('AppSettingsPage (F8-19)', () => {
     http.expectOne('/api/v1/projects/p1/pages').flush([
       { id: 'a', key: 'today', name: 'Сьогодні', kind: 'dashboard', definition: { table: '' }, roles: [], sortOrder: 0, updatedAt: '' },
       { id: 'b', key: 'calendar', name: 'Розклад', kind: 'calendar', definition: { table: 'slots' }, roles: [], sortOrder: 1, updatedAt: '' },
+      { id: 'c', key: 'slot-edit', name: 'Слот — зміна', kind: 'form', definition: { table: 'slots', fields: [], onSubmit: { operation: 'update' } }, roles: [], sortOrder: 2, updatedAt: '' },
     ]);
     await render(fixture);
     return { fixture, http, navigate, host: fixture.nativeElement as HTMLElement };
@@ -88,6 +89,15 @@ describe('AppSettingsPage (F8-19)', () => {
     http.expectOne({ method: 'DELETE', url: '/api/v1/workflow-groups/p1/app' }).flush(null);
     http.expectOne('/api/v1/workflow-groups').flush([]);
     expect(navigate).toHaveBeenCalledWith(['/projects', 'p1', 'app']);
+  });
+
+  it('група без назви зберігається (пункти без підпису), службові сторінки в меню не пропонуються', async () => {
+    const { fixture, http, host } = await setup({ title: 'Кабінет', nav: [{ label: '', pages: ['today', 'calendar'] }, { label: 'Записи', pages: ['slot-edit'] }] });
+    expect(host.querySelector('[data-nav-page="slot-edit"]')).toBeNull();
+    await render(fixture);
+    host.querySelector<HTMLButtonElement>('[data-testid="as-save"]')!.click();
+    const request = http.expectOne({ method: 'PUT', url: '/api/v1/workflow-groups/p1/app' });
+    expect(request.request.body.nav).toEqual([{ label: '', pages: ['today', 'calendar'] }]);
   });
 
   it('помилка Api показується над формою', async () => {
