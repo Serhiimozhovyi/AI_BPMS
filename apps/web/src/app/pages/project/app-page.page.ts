@@ -1,3 +1,4 @@
+import { ViewAsService } from '../../auth/view-as.service';
 import { NgTemplateOutlet } from '@angular/common';
 import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -82,7 +83,7 @@ interface DrawerState {
             <a mat-button data-testid="app-edit-page" [routerLink]="['/projects', projectId, 'app', '_builder', v.page.key]" i18n="@@app.page.edit">Налаштувати</a>
           }
           @if ((v.page.kind === 'list' || v.page.kind === 'calendar') && v.page.definition.create; as create) {
-            <button mat-flat-button type="button" data-testid="app-create" (click)="open(create.page, undefined, create.mode)" i18n="@@app.page.create">Створити</button>
+            <button mat-flat-button type="button" data-testid="app-create" [disabled]="readOnly()" [attr.title]="readOnly() ? readOnlyTip : null" (click)="open(create.page, undefined, create.mode)" i18n="@@app.page.create">Створити</button>
           }
         </div>
 
@@ -134,7 +135,7 @@ interface DrawerState {
                       @if (row.actions.length) {
                         <div class="mt-2 flex flex-wrap gap-1">
                           @for (i of row.actions; track i) {
-                            <button mat-button type="button" [attr.data-action]="i" (click)="act(v.page.definition.actions![i], i, row)">
+                            <button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null" (click)="act(v.page.definition.actions![i], i, row)">
                               {{ v.page.definition.actions![i].label }}
                             </button>
                           }
@@ -205,7 +206,7 @@ interface DrawerState {
                           }
                           <td class="whitespace-nowrap p-2 text-right">
                             @for (i of row.actions; track i) {
-                              <button mat-button type="button" [attr.data-action]="i" (click)="act(v.page.definition.actions![i], i, row)">
+                              <button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null" (click)="act(v.page.definition.actions![i], i, row)">
                                 {{ v.page.definition.actions![i].label }}
                               </button>
                             }
@@ -262,7 +263,7 @@ interface DrawerState {
               @if (rec.row.actions.length) {
                 <div class="mb-4 flex gap-2">
                   @for (i of rec.row.actions; track i) {
-                    <button mat-stroked-button type="button" [attr.data-action]="i" (click)="act(v.page.definition.actions![i], i, rec.row)">
+                    <button mat-stroked-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null" (click)="act(v.page.definition.actions![i], i, rec.row)">
                       {{ v.page.definition.actions![i].label }}
                     </button>
                   }
@@ -341,6 +342,9 @@ interface DrawerState {
 })
 export class AppPagePage implements OnInit {
   private readonly api = inject(ProjectPagesApiService);
+  /** Перегляд «як користувач» (F12-02): дії, що змінюють дані, неактивні. */
+  protected readonly readOnly = inject(ViewAsService).active;
+  protected readonly readOnlyTip = $localize`:@@viewAs.disabled:У режимі перегляду дані не змінюються`;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);

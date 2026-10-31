@@ -16,6 +16,8 @@ export interface ViewAsMode {
   role?: 'editor' | 'viewer';
   appRole?: string | null;
   memberId?: string;
+  /** Куди повернутись після виходу з перегляду (сторінка, з якої його ввімкнули). */
+  returnUrl?: string;
   /** Що показати в смузі: «Координатор», «Редактор проєкту», «olena@firma.ua». */
   label: string;
 }

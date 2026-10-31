@@ -1,3 +1,4 @@
+import { ViewAsService } from '../../auth/view-as.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -240,7 +241,7 @@ interface DayColumn {
             <button mat-flat-button type="button" data-testid="cal-open" (click)="openEvent(s, target.page, target.mode)" i18n="@@cal.open">Відкрити</button>
           }
           @for (i of s.event.row.actions; track i) {
-            <button mat-stroked-button type="button" [attr.data-action]="i" (click)="runAction(i, s.event.row)">
+            <button mat-stroked-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !definition().actions![i].page" [attr.title]="readOnly() && !definition().actions![i].page ? readOnlyTip : null" (click)="runAction(i, s.event.row)">
               {{ definition().actions![i].label }}
             </button>
           }
@@ -251,6 +252,9 @@ interface DayColumn {
 })
 export class PageCalendarComponent {
   private readonly api = inject(ProjectPagesApiService);
+  /** Перегляд «як користувач» (F12-02): дії, що змінюють дані, неактивні. */
+  protected readonly readOnly = inject(ViewAsService).active;
+  protected readonly readOnlyTip = $localize`:@@viewAs.disabled:У режимі перегляду дані не змінюються`;
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -298,7 +302,7 @@ export class PageCalendarComponent {
   protected readonly toHour = computed(() => Math.max(this.fromHour() + 1, this.definition().calendar?.toHour ?? DEFAULT_TO_HOUR));
   protected readonly hours = computed(() => Array.from({ length: this.toHour() - this.fromHour() }, (_, i) => this.fromHour() + i));
   protected readonly gridHeight = computed(() => this.hours().length * HOUR_PX);
-  protected readonly canCreate = computed(() => !!this.definition().create);
+  protected readonly canCreate = computed(() => !!this.definition().create && !this.readOnly());
   protected readonly gridColumns = computed(() => `3.5rem repeat(${this.days().length}, minmax(0, 1fr))`);
   private readonly shown = computed(() => this.events().map((event, i) => this.present(event, i)));
   protected readonly columns = computed<DayColumn[]>(() => {

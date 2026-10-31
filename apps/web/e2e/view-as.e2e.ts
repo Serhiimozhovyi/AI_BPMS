@@ -77,7 +77,7 @@ test('editor переглядає проєкт як «Психолог» і ви
   const before = seen.length;
   await page.getByTestId('view-as-exit').click();
   await expect(page.getByTestId('view-as-banner')).toHaveCount(0);
-  await expect(page).toHaveURL(/\/projects\/p1(\/app)?$/);
+  await expect(page).toHaveURL(/\/projects\/p1\/members$/);
   await expect(page.getByTestId('project-select')).toBeVisible();
   expect(seen.slice(before).every((h) => h === null)).toBe(true);
 });

@@ -3,6 +3,7 @@ import { ChipComponent, ChipTone } from '../../shared/chip/chip.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
+import { ViewAsService } from '../../auth/view-as.service';
 import { Subscription, of } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { eventLine } from '../../projects/calendar-line';
@@ -121,7 +122,7 @@ interface AgendaItem {
                               }
                               <td class="whitespace-nowrap p-1.5 text-right">
                                 @for (i of row.actions; track i) {
-                                  <button mat-button type="button" [attr.data-action]="i" (click)="rowAction(b, row, i)">{{ rowActionLabel(b, i) }}</button>
+                                  <button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !rowActionIsLink(b, i)" [attr.title]="readOnly() && !rowActionIsLink(b, i) ? readOnlyTip : null" (click)="rowAction(b, row, i)">{{ rowActionLabel(b, i) }}</button>
                                 }
                               </td>
                             </tr>
@@ -177,7 +178,7 @@ interface AgendaItem {
               @case ('actions') {
                 <div class="flex flex-wrap gap-2" data-testid="block-actions">
                   @for (i of b.actions ?? []; track i) {
-                    <button mat-stroked-button type="button" [attr.data-block-action]="i" (click)="blockAction(b, i)">{{ blockActionOf(b, i)?.label }}</button>
+                    <button mat-stroked-button type="button" [attr.data-block-action]="i" [disabled]="readOnly()" [attr.title]="readOnly() ? readOnlyTip : null" (click)="blockAction(b, i)">{{ blockActionOf(b, i)?.label }}</button>
                   }
                 </div>
               }
@@ -191,6 +192,9 @@ interface AgendaItem {
 export class PageDashboardComponent {
   private readonly api = inject(ProjectPagesApiService);
   private readonly destroyRef = inject(DestroyRef);
+  /** Перегляд «як користувач» (F12-02): дії, що змінюють дані, неактивні. */
+  protected readonly readOnly = inject(ViewAsService).active;
+  protected readonly readOnlyTip = $localize`:@@viewAs.disabled:У режимі перегляду дані не змінюються`;
 
   readonly projectId = input.required<string>();
   readonly view = input.required<ProjectPageView>();
@@ -278,6 +282,11 @@ export class PageDashboardComponent {
   /** Сторінка, на яку веде «Усі» / «Відкрити календар»: лише блок із `page`, а не з власним визначенням. */
   protected pageOf(block: PageDashboardBlock): string | null {
     return this.definition().blocks?.[block.index]?.page ?? null;
+  }
+
+  /** Дія рядка лише відкриває сторінку (не змінює дані). */
+  protected rowActionIsLink(block: PageDashboardBlock, index: number): boolean {
+    return !!block.view?.page.definition.actions?.[index]?.page;
   }
 
   protected rowActionLabel(block: PageDashboardBlock, index: number): string {

@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 import { ProjectPageView } from '../../projects/project-pages-api.service';
 import { PageFormComponent } from './page-form.component';
+import { ViewAsService } from '../../auth/view-as.service';
 
 const view: ProjectPageView = {
   page: {
@@ -67,5 +68,16 @@ describe('PageFormComponent: дата й час у поясі застосунк
     const submit = http.expectOne('/api/v1/projects/p1/pages/slot-form/submit');
     expect(submit.request.body.values.starts_at).toBe('2026-07-01T07:00:00.000Z');
     submit.flush({ row: null, then: null });
+  });
+
+  it('у перегляді «як користувач» (F12-02) кнопка «Зберегти» неактивна з поясненням', async () => {
+    const { fixture, render, http, host } = await setup(null);
+    http.match(() => true).forEach((r) => r.flush({}));
+    TestBed.inject(ViewAsService).mode.set({ projectId: 'p1', projectName: 'P', role: 'viewer', appRole: 'psychologist', label: 'Психолог' });
+    fixture.detectChanges();
+    await render();
+    const submit = host.querySelector<HTMLButtonElement>('[data-testid="app-submit"]')!;
+    expect(submit.disabled).toBe(true);
+    expect(submit.title).toContain('У режимі перегляду');
   });
 });

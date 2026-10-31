@@ -218,18 +218,21 @@ export class App {
       .afterClosed()
       .subscribe((mode) => {
         if (!mode) return;
-        this.viewAs.set(mode);
+        this.viewAs.set({ ...mode, returnUrl: this.router.url });
         const app = !!mode.appRole || !!mode.memberId;
         void this.router.navigate(app ? ['/projects', mode.projectId, 'app'] : ['/projects', mode.projectId]);
       });
   }
 
-  /** Вийти з перегляду: знову власні права, сторінка проєкту, який переглядали. */
+  /** Вийти з перегляду: знову власні права, сторінка, з якої перегляд увімкнули. */
   protected exitViewAs(): void {
     const mode = this.viewAs.mode();
     this.userMenuOpen.set(false);
     this.viewAs.clear();
-    if (mode) void this.router.navigate(['/projects', mode.projectId]);
+    if (!mode) return;
+    // Назад на сторінку, з якої ввімкнули перегляд: проєкт без вибраної вкладки відкрив би порожній «Застосунок».
+    if (mode.returnUrl?.startsWith('/') && !mode.returnUrl.startsWith('//')) void this.router.navigateByUrl(mode.returnUrl);
+    else void this.router.navigate(['/projects', mode.projectId]);
   }
 
   /** Вихід: сесію закрито на Api — на сторінку входу; якщо Api недоступний, користувача все одно забуваємо. */
