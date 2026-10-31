@@ -83,7 +83,7 @@ interface DrawerState {
             <a mat-button data-testid="app-edit-page" [routerLink]="['/projects', projectId, 'app', '_builder', v.page.key]" i18n="@@app.page.edit">Налаштувати</a>
           }
           @if ((v.page.kind === 'list' || v.page.kind === 'calendar') && v.page.definition.create; as create) {
-            <button mat-flat-button type="button" data-testid="app-create" [disabled]="readOnly()" [attr.title]="readOnly() ? readOnlyTip : null" (click)="open(create.page, undefined, create.mode)" i18n="@@app.page.create">Створити</button>
+            <span class="inline-flex" [attr.title]="readOnly() ? readOnlyTip : null"><button mat-flat-button type="button" data-testid="app-create" [disabled]="readOnly()" (click)="open(create.page, undefined, create.mode)" i18n="@@app.page.create">Створити</button></span>
           }
         </div>
 
@@ -135,9 +135,9 @@ interface DrawerState {
                       @if (row.actions.length) {
                         <div class="mt-2 flex flex-wrap gap-1">
                           @for (i of row.actions; track i) {
-                            <button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null" (click)="act(v.page.definition.actions![i], i, row)">
+                            <span class="inline-flex" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null"><button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" (click)="act(v.page.definition.actions![i], i, row)">
                               {{ v.page.definition.actions![i].label }}
-                            </button>
+                            </button></span>
                           }
                         </div>
                       }
@@ -206,9 +206,9 @@ interface DrawerState {
                           }
                           <td class="whitespace-nowrap p-2 text-right">
                             @for (i of row.actions; track i) {
-                              <button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null" (click)="act(v.page.definition.actions![i], i, row)">
+                              <span class="inline-flex" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null"><button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" (click)="act(v.page.definition.actions![i], i, row)">
                                 {{ v.page.definition.actions![i].label }}
-                              </button>
+                              </button></span>
                             }
                           </td>
                         </tr>
@@ -263,9 +263,9 @@ interface DrawerState {
               @if (rec.row.actions.length) {
                 <div class="mb-4 flex gap-2">
                   @for (i of rec.row.actions; track i) {
-                    <button mat-stroked-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null" (click)="act(v.page.definition.actions![i], i, rec.row)">
+                    <span class="inline-flex" [attr.title]="readOnly() && !v.page.definition.actions![i].page ? readOnlyTip : null"><button mat-stroked-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !v.page.definition.actions![i].page" (click)="act(v.page.definition.actions![i], i, rec.row)">
                       {{ v.page.definition.actions![i].label }}
-                    </button>
+                    </button></span>
                   }
                 </div>
               }

@@ -122,7 +122,7 @@ interface AgendaItem {
                               }
                               <td class="whitespace-nowrap p-1.5 text-right">
                                 @for (i of row.actions; track i) {
-                                  <button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !rowActionIsLink(b, i)" [attr.title]="readOnly() && !rowActionIsLink(b, i) ? readOnlyTip : null" (click)="rowAction(b, row, i)">{{ rowActionLabel(b, i) }}</button>
+                                  <span class="inline-flex" [attr.title]="readOnly() && !rowActionIsLink(b, i) ? readOnlyTip : null"><button mat-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !rowActionIsLink(b, i)" (click)="rowAction(b, row, i)">{{ rowActionLabel(b, i) }}</button></span>
                                 }
                               </td>
                             </tr>
@@ -178,7 +178,7 @@ interface AgendaItem {
               @case ('actions') {
                 <div class="flex flex-wrap gap-2" data-testid="block-actions">
                   @for (i of b.actions ?? []; track i) {
-                    <button mat-stroked-button type="button" [attr.data-block-action]="i" [disabled]="readOnly()" [attr.title]="readOnly() ? readOnlyTip : null" (click)="blockAction(b, i)">{{ blockActionOf(b, i)?.label }}</button>
+                    <span class="inline-flex" [attr.title]="readOnly() ? readOnlyTip : null"><button mat-stroked-button type="button" [attr.data-block-action]="i" [disabled]="readOnly()" (click)="blockAction(b, i)">{{ blockActionOf(b, i)?.label }}</button></span>
                   }
                 </div>
               }
