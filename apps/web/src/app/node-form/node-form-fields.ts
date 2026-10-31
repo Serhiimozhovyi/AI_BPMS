@@ -38,6 +38,7 @@ import {
   CODE_FIELD,
   COMBINE_FIELD,
   COMMANDS_FIELD,
+  FORM_SCHEMA_FIELD,
   CONDITION_FIELD,
   DECISION_RULES_FIELD,
   KEYBOARD_FIELD,
@@ -47,6 +48,7 @@ import {
   VALUE_FIELD,
 } from './schema-fields';
 import { NodeCommandsFieldComponent, NodeKeyboardFieldComponent, NodeMultiChoiceFieldComponent } from './widget-fields.component';
+import { NodeFormSchemaFieldComponent } from './form-schema-field.component';
 import { NodeDecisionRulesFieldComponent } from './decision-table-field.component';
 import { BpButtonDirective } from '../shared/button.directive';
 import { SelectSearchComponent } from '../shared/select-search/select-search.component';
@@ -1376,6 +1378,7 @@ export function provideNodeForm() {
       { name: DECISION_RULES_FIELD, component: NodeDecisionRulesFieldComponent },
       { name: KEYBOARD_FIELD, component: NodeKeyboardFieldComponent },
       { name: COMMANDS_FIELD, component: NodeCommandsFieldComponent },
+      { name: FORM_SCHEMA_FIELD, component: NodeFormSchemaFieldComponent },
       { name: MULTI_CHOICE_FIELD, component: NodeMultiChoiceFieldComponent },
     ],
     wrappers: [{ name: SECTION_WRAPPER, component: NodeSectionWrapperComponent }],

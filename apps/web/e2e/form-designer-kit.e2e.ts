@@ -53,7 +53,7 @@ test('конструктор форм: рядок «З — По» перетяг
   await to.click();
   await designer.getByTestId('fd-split').click();
   const top = async (l: typeof from) => (await l.boundingBox())!.y;
-  expect(await top(to)).toBeGreaterThan((await top(from)) + 20);
+  await expect.poll(async () => (await top(to)) - (await top(from))).toBeGreaterThan(20);
 
   // Тягнемо «По» за ручку на праву половину «З».
   const handle = to.locator('.fd__handle');
@@ -68,6 +68,8 @@ test('конструктор форм: рядок «З — По» перетяг
   await page.mouse.up();
   await expect.poll(async () => Math.abs((await top(to)) - (await top(from)))).toBeLessThan(2);
   await expect(from).toHaveAttribute('data-width', '6');
+  // Анімація CDK після скидання (200 мс) закінчилась: координати межі вже остаточні.
+  await expect(designer.locator('.cdk-drag-animating, .cdk-drag-preview')).toHaveCount(0);
 
   // Межа між «З» і «По»: вправо на ~2 колонки.
   const resize = from.getByTestId('fd-resize');

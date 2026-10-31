@@ -28,7 +28,8 @@
     "schema": {
       "title": "Поля форми (JSON Schema)",
       "description": "Об'єкт з properties: string (format email | date | date-time | uri | textarea | binary — файл), number, integer, boolean, enum — список. title — підпис поля, required — обов'язкові.",
-      "type": "object"
+      "type": "object",
+      "x-openbp-widget": "form-schema"
     },
     "submitLabel": {
       "title": "Текст кнопки",

@@ -79,6 +79,7 @@
     },
     "fields": {
       "type": "object",
+      "x-openbp-widget": "form-schema",
       "description": "Поля коментаря чи даних до рішення (JSON Schema, як у core.formTrigger); без значення — лише кнопки рішень"
     },
     "assignee": {

@@ -36,6 +36,8 @@ export const DECISION_RULES_FIELD = 'app-decision-rules';
 export const KEYBOARD_FIELD = 'app-keyboard';
 /** Таблиця «команда — опис» — анотація `x-openbp-widget: commands` (F6-30). */
 export const COMMANDS_FIELD = 'app-commands';
+/** Поля форми вузла (`x-openbp-widget: form-schema`): кнопка + діалог конструктора (F11-04). */
+export const FORM_SCHEMA_FIELD = 'app-form-schema';
 /** Множинний вибір із `items.enum` (F6-30). */
 export const MULTI_CHOICE_FIELD = 'app-multi-choice';
 
@@ -94,11 +96,11 @@ export function schemaFields(schema: JsonSchema | null | undefined, options: Sch
 
 function fieldFor(key: string | undefined, raw: JsonSchema, required: boolean, root: JsonSchema, depth: number): FormlyFieldConfig {
   const widget = parseWidget(resolve(raw, root, 0)[WIDGET_ANNOTATION]);
-  if (widget === 'keyboard' || widget === 'commands') {
+  if (widget === 'keyboard' || widget === 'commands' || widget === 'form-schema') {
     const schema = resolve(raw, root, 0);
     const label = typeof schema['title'] === 'string' && schema['title'] ? schema['title'] : key;
     const description = typeof schema['description'] === 'string' ? schema['description'] : undefined;
-    return { key, type: widget === 'keyboard' ? KEYBOARD_FIELD : COMMANDS_FIELD, props: { label, description, required } };
+    return { key, type: widget === 'keyboard' ? KEYBOARD_FIELD : widget === 'commands' ? COMMANDS_FIELD : FORM_SCHEMA_FIELD, props: { label, description, required } };
   }
   const field = typedField(key, raw, required, root, depth);
   const source = field.type === VALUE_FIELD ? parseOptionsSource(resolve(raw, root, 0)[OPTIONS_ANNOTATION]) : null;
