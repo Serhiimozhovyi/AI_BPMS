@@ -22,6 +22,7 @@ import {
   serializeKeyboard,
   toggleChoice,
 } from './widgets';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /**
  * Редактор кнопок `reply_markup` (F6-30, `x-openbp-widget: keyboard`): інлайн-кнопки під повідомленням, клавіатура
@@ -31,7 +32,7 @@ import {
 @Component({
   selector: 'app-node-keyboard-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule],
   template: `
     <div class="kb" [attr.data-field]="key">
       <span class="kb__label">{{ label }}</span>
@@ -77,14 +78,14 @@ import {
                   </div>
                 }
                 <div class="kb__rowtools">
-                  <button mat-stroked-button type="button" [attr.data-testid]="'kb-add-button-' + r" (click)="addButton(r)" i18n="@@kb.addButton">Додати кнопку</button>
+                  <button mat-stroked-button type="button" [attr.data-testid]="'kb-add-button-' + r" (click)="addButton(r)" i18n="@@kb.addButton" bpVariant="tonal">Додати кнопку</button>
                   <button type="button" class="kb__icon" [disabled]="r === 0" [attr.data-testid]="'kb-row-up-' + r" i18n-title="@@kb.rowUp" title="Рядок вище" (click)="moveRow(r, -1)">↑</button>
                   <button type="button" class="kb__icon" [disabled]="r === state().inline.length - 1" [attr.data-testid]="'kb-row-down-' + r" i18n-title="@@kb.rowDown" title="Рядок нижче" (click)="moveRow(r, 1)">↓</button>
                   <button type="button" class="kb__icon" [attr.data-testid]="'kb-row-remove-' + r" i18n-title="@@kb.removeRow" title="Видалити рядок" (click)="removeRow(r)">✕</button>
                 </div>
               </div>
             }
-            <button mat-stroked-button type="button" data-testid="kb-add-row" (click)="addRow()" i18n="@@kb.addRow">Додати рядок</button>
+            <button mat-stroked-button type="button" data-testid="kb-add-row" (click)="addRow()" i18n="@@kb.addRow" bpVariant="tonal">Додати рядок</button>
           </div>
         }
         @case ('reply') {
@@ -107,14 +108,14 @@ import {
                   </div>
                 }
                 <div class="kb__rowtools">
-                  <button mat-stroked-button type="button" [attr.data-testid]="'kb-add-button-' + r" (click)="addButton(r)" i18n="@@kb.addButton">Додати кнопку</button>
+                  <button mat-stroked-button type="button" [attr.data-testid]="'kb-add-button-' + r" (click)="addButton(r)" i18n="@@kb.addButton" bpVariant="tonal">Додати кнопку</button>
                   <button type="button" class="kb__icon" [disabled]="r === 0" [attr.data-testid]="'kb-row-up-' + r" i18n-title="@@kb.rowUp" title="Рядок вище" (click)="moveRow(r, -1)">↑</button>
                   <button type="button" class="kb__icon" [disabled]="r === state().reply.length - 1" [attr.data-testid]="'kb-row-down-' + r" i18n-title="@@kb.rowDown" title="Рядок нижче" (click)="moveRow(r, 1)">↓</button>
                   <button type="button" class="kb__icon" [attr.data-testid]="'kb-row-remove-' + r" i18n-title="@@kb.removeRow" title="Видалити рядок" (click)="removeRow(r)">✕</button>
                 </div>
               </div>
             }
-            <button mat-stroked-button type="button" data-testid="kb-add-row" (click)="addRow()" i18n="@@kb.addRow">Додати рядок</button>
+            <button mat-stroked-button type="button" data-testid="kb-add-row" (click)="addRow()" i18n="@@kb.addRow" bpVariant="tonal">Додати рядок</button>
             <div class="kb__opts">
               <label><input type="checkbox" data-testid="kb-resize" [checked]="state().resize" (change)="setFlag('resize', $any($event.target).checked)" /> <span i18n="@@kb.resize">Стиснути за висотою (resize)</span></label>
               <label><input type="checkbox" data-testid="kb-onetime" [checked]="state().oneTime" (change)="setFlag('oneTime', $any($event.target).checked)" /> <span i18n="@@kb.oneTime">Сховати після натискання (one_time)</span></label>
@@ -355,7 +356,7 @@ function parseRaw(text: string): unknown {
             }
           </tbody>
         </table>
-        <button mat-stroked-button type="button" data-testid="cm-add" (click)="add()" i18n="@@cm.add">Додати команду</button>
+        <button mat-stroked-button type="button" data-testid="cm-add" (click)="add()" i18n="@@cm.add" bpVariant="tonal">Додати команду</button>
       } @else {
         <textarea class="cm__raw" rows="3" data-testid="cm-raw" [value]="rawText()" i18n-aria-label="@@cm.raw" aria-label="Команди" (change)="setRaw($any($event.target).value)"></textarea>
         <p class="cm__hint" i18n="@@cm.rawHint">Значення не є списком команд (наприклад, вираз), тому показано як є.</p>

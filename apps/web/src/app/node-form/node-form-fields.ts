@@ -1258,9 +1258,9 @@ export class NodeCombineFieldComponent extends FieldType<FieldTypeConfig> implem
         <p class="set__empty" i18n="@@set.empty">Ще немає полів.</p>
       }
       <div class="set__actions">
-        <button mat-stroked-button type="button" [attr.data-testid]="'add-' + key" (click)="add()" i18n="@@set.add">Додати поле</button>
+        <button mat-stroked-button type="button" [attr.data-testid]="'add-' + key" (click)="add()" i18n="@@set.add" bpVariant="tonal">Додати поле</button>
         @if (fromInput().length > 0) {
-          <button mat-button type="button" data-testid="add-all-input" (click)="addAllFromInput()" i18n="@@set.addAll">Додати всі поля зі входу ({{ fromInput().length }})</button>
+          <button mat-stroked-button type="button" data-testid="add-all-input" (click)="addAllFromInput()" i18n="@@set.addAll" bpVariant="tonal">Додати всі поля зі входу ({{ fromInput().length }})</button>
         }
       </div>
     </fieldset>

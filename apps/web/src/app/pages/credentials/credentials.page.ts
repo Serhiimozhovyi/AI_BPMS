@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { forkJoin } from 'rxjs';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { TableToolbarComponent } from '../../shared/table-toolbar/table-toolbar.component';
 import { NotifyService } from '../../shared/notify.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { CredentialFormComponent } from '../../credentials/credential-form.component';
@@ -17,7 +18,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
 @Component({
   selector: 'app-credentials-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule, CredentialFormComponent, EmptyStateComponent],
+  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule, CredentialFormComponent, EmptyStateComponent, TableToolbarComponent],
   template: `
     <section class="p-6">
       <div class="mb-2 flex items-center gap-4">
@@ -73,7 +74,19 @@ import { BpButtonDirective } from '../../shared/button.directive';
       }
 
       @if (credentials().length > 0) {
-        <table class="w-full text-left" data-testid="credentials-table">
+        <bp-table-toolbar
+          class="mb-3 block"
+          [(search)]="search"
+          searchTestId="credentials-search"
+          searchPlaceholder="Пошук за назвою чи типом"
+          i18n-searchPlaceholder="@@credentials.search"
+          ariaLabel="Дії над списком облікових даних"
+          i18n-ariaLabel="@@credentials.toolbar"
+        />
+        @if (shownCredentials().length === 0) {
+          <p class="opacity-70" data-testid="nothing-found" i18n="@@credentials.nothingFound">Нічого не знайдено.</p>
+        }
+        <table class="w-full text-left" data-testid="credentials-table" [hidden]="shownCredentials().length === 0">
           <thead>
             <tr class="border-b border-bp-line">
               <th class="p-2" i18n="@@credentials.col.name">Назва</th>
@@ -85,7 +98,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
             </tr>
           </thead>
           <tbody>
-            @for (c of credentials(); track c.id) {
+            @for (c of shownCredentials(); track c.id) {
               <tr class="border-b border-bp-line-2 align-top" [attr.data-credential]="c.id">
                 <td class="p-2 font-medium">{{ c.name }}</td>
                 <td class="p-2">{{ typeLabel(c.type) }}</td>
@@ -168,6 +181,13 @@ export class CredentialsPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
 
   readonly credentials = signal<CredentialSummary[]>([]);
+  readonly search = signal('');
+  /** Облікові дані, що пройшли пошук за назвою чи підписом типу. */
+  readonly shownCredentials = computed(() => {
+    const q = this.search().trim().toLowerCase();
+    if (!q) return this.credentials();
+    return this.credentials().filter((c) => c.name.toLowerCase().includes(q) || this.typeLabel(c.type).toLowerCase().includes(q));
+  });
   readonly types = signal<CredentialTypeInfo[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);

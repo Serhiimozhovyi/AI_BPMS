@@ -14,6 +14,7 @@ import {
   PageRow,
   ProjectPagesApiService,
 } from '../../projects/project-pages-api.service';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 /** Запит відкрити сторінку застосунку з підлеглого списку (картка, форма зміни чи створення). */
 export interface ExpandOpen {
@@ -32,7 +33,7 @@ export interface ExpandOpen {
 @Component({
   selector: 'app-page-expand',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule, ChipComponent],
+  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule, ChipComponent],
   template: `
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
@@ -46,7 +47,7 @@ export interface ExpandOpen {
         <div class="mb-1 flex items-center gap-3">
           <h4 class="font-semibold">{{ list.label }}</h4>
           @if (def.create; as create) {
-            <button mat-stroked-button type="button" [attr.data-expand-create]="i" (click)="add(def, create.page, create.mode)" i18n="@@app.page.expandAdd">Додати</button>
+            <button mat-stroked-button type="button" [attr.data-expand-create]="i" (click)="add(def, create.page, create.mode)" i18n="@@app.page.expandAdd" bpVariant="tonal">Додати</button>
           }
         </div>
         @if (list.rows.length === 0) {

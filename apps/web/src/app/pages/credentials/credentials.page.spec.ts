@@ -58,6 +58,23 @@ describe('CredentialsPage', () => {
     expect(row.textContent).toContain('сценарій «Звіт»');
   });
 
+  it('пошук над таблицею: за назвою чи типом, «Нічого не знайдено», очищення повертає рядки', async () => {
+    const { fixture, host } = await setup([used, { ...used, id: 'c2', name: 'Бот Telegram', type: 'telegram' }]);
+    expect(host.querySelectorAll('[data-credential]').length).toBe(2);
+    type(host, '[data-testid="credentials-search"]', 'telegram');
+    await render(fixture);
+    expect([...host.querySelectorAll('[data-credential]')].map((r) => r.getAttribute('data-credential'))).toEqual(['c2']);
+    type(host, '[data-testid="credentials-search"]', 'anthropic');
+    await render(fixture);
+    expect([...host.querySelectorAll('[data-credential]')].map((r) => r.getAttribute('data-credential'))).toEqual(['c1']);
+    type(host, '[data-testid="credentials-search"]', 'нема такого');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="nothing-found"]')).not.toBeNull();
+    type(host, '[data-testid="credentials-search"]', '');
+    await render(fixture);
+    expect(host.querySelectorAll('[data-credential]').length).toBe(2);
+  });
+
   it('таблиця: кількість підключень, що використовують облікові дані', async () => {
     const { host } = await setup([
       { ...used, usedBy: { connectors: [{ id: 'k1', name: 'Бот 1' }, { id: 'k2', name: 'Бот 2' }], workflows: [] } },

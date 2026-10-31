@@ -82,7 +82,7 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
         <button mat-button type="button" (click)="removeComputed(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>
     }
-    <button mat-button type="button" data-testid="b-add-computed" (click)="addComputed()" i18n="@@bo.computed.add">Додати обчислювану колонку</button>
+    <button mat-stroked-button type="button" data-testid="b-add-computed" (click)="addComputed()" i18n="@@bo.computed.add" bpVariant="tonal">Додати обчислювану колонку</button>
 
     <h3 class="mb-1 mt-4 font-medium" i18n="@@bo.list.layout">Показ</h3>
     <div class="flex flex-wrap items-center gap-2">
@@ -139,7 +139,7 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
         <button mat-button type="button" (click)="removeExpand(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>
     }
-    <button mat-button type="button" data-testid="b-add-expand" (click)="addExpand()" i18n="@@bo.expand.add">Додати підлеглий список</button>
+    <button mat-stroked-button type="button" data-testid="b-add-expand" (click)="addExpand()" i18n="@@bo.expand.add" bpVariant="tonal">Додати підлеглий список</button>
   `,
 })
 export class BuilderListOptionsComponent {

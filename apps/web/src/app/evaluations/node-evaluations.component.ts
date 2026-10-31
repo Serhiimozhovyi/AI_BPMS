@@ -173,7 +173,7 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
 
         @if (!readonly()) {
           <div class="flex flex-wrap gap-2">
-            <button mat-button type="button" data-testid="case-add" (click)="add()" i18n="@@evaluations.add">Додати кейс</button>
+            <button mat-stroked-button type="button" data-testid="case-add" (click)="add()" i18n="@@evaluations.add" bpVariant="tonal">Додати кейс</button>
             <button mat-stroked-button type="button" data-testid="evaluation-save" [disabled]="busy() || !dirty()" (click)="save()" i18n="@@evaluations.save">Зберегти кейси</button>
             <button mat-flat-button type="button" data-testid="evaluation-run" [disabled]="busy() || dirty() || drafts().length === 0" (click)="run()" i18n="@@evaluations.run">Запустити оцінку</button>
           </div>

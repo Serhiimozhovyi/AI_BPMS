@@ -90,12 +90,12 @@ const KINDS: readonly PageBlock['kind'][] = ['text', 'tiles', 'list', 'calendar'
                 <button mat-button type="button" (click)="removeAction(i, j)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
               </div>
             }
-            <button mat-button type="button" [attr.data-testid]="'bd-add-action-' + i" (click)="addAction(i)" i18n="@@builder.addAction">Додати дію</button>
+            <button mat-stroked-button type="button" [attr.data-testid]="'bd-add-action-' + i" (click)="addAction(i)" i18n="@@builder.addAction" bpVariant="tonal">Додати дію</button>
           </div>
         }
       </div>
     }
-    <button mat-button type="button" data-testid="b-add-block" (click)="add()" i18n="@@bd.add">Додати блок</button>
+    <button mat-stroked-button type="button" data-testid="b-add-block" (click)="add()" i18n="@@bd.add" bpVariant="tonal">Додати блок</button>
   `,
 })
 export class BuilderDashboardComponent {

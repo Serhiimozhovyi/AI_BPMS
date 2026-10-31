@@ -178,8 +178,8 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
             <p role="alert" class="mb-2 text-red-700" data-testid="table-form-error">{{ designError() }}</p>
           }
           <div class="flex flex-wrap gap-2">
-            <button mat-button type="button" data-testid="column-add" (click)="addColumn()" i18n="@@tables.form.addColumn">Додати колонку</button>
-            <button mat-button type="button" data-testid="unique-add" (click)="addUnique()" i18n="@@tables.form.addUnique">Додати правило унікальності</button>
+            <button mat-stroked-button type="button" data-testid="column-add" (click)="addColumn()" i18n="@@tables.form.addColumn" bpVariant="tonal">Додати колонку</button>
+            <button mat-stroked-button type="button" data-testid="unique-add" (click)="addUnique()" i18n="@@tables.form.addUnique" bpVariant="tonal">Додати правило унікальності</button>
             <button mat-flat-button type="button" data-testid="table-save" [disabled]="saving()" (click)="saveTable()" i18n="@@tables.form.save">
               Зберегти
             </button>
