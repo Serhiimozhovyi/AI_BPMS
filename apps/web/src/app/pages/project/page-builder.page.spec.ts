@@ -20,6 +20,7 @@ const tables = [
       { name: 'starts_at', type: 'datetime' },
     ],
   },
+  { id: 't3', name: 'rooms', projectId: 'p1', rowCount: 0, updatedAt: '2026-10-28T00:00:00Z', columns: [{ name: 'title', type: 'string' }] },
   { id: 't2', name: 'other', projectId: 'p2', rowCount: 0, updatedAt: '2026-10-28T00:00:00Z', columns: [{ name: 'x', type: 'string' }] },
 ];
 
@@ -79,7 +80,7 @@ describe('PageBuilderPage (F8-05)', () => {
     await render(fixture);
 
     // Таблиці й сценарії інших проєктів у виборі не з'являються.
-    expect(matSelectOf(host.querySelector('[data-testid="b-table"]')!).options.map((o) => o.viewValue)).toEqual(['—', 'bookings']);
+    expect(matSelectOf(host.querySelector('[data-testid="b-table"]')!).options.map((o) => o.viewValue)).toEqual(['—', 'bookings', 'rooms']);
 
     pick(host, '[data-testid="b-key"]', 'my-bookings', 'input');
     pick(host, '[data-testid="b-name"]', 'Мої записи', 'input');
@@ -152,12 +153,16 @@ describe('PageBuilderPage (F8-05)', () => {
     });
     await render(fixture);
 
-    host.querySelector<HTMLInputElement>('[data-field="minutes"]')!.click();
+    host.querySelector<HTMLElement>('[data-testid="fd-card-minutes"]')!.click();
     await render(fixture);
+    host.querySelector<HTMLButtonElement>('[data-testid="fd-delete"]')!.click();
+    await render(fixture);
+    expect(host.querySelector('[data-testid="fd-col-minutes"]')).not.toBeNull();
     host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
     const body = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/book' }).request.body.definition;
     expect(body.fields).toEqual([{ column: 'name', ui: { placeholder: 'Ім’я' } }]);
-    expect(body.formLayout).toEqual({ sections: [{ title: 'Запис', rows: [[{ field: 'name', width: 8 }]] }] });
+    // Поле, що лишилось одне в рядку, ширину втрачає.
+    expect(body.formLayout).toEqual({ sections: [{ title: 'Запис', rows: [[{ field: 'name' }]] }] });
   });
 
   it('редагує наявну форму: зберігає display і value полів, яких форма не змінює', async () => {
@@ -186,8 +191,15 @@ describe('PageBuilderPage (F8-05)', () => {
     await render(fixture);
 
     expect(host.querySelector<HTMLInputElement>('[data-testid="b-key"]')!.disabled).toBe(true);
-    expect(host.querySelector<HTMLInputElement>('[data-required="name"]')!.checked).toBe(true);
-    host.querySelector<HTMLInputElement>('[data-required="name"]')!.click();
+    // «status» ставить сервер — його немає на канвасі, він у списку прихованих.
+    expect(host.querySelector('[data-testid="fd-card-status"]')).toBeNull();
+    expect((host.querySelector('[data-testid="b-hidden-text-0"]') as HTMLInputElement).value).toBe('active');
+    host.querySelector<HTMLElement>('[data-testid="fd-card-name"]')!.click();
+    await render(fixture);
+    const required = host.querySelector<HTMLInputElement>('[data-testid="fd-prop-required"] input')!;
+    expect(required.checked).toBe(true);
+    required.click();
+    await render(fixture);
     host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
     const put = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/book' });
     expect(put.request.body.definition).toEqual({
@@ -196,6 +208,58 @@ describe('PageBuilderPage (F8-05)', () => {
       onSubmit: { workflow: 'cancel-booking' },
       then: { page: 'booking' },
     });
+  });
+
+  it('нова форма: колонки таблиці → поля, два в один рядок, приховане поле з виразом', async () => {
+    const { fixture, http, host } = await setup();
+    await render(fixture);
+    pick(host, '[data-testid="b-key"]', 'book', 'input');
+    pick(host, '[data-testid="b-name"]', 'Запис', 'input');
+    pick(host, '[data-testid="b-kind"]', 'form');
+    pick(host, '[data-testid="b-table"]', 'bookings');
+    await render(fixture);
+
+    expect(host.querySelectorAll('[data-column]').length).toBe(4);
+    host.querySelector<HTMLElement>('[data-testid="fd-col-name"]')!.click();
+    host.querySelector<HTMLElement>('[data-testid="fd-col-minutes"]')!.click();
+    await render(fixture);
+    host.querySelector<HTMLElement>('[data-testid="fd-join"]')!.click();
+    await render(fixture);
+    host.querySelector<HTMLElement>('[data-testid="fd-row-preset-4-8"]')!.click();
+    await render(fixture);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="b-hidden-add"]')!.click();
+    await render(fixture);
+    pick(host, '[data-testid="b-hidden-column-0"]', 'status');
+    const text = host.querySelector<HTMLInputElement>('[data-testid="b-hidden-text-0"]')!;
+    text.value = 'active';
+    text.dispatchEvent(new Event('input'));
+    await render(fixture);
+    expect(host.querySelector('[data-testid="fd-col-status"]')).toBeNull();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="b-save"]')!.click();
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/projects/p1/pages/book' });
+    expect(put.request.body.definition).toEqual({
+      table: 'bookings',
+      fields: [{ column: 'name' }, { column: 'minutes' }, { column: 'status', value: 'active' }],
+      formLayout: { sections: [{ rows: [[{ field: 'name', width: 4 }, { field: 'minutes', width: 8 }]] }] },
+      onSubmit: { operation: 'insert' },
+    });
+  });
+
+  it('інша таблиця очищає поля форми й приховані поля', async () => {
+    const { fixture, host } = await setup();
+    await render(fixture);
+    pick(host, '[data-testid="b-kind"]', 'form');
+    pick(host, '[data-testid="b-table"]', 'bookings');
+    await render(fixture);
+    host.querySelector<HTMLElement>('[data-testid="fd-col-name"]')!.click();
+    await render(fixture);
+    expect(host.querySelector('[data-testid="fd-card-name"]')).not.toBeNull();
+    pick(host, '[data-testid="b-table"]', 'rooms');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="fd-card-name"]')).toBeNull();
+    expect(host.querySelector('[data-testid="fd-col-title"]')).not.toBeNull();
   });
 
   it('помилка Api показується, хибний JSON не змінює форму', async () => {

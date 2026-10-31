@@ -24,7 +24,13 @@ import {
   fromSchema,
   keyError,
   kindOf,
+  propertyForColumn,
+  TableColumn,
+  addAllColumns,
+  addColumn,
+  addColumnToRow,
   addFieldToRow,
+  columnsNotOnForm,
   canJoinPrevious,
   joinPrevious,
   moveField,
@@ -65,6 +71,9 @@ interface DropSpot {
 }
 
 const PALETTE_ID = 'fd-palette';
+
+/** Що тягнуть з палітри: тип нового поля або колонка таблиці (режим таблиці). */
+type PaletteItem = { kind: FieldKind } | { column: string };
 const GRID_UNITS = 12;
 
 /**
@@ -84,7 +93,9 @@ const GRID_UNITS = 12;
   template: `
     <div class="fd" data-testid="form-designer">
       <div class="fd__bar">
-        <bp-tabs variant="pills" [tabs]="modes()" [value]="mode()" (valueChange)="setMode($any($event))" label="Режим конструктора" i18n-label="@@fd.modes" testId="fd-mode" />
+        @if (!tableMode()) {
+          <bp-tabs variant="pills" [tabs]="modes()" [value]="mode()" (valueChange)="setMode($any($event))" label="Режим конструктора" i18n-label="@@fd.modes" testId="fd-mode" />
+        }
         <span class="fd__spacer"></span>
         <button mat-icon-button type="button" data-testid="fd-undo" [disabled]="!canUndo()" (click)="undo()" i18n-aria-label="@@fd.undo" aria-label="Скасувати (Ctrl+Z)" i18n-title="@@fd.undo" title="Скасувати (Ctrl+Z)">
           <span class="material-symbols-outlined" aria-hidden="true">undo</span>
@@ -97,7 +108,7 @@ const GRID_UNITS = 12;
       @if (mode() === 'design') {
         <div class="fd__grid">
           <aside class="fd__palette" aria-labelledby="fd-palette-title">
-            <h3 id="fd-palette-title" class="fd__heading" i18n="@@fd.palette">Додати поле</h3>
+            <h3 id="fd-palette-title" class="fd__heading">{{ tableMode() ? columnsHeading : paletteHeading }}</h3>
             <div
               class="fd__kinds"
               cdkDropList
@@ -107,13 +118,28 @@ const GRID_UNITS = 12;
               [cdkDropListEnterPredicate]="noEnter"
               data-testid="fd-palette"
             >
-              @for (k of kinds; track k.kind) {
-                <button type="button" class="fd__kind" cdkDrag [cdkDragData]="k.kind" [attr.data-kind]="k.kind" [attr.data-testid]="'fd-kind-' + k.kind" (click)="add(k.kind)">
-                  <span class="material-symbols-outlined" aria-hidden="true">{{ k.icon }}</span>
-                  <span>{{ k.label }}</span>
-                </button>
+              @if (tableMode()) {
+                @for (c of freeColumns(); track c.name) {
+                  <button type="button" class="fd__kind" cdkDrag [cdkDragData]="{ column: c.name }" [attr.data-column]="c.name" [attr.data-testid]="'fd-col-' + c.name" (click)="addColumnClick(c)">
+                    <span class="material-symbols-outlined" aria-hidden="true">{{ columnIcon(c) }}</span>
+                    <span class="fd__kind-name">{{ c.name }}</span>
+                    <span class="fd__kind-type">{{ columnTypeLabel(c.type) }}</span>
+                  </button>
+                } @empty {
+                  <p class="fd__note" data-testid="fd-columns-empty" i18n="@@fd.columns.empty">Усі колонки вже на формі.</p>
+                }
+              } @else {
+                @for (k of kinds; track k.kind) {
+                  <button type="button" class="fd__kind" cdkDrag [cdkDragData]="{ kind: k.kind }" [attr.data-kind]="k.kind" [attr.data-testid]="'fd-kind-' + k.kind" (click)="add(k.kind)">
+                    <span class="material-symbols-outlined" aria-hidden="true">{{ k.icon }}</span>
+                    <span>{{ k.label }}</span>
+                  </button>
+                }
               }
             </div>
+            @if (tableMode() && freeColumns().length > 1) {
+              <button mat-stroked-button type="button" class="fd__add-section" data-testid="fd-add-all" (click)="addAll()" i18n="@@fd.columns.addAll">Додати всі</button>
+            }
             <button mat-stroked-button type="button" class="fd__add-section" bpVariant="tonal" data-testid="fd-add-section" (click)="newSection()">
               <span class="material-symbols-outlined" aria-hidden="true">add</span>
               <span i18n="@@fd.addSection">Секція</span>
@@ -229,13 +255,17 @@ const GRID_UNITS = 12;
                   <mat-label i18n="@@fd.prop.title">Підпис</mat-label>
                   <input matInput data-testid="fd-prop-title" [value]="titleOf(p, key)" (input)="setProp(key, 'title', text($event))" />
                 </mat-form-field>
-                <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
-                  <mat-label i18n="@@fd.prop.key">Ключ (назва в даних)</mat-label>
-                  <input matInput data-testid="fd-prop-key" [value]="keyDraft() ?? key" (input)="keyDraft.set(text($event))" (change)="commitKey(key)" (keydown.enter)="commitKey(key)" />
-                  @if (keyDraftError(); as err) {
-                    <mat-hint class="fd__error" data-testid="fd-key-error">{{ err }}</mat-hint>
-                  }
-                </mat-form-field>
+                @if (tableMode()) {
+                  <p class="fd__note" data-testid="fd-prop-column"><ng-container i18n="@@fd.prop.column">Колонка таблиці:</ng-container> <strong>{{ key }}</strong> · {{ columnTypeOf(key) }}</p>
+                } @else {
+                  <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
+                    <mat-label i18n="@@fd.prop.key">Ключ (назва в даних)</mat-label>
+                    <input matInput data-testid="fd-prop-key" [value]="keyDraft() ?? key" (input)="keyDraft.set(text($event))" (change)="commitKey(key)" (keydown.enter)="commitKey(key)" />
+                    @if (keyDraftError(); as err) {
+                      <mat-hint class="fd__error" data-testid="fd-key-error">{{ err }}</mat-hint>
+                    }
+                  </mat-form-field>
+                }
                 <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
                   <mat-label i18n="@@fd.prop.description">Підказка під полем</mat-label>
                   <input matInput data-testid="fd-prop-description" [value]="str(p['description'])" (input)="setProp(key, 'description', text($event))" />
@@ -248,71 +278,73 @@ const GRID_UNITS = 12;
                 }
                 <mat-checkbox data-testid="fd-prop-required" [checked]="isRequired(key)" (change)="toggleRequired(key, $event.checked)" i18n="@@fd.prop.required">Обов'язкове</mat-checkbox>
 
+                @if (!tableMode()) {
                 @if (kind === 'text' || kind === 'textarea' || kind === 'address') {
-                  <div class="fd__pair">
-                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
-                      <mat-label i18n="@@fd.prop.minLength">Мін. символів</mat-label>
-                      <input matInput type="number" min="0" data-testid="fd-prop-minLength" [value]="str(p['minLength'])" (input)="setNumber(key, 'minLength', $event)" />
+                    <div class="fd__pair">
+                      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                        <mat-label i18n="@@fd.prop.minLength">Мін. символів</mat-label>
+                        <input matInput type="number" min="0" data-testid="fd-prop-minLength" [value]="str(p['minLength'])" (input)="setNumber(key, 'minLength', $event)" />
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                        <mat-label i18n="@@fd.prop.maxLength">Макс. символів</mat-label>
+                        <input matInput type="number" min="1" data-testid="fd-prop-maxLength" [value]="str(p['maxLength'])" (input)="setNumber(key, 'maxLength', $event)" />
+                      </mat-form-field>
+                    </div>
+                  }
+                  @if (kind === 'text') {
+                    <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
+                      <mat-label i18n="@@fd.prop.pattern">Шаблон (регулярний вираз)</mat-label>
+                      <input matInput data-testid="fd-prop-pattern" [value]="str(p['pattern'])" (input)="setProp(key, 'pattern', text($event))" />
                     </mat-form-field>
-                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
-                      <mat-label i18n="@@fd.prop.maxLength">Макс. символів</mat-label>
-                      <input matInput type="number" min="1" data-testid="fd-prop-maxLength" [value]="str(p['maxLength'])" (input)="setNumber(key, 'maxLength', $event)" />
-                    </mat-form-field>
-                  </div>
-                }
-                @if (kind === 'text') {
-                  <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
-                    <mat-label i18n="@@fd.prop.pattern">Шаблон (регулярний вираз)</mat-label>
-                    <input matInput data-testid="fd-prop-pattern" [value]="str(p['pattern'])" (input)="setProp(key, 'pattern', text($event))" />
-                  </mat-form-field>
-                }
-                @if (kind === 'number') {
-                  <div class="fd__pair">
-                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
-                      <mat-label i18n="@@fd.prop.minimum">Мінімум</mat-label>
-                      <input matInput type="number" data-testid="fd-prop-minimum" [value]="str(p['minimum'])" (input)="setNumber(key, 'minimum', $event)" />
-                    </mat-form-field>
-                    <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
-                      <mat-label i18n="@@fd.prop.maximum">Максимум</mat-label>
-                      <input matInput type="number" data-testid="fd-prop-maximum" [value]="str(p['maximum'])" (input)="setNumber(key, 'maximum', $event)" />
-                    </mat-form-field>
-                  </div>
-                  <mat-checkbox data-testid="fd-prop-integer" [checked]="p['type'] === 'integer'" (change)="setProp(key, 'type', $event.checked ? 'integer' : 'number')" i18n="@@fd.prop.integer">Лише цілі числа</mat-checkbox>
-                }
-                @if (kind === 'select' || kind === 'multiselect') {
-                  <h4 class="fd__subheading" i18n="@@fd.options">Варіанти</h4>
-                  <div class="fd-options" cdkDropList (cdkDropListDropped)="optionDropped(key, $event)" data-testid="fd-options">
-                    @for (o of options(); track $index; let i = $index) {
-                      <div class="fd-option" cdkDrag>
-                        <span class="material-symbols-outlined fd__handle" cdkDragHandle aria-hidden="true">drag_indicator</span>
-                        <input class="fd-option__input" [value]="o.label" [attr.data-testid]="'fd-option-label-' + i" i18n-aria-label="@@fd.option.label" aria-label="Підпис варіанта" (input)="setOption(key, i, 'label', text($event))" />
-                        <input class="fd-option__input fd-option__value" [value]="o.value" [attr.data-testid]="'fd-option-value-' + i" i18n-aria-label="@@fd.option.value" aria-label="Значення в даних" (input)="setOption(key, i, 'value', text($event))" />
-                        <button mat-icon-button type="button" bpSize="sm" [attr.data-testid]="'fd-option-remove-' + i" i18n-aria-label="@@fd.option.remove" aria-label="Прибрати варіант" (click)="removeOption(key, i)">
-                          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
-                  <button mat-stroked-button type="button" bpVariant="tonal" data-testid="fd-option-add" (click)="addOption(key)" i18n="@@fd.option.add">Додати варіант</button>
-                }
-                @if (kind === 'boolean') {
-                  <mat-checkbox data-testid="fd-prop-default" [checked]="p['default'] === true" (change)="setProp(key, 'default', $event.checked || undefined)" i18n="@@fd.prop.defaultOn">Позначено спочатку</mat-checkbox>
-                } @else if (kind === 'select') {
-                  <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
-                    <mat-label i18n="@@fd.prop.default">Значення за замовчуванням</mat-label>
-                    <mat-select data-testid="fd-prop-default" [value]="str(p['default'])" (selectionChange)="setProp(key, 'default', $event.value || undefined)">
-                      <bp-select-search />
-                      <mat-option value="">—</mat-option>
-                      @for (o of options(); track $index) {
-                        <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                  }
+                  @if (kind === 'number') {
+                    <div class="fd__pair">
+                      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                        <mat-label i18n="@@fd.prop.minimum">Мінімум</mat-label>
+                        <input matInput type="number" data-testid="fd-prop-minimum" [value]="str(p['minimum'])" (input)="setNumber(key, 'minimum', $event)" />
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                        <mat-label i18n="@@fd.prop.maximum">Максимум</mat-label>
+                        <input matInput type="number" data-testid="fd-prop-maximum" [value]="str(p['maximum'])" (input)="setNumber(key, 'maximum', $event)" />
+                      </mat-form-field>
+                    </div>
+                    <mat-checkbox data-testid="fd-prop-integer" [checked]="p['type'] === 'integer'" (change)="setProp(key, 'type', $event.checked ? 'integer' : 'number')" i18n="@@fd.prop.integer">Лише цілі числа</mat-checkbox>
+                  }
+                  @if (kind === 'select' || kind === 'multiselect') {
+                    <h4 class="fd__subheading" i18n="@@fd.options">Варіанти</h4>
+                    <div class="fd-options" cdkDropList (cdkDropListDropped)="optionDropped(key, $event)" data-testid="fd-options">
+                      @for (o of options(); track $index; let i = $index) {
+                        <div class="fd-option" cdkDrag>
+                          <span class="material-symbols-outlined fd__handle" cdkDragHandle aria-hidden="true">drag_indicator</span>
+                          <input class="fd-option__input" [value]="o.label" [attr.data-testid]="'fd-option-label-' + i" i18n-aria-label="@@fd.option.label" aria-label="Підпис варіанта" (input)="setOption(key, i, 'label', text($event))" />
+                          <input class="fd-option__input fd-option__value" [value]="o.value" [attr.data-testid]="'fd-option-value-' + i" i18n-aria-label="@@fd.option.value" aria-label="Значення в даних" (input)="setOption(key, i, 'value', text($event))" />
+                          <button mat-icon-button type="button" bpSize="sm" [attr.data-testid]="'fd-option-remove-' + i" i18n-aria-label="@@fd.option.remove" aria-label="Прибрати варіант" (click)="removeOption(key, i)">
+                            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                          </button>
+                        </div>
                       }
-                    </mat-select>
-                  </mat-form-field>
-                } @else if (kind !== 'multiselect' && kind !== 'file') {
-                  <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
-                    <mat-label i18n="@@fd.prop.default">Значення за замовчуванням</mat-label>
-                    <input matInput data-testid="fd-prop-default" [value]="str(p['default'])" (input)="setDefault(key, kind, text($event))" />
-                  </mat-form-field>
+                    </div>
+                    <button mat-stroked-button type="button" bpVariant="tonal" data-testid="fd-option-add" (click)="addOption(key)" i18n="@@fd.option.add">Додати варіант</button>
+                  }
+                  @if (kind === 'boolean') {
+                    <mat-checkbox data-testid="fd-prop-default" [checked]="p['default'] === true" (change)="setProp(key, 'default', $event.checked || undefined)" i18n="@@fd.prop.defaultOn">Позначено спочатку</mat-checkbox>
+                  } @else if (kind === 'select') {
+                    <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
+                      <mat-label i18n="@@fd.prop.default">Значення за замовчуванням</mat-label>
+                      <mat-select data-testid="fd-prop-default" [value]="str(p['default'])" (selectionChange)="setProp(key, 'default', $event.value || undefined)">
+                        <bp-select-search />
+                        <mat-option value="">—</mat-option>
+                        @for (o of options(); track $index) {
+                          <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  } @else if (kind !== 'multiselect' && kind !== 'file') {
+                    <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
+                      <mat-label i18n="@@fd.prop.default">Значення за замовчуванням</mat-label>
+                      <input matInput data-testid="fd-prop-default" [value]="str(p['default'])" (input)="setDefault(key, kind, text($event))" />
+                    </mat-form-field>
+                  }
                 }
                 @if (selectedRow(); as r) {
                   <h4 class="fd__subheading" i18n="@@fd.row">Рядок</h4>
@@ -341,8 +373,12 @@ const GRID_UNITS = 12;
                   }
                 }
                 <div class="fd__actions">
-                  <button mat-stroked-button type="button" data-testid="fd-duplicate" (click)="duplicate(key)" i18n="@@fd.duplicate">Дублювати</button>
-                  <button mat-button type="button" bpVariant="danger" data-testid="fd-delete" (click)="remove(key)" i18n="@@fd.delete">Видалити поле</button>
+                  @if (!tableMode()) {
+                    <button mat-stroked-button type="button" data-testid="fd-duplicate" (click)="duplicate(key)" i18n="@@fd.duplicate">Дублювати</button>
+                    <button mat-button type="button" bpVariant="danger" data-testid="fd-delete" (click)="remove(key)" i18n="@@fd.delete">Видалити поле</button>
+                  } @else {
+                    <button mat-button type="button" bpVariant="danger" data-testid="fd-delete" (click)="remove(key)" i18n="@@fd.removeColumn">Прибрати з форми</button>
+                  }
                 </div>
               }
               @case ('section') {
@@ -714,6 +750,8 @@ export class FormDesignerComponent {
   readonly schemaChange = output<JsonSchema>();
   /** Є — з'являється вкладка «Перегляд» з цими заголовком, описом і кнопкою (панель вузла). */
   readonly preview = input<DesignerPreviewMeta | null>(null);
+  /** Є — режим таблиці (F11-05): поля форми — колонки таблиці; тип і ключ поля задає колонка, палітра — колонки без поля, JSON-режиму немає. */
+  readonly columns = input<readonly TableColumn[] | null>(null);
 
   protected readonly kinds = FIELD_KINDS;
   protected readonly paletteId = PALETTE_ID;
@@ -723,6 +761,10 @@ export class FormDesignerComponent {
   private readonly modeJson: BpTab = { value: 'json', label: 'JSON', testId: 'fd-mode-json' };
   protected readonly modes = computed<BpTab[]>(() => (this.preview() ? [this.modeDesign, this.modePreview, this.modeJson] : [this.modeDesign, this.modeJson]));
   protected readonly currentSchema = computed(() => toSchema(this.state()));
+  protected readonly tableMode = computed(() => this.columns() !== null);
+  protected readonly freeColumns = computed(() => columnsNotOnForm(this.state(), this.columns() ?? []));
+  protected readonly paletteHeading = $localize`:@@fd.palette:Додати поле`;
+  protected readonly columnsHeading = $localize`:@@fd.columns:Колонки таблиці`;
 
   protected readonly state = signal<DesignerState>(fromSchema(null));
   protected readonly selection = signal<Selection>(null);
@@ -911,6 +953,29 @@ export class FormDesignerComponent {
     this.selectField(key);
   }
 
+  protected addColumnClick(column: TableColumn): void {
+    const target = this.selectedSection() ?? (this.selectedKey() ? placeOf(this.state(), this.selectedKey()!)?.section : undefined);
+    this.update(addColumn(this.state(), column, target ?? this.state().layout.sections.length - 1));
+    this.selectField(column.name);
+  }
+
+  protected addAll(): void {
+    const target = this.selectedSection() ?? (this.selectedKey() ? placeOf(this.state(), this.selectedKey()!)?.section : undefined);
+    this.update(addAllColumns(this.state(), this.columns() ?? [], target ?? this.state().layout.sections.length - 1));
+  }
+
+  protected columnIcon(column: TableColumn): string {
+    return FIELD_KINDS.find((k) => k.kind === kindOf(propertyForColumn(column)))?.icon ?? 'short_text';
+  }
+
+  protected columnTypeLabel(type: string): string {
+    return type;
+  }
+
+  protected columnTypeOf(name: string): string {
+    return this.columns()?.find((c) => c.name === name)?.type ?? '';
+  }
+
   protected newSection(): void {
     this.update(addSection(this.state()));
     this.selection.set({ kind: 'section', index: this.state().layout.sections.length - 1 });
@@ -1037,7 +1102,7 @@ export class FormDesignerComponent {
       this.remove(key);
     } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
       event.preventDefault();
-      this.duplicate(key);
+      if (!this.tableMode()) this.duplicate(key);
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       this.selectField(key);
@@ -1061,11 +1126,33 @@ export class FormDesignerComponent {
 
   // ---------- Перетягування ----------
 
+  /**
+   * Позиція в рядку для поля, що прийшло ззовні: CDK ставить його на місце картки під вказівником (тобто перед нею),
+   * а людина, яка скинула на праву половину картки, чекає «після». Порівнюємо точку скидання із серединою картки.
+   */
+  private entryIndex(event: CdkDragDrop<DropSpot>, section: number, row: number): number {
+    const cells = this.state().layout.sections[section]?.rows[row] ?? [];
+    const hovered = cells[event.currentIndex];
+    if (!hovered) return event.currentIndex;
+    const card = document.querySelector<HTMLElement>(`[data-testid="fd-card-${CSS.escape(hovered.field)}"]`);
+    if (!card) return event.currentIndex;
+    const rect = card.getBoundingClientRect();
+    return event.dropPoint.x > rect.left + rect.width / 2 ? event.currentIndex + 1 : event.currentIndex;
+  }
+
   /** Скидання в рядок: поле стає поруч з іншими (у своєму рядку — змінює порядок). */
   protected rowDropped(event: CdkDragDrop<DropSpot>): void {
     const { section, row } = event.container.data;
     if (event.previousContainer.id === PALETTE_ID) {
-      const { state, key } = addFieldToRow(this.state(), event.item.data as FieldKind, section, row, event.currentIndex);
+      const item = event.item.data as PaletteItem;
+      if ('column' in item) {
+        const column = this.columns()?.find((c) => c.name === item.column);
+        if (!column) return;
+        this.update(addColumnToRow(this.state(), column, section, row, this.entryIndex(event, section, row)));
+        this.selectField(column.name);
+        return;
+      }
+      const { state, key } = addFieldToRow(this.state(), item.kind, section, row, this.entryIndex(event, section, row));
       this.update(state);
       this.selectField(key);
       return;
@@ -1077,7 +1164,7 @@ export class FormDesignerComponent {
       const index = event.currentIndex > event.previousIndex ? event.currentIndex + 1 : event.currentIndex;
       this.update(placeInRow(this.state(), key, section, row, index));
     } else {
-      this.update(placeInRow(this.state(), key, section, row, event.currentIndex));
+      this.update(placeInRow(this.state(), key, section, row, this.entryIndex(event, section, row)));
     }
     this.selectField(key);
   }
@@ -1086,7 +1173,15 @@ export class FormDesignerComponent {
   protected gapDropped(event: CdkDragDrop<DropSpot>): void {
     const { section, row } = event.container.data;
     if (event.previousContainer.id === PALETTE_ID) {
-      const { state, key } = addField(this.state(), event.item.data as FieldKind, section, row);
+      const item = event.item.data as PaletteItem;
+      if ('column' in item) {
+        const column = this.columns()?.find((c) => c.name === item.column);
+        if (!column) return;
+        this.update(addColumn(this.state(), column, section, row));
+        this.selectField(column.name);
+        return;
+      }
+      const { state, key } = addField(this.state(), item.kind, section, row);
       this.update(state);
       this.selectField(key);
       return;

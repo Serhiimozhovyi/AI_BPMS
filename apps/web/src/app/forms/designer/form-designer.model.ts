@@ -259,6 +259,69 @@ export function nudgeField(state: DesignerState, key: string, delta: -1 | 1): De
   return moveField(state, key, next, delta < 0 ? sections[next].rows.length : 0);
 }
 
+// ---------- Режим таблиці: поля форми сторінки застосунку = колонки (F11-05) ----------
+
+/** Колонка таблиці даних, яку можна поставити на форму сторінки; тип колонки визначає тип поля. */
+export interface TableColumn {
+  name: string;
+  /** Тип колонки таблиці: `string`, `number`, `boolean`, `date`, `datetime`, `enum`, `ref`, `user`, `json`. */
+  type: string;
+  /** Варіанти колонки `enum`. */
+  values?: readonly string[] | null;
+}
+
+/** Властивість схеми для колонки таблиці: тип поля задає колонка, підпис — назва колонки, поки її не змінили. */
+export function propertyForColumn(column: TableColumn, title = column.name): JsonSchema {
+  switch (column.type) {
+    case 'number':
+      return { type: 'number', title };
+    case 'boolean':
+      return { type: 'boolean', title };
+    case 'date':
+      return { type: 'string', title, format: 'date' };
+    case 'datetime':
+      return { type: 'string', title, format: 'date-time' };
+    case 'enum':
+      return { type: 'string', title, oneOf: (column.values ?? []).map((v) => ({ const: v, title: v })) };
+    case 'ref':
+    case 'user':
+      // Варіанти бере сервер зі зв'язаної таблиці; конструктору важливо лише, що це вибір.
+      return { type: 'string', title, enum: [] };
+    case 'json':
+      return { type: 'string', title, format: 'textarea' };
+    default:
+      return { type: 'string', title };
+  }
+}
+
+/** Колонки, яких ще немає на формі, у порядку таблиці. */
+export function columnsNotOnForm(state: DesignerState, columns: readonly TableColumn[]): TableColumn[] {
+  return columns.filter((c) => !(c.name in state.properties));
+}
+
+/** Колонка стає полем форми окремим рядком у секції `section` на місці `row` (за замовчуванням — у кінці). */
+export function addColumn(state: DesignerState, column: TableColumn, section = state.layout.sections.length - 1, row?: number): DesignerState {
+  if (column.name in state.properties) return state;
+  const sections = copySections(state);
+  if (!sections.length) sections.push({ rows: [] });
+  const s = Math.max(0, Math.min(section, sections.length - 1));
+  sections[s].rows.splice(clampIndex(row ?? sections[s].rows.length, sections[s].rows.length), 0, [{ field: column.name }]);
+  return { ...state, properties: { ...state.properties, [column.name]: propertyForColumn(column) }, layout: { sections } };
+}
+
+/** Усі колонки, яких ще немає на формі, — окремими рядками в кінці секції `section`. */
+export function addAllColumns(state: DesignerState, columns: readonly TableColumn[], section = state.layout.sections.length - 1): DesignerState {
+  return columnsNotOnForm(state, columns).reduce((acc, column) => addColumn(acc, column, section), state);
+}
+
+/** Колонка як поле в наявному рядку (якщо там уже 4 поля — окремим рядком під ним). */
+export function addColumnToRow(state: DesignerState, column: TableColumn, section: number, row: number, index: number): DesignerState {
+  const added = addColumn(state, column, section, row + 1);
+  const target = state.layout.sections[section]?.rows[row];
+  if (added === state || !target || target.length >= MAX_ROW_CELLS) return added;
+  return placeInRow(added, column.name, section, row, index);
+}
+
 // ---------- Рядки з кількох полів і ширини (F11-03) ----------
 
 /** Найменша ширина клітинки при зміні ширин перетягуванням чи клавіатурою. */
