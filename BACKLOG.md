@@ -1563,7 +1563,7 @@
 - DoD: e2e `canvas-editing`, `node-connection`, `palette-connector`, `business-view` зелені; знімки редактора 1440 / 1280 px.
 
 ### F9-11 · Підсумок фази: прибрати `--ac-*`, перевірка всіх сторінок
-- model: `sonnet` · status: `review` · depends: F9-02, F9-03, F9-04, F9-05, F9-06, F9-07, F9-08, F9-10
+- model: `sonnet` · status: `done` · depends: F9-02, F9-03, F9-04, F9-05, F9-06, F9-07, F9-08, F9-10
 - Що: видалити аліаси `--ac-*` і Tailwind `ac-*`, залишки фіолетового (`grep -rni "7a6ff0\|5f53dc\|261f4b\|372f6c"`); axe на всіх сторінках; оновити знімки в `docs/guide/`; розгорнути на локальному OpenBP власника (Mac) і показати.
 - DoD: CI зелений; у PR знімки всіх основних сторінок у новому дизайні; `docs/design-system.md` актуальний.
 
