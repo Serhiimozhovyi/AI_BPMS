@@ -241,9 +241,9 @@ interface DayColumn {
             <button mat-flat-button type="button" data-testid="cal-open" (click)="openEvent(s, target.page, target.mode)" i18n="@@cal.open">Відкрити</button>
           }
           @for (i of s.event.row.actions; track i) {
-            <button mat-stroked-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !definition().actions![i].page" [attr.title]="readOnly() && !definition().actions![i].page ? readOnlyTip : null" (click)="runAction(i, s.event.row)">
+            <span class="inline-flex" [attr.title]="readOnly() && !definition().actions![i].page ? readOnlyTip : null"><button mat-stroked-button type="button" [attr.data-action]="i" [disabled]="readOnly() && !definition().actions![i].page" (click)="runAction(i, s.event.row)">
               {{ definition().actions![i].label }}
-            </button>
+            </button></span>
           }
         </div>
       </section>

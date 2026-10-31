@@ -78,6 +78,6 @@ describe('PageFormComponent: дата й час у поясі застосунк
     await render();
     const submit = host.querySelector<HTMLButtonElement>('[data-testid="app-submit"]')!;
     expect(submit.disabled).toBe(true);
-    expect(submit.title).toContain('У режимі перегляду');
+    expect((submit.parentElement as HTMLElement).title).toContain('У режимі перегляду');
   });
 });

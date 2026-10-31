@@ -41,7 +41,7 @@ interface FieldError {
       @if (saved()) {
         <p role="status" class="mb-2" data-testid="app-form-saved" i18n="@@app.page.saved">Збережено.</p>
       }
-      <button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting() || loading() || preview() || readOnly()" [attr.title]="readOnly() ? readOnlyTip : null" i18n="@@app.page.submit">Зберегти</button>
+      <span class="inline-flex" [attr.title]="readOnly() ? readOnlyTip : null"><button mat-flat-button type="submit" data-testid="app-submit" [disabled]="submitting() || loading() || preview() || readOnly()" i18n="@@app.page.submit">Зберегти</button></span>
     </form>
   `,
 })
