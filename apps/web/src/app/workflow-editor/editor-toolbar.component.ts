@@ -182,7 +182,13 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       flex: 1 1 160px;
       align-items: center;
       gap: 8px;
-      min-width: min(160px, 14vw);
+      min-width: 48px;
+    }
+
+    @media (min-width: 1280px) {
+      .bar__title {
+        min-width: 160px;
+      }
     }
 
     .bar__name {
