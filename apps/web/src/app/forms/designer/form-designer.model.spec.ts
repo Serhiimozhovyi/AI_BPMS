@@ -1,0 +1,192 @@
+import {
+  DesignerHistory,
+  addField,
+  addSection,
+  duplicateField,
+  fieldOrder,
+  fromSchema,
+  keyError,
+  keyFromLabel,
+  kindOf,
+  moveField,
+  moveRow,
+  moveSection,
+  nudgeField,
+  optionsOf,
+  placeOf,
+  propertyFor,
+  removeField,
+  removeSection,
+  renameKey,
+  setFieldProps,
+  setFieldUi,
+  setOptions,
+  setRequired,
+  setSectionProps,
+  toSchema,
+  uniqueKey,
+} from './form-designer.model';
+
+describe('модель конструктора форми (F11-02)', () => {
+  const schema = {
+    type: 'object',
+    title: 'Заява',
+    required: ['name', 'from'],
+    properties: {
+      name: { type: 'string', title: 'ПІБ', minLength: 2, 'x-custom': 1 },
+      from: { type: 'string', format: 'date', title: 'З' },
+      to: { type: 'string', format: 'date', title: 'По' },
+      reason: { type: 'string', format: 'textarea', title: 'Причина' },
+    },
+    'x-openbp-layout': {
+      sections: [
+        { title: 'Хто', rows: [[{ field: 'name' }]] },
+        { title: 'Коли', rows: [[{ field: 'from', width: 6 }, { field: 'to', width: 6 }], [{ field: 'reason', visibleIf: { field: 'from', operator: 'isNotEmpty' } }]] },
+      ],
+    },
+  };
+
+  it('схема → модель → схема без втрат, зокрема невідомих ключів і visibleIf', () => {
+    expect(toSchema(fromSchema(schema))).toEqual(schema);
+  });
+
+  it('порожня або не об’єктна схема — одна секція без полів', () => {
+    const state = fromSchema(null);
+    expect(state.layout.sections).toEqual([{ rows: [] }]);
+    expect(toSchema(state)).toEqual({ type: 'object', properties: {} });
+  });
+
+  it('ключ з підпису: транслітерація й унікальність', () => {
+    expect(keyFromLabel('Прізвище та ім’я')).toBe('prizvyshche_ta_imia');
+    expect(keyFromLabel('Дата й час')).toBe('data_i_chas');
+    expect(keyFromLabel('2 дні')).toBe('f_2_dni');
+    expect(keyFromLabel('!!!')).toBe('field');
+    expect(uniqueKey('tekst', ['tekst', 'tekst_2'])).toBe('tekst_3');
+    expect(keyError(fromSchema(schema), 'name', 'from')).toBeTruthy();
+    expect(keyError(fromSchema(schema), 'name', '1x')).toBeTruthy();
+    expect(keyError(fromSchema(schema), 'name', 'full_name')).toBeNull();
+  });
+
+  it('додає поле в кінець секції або на вказане місце', () => {
+    let state = fromSchema(schema);
+    const first = addField(state, 'text');
+    expect(first.key).toBe('tekst');
+    expect(placeOf(first.state, 'tekst')).toEqual({ section: 1, row: 2, cell: 0 });
+    state = addField(first.state, 'text', 0, 0).state;
+    expect(placeOf(state, 'tekst_2')).toEqual({ section: 0, row: 0, cell: 0 });
+    expect(state.properties['tekst_2']).toEqual({ type: 'string', title: 'Текст' });
+  });
+
+  it('типи палітри дають властивості, які конструктор розпізнає назад', () => {
+    for (const kind of ['text', 'textarea', 'number', 'email', 'phone', 'address', 'date', 'datetime', 'boolean', 'select', 'multiselect', 'file'] as const) {
+      expect(kindOf(propertyFor(kind, 'Поле'))).toBe(kind);
+    }
+  });
+
+  it('видаляє поле разом з обов’язковістю; рядок з одним полем, що лишилось, втрачає ширину', () => {
+    const state = removeField(fromSchema(schema), 'to');
+    expect(state.layout.sections[1].rows[0]).toEqual([{ field: 'from' }]);
+    expect(removeField(fromSchema(schema), 'name').required).toEqual(['from']);
+    expect(toSchema(removeField(fromSchema(schema), 'name'))['properties']).not.toHaveProperty('name');
+  });
+
+  it('переносить поле й рядок між секціями', () => {
+    let state = moveField(fromSchema(schema), 'to', 0, 0);
+    expect(fieldOrder(state)).toEqual(['to', 'name', 'from', 'reason']);
+    expect(state.layout.sections[1].rows[0]).toEqual([{ field: 'from' }]);
+    state = moveRow(fromSchema(schema), 1, 0, 0, 1);
+    expect(state.layout.sections[0].rows).toEqual([[{ field: 'name' }], [{ field: 'from', width: 6 }, { field: 'to', width: 6 }]]);
+  });
+
+  it('↑/↓: рядок міняється з сусіднім, на межі переходить у сусідню секцію, поле з рядка виходить окремим', () => {
+    let state = nudgeField(fromSchema(schema), 'reason', -1);
+    expect(fieldOrder(state)).toEqual(['name', 'reason', 'from', 'to']);
+    state = nudgeField(state, 'reason', -1);
+    expect(placeOf(state, 'reason')).toEqual({ section: 0, row: 1, cell: 0 });
+    expect(nudgeField(fromSchema(schema), 'name', -1)).toEqual(fromSchema(schema));
+    state = nudgeField(fromSchema(schema), 'to', 1);
+    expect(state.layout.sections[1].rows.map((r) => r.map((c) => c.field))).toEqual([['from'], ['to'], ['reason']]);
+  });
+
+  it('дублює поле під оригіналом з новим ключем і обов’язковістю', () => {
+    const { state, key } = duplicateField(fromSchema(schema), 'name');
+    expect(key).toBe('name_2');
+    expect(placeOf(state, 'name_2')).toEqual({ section: 0, row: 1, cell: 0 });
+    expect(state.properties['name_2']).toEqual(state.properties['name']);
+    expect(state.required).toContain('name_2');
+  });
+
+  it('властивості, підказки показу, обов’язковість', () => {
+    let state = setFieldProps(fromSchema(schema), 'name', { title: 'Ім’я', minLength: undefined, description: '' });
+    expect(state.properties['name']).toEqual({ type: 'string', title: 'Ім’я', 'x-custom': 1 });
+    state = setFieldUi(state, 'name', { placeholder: 'Як звати' });
+    expect(state.properties['name']['x-openbp-ui']).toEqual({ placeholder: 'Як звати' });
+    state = setFieldUi(state, 'name', { placeholder: '' });
+    expect(state.properties['name']).not.toHaveProperty('x-openbp-ui');
+    expect(setRequired(state, 'to', true).required).toEqual(['name', 'from', 'to']);
+    expect(setRequired(state, 'name', false).required).toEqual(['from']);
+  });
+
+  it('перейменування ключа оновлює розмітку, обов’язковість і умови', () => {
+    const state = renameKey(fromSchema(schema), 'from', 'start');
+    expect(Object.keys(state.properties)).toEqual(['name', 'start', 'to', 'reason']);
+    expect(state.required).toEqual(['name', 'start']);
+    expect(state.layout.sections[1].rows[0][0]).toEqual({ field: 'start', width: 6 });
+    expect(state.layout.sections[1].rows[1][0].visibleIf?.field).toBe('start');
+    expect(renameKey(fromSchema(schema), 'from', 'to')).toEqual(fromSchema(schema));
+  });
+
+  it('секції: додати, налаштувати, перенести, видалити з перенесенням полів', () => {
+    let state = addSection(fromSchema(schema));
+    expect(state.layout.sections[2]).toEqual({ title: 'Нова секція', rows: [] });
+    state = setSectionProps(state, 2, { title: 'Документи', collapsible: true, collapsed: true });
+    expect(state.layout.sections[2]).toEqual({ title: 'Документи', collapsible: true, collapsed: true, rows: [] });
+    state = setSectionProps(state, 2, { collapsible: false });
+    expect(state.layout.sections[2]).toEqual({ title: 'Документи', rows: [] });
+    state = moveSection(state, 2, 0);
+    expect(state.layout.sections.map((s) => s.title)).toEqual(['Документи', 'Хто', 'Коли']);
+    state = removeSection(state, 0);
+    expect(state.layout.sections.map((s) => s.title)).toEqual(['Хто', 'Коли']);
+    state = removeSection(state, 1);
+    expect(fieldOrder(state)).toEqual(['name', 'from', 'to', 'reason']);
+    expect(removeSection(state, 0)).toBe(state);
+  });
+
+  it('варіанти списку з підписами записуються як oneOf, для масиву — в items', () => {
+    const base = addField(addField(fromSchema(schema), 'select').state, 'multiselect').state;
+    let state = setOptions(base, 'vybir', [
+      { value: 'annual', label: 'Щорічна' },
+      { value: 'unpaid', label: '' },
+    ]);
+    expect(state.properties['vybir']['oneOf']).toEqual([
+      { const: 'annual', title: 'Щорічна' },
+      { const: 'unpaid', title: 'unpaid' },
+    ]);
+    expect(optionsOf(state.properties['vybir']).map((o) => o.label)).toEqual(['Щорічна', 'unpaid']);
+    state = setOptions(state, 'kilka_variantiv', [{ value: 'a', label: 'А' }]);
+    expect(state.properties['kilka_variantiv']['items']).toEqual({ type: 'string', oneOf: [{ const: 'a', title: 'А' }] });
+    expect(optionsOf({ type: 'string', enum: ['x', 'y'] })).toEqual([
+      { value: 'x', label: 'x' },
+      { value: 'y', label: 'y' },
+    ]);
+  });
+
+  it('історія: undo/redo, нова дія очищає redo, ліміт кроків', () => {
+    const history = new DesignerHistory<number>(3);
+    history.push(1);
+    history.push(2);
+    expect(history.undo(3)).toBe(2);
+    expect(history.redo(2)).toBe(3);
+    expect(history.undo(3)).toBe(2);
+    history.push(2);
+    expect(history.canRedo).toBe(false);
+    for (let i = 10; i < 20; i++) history.push(i);
+    let steps = 0;
+    let current = 99;
+    for (let prev = history.undo(current); prev !== null; prev = history.undo(current)) {
+      current = prev;
+      steps++;
+    }
+    expect(steps).toBe(3);
+  });
+});
