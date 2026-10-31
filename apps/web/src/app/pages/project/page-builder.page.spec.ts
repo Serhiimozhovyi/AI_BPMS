@@ -79,7 +79,7 @@ describe('PageBuilderPage (F8-05)', () => {
     await render(fixture);
 
     // Таблиці й сценарії інших проєктів у виборі не з'являються.
-    expect(matSelectOf(host.querySelector('[data-testid="b-table"]')!).options.map((o) => o.viewValue)).toEqual(['', 'bookings']);
+    expect(matSelectOf(host.querySelector('[data-testid="b-table"]')!).options.map((o) => o.viewValue)).toEqual(['—', 'bookings']);
 
     pick(host, '[data-testid="b-key"]', 'my-bookings', 'input');
     pick(host, '[data-testid="b-name"]', 'Мої записи', 'input');

@@ -131,7 +131,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                     <mat-label i18n="@@tables.form.refTable">Таблиця посилання</mat-label>
                     <mat-select data-testid="column-ref" [value]="c.table ?? ''" (selectionChange)="patchColumn(i, { table: $event.value })">
                       <bp-select-search />
-                      <mat-option value=""></mat-option>
+                      <mat-option value="">—</mat-option>
                       @for (r of refTargets(); track r.id) {
                         <mat-option [value]="r.name">{{ r.name }}</mat-option>
                       }

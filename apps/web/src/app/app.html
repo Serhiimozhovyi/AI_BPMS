@@ -12,6 +12,8 @@
         <mat-select
           class="shell-project__select"
           data-testid="project-select"
+          [panelWidth]="null"
+          panelClass="bp-select-panel-wide"
           aria-label="Проєкт"
           i18n-aria-label="@@app.project.label"
           [value]="projects.current() ?? ''"

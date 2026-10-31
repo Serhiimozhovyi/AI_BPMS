@@ -94,7 +94,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
           <mat-select id="b-table" aria-labelledby="b-table-label" data-testid="b-table" [value]="table()" (selectionChange)="table.set($event.value)">
             <bp-select-search />
-            <mat-option value="">{{ kind() === 'metrics' ? '—' : '' }}</mat-option>
+            <mat-option value="">—</mat-option>
             @for (t of tables(); track t.id) {
               <mat-option [value]="t.name">{{ t.name }}</mat-option>
             }

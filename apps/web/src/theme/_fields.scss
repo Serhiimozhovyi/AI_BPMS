@@ -186,6 +186,9 @@
   .mat-mdc-select-panel .mat-mdc-option,
   .mat-mdc-autocomplete-panel .mat-mdc-option {
     min-height: 36px;
+    // Довга назва у вузькому списку переноситься — з відступами, а не впритул (рядок 20 + 8 + 8 = 36).
+    padding-top: 8px;
+    padding-bottom: 8px;
 
     &:hover:not(.mdc-list-item--disabled) {
       background: var(--bp-bg-2);
@@ -268,6 +271,12 @@
     &::placeholder {
       color: var(--bp-text-muted);
     }
+  }
+
+  // Список ширший за поле (вузьке поле в шапці): панель за вмістом, від 240 до 360 px.
+  .mat-mdc-select-panel.bp-select-panel-wide {
+    min-width: 240px;
+    max-width: 360px;
   }
 
   // Пункти, які сховав пошук.

@@ -44,9 +44,9 @@ import { menuPages } from '../../projects/app-menu';
           @if (loaded() && pages().length === 0 && !error()) {
             <p class="opacity-70" data-testid="app-empty">
               @if (canEdit()) {
-                <ng-container i18n="@@project.app.emptyEditor"
-                  >Сторінок застосунку ще немає. Додайте першу конструктором («Нова сторінка») або через MCP-інструмент upsert_project_page
-                  (наприклад, з Claude).</ng-container
+                <ng-container i18n="@@project.app.emptyEditorSideNav"
+                  >Сторінок застосунку ще немає. Додайте першу кнопкою «Конструктор» унизу меню ліворуч або через MCP-інструмент
+                  upsert_project_page (наприклад, з Claude).</ng-container
                 >
               } @else {
                 <ng-container i18n="@@project.app.empty">Для вашої ролі сторінок застосунку немає.</ng-container>
