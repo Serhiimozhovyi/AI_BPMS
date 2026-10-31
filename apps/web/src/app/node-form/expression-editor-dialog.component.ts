@@ -156,7 +156,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
     }
 
     .expr__label {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-weight: 400;
     }
 
@@ -187,7 +187,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
     .expr__muted {
       margin: 0;
       font-size: 12px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .expr__side {
@@ -206,14 +206,14 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
       font: 700 12px/16px var(--bp-font-family);
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .expr__type {
       padding: 0 6px;
       border-radius: var(--ac-radius);
-      background: var(--ac-button);
-      color: var(--ac-kit);
+      background: var(--bp-tonal);
+      color: var(--bp-primary);
       font-weight: 500;
       text-transform: none;
     }
@@ -224,7 +224,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
       max-height: 200px;
       overflow: auto;
       border-radius: var(--ac-radius-sm);
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
       font: 12px/17px monospace;
       white-space: pre-wrap;
       word-break: break-word;
@@ -248,7 +248,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
 
     .expr__search:focus {
       outline: none;
-      border-color: var(--ac-kit);
+      border-color: var(--bp-primary);
     }
 
     .expr__group {

@@ -61,9 +61,9 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
       flex-direction: column;
       min-width: 220px;
       padding: 4px 0;
-      border: 1px solid var(--ac-cool-grey);
+      border: 1px solid var(--bp-bg);
       border-radius: 8px;
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: 0 4px 16px rgb(12 43 48 / 0.18);
     }
 
@@ -82,7 +82,7 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
 
     .menu__item:hover:not(:disabled),
     .menu__item:focus-visible {
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
 
     .menu__item:disabled {
@@ -95,7 +95,7 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
     }
 
     .menu__item kbd {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font: 11px/1.4 Ubuntu, sans-serif;
     }
   `,

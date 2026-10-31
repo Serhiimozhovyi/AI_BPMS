@@ -298,7 +298,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
 
     .value__mark {
       border-radius: 3px;
-      background: var(--ac-button);
+      background: var(--bp-tonal);
       color: transparent;
     }
 
@@ -313,14 +313,14 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
       border: 0;
       border-radius: var(--ac-radius-sm);
       background: none;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       cursor: pointer;
     }
 
     .value__expand:hover,
     .value__expand:focus-visible {
-      background: var(--ac-cool-grey-2);
-      color: var(--ac-kit);
+      background: var(--bp-bg-2);
+      color: var(--bp-primary);
     }
 
     .value__expand .material-symbols-outlined {
@@ -1024,7 +1024,7 @@ export class NodeCodeFieldComponent extends FieldType<FieldTypeConfig> implement
     .array__port {
       margin-bottom: 4px;
       font-size: 12px;
-      color: var(--ac-kit);
+      color: var(--bp-primary);
     }
 
     .array__body {
@@ -1161,10 +1161,10 @@ export class NodeConditionFieldComponent extends FieldType<FieldTypeConfig> impl
 
     .combine__chip {
       padding: 4px 12px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: 16px;
-      background: var(--ac-white);
-      color: var(--ac-vivid);
+      background: var(--bp-white);
+      color: var(--bp-text);
       font: var(--bp-font-p3);
       cursor: pointer;
     }
@@ -1178,15 +1178,15 @@ export class NodeConditionFieldComponent extends FieldType<FieldTypeConfig> impl
       min-width: 160px;
       min-height: 28px;
       padding: 0 8px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-sm);
       font: 400 13px/18px monospace;
     }
 
     .combine__chip--on {
-      border-color: var(--ac-kit);
-      background: var(--ac-button);
-      color: var(--ac-kit);
+      border-color: var(--bp-primary);
+      background: var(--bp-tonal);
+      color: var(--bp-primary);
     }
   `,
 })
@@ -1290,7 +1290,7 @@ export class NodeCombineFieldComponent extends FieldType<FieldTypeConfig> implem
 
     .set__eq {
       margin-top: 16px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .set__remove {

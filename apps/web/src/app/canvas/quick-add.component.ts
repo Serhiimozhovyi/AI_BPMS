@@ -67,9 +67,9 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       width: 300px;
       max-height: 380px;
       padding: 8px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius);
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: var(--ac-shadow);
       font: 13px/1.3 Ubuntu, sans-serif;
     }
@@ -78,7 +78,7 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       padding: 2px 4px 6px;
       font-size: 11px;
       font-weight: 700;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       text-transform: uppercase;
     }
 
@@ -86,14 +86,14 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       box-sizing: border-box;
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-sm);
       font: inherit;
       outline: none;
     }
 
     .quick__search:focus {
-      border-color: var(--ac-kit);
+      border-color: var(--bp-primary);
     }
 
     .quick__list {
@@ -105,7 +105,7 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       padding: 8px 4px 2px;
       font-size: 11px;
       font-weight: 700;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       text-transform: uppercase;
     }
 
@@ -123,7 +123,7 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
     }
 
     .quick__item--active {
-      background: var(--ac-button);
+      background: var(--bp-tonal);
     }
 
     .quick__type {
@@ -145,7 +145,7 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       padding: 0;
       border: 0;
       background: none;
-      color: var(--ac-kit);
+      color: var(--bp-primary);
       font: inherit;
       cursor: pointer;
     }

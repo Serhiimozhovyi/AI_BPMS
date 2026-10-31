@@ -166,7 +166,7 @@ export interface DataFieldPick {
     .data__port-label {
       margin-bottom: 6px;
       font-size: 12px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .data__body {
@@ -178,7 +178,7 @@ export interface DataFieldPick {
       margin: 0;
       padding: 6px 8px;
       border-radius: 4px;
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
       font-size: 12px;
       white-space: pre-wrap;
       word-break: break-word;
@@ -212,7 +212,7 @@ export interface DataFieldPick {
       padding: 0;
       border: 0;
       background: none;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 11px;
       cursor: pointer;
     }
@@ -220,10 +220,10 @@ export interface DataFieldPick {
     .field-chip,
     .field-name {
       padding: 0 6px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: 4px;
-      background: var(--ac-white);
-      color: var(--ac-vivid);
+      background: var(--bp-white);
+      color: var(--bp-text);
       font: 400 12px/18px monospace;
     }
 
@@ -233,15 +233,15 @@ export interface DataFieldPick {
 
     .field-chip:hover,
     .field-chip:focus-visible {
-      border-color: var(--ac-kit);
-      background: var(--ac-button);
-      color: var(--ac-kit);
+      border-color: var(--bp-primary);
+      background: var(--bp-tonal);
+      color: var(--bp-primary);
       outline: none;
     }
 
     .tree__type {
       font-size: 11px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .tree__sample {
@@ -265,7 +265,7 @@ export interface DataFieldPick {
     .table th,
     .table td {
       padding: 2px 8px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       text-align: left;
       white-space: nowrap;
       max-width: 240px;
@@ -274,11 +274,11 @@ export interface DataFieldPick {
     }
 
     .table__index {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .table__nested {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-family: monospace;
     }
   `,

@@ -216,7 +216,7 @@ interface MenuItem {
       flex-direction: column;
       height: 100%;
       min-height: 0;
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
 
     .bv__bar {
@@ -224,8 +224,8 @@ interface MenuItem {
       align-items: center;
       gap: 12px;
       padding: 6px 12px;
-      border-bottom: 1px solid var(--ac-line);
-      background: var(--ac-white);
+      border-bottom: 1px solid var(--bp-line);
+      background: var(--bp-white);
     }
 
     .bv__legend {
@@ -236,7 +236,7 @@ interface MenuItem {
       padding: 0;
       list-style: none;
       font-size: 12px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .bv__legend li {
@@ -269,14 +269,14 @@ interface MenuItem {
     }
 
     .bv__swatch--external {
-      background: var(--ac-button);
-      border-color: var(--ac-kit);
+      background: var(--bp-tonal);
+      border-color: var(--bp-primary);
     }
 
     .bv__swatch--decision {
       width: 12px;
-      background: var(--ac-stone);
-      border-color: var(--ac-cool-grey-4);
+      background: var(--bp-surface-2);
+      border-color: var(--bp-text-muted);
       transform: rotate(45deg) scale(0.8);
     }
 
@@ -289,7 +289,7 @@ interface MenuItem {
     }
 
     .bv__swatch--read {
-      border-color: var(--ac-kit);
+      border-color: var(--bp-primary);
     }
 
     .bv__swatch--alt {
@@ -301,7 +301,7 @@ interface MenuItem {
       min-width: 0;
       overflow: hidden;
       font-size: 11.5px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -321,7 +321,7 @@ interface MenuItem {
       margin: 16px;
       overflow: hidden;
       border-radius: 15px;
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: var(--ac-shadow-card);
       cursor: grab;
       touch-action: none;
@@ -329,7 +329,7 @@ interface MenuItem {
 
     .bv__empty {
       margin: 24px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .bv__svg {
@@ -339,8 +339,8 @@ interface MenuItem {
     }
 
     .bv__lane {
-      fill: var(--ac-stone);
-      stroke: var(--ac-line-2);
+      fill: var(--bp-surface-2);
+      stroke: var(--bp-line-2);
     }
 
     .bv__lane-name {
@@ -348,12 +348,12 @@ interface MenuItem {
       font-weight: 500;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      fill: var(--ac-cool-grey-4);
+      fill: var(--bp-text-muted);
     }
 
     .bv__lane-desc {
       font-size: 11px;
-      fill: var(--ac-cool-grey-4);
+      fill: var(--bp-text-muted);
     }
 
     /* Кроки — як блоки «БП схеми» AC-Kit: тло 15% кольору, рамка й текст кольором кроку. */
@@ -382,9 +382,9 @@ interface MenuItem {
     }
 
     .bv__step--external {
-      --bv-color: var(--ac-kit);
-      --bv-fill: var(--ac-button);
-      --bv-text: var(--ac-kit);
+      --bv-color: var(--bp-primary);
+      --bv-fill: var(--bp-tonal);
+      --bv-text: var(--bp-primary);
     }
 
     .bv__shape {
@@ -394,13 +394,13 @@ interface MenuItem {
     }
 
     .bv__step--decision .bv__shape {
-      fill: var(--ac-stone);
-      stroke: var(--ac-cool-grey-4);
+      fill: var(--bp-surface-2);
+      stroke: var(--bp-text-muted);
     }
 
     .bv__gate-mark {
       fill: none;
-      stroke: var(--ac-vivid);
+      stroke: var(--bp-text);
       stroke-width: 1.6;
       stroke-linecap: round;
     }
@@ -428,13 +428,13 @@ interface MenuItem {
     .bv__title--decision,
     .bv__edge-label {
       paint-order: stroke;
-      stroke: var(--ac-stone);
+      stroke: var(--bp-surface-2);
       stroke-width: 4px;
       stroke-linejoin: round;
     }
 
     .bv__title--decision {
-      fill: var(--ac-cool-grey-4);
+      fill: var(--bp-text-muted);
     }
 
     .bv__sub,
@@ -448,7 +448,7 @@ interface MenuItem {
     .bv__step--st-done {
       --bv-color: var(--ac-green);
       --bv-fill: var(--ac-green);
-      --bv-text: var(--ac-white);
+      --bv-text: var(--bp-white);
     }
 
     .bv__step--st-done.bv__step--decision .bv__shape {
@@ -458,7 +458,7 @@ interface MenuItem {
 
     .bv__step--st-running .bv__shape,
     .bv__step--st-waiting .bv__shape {
-      stroke: var(--ac-kit);
+      stroke: var(--bp-primary);
       stroke-width: 3;
     }
 
@@ -477,9 +477,9 @@ interface MenuItem {
     }
 
     .bv__step--st-pending {
-      --bv-color: var(--ac-cool-grey-3);
-      --bv-fill: var(--ac-cool-grey-2);
-      --bv-text: var(--ac-kit);
+      --bv-color: var(--bp-line-3);
+      --bv-fill: var(--bp-bg-2);
+      --bv-text: var(--bp-primary);
     }
 
     .bv__swatch--st-done {
@@ -488,8 +488,8 @@ interface MenuItem {
     }
 
     .bv__swatch--st-running {
-      background: var(--ac-cool-grey-2);
-      border-color: var(--ac-kit);
+      background: var(--bp-bg-2);
+      border-color: var(--bp-primary);
       border-width: 3px;
     }
 
@@ -499,18 +499,18 @@ interface MenuItem {
     }
 
     .bv__swatch--st-pending {
-      background: var(--ac-cool-grey-2);
-      border-color: var(--ac-cool-grey-3);
+      background: var(--bp-bg-2);
+      border-color: var(--bp-line-3);
     }
 
     .bv__edge {
       fill: none;
-      stroke: var(--ac-vivid);
+      stroke: var(--bp-text);
       stroke-width: 1;
     }
 
     .bv__edge--read {
-      stroke: var(--ac-kit);
+      stroke: var(--bp-primary);
       stroke-dasharray: 4 3;
     }
 
@@ -520,11 +520,11 @@ interface MenuItem {
     }
 
     .bv__arrowhead {
-      fill: var(--ac-vivid);
+      fill: var(--bp-text);
     }
 
     .bv__arrowhead--read {
-      fill: var(--ac-kit);
+      fill: var(--bp-primary);
     }
 
     .bv__arrowhead--alt {
@@ -534,7 +534,7 @@ interface MenuItem {
     .bv__edge-label {
       font-size: 12px;
       font-weight: 500;
-      fill: var(--ac-cool-grey-4);
+      fill: var(--bp-text-muted);
     }
 
     .bv__edge-label--yes {
@@ -553,8 +553,8 @@ interface MenuItem {
     }
 
     .bv__lane--drop .bv__lane {
-      fill: var(--ac-button);
-      stroke: var(--ac-kit);
+      fill: var(--bp-tonal);
+      stroke: var(--bp-primary);
     }
 
     .bv__lane-name,
@@ -568,10 +568,10 @@ interface MenuItem {
       box-sizing: border-box;
       height: 28px;
       padding: 2px 6px;
-      border: 1.5px solid var(--ac-kit);
+      border: 1.5px solid var(--bp-primary);
       border-radius: 4px;
-      background: var(--ac-white);
-      color: var(--ac-vivid);
+      background: var(--bp-white);
+      color: var(--bp-text);
       font: 500 13px Ubuntu, system-ui, sans-serif;
       outline: none;
     }
@@ -585,9 +585,9 @@ interface MenuItem {
       max-height: 320px;
       overflow-y: auto;
       padding: 4px 0;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: 6px;
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
       cursor: default;
     }
@@ -595,14 +595,14 @@ interface MenuItem {
     .bv__menu-title {
       padding: 6px 14px 4px;
       font-size: 11px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .bv__menu-item {
       padding: 7px 14px;
       border: 0;
       background: none;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       font: 13px Ubuntu, system-ui, sans-serif;
       text-align: left;
       cursor: pointer;
@@ -610,7 +610,7 @@ interface MenuItem {
 
     .bv__menu-item:hover,
     .bv__menu-item:focus-visible {
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
       outline: none;
     }
   `,

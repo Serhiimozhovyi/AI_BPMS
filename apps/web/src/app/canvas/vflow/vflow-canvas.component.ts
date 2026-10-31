@@ -150,14 +150,14 @@ const MIN_NODE_HEIGHT = 72;
 /** Вертикальний крок між портами: стільки, щоб підписи портів не накладались. */
 const PORT_STEP = 16;
 
-/** Колір групи для картки вузла. */
+/** Колір групи для картки вузла: highlight-гама AC-Kit; текст — суміш 45% кольору з `--bp-text` (≥ 4,5:1 на 15%-тлі). */
 export const GROUP_COLORS: Record<CanvasNodeGroup, string> = {
-  trigger: '#47cc8a',
-  logic: '#ff840a',
-  transform: '#27c7be',
-  integration: '#20aaea',
-  ai: '#b36bd4',
-  unknown: '#57696b',
+  trigger: 'var(--ac-green)',
+  logic: 'var(--ac-orange)',
+  transform: 'var(--bp-accent)',
+  integration: 'var(--ac-blue)',
+  ai: 'var(--ac-violet)',
+  unknown: 'var(--bp-text-muted)',
 };
 
 /** Id порту ngx-vflow за індексом формату: `in-0`, `out-1`. Індекси, а не назви, — щоб ребра не залежали від підписів. */
@@ -427,7 +427,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       <ng-template edgeLabelHtml let-ctx>
         <span class="flex flex-col items-center gap-0.5">
           @if (ctx.label.data.count !== undefined) {
-            <span class="edge__count pointer-events-none block whitespace-nowrap rounded-md bg-[var(--ac-cool-grey)] px-[3px] text-[10px] leading-[14px] text-[var(--ac-cool-grey-4)]" data-testid="edge-count" [attr.data-edge]="ctx.label.data.index">{{ itemsLabel(ctx.label.data.count) }}</span>
+            <span class="edge__count pointer-events-none block whitespace-nowrap rounded-md bg-[var(--bp-bg)] px-[3px] text-[10px] leading-[14px] text-[var(--bp-text-muted)]" data-testid="edge-count" [attr.data-edge]="ctx.label.data.index">{{ itemsLabel(ctx.label.data.count) }}</span>
           }
           @if (ctx.label.data.add) {
             <button
@@ -499,10 +499,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       min-width: 30px;
       height: 30px;
       padding: 0 6px;
-      border: 1px solid var(--ac-cool-grey);
+      border: 1px solid var(--bp-bg);
       border-radius: 6px;
-      background: var(--ac-white);
-      color: var(--ac-cool-grey-4);
+      background: var(--bp-white);
+      color: var(--bp-text-muted);
       font: 500 14px/1 Ubuntu, sans-serif;
       cursor: pointer;
       box-shadow: 0 1px 3px rgb(12 43 48 / 0.1);
@@ -514,14 +514,14 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .controls__btn--on {
-      border-color: var(--ac-kit);
-      background: var(--ac-button);
-      color: var(--ac-kit);
+      border-color: var(--bp-primary);
+      background: var(--bp-tonal);
+      color: var(--bp-primary);
     }
 
     .controls__btn:hover {
-      border-color: var(--ac-kit);
-      color: var(--ac-kit);
+      border-color: var(--bp-primary);
+      color: var(--bp-primary);
     }
 
     /* Картка вузла — у foreignObject ngx-vflow, який обрізає все за межами вузла; «+» біля порту стоїть за краєм. */
@@ -537,7 +537,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border: 1.5px solid var(--node-color);
       border-left-width: 6px;
       border-radius: 8px;
-      background: #fff;
+      background: var(--bp-white);
       box-shadow: 0 1px 4px rgb(12 43 48 / 0.12);
       font: 13px/1.3 Ubuntu, sans-serif;
       user-select: none;
@@ -590,13 +590,13 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__run--skipped {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .node__time {
       margin-right: 4px;
       font-size: 10px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .node.disabled {
@@ -614,14 +614,14 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       padding: 0 6px;
       border-radius: 8px;
       background: var(--ac-red);
-      color: #fff;
+      color: var(--bp-white);
       font-weight: 600;
       cursor: help;
     }
 
     .node__group {
       /* Яскравий колір групи на білому не проходить контраст AA — підмішуємо Vivid (F3-86). */
-      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #0c2b30));
+      color: color-mix(in srgb, var(--node-color) 45%, var(--bp-text));
       font-weight: 600;
       text-transform: uppercase;
     }
@@ -649,12 +649,12 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__icon {
       font-size: 16px;
-      color: color-mix(in srgb, var(--node-color) 45%, var(--ac-vivid, #0c2b30));
+      color: color-mix(in srgb, var(--node-color) 45%, var(--bp-text));
     }
 
     .node__type {
       font-size: 11px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     /* Тулбар над карткою (F3-58): при наведенні і на виділеному вузлі; за межею картки, як «+» біля порту. */
@@ -665,9 +665,9 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       display: none;
       gap: 2px;
       padding: 2px;
-      border: 1px solid var(--ac-cool-grey);
+      border: 1px solid var(--bp-bg);
       border-radius: 6px;
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: 0 1px 4px rgb(12 43 48 / 0.12);
     }
 
@@ -684,15 +684,15 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border: 0;
       border-radius: 4px;
       background: none;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font: 13px/1 Ubuntu, sans-serif;
       cursor: pointer;
     }
 
     .node__tool:hover,
     .node__tool:focus-visible {
-      background: var(--ac-cool-grey);
-      color: var(--ac-kit);
+      background: var(--bp-bg);
+      color: var(--bp-primary);
     }
 
     .node__tool--danger:hover {
@@ -704,7 +704,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       width: 100%;
       margin-top: 2px;
       padding: 1px 4px;
-      border: 1px solid var(--ac-kit);
+      border: 1px solid var(--bp-primary);
       border-radius: 4px;
       font: 500 13px/1.3 Ubuntu, sans-serif;
     }
@@ -726,7 +726,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       padding: 0 6px;
       border: 1px solid var(--ac-orange);
       border-radius: 8px;
-      background: var(--ac-white);
+      background: var(--bp-white);
       color: var(--ac-orange);
       font: 700 12px/16px var(--bp-font-family);
       white-space: nowrap;
@@ -737,7 +737,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       position: absolute;
       transform: translateY(-50%);
       font-size: 10px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .node__port--out {
@@ -761,10 +761,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       width: 20px;
       height: 20px;
       padding: 0;
-      border: 1.5px solid var(--ac-kit);
+      border: 1.5px solid var(--bp-primary);
       border-radius: 50%;
-      background: var(--ac-white);
-      color: var(--ac-kit);
+      background: var(--bp-white);
+      color: var(--bp-primary);
       font: 700 14px/1 Ubuntu, sans-serif;
       cursor: pointer;
     }
@@ -782,8 +782,8 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .node__add:hover,
     .edge__add:hover {
-      background: var(--ac-kit);
-      color: var(--ac-white);
+      background: var(--bp-primary);
+      color: var(--bp-white);
     }
 
     /* Нотатка (F3-62): Highlight-колір AC-Kit — рамка і 15 %-тло; ngx-vflow бере розмір вузла з картки, тож він явний. */
@@ -794,7 +794,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border: 1.5px solid var(--note-color);
       border-radius: 8px;
       background: color-mix(in srgb, var(--note-color) 15%, white);
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       font: 13px/1.4 Ubuntu, sans-serif;
       user-select: none;
     }
@@ -804,7 +804,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .note--editing {
-      background: var(--ac-white);
+      background: var(--bp-white);
       user-select: text;
     }
 
@@ -840,13 +840,13 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .note__body a {
-      color: var(--ac-kit);
+      color: var(--bp-primary);
     }
 
     .note__hint {
       position: absolute;
       inset: 8px 10px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 12px;
       pointer-events: none;
     }
@@ -874,9 +874,9 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       align-items: center;
       gap: 4px;
       padding: 3px 4px;
-      border: 1px solid var(--ac-cool-grey);
+      border: 1px solid var(--bp-bg);
       border-radius: 6px;
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: 0 1px 4px rgb(12 43 48 / 0.12);
     }
 
@@ -892,7 +892,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
 
     .note__swatch--on,
     .note__swatch:hover {
-      border-color: var(--ac-vivid);
+      border-color: var(--bp-text);
     }
 
     .note__tool {
@@ -902,14 +902,14 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       border: 0;
       border-radius: 4px;
       background: none;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font: 13px/1 Ubuntu, sans-serif;
       cursor: pointer;
     }
 
     .note__tool:hover {
-      background: var(--ac-cool-grey);
-      color: var(--ac-kit);
+      background: var(--bp-bg);
+      color: var(--bp-primary);
     }
 
     .note__tool--danger:hover {

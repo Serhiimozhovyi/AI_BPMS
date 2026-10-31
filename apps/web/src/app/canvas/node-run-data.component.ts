@@ -106,8 +106,8 @@ interface PortView {
       padding: 0 8px;
       border-radius: 8px;
       font-size: 12px;
-      color: #fff;
-      background: var(--ac-cool-grey-4);
+      color: var(--bp-white);
+      background: var(--bp-text-muted);
     }
 
     .run__status--success {
@@ -134,7 +134,7 @@ interface PortView {
       padding: 6px 8px;
       overflow: auto;
       border-radius: 4px;
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
       font-size: 12px;
       white-space: pre-wrap;
       word-break: break-word;
@@ -151,14 +151,14 @@ interface PortView {
 
     .run__error-note {
       max-width: 100%;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .run__error-input {
       padding: 0;
       border: 0;
       background: none;
-      color: var(--ac-kit);
+      color: var(--bp-primary);
       font: inherit;
       text-decoration: underline;
       cursor: pointer;
@@ -183,7 +183,7 @@ interface PortView {
     .run__sub-kind {
       padding: 0 6px;
       border-radius: 6px;
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
 
     .run__sub-meta {

@@ -77,14 +77,14 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       align-items: center;
       gap: 8px;
       padding: 8px 8px 8px 12px;
-      border-bottom: 1px solid var(--ac-line);
+      border-bottom: 1px solid var(--bp-line);
     }
     .head__mark {
       align-self: stretch;
       flex-shrink: 0;
       width: 4px;
       border-radius: 2px;
-      background: var(--group-color, var(--ac-kit));
+      background: var(--group-color, var(--bp-primary));
     }
     .head__title {
       display: flex;
@@ -115,13 +115,13 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
     }
     .head__name-button:hover,
     .head__name-button:focus-visible {
-      border-color: var(--ac-line);
+      border-color: var(--bp-line);
     }
     .head__input {
       width: 100%;
       min-width: 0;
       padding: 2px 6px;
-      border: 1px solid var(--ac-kit);
+      border: 1px solid var(--bp-primary);
       border-radius: var(--ac-radius-sm);
       font: inherit;
       font-size: 16px;
@@ -129,7 +129,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
     .head__type {
       overflow: hidden;
       font-size: 12px;
-      color: var(--ac-cool-grey-4, #57696b);
+      color: var(--bp-text-muted, #57696b);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -149,7 +149,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       border: 0;
       border-radius: var(--ac-radius-sm);
       background: transparent;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       cursor: pointer;
     }
     .head__icon svg {
@@ -158,11 +158,11 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       fill: currentColor;
     }
     .head__icon:hover {
-      background: var(--ac-button);
+      background: var(--bp-tonal);
     }
     .head__icon:focus-visible,
     .head__menu button:focus-visible {
-      outline: 2px solid var(--ac-kit);
+      outline: 2px solid var(--bp-primary);
       outline-offset: -2px;
     }
     .head__more {
@@ -177,9 +177,9 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       flex-direction: column;
       min-width: 200px;
       padding: 4px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: var(--ac-radius-sm);
-      background: var(--ac-white);
+      background: var(--bp-white);
       box-shadow: 0 4px 16px rgb(12 43 48 / 16%);
     }
     .head__menu button {
@@ -189,15 +189,15 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       background: transparent;
       font: inherit;
       font-size: 14px;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       text-align: left;
       cursor: pointer;
     }
     .head__menu button:hover:not(:disabled) {
-      background: var(--ac-button);
+      background: var(--bp-tonal);
     }
     .head__menu button:disabled {
-      color: var(--ac-cool-grey-4, #57696b);
+      color: var(--bp-text-muted, #57696b);
       cursor: default;
     }
   `,
@@ -206,7 +206,7 @@ export class NodePanelHeaderComponent {
   readonly node = input.required<WorkflowNode>();
   /** Людська назва типу вузла; технічний тип показується в підказці. */
   readonly typeLabel = input('');
-  readonly groupColor = input('var(--ac-kit)');
+  readonly groupColor = input('var(--bp-primary)');
   readonly readonly = input(false);
   readonly running = input(false);
   /** Output вузла закріплено. */

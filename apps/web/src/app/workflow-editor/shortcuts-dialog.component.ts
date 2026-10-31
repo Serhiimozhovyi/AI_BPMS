@@ -46,7 +46,7 @@ import { keyLabel, shortcutGroups } from './shortcuts';
     }
     .group__title {
       margin: 0 0 8px;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       font: 700 12px/16px var(--bp-font-family);
       text-transform: uppercase;
     }
@@ -76,14 +76,14 @@ import { keyLabel, shortcutGroups } from './shortcuts';
     }
     kbd {
       padding: 1px 6px;
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       border-radius: 4px;
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
       font: var(--bp-font-p4);
       white-space: nowrap;
     }
     .or {
-      color: var(--ac-cool-grey-4, #57696b);
+      color: var(--bp-text-muted, #57696b);
       font-size: 11px;
     }
   `,
