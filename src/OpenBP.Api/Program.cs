@@ -127,6 +127,8 @@ builder.Services.AddOpenBpOpenApi();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+// Swagger UI (F10-01): /swagger показує /openapi/v1.json; статичні файли без входу, дані — лише з ключем чи сесією.
+app.UseOpenBpSwaggerUi();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

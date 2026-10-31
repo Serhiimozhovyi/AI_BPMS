@@ -80,6 +80,10 @@
           <span class="material-symbols-outlined" aria-hidden="true">key</span>
           <span i18n="@@app.changePassword">Змінити пароль</span>
         </a>
+        <a class="shell-menu__item" role="menuitem" data-testid="api-docs" href="/swagger" target="_blank" rel="noopener" (click)="closeUserMenu()">
+          <span class="material-symbols-outlined" aria-hidden="true">api</span>
+          <span i18n="@@app.apiDocs">Документація API</span>
+        </a>
         <button type="button" class="shell-menu__item" role="menuitem" data-testid="logout" (click)="logout()">
           <span class="material-symbols-outlined" aria-hidden="true">logout</span>
           <span i18n="@@app.logout">Вийти</span>
