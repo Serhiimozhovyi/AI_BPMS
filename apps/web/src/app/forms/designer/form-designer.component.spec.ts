@@ -223,7 +223,7 @@ describe('FormDesignerComponent (F11-02)', () => {
 
     it('тип з палітри, скинутий у рядок, додає поле поруч', async () => {
       const ctx = await setup();
-      await drop(ctx, '[data-row="0:1"]', 'date', { id: 'fd-palette', index: 6 }, 1);
+      await drop(ctx, '[data-row="0:1"]', { kind: 'date' }, { id: 'fd-palette', index: 6 }, 1);
       expect(layoutOf(ctx.last())).toEqual([[['name'], ['from', 'data']]]);
       expect(ctx.q('fd-card-data')?.getAttribute('aria-pressed')).toBe('true');
     });
@@ -261,6 +261,102 @@ describe('FormDesignerComponent (F11-02)', () => {
       ctx.q('fd-undo')!.click();
       await ctx.render();
       expect(layoutOf(ctx.last())).toEqual([[['name:5', 'from:7']]]);
+    });
+  });
+
+  describe('режим таблиці (F11-05)', () => {
+    const columns = [
+      { name: 'name', type: 'string' },
+      { name: 'starts_at', type: 'datetime' },
+      { name: 'status', type: 'enum', values: ['active', 'cancelled'] },
+      { name: 'minutes', type: 'number' },
+    ];
+
+    const layoutOf = (schema: JsonSchema) =>
+      ((schema['x-openbp-layout'] as { sections: { rows: { field: string }[][] }[] }) ?? { sections: [] }).sections.map((sec) => sec.rows.map((r) => r.map((c) => c.field)));
+
+    async function tableSetup(schema: JsonSchema | null = null) {
+      TestBed.configureTestingModule({ imports: [TableHostComponent] });
+      const fixture = TestBed.createComponent(TableHostComponent);
+      fixture.componentInstance.schema.set(schema);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const el = fixture.nativeElement as HTMLElement;
+      const q = (id: string) => el.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+      const render = async () => {
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+      };
+      return { fixture, el, q, render, last: () => fixture.componentInstance.emitted.at(-1)! };
+    }
+
+    @Component({
+      imports: [FormDesignerComponent],
+      template: `<bp-form-designer [schema]="schema()" [columns]="columns" (schemaChange)="changed($event)" />`,
+    })
+    class TableHostComponent {
+      readonly schema = signal<JsonSchema | null>(null);
+      readonly emitted: JsonSchema[] = [];
+      readonly columns = columns;
+      changed(schema: JsonSchema): void {
+        this.emitted.push(schema);
+        this.schema.set(schema);
+      }
+    }
+
+    it('палітра — колонки таблиці, без типів і вкладок JSON; клік ставить колонку з типом колонки', async () => {
+      const { q, render, last, el } = await tableSetup();
+      expect(q('fd-kind-text')).toBeNull();
+      expect(q('fd-mode-json')).toBeNull();
+      expect(el.querySelectorAll('[data-column]').length).toBe(4);
+      q('fd-col-starts_at')!.click();
+      await render();
+      expect((last()['properties'] as Record<string, JsonSchema>)['starts_at']).toEqual({ type: 'string', title: 'starts_at', format: 'date-time' });
+      expect(q('fd-col-starts_at')).toBeNull();
+      expect(q('fd-prop-column')?.textContent).toContain('starts_at');
+      expect(q('fd-prop-key')).toBeNull();
+      expect(q('fd-duplicate')).toBeNull();
+      expect(q('fd-delete')?.textContent).toContain('Прибрати з форми');
+    });
+
+    it('«Додати всі» і повернення колонки в палітру після «Прибрати з форми»', async () => {
+      const { q, render, last } = await tableSetup();
+      q('fd-add-all')!.click();
+      await render();
+      expect(Object.keys(last()['properties'] as object)).toEqual(['name', 'starts_at', 'status', 'minutes']);
+      expect((last()['properties'] as Record<string, JsonSchema>)['status']['oneOf']).toEqual([
+        { const: 'active', title: 'active' },
+        { const: 'cancelled', title: 'cancelled' },
+      ]);
+      expect(q('fd-columns-empty')).not.toBeNull();
+      q('fd-card-minutes')!.click();
+      await render();
+      q('fd-delete')!.click();
+      await render();
+      expect(q('fd-col-minutes')).not.toBeNull();
+      expect(Object.keys(last()['properties'] as object)).not.toContain('minutes');
+    });
+
+    it('підпис, підказка, плейсхолдер, обов’язкове й ширини працюють, обмежень типу немає', async () => {
+      const { q, render, last } = await tableSetup({ type: 'object', properties: { name: { type: 'string', title: 'name' }, minutes: { type: 'number', title: 'minutes' } } });
+      q('fd-card-name')!.click();
+      await render();
+      expect(q('fd-prop-minLength')).toBeNull();
+      expect(q('fd-prop-pattern')).toBeNull();
+      const title = q('fd-prop-title') as HTMLInputElement;
+      title.value = 'Ім’я клієнта';
+      title.dispatchEvent(new Event('input'));
+      (q('fd-prop-required')!.querySelector('input') as HTMLInputElement).click();
+      await render();
+      expect(last()['required']).toEqual(['name']);
+      expect((last()['properties'] as Record<string, JsonSchema>)['name']['title']).toBe('Ім’я клієнта');
+      q('fd-card-minutes')!.click();
+      await render();
+      q('fd-join')!.click();
+      await render();
+      expect(layoutOf(last())).toEqual([[['name', 'minutes']]]);
+      expect(q('fd-row-preset-6-6')).not.toBeNull();
     });
   });
 });

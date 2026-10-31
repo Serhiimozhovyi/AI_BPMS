@@ -5,6 +5,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, debounceTime, forkJoin, map, of, switchMap, tap } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
+import { FormDesignerComponent } from '../../forms/designer/form-designer.component';
+import type { TableColumn } from '../../forms/designer/form-designer.model';
+import type { JsonSchema } from '../../forms/form-fields';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { SampleKind, sampleFor } from '../../projects/page-builder-options';
 import {
@@ -41,6 +44,7 @@ import {
 } from '../../projects/project-pages-api.service';
 import { DataTableSummary, DataTablesApiService } from '../../tables/data-tables-api.service';
 import { WorkflowSummary, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { HiddenRow, designerSchema, fromDesignerSchema, hiddenFields, hiddenRows } from './page-form-model';
 import { BuilderCalendarComponent } from './builder/builder-calendar.component';
 import { BuilderDashboardComponent } from './builder/builder-dashboard.component';
 import { BuilderListOptionsComponent, ListExtras } from './builder/builder-list-options.component';
@@ -61,7 +65,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
 @Component({
   selector: 'app-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BpButtonDirective, MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
+  imports: [BpButtonDirective, MatButtonModule, NgTemplateOutlet, RouterLink, BuilderCalendarComponent, BuilderDashboardComponent, BuilderListOptionsComponent, BuilderUserFiltersComponent, PagePreviewComponent, FormDesignerComponent, MatFormFieldModule, MatSelectModule, SelectSearchComponent],
   template: `
     <div class="grid gap-6 px-6 pb-8 pt-2 xl:grid-cols-2">
     <section class="min-w-0" data-testid="page-builder">
@@ -92,7 +96,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         </mat-form-field>
         <label id="b-table-label" for="b-table" i18n="@@builder.table">Таблиця</label>
         <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
-          <mat-select id="b-table" aria-labelledby="b-table-label" data-testid="b-table" [value]="table()" (selectionChange)="table.set($event.value)">
+          <mat-select id="b-table" aria-labelledby="b-table-label" data-testid="b-table" [value]="table()" (selectionChange)="setTable($event.value)">
             <bp-select-search />
             <mat-option value="">—</mat-option>
             @for (t of tables(); track t.id) {
@@ -193,7 +197,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         <app-builder-dashboard [blocks]="blocks()" [pageKeys]="pageKeys()" [workflows]="workflowNames()" [appRoles]="appRoles()" (blocksChange)="blocks.set($event)" />
       }
 
-      @if (kind() === 'detail' || kind() === 'form') {
+      @if (kind() === 'detail') {
         <fieldset class="mb-4" data-testid="b-fields">
           <legend class="font-medium" i18n="@@builder.fields">Поля</legend>
           @for (c of columnNames(); track c) {
@@ -202,14 +206,45 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
                 <input type="checkbox" [attr.data-field]="c" [checked]="fields().includes(c)" (change)="fields.set(toggleOrdered(fields(), c, $any($event.target).checked))" />
                 {{ c }}
               </label>
-              @if (kind() === 'form' && fields().includes(c)) {
-                <label class="inline-flex items-center gap-1 opacity-80">
-                  <input type="checkbox" [attr.data-required]="c" [checked]="required().includes(c)" (change)="required.set(toggle(required(), c, $any($event.target).checked))" />
-                  <span i18n="@@builder.required">обов'язкове</span>
-                </label>
-              }
             </span>
           }
+        </fieldset>
+      }
+
+      @if (kind() === 'form') {
+        <fieldset class="mb-4" data-testid="b-fields">
+          <legend class="font-medium" i18n="@@builder.fields">Поля</legend>
+          @if (table()) {
+            <bp-form-designer [schema]="formSchema()" [columns]="designerColumns()" (schemaChange)="formSchema.set($event)" />
+          } @else {
+            <p class="text-sm opacity-70" data-testid="b-fields-hint" i18n="@@builder.fields.pickTable">Оберіть таблицю — її колонки стануть полями форми.</p>
+          }
+        </fieldset>
+        <fieldset class="mb-4" data-testid="b-hidden">
+          <legend class="font-medium" i18n="@@builder.hidden">Приховані поля (ставить сервер)</legend>
+          <p class="mb-2 text-sm opacity-70" i18n="@@builder.hidden.hint">Не показуються на формі: значення ставить сервер — вираз (наприклад, {{ '{{ $user.id }}' }}) або копія з рядка, вибраного в полі-посиланні форми.</p>
+          @for (h of hiddenList(); track $index; let i = $index) {
+            <div class="mb-1 flex flex-wrap items-center gap-2" [attr.data-hidden]="i">
+              <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                <mat-select aria-label="Колонка" i18n-aria-label="@@builder.hidden.column" [attr.data-testid]="'b-hidden-column-' + i" [value]="h.column" (selectionChange)="setHidden(i, { column: $event.value })">
+                  <bp-select-search />
+                  @for (c of columnNames(); track c) {
+                    <mat-option [value]="c">{{ c }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="bp-field-compact" subscriptSizing="dynamic">
+                <mat-select aria-label="Звідки значення" i18n-aria-label="@@builder.hidden.mode" [attr.data-testid]="'b-hidden-mode-' + i" [value]="h.mode" (selectionChange)="setHidden(i, { mode: $event.value })">
+                  <bp-select-search />
+                  <mat-option value="value" i18n="@@builder.hidden.value">Значення або вираз</mat-option>
+                  <mat-option value="copy" i18n="@@builder.hidden.copy">Копія з пов'язаного рядка</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <input class="w-64 border p-1" [attr.data-testid]="'b-hidden-text-' + i" [placeholder]="h.mode === 'copy' ? hints.copyFrom : hints.value" [attr.aria-label]="h.mode === 'copy' ? hints.copyFrom : hints.value" [value]="h.text" (input)="setHidden(i, { text: $any($event.target).value })" />
+              <button mat-button type="button" bpVariant="danger" [attr.data-testid]="'b-hidden-remove-' + i" (click)="hiddenList.set(removeAt(hiddenList(), i))" i18n="@@builder.remove">Прибрати</button>
+            </div>
+          }
+          <button mat-stroked-button type="button" bpVariant="tonal" data-testid="b-hidden-add" (click)="hiddenList.set([...hiddenList(), { column: '', mode: 'value', text: '' }])" i18n="@@builder.hidden.add">Додати приховане поле</button>
         </fieldset>
       }
 
@@ -475,6 +510,7 @@ export class PageBuilderPage implements OnInit {
     expression: $localize`:@@builder.hint.expression:{{ $tiles.booked / $tiles.slots }}`,
     expressionLabel: $localize`:@@builder.hint.expressionLabel:Вираз над плитками`,
     value: $localize`:@@builder.hint.value:значення або {{ $user.id }}`,
+    copyFrom: $localize`:@@builder.hint.copyFrom:колонка_посилання.колонка`,
   };
 
   readonly kinds = PAGE_KINDS;
@@ -507,7 +543,10 @@ export class PageBuilderPage implements OnInit {
   readonly sortDirection = signal<'asc' | 'desc'>('asc');
   readonly pageSize = signal('');
   readonly fields = signal<string[]>([]);
-  readonly required = signal<string[]>([]);
+  /** Схема форми в конструкторі (F11-05): видимі поля, розмітка; джерело правди для `fields`/`formLayout` форми. */
+  readonly formSchema = signal<JsonSchema>({ type: 'object', properties: {} });
+  /** Поля форми, які ставить сервер (`value`/`copyFrom`) — поза конструктором. */
+  readonly hiddenList = signal<HiddenRow[]>([]);
   readonly submitMode = signal<SubmitMode>('insert');
   readonly submitWorkflow = signal('');
   readonly thenPage = signal('');
@@ -534,6 +573,11 @@ export class PageBuilderPage implements OnInit {
 
   readonly columnNames = computed(() => this.columnsOf(this.table()));
   readonly workflowNames = computed(() => this.workflows().map((w) => w.name));
+  /** Колонки таблиці для палітри конструктора форми: без тих, що вже сховані (ставить сервер). */
+  readonly designerColumns = computed<TableColumn[]>(() => {
+    const hidden = new Set(this.hiddenList().map((h) => h.column));
+    return this.tableColumnsOf(this.table()).filter((c) => !hidden.has(c.name));
+  });
   readonly selectedColumns = computed<PageColumn[]>(() => this.columns().map((column) => this.columnOverrides().find((c) => c.column === column) ?? { column }));
 
   readonly definition = computed<PageDefinition>(() => {
@@ -567,22 +611,17 @@ export class PageBuilderPage implements OnInit {
       if (this.pageSize()) def.pageSize = Number(this.pageSize());
       const create = this.createPage();
       if (create) def.create = this.createMode() === 'drawer' ? { page: create, mode: 'drawer' } : { page: create };
+    } else if (kind === 'form') {
+      const base = this.base.fields ?? [];
+      const result = fromDesignerSchema(this.formSchema(), base, hiddenFields(this.hiddenList(), base));
+      def.fields = result.fields;
+      if (result.formLayout) def.formLayout = result.formLayout;
     } else {
-      const required = this.required();
       def.fields = this.fields().map((column): PageField => {
         const kept = this.base.fields?.find((f) => f.column === column);
-        const field: PageField = { ...(kept ?? { column }) };
-        if (kind === 'form') field.required = required.includes(column) || undefined;
-        return field;
+        return { ...(kept ?? { column }) };
       });
-      if (kind === 'detail' && this.base.related?.length) def.related = this.base.related;
-      if (kind === 'form' && this.base.formLayout) {
-        // Розмітку (F11-01) редактор форми ще не знає — зберігаємо, прибравши клітинки полів, яких на формі вже немає.
-        const visible = new Set(def.fields.filter((f) => f.value === undefined && f.copyFrom === undefined).map((f) => f.column));
-        def.formLayout = {
-          sections: this.base.formLayout.sections.map((s) => ({ ...s, rows: s.rows.map((r) => r.filter((c) => visible.has(c.field))).filter((r) => r.length) })),
-        };
-      }
+      if (this.base.related?.length) def.related = this.base.related;
     }
 
     if (kind !== 'form') {
@@ -681,6 +720,24 @@ export class PageBuilderPage implements OnInit {
   columnsOf(table: string): string[] {
     const name = table || this.table();
     return this.tables().find((t) => t.name.toLowerCase() === name.toLowerCase())?.columns.map((c) => c.name) ?? [];
+  }
+
+  /** Колонки таблиці для конструктора форми (тип колонки задає тип поля). */
+  tableColumnsOf(table: string): TableColumn[] {
+    const found = this.tables().find((t) => t.name.toLowerCase() === table.toLowerCase());
+    return (found?.columns ?? []).map((c) => ({ name: c.name, type: c.type, values: c.values }));
+  }
+
+  /** Інша таблиця — інші колонки: поля форми й приховані поля попередньої таблиці не лишаються. */
+  setTable(name: string): void {
+    if (name === this.table()) return;
+    this.table.set(name);
+    this.formSchema.set({ type: 'object', properties: {} });
+    this.hiddenList.set([]);
+  }
+
+  setHidden(index: number, patch: Partial<HiddenRow>): void {
+    this.hiddenList.update((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   }
 
   numberColumns(table: string): string[] {
@@ -797,7 +854,8 @@ export class PageBuilderPage implements OnInit {
     this.sortDirection.set(def.sort?.direction ?? 'asc');
     this.pageSize.set(def.pageSize ? String(def.pageSize) : '');
     this.fields.set((def.fields ?? []).map((f) => f.column));
-    this.required.set((def.fields ?? []).filter((f) => f.required).map((f) => f.column));
+    this.formSchema.set(designerSchema(def, this.tableColumnsOf(def.table ?? '')));
+    this.hiddenList.set(hiddenRows(def.fields));
     this.submitMode.set(def.onSubmit?.workflow ? 'workflow' : ((def.onSubmit?.operation as SubmitMode | undefined) ?? 'insert'));
     this.submitWorkflow.set(def.onSubmit?.workflow ?? '');
     this.thenPage.set(def.then?.page ?? '');

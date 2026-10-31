@@ -127,3 +127,54 @@ test('календар і головна збираються в констру�
   await expect(page.getByTestId('appset-saved')).toBeVisible();
   expect(appBodies).toEqual([{ title: 'Кабінет психолога', icon: null, home: 'home', timezone: null, nav: [{ label: 'Робота', pages: ['calendar', 'home'] }] }]);
 });
+
+test('форма: колонки таблиці перетягуються на канвас, два поля — в один рядок, приховане поле ставить сервер (F11-05)', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  const saved: Saved[] = [];
+  const previews: Saved[] = [];
+  await mockApi(page, saved, previews, []);
+
+  await page.goto('/projects/p1/app/_builder');
+  await page.getByTestId('b-key').fill('book');
+  await page.getByTestId('b-name').fill('Запис');
+  await chooseOption(page.getByTestId('b-kind'), 'Форма');
+  await chooseOption(page.getByTestId('b-table'), 'slots');
+
+  const designer = page.getByTestId('b-fields');
+  await expect(designer.locator('[data-column]')).toHaveCount(4);
+  await designer.getByTestId('fd-col-note').click();
+  await expect(designer.getByTestId('fd-card-note')).toBeVisible();
+  await designer.getByTestId('fd-prop-title').fill('Примітка');
+
+  // Колонку «minutes» тягнемо з палітри в рядок поля «Примітка».
+  const source = (await designer.getByTestId('fd-col-minutes').boundingBox())!;
+  const row = designer.locator('[data-row="0:0"]');
+  const target = (await row.boundingBox())!;
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 14; i++) {
+    await page.mouse.move(
+      source.x + source.width / 2 + ((target.x + target.width * 0.8 - source.x - source.width / 2) * i) / 14,
+      source.y + source.height / 2 + ((target.y + target.height / 2 - source.y - source.height / 2) * i) / 14,
+    );
+  }
+  await page.mouse.up();
+  await expect(designer.getByTestId('fd-card-minutes')).toBeVisible();
+  const [a, b] = [(await designer.getByTestId('fd-card-note').boundingBox())!, (await designer.getByTestId('fd-card-minutes').boundingBox())!];
+  expect(Math.abs(a.y - b.y)).toBeLessThan(2);
+  await expect(designer.getByTestId('fd-col-minutes')).toHaveCount(0);
+
+  await page.getByTestId('b-hidden-add').click();
+  await chooseOption(page.getByTestId('b-hidden-column-0'), 'status');
+  await page.getByTestId('b-hidden-text-0').fill('open');
+  await expect(designer.getByTestId('fd-col-status')).toHaveCount(0);
+  await testInfo.attach('page-form-designer', { body: await page.screenshot(), contentType: 'image/png' });
+
+  await page.getByTestId('b-save').click();
+  await expect(page).toHaveURL(/\/app\/book$/);
+  expect(saved.find((s) => s.key === 'book')!.body.definition).toMatchObject({
+    table: 'slots',
+    fields: [{ column: 'note', label: 'Примітка' }, { column: 'minutes' }, { column: 'status', value: 'open' }],
+    formLayout: { sections: [{ rows: [[{ field: 'note' }, { field: 'minutes' }]] }] },
+  });
+});
