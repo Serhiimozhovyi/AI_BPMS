@@ -14,7 +14,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NotifyService } from '../../shared/notify.service';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
-import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService, mcpClaudeCodeCommand, mcpClientConfig, mcpDesktopConfig } from '../../settings/api-keys-api.service';
+import { ApiKeyCreated, ApiKeyInfo, ApiKeysApiService } from '../../settings/api-keys-api.service';
+import { isLocalMcpUrl, mcpClientTemplates } from '../../settings/mcp-client-templates';
 import { AuthService } from '../../auth/auth.service';
 import { AssistantSection } from '../../settings/assistant-section.component';
 import { AuditSection } from '../../settings/audit-section.component';
@@ -182,21 +183,28 @@ export interface SettingsSectionItem {
         Агент зможе описувати конектори, створювати й запускати сценарії та тестувати вузли.
       </p>
       <p class="mb-2 font-mono text-sm" data-testid="mcp-url">{{ mcpUrl }}</p>
-      <div class="max-w-3xl">
+      <div class="max-w-4xl">
         <bp-tabs variant="icon" [tabs]="mcpTabs" [(value)]="mcpTab" label="Клієнт ШІ-агента" i18n-label="@@settings.mcp.clients" testId="mcp-tabs" />
-        <div role="tabpanel">
-          @switch (mcpTab()) {
-            @case ('code') {
-              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: claudeCodeCommand(), id: 'code' }" />
+        @if (mcpTemplate(); as tpl) {
+          <div role="tabpanel" class="pt-3" [attr.data-testid]="'mcp-template-' + tpl.id">
+            <p class="text-sm"><span class="mr-1 opacity-70" i18n="@@settings.mcp.where">Куди:</span><span data-testid="mcp-where">{{ tpl.where }}</span></p>
+            @if (tpl.warning) {
+              <p class="mcp-note mcp-note--warn mt-2" role="note" data-testid="mcp-warning">{{ tpl.warning }}</p>
+            } @else if (tpl.needsPublicUrl && localUrl) {
+              <p class="mcp-note mt-2" role="note" data-testid="mcp-public-hint" i18n="@@settings.mcp.publicHint">
+                Цей клієнт звертається до AI_BPMS зі своїх серверів, тому потрібна публічна HTTPS-адреса. Відкрийте AI_BPMS за такою адресою — і фрагмент підставить її сам.
+              </p>
             }
-            @case ('other') {
-              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: config(), id: 'other' }" />
+            <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm" data-testid="mcp-steps">
+              @for (step of tpl.steps; track $index) {
+                <li>{{ step }}</li>
+              }
+            </ol>
+            @if (tpl.snippet; as text) {
+              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: text, id: tpl.id }" />
             }
-            @default {
-              <ng-container *ngTemplateOutlet="snippet; context: { $implicit: desktopConfig(), id: 'desktop' }" />
-            }
-          }
-        </div>
+          </div>
+        }
       </div>
     </ng-template>
 
@@ -210,6 +218,16 @@ export interface SettingsSectionItem {
     </ng-template>
   `,
   styles: `
+    .mcp-note {
+      padding: 8px 12px;
+      border-radius: var(--bp-radius-sm);
+      background: var(--bp-bg-2);
+      font-size: 0.875rem;
+    }
+    .mcp-note--warn {
+      background: var(--bp-warning-15);
+      color: var(--bp-warning);
+    }
     .settings-nav {
       display: flex;
       gap: 4px;
@@ -257,11 +275,6 @@ export class SettingsPage implements OnInit {
   readonly keyProject = signal('');
   /** Вкладка клієнта в «Підключити ШІ-агента». */
   readonly mcpTab = signal<string | null>('desktop');
-  readonly mcpTabs: BpTab[] = [
-    { value: 'desktop', icon: '🖥️', label: 'Claude Desktop' },
-    { value: 'code', icon: '⌨️', label: 'Claude Code' },
-    { value: 'other', icon: '🔌', label: $localize`:@@settings.mcp.other:Інше` },
-  ];
 
   readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
 
@@ -299,11 +312,16 @@ export class SettingsPage implements OnInit {
   /** Адреса `/mcp` на тому ж хості, що й UI. */
   readonly mcpUrl = `${inject(DOCUMENT).location.origin}/mcp`;
 
-  /** Фрагмент конфігурації: зі щойно створеним ключем, інакше із заглушкою. */
-  readonly config = computed(() => mcpClientConfig(this.mcpUrl, this.keyOrPlaceholder()));
+  /** Адреса локальна або без HTTPS — хмарним клієнтам (claude.ai, Copilot Studio, OpenAI API) не підійде. */
+  readonly localUrl = isLocalMcpUrl(this.mcpUrl);
 
-  readonly desktopConfig = computed(() => mcpDesktopConfig(this.mcpUrl, this.keyOrPlaceholder()));
-  readonly claudeCodeCommand = computed(() => mcpClaudeCodeCommand(this.mcpUrl, this.keyOrPlaceholder()));
+  /** Шаблони клієнтів (F3-118): зі щойно створеним ключем, інакше із заглушкою. */
+  readonly mcpTemplates = computed(() => mcpClientTemplates(this.mcpUrl, this.keyOrPlaceholder()));
+  readonly mcpTabs: BpTab[] = mcpClientTemplates('', '').map((t) => ({ value: t.id, icon: t.icon, label: t.label }));
+  readonly mcpTemplate = computed(() => {
+    const list = this.mcpTemplates();
+    return list.find((t) => t.id === this.mcpTab()) ?? list[0];
+  });
 
   private keyOrPlaceholder(): string {
     return this.created()?.key ?? $localize`:@@settings.mcp.keyPlaceholder:<ваш API-ключ>`;
