@@ -23,7 +23,7 @@
   &:focus-visible {
     outline: 2px solid var(--bp-accent);
     outline-offset: 2px;
-    border-radius: var(--ac-radius-sm);
+    border-radius: var(--bp-radius-sm);
   }
 }
 
@@ -33,7 +33,7 @@
   width: 32px;
   height: 32px;
   overflow: hidden;
-  border-radius: var(--ac-radius);
+  border-radius: var(--bp-radius);
   background: var(--bp-accent);
   color: var(--bp-shell);
   font: 700 14px/1 Ubuntu, sans-serif;
@@ -189,7 +189,7 @@
   height: 36px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 0.24);
-  border-radius: var(--ac-radius);
+  border-radius: var(--bp-radius);
   background: var(--bp-shell-2);
   color: var(--bp-white);
   --mat-select-enabled-trigger-text-color: var(--bp-white);
@@ -301,9 +301,9 @@
   min-width: 240px;
   padding: 8px 0;
   border: 1px solid var(--bp-line);
-  border-radius: var(--ac-radius);
+  border-radius: var(--bp-radius);
   background: var(--bp-white);
-  box-shadow: var(--ac-shadow);
+  box-shadow: var(--bp-shadow);
   color: var(--bp-text);
 }
 
@@ -387,9 +387,9 @@
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  border-bottom: 2px solid var(--ac-red);
-  background: var(--ac-red-15, #ffe7e7);
-  color: var(--ac-vivid);
+  border-bottom: 2px solid var(--bp-danger);
+  background: var(--bp-danger-15, #ffe7e7);
+  color: var(--bp-text);
   font: var(--bp-font-h7);
 }
 
@@ -399,8 +399,8 @@
 
 .shell-offline__retry {
   padding: 4px 16px;
-  border: 1px solid var(--ac-vivid);
-  border-radius: var(--ac-radius-sm);
+  border: 1px solid var(--bp-text);
+  border-radius: var(--bp-radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;

@@ -280,7 +280,7 @@ describe('ConnectorsPage', () => {
     ]);
     await render(fixture);
     const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-catalog="telegram"]')?.classList).toContain('border-ac-kit');
+    expect(host.querySelector('[data-catalog="telegram"]')?.classList).toContain('border-bp-primary');
     expect(host.querySelector('[data-testid="add-button"]')).toBeNull();
 
     (host.querySelector('[data-testid="catalog-install"]') as HTMLButtonElement).click();

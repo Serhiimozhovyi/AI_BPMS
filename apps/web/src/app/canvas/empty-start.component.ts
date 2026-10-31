@@ -81,9 +81,9 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
       max-height: 70vh;
       padding: 24px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-lg);
+      border-radius: var(--bp-radius-lg);
       background: var(--bp-white);
-      box-shadow: var(--ac-shadow);
+      box-shadow: var(--bp-shadow);
       color: var(--bp-text);
     }
 
@@ -112,7 +112,7 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
 
     .start__error {
       margin: 0;
-      color: var(--ac-red);
+      color: var(--bp-danger);
       font-size: 13px;
     }
 
@@ -133,7 +133,7 @@ export function missingConnectors(template: WorkflowTemplate, installed: Readonl
       width: 100%;
       padding: 8px 12px;
       border: 1px solid transparent;
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       background: none;
       color: inherit;
       text-align: left;

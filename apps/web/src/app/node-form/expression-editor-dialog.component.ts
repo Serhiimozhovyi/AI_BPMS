@@ -172,7 +172,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
       flex: 1;
       min-height: 0;
       border: 1px solid var(--mat-sys-outline-variant);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       overflow: hidden;
     }
 
@@ -211,7 +211,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
 
     .expr__type {
       padding: 0 6px;
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       background: var(--bp-tonal);
       color: var(--bp-primary);
       font-weight: 500;
@@ -223,7 +223,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
       padding: 8px;
       max-height: 200px;
       overflow: auto;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: var(--bp-bg-2);
       font: 12px/17px monospace;
       white-space: pre-wrap;
@@ -240,7 +240,7 @@ type PreviewState = { status: 'idle' | 'loading' } | { status: 'ready'; value: u
       margin-bottom: 4px;
       padding: 6px 10px;
       border: 1px solid var(--mat-sys-outline-variant);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       color: inherit;
       font: inherit;

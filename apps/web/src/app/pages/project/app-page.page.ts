@@ -103,7 +103,7 @@ interface DrawerState {
               } @else if (v.page.definition.layout === 'cards') {
                 <ul class="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3" data-testid="app-cards">
                   @for (row of r.items; track row.key) {
-                    <li class="rounded border border-ac-line p-4" [attr.data-row]="row.key">
+                    <li class="rounded border border-bp-line p-4" [attr.data-row]="row.key">
                       <div class="flex items-start gap-2">
                         <div class="grow">
                           @let title = cardCell(row, v.page.definition.card?.title);
@@ -141,7 +141,7 @@ interface DrawerState {
                         </div>
                       }
                       @if (isExpanded(row.key)) {
-                        <div class="mt-3 border-t border-ac-line pt-3">
+                        <div class="mt-3 border-t border-bp-line pt-3">
                           <app-page-expand
                             [projectId]="projectId"
                             [pageKey]="v.page.key"
@@ -213,7 +213,7 @@ interface DrawerState {
                         </tr>
                         @if (isExpanded(row.key)) {
                           <tr [attr.data-expand-row]="row.key">
-                            <td class="bg-ac-stone p-3" [attr.colspan]="columns().length + 2">
+                            <td class="bg-bp-surface-2 p-3" [attr.colspan]="columns().length + 2">
                               <app-page-expand
                                 [projectId]="projectId"
                                 [pageKey]="v.page.key"

@@ -40,8 +40,8 @@ import { WorkflowEditorComponent } from '../../workflow-editor/workflow-editor.c
     .narrow-hint {
       margin: 0;
       padding: 8px 16px;
-      background: var(--ac-button);
-      color: var(--ac-vivid);
+      background: var(--bp-tonal);
+      color: var(--bp-text);
       font: var(--bp-font-h7);
     }
   `,

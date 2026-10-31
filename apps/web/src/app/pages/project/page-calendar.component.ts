@@ -84,7 +84,7 @@ interface DayColumn {
               type="button"
               [attr.data-cal-view]="v"
               [attr.aria-pressed]="mode() === v"
-              [class.bg-ac-button]="mode() === v"
+              [class.bg-bp-tonal]="mode() === v"
               (click)="setMode(v)"
             >
               {{ viewName(v) }}
@@ -103,14 +103,14 @@ interface DayColumn {
 
     @if (mode() === 'month') {
       <div class="max-w-6xl overflow-x-auto">
-        <div class="grid min-w-[40rem] grid-cols-7 border-l border-t border-ac-line" data-testid="cal-month">
+        <div class="grid min-w-[40rem] grid-cols-7 border-l border-t border-bp-line" data-testid="cal-month">
           @for (name of weekdayNames; track name) {
-            <div class="border-b border-r border-ac-line bg-ac-stone p-1 text-center text-sm opacity-80">{{ name }}</div>
+            <div class="border-b border-r border-bp-line bg-bp-surface-2 p-1 text-center text-sm opacity-80">{{ name }}</div>
           }
           @for (col of columns(); track col.key) {
             <div
-              class="min-h-24 border-b border-r border-ac-line p-1"
-              [class.bg-ac-stone]="!inMonth(col.day)"
+              class="min-h-24 border-b border-r border-bp-line p-1"
+              [class.bg-bp-surface-2]="!inMonth(col.day)"
               [class.opacity-60]="!inMonth(col.day)"
               [attr.data-day]="col.key"
             >
@@ -118,7 +118,7 @@ interface DayColumn {
                 type="button"
                 class="mb-1 rounded px-1 text-sm"
                 [class.font-bold]="col.today"
-                [class.bg-ac-button]="col.today"
+                [class.bg-bp-tonal]="col.today"
                 [attr.data-day-open]="col.key"
                 [attr.aria-label]="col.label"
                 (click)="openDay(col.day)"
@@ -152,7 +152,7 @@ interface DayColumn {
           <div class="grid" [style.grid-template-columns]="gridColumns()">
             <div></div>
             @for (col of columns(); track col.key) {
-              <div class="border-b border-ac-line p-1 text-center" [class.font-bold]="col.today" [attr.data-day-head]="col.key">{{ col.label }}</div>
+              <div class="border-b border-bp-line p-1 text-center" [class.font-bold]="col.today" [attr.data-day-head]="col.key">{{ col.label }}</div>
             }
           </div>
           <div class="grid" [style.grid-template-columns]="gridColumns()">
@@ -162,12 +162,12 @@ interface DayColumn {
               }
             </div>
             @for (col of columns(); track col.key; let ci = $index) {
-              <div class="relative border-l border-ac-line" [style.height.px]="gridHeight()" [attr.data-day]="col.key" [class.bg-ac-stone]="col.today">
+              <div class="relative border-l border-bp-line" [style.height.px]="gridHeight()" [attr.data-day]="col.key" [class.bg-bp-surface-2]="col.today">
                 @for (h of hours(); track h) {
                   @if (canCreate()) {
                     <button
                       type="button"
-                      class="block w-full border-b border-ac-line hover:bg-ac-button"
+                      class="block w-full border-b border-bp-line hover:bg-bp-tonal"
                       [style.height.px]="hourPx"
                       [attr.data-slot]="slotId(col.day, h)"
                       [attr.aria-label]="slotLabel(col.day, h)"
@@ -177,14 +177,14 @@ interface DayColumn {
                       (keydown)="slotKey($event, ci, h)"
                     ></button>
                   } @else {
-                    <div class="border-b border-ac-line" [style.height.px]="hourPx"></div>
+                    <div class="border-b border-bp-line" [style.height.px]="hourPx"></div>
                   }
                 }
                 @for (s of col.events; track s.id) {
                   @if (s.height > 0) {
                   <button
                     type="button"
-                    class="absolute z-10 overflow-hidden rounded border border-ac-line px-1 text-left text-sm"
+                    class="absolute z-10 overflow-hidden rounded border border-bp-line px-1 text-left text-sm"
                     [class]="badge(s.color)"
                     [class.ring-2]="selected()?.id === s.id"
                     [style.top.px]="s.top"
@@ -224,7 +224,7 @@ interface DayColumn {
     }
 
     @if (selected(); as s) {
-      <section class="mt-4 max-w-xl rounded border border-ac-line p-4" data-testid="cal-selected" aria-live="polite">
+      <section class="mt-4 max-w-xl rounded border border-bp-line p-4" data-testid="cal-selected" aria-live="polite">
         <div class="flex items-start gap-2">
           <div class="grow">
             <div class="font-semibold" data-testid="cal-selected-title">{{ s.title.text }}</div>

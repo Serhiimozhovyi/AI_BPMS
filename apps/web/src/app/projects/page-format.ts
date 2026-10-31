@@ -35,12 +35,12 @@ export const BADGE_TONES: Record<PageColor, ChipTone> = {
 
 /** Класи Tailwind міток за кольором для вузьких місць (календар, плитки). */
 export const BADGE_CLASSES: Record<PageColor, string> = {
-  gray: 'bg-ac-cool-grey text-ac-cool-grey-4',
-  green: 'bg-ac-green/20 text-ac-vivid',
-  yellow: 'bg-ac-orange/20 text-ac-vivid',
-  red: 'bg-ac-red/20 text-ac-vivid',
-  blue: 'bg-ac-blue/20 text-ac-vivid',
-  purple: 'bg-ac-violet/20 text-ac-vivid',
+  gray: 'bg-bp-bg text-bp-text-muted',
+  green: 'bg-bp-success/20 text-bp-text',
+  yellow: 'bg-bp-warning/20 text-bp-text',
+  red: 'bg-bp-danger/20 text-bp-text',
+  blue: 'bg-bp-info/20 text-bp-text',
+  purple: 'bg-bp-cat-violet/20 text-bp-text',
 };
 
 function zone(timezone: string | undefined): string {

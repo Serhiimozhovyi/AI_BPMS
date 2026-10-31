@@ -4,6 +4,7 @@ import { COLUMN_FORMATS, labelsText, parseLabels } from '../../../projects/page-
 import { PageColumn, PageComputed, PageDefinition, PageOpenMode, PageRelated } from '../../../projects/project-pages-api.service';
 import { DataTableSummary } from '../../../tables/data-tables-api.service';
 import { BuilderUserFiltersComponent } from './builder-user-filters.component';
+import { BpButtonDirective } from '../../../shared/button.directive';
 
 /** Що конструктор списку зберігає поза основною формою: нові опції F8-14. */
 export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' | 'card' | 'expand' | 'empty'>;
@@ -15,7 +16,7 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
 @Component({
   selector: 'app-builder-list-options',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, BuilderUserFiltersComponent],
+  imports: [BpButtonDirective, MatButtonModule, BuilderUserFiltersComponent],
   template: `
     <h3 class="mb-1 mt-4 font-medium" i18n="@@bo.list.filters">Фільтри над списком</h3>
     <app-builder-user-filters [filters]="extras().filters ?? []" [columns]="columnNames()" (changed)="patch({ filters: $event })" />
@@ -78,7 +79,7 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
             <option [value]="c" [selected]="c === x.of">з {{ c }}</option>
           }
         </select>
-        <button mat-button type="button" (click)="removeComputed(i)" i18n="@@builder.remove">Прибрати</button>
+        <button mat-button type="button" (click)="removeComputed(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>
     }
     <button mat-button type="button" data-testid="b-add-computed" (click)="addComputed()" i18n="@@bo.computed.add">Додати обчислювану колонку</button>
@@ -135,7 +136,7 @@ export type ListExtras = Pick<PageDefinition, 'filters' | 'computed' | 'layout' 
           }
         </select>
         <input class="w-56 border p-1" placeholder="Коли порожньо" i18n-placeholder="@@bo.expand.empty" [value]="e.empty ?? ''" (input)="expand(i, { empty: $any($event.target).value || undefined })" />
-        <button mat-button type="button" (click)="removeExpand(i)" i18n="@@builder.remove">Прибрати</button>
+        <button mat-button type="button" (click)="removeExpand(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>
     }
     <button mat-button type="button" data-testid="b-add-expand" (click)="addExpand()" i18n="@@bo.expand.add">Додати підлеглий список</button>

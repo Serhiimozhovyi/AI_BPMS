@@ -69,7 +69,7 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
         }
         @for (f of fields(); track f.name) {
           @if (f.kind === 'secretMap') {
-            <fieldset class="rounded border border-ac-line p-3" [attr.data-map]="f.name">
+            <fieldset class="rounded border border-bp-line p-3" [attr.data-map]="f.name">
               @if (f.title) {
                 <legend class="px-1 text-sm font-medium">{{ f.title }}</legend>
               }
@@ -169,11 +169,11 @@ import { CredentialSummary, CredentialTypeInfo, CredentialsApiService } from './
       }
 
       @for (e of errors(); track e) {
-        <p role="alert" class="text-sm text-ac-red" data-testid="form-error">{{ e }}</p>
+        <p role="alert" class="text-sm text-bp-danger" data-testid="form-error">{{ e }}</p>
       }
 
       @if (checkResult(); as r) {
-        <p role="status" class="text-sm" [class.text-green-700]="r.ok" [class.text-ac-red]="!r.ok" data-testid="check-result">{{ r.message }}</p>
+        <p role="status" class="text-sm" [class.text-green-700]="r.ok" [class.text-bp-danger]="!r.ok" data-testid="check-result">{{ r.message }}</p>
       }
 
       <div class="flex flex-wrap gap-2">

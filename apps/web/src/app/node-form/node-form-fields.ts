@@ -48,6 +48,7 @@ import {
 } from './schema-fields';
 import { NodeCommandsFieldComponent, NodeKeyboardFieldComponent, NodeMultiChoiceFieldComponent } from './widget-fields.component';
 import { NodeDecisionRulesFieldComponent } from './decision-table-field.component';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /** Спільний стан форми вузла (`FormlyFormOptions.formState`): контекст підказок виразів і конектор вузла. */
 export interface NodeFormState {
@@ -86,7 +87,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
 @Component({
   selector: 'app-node-value-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatButtonModule, MatAutocompleteModule],
+  imports: [BpButtonDirective, ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatButtonModule, MatAutocompleteModule],
   template: `
     @if (source) {
       <div class="value__modes" role="radiogroup" [attr.aria-label]="label">
@@ -288,7 +289,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
     }
 
     .value__over {
-      color: var(--ac-red, #c62828);
+      color: var(--bp-danger, #c62828);
     }
 
     .value__backdrop--multiline {
@@ -311,7 +312,7 @@ export function nodeValueValidator(control: AbstractControl, field: FormlyFieldC
       margin-top: 12px;
       padding: 0;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: none;
       color: var(--bp-text-muted);
       cursor: pointer;
@@ -966,7 +967,7 @@ export class NodeCodeFieldComponent extends FieldType<FieldTypeConfig> implement
               @if (fieldProps.compact) {
                 <button mat-button type="button" class="array__remove" [attr.data-testid]="'remove-' + key + '-' + i" i18n-title="@@nodeform.array.remove" title="Видалити" (click)="remove(i)">✕</button>
               } @else {
-                <button mat-button type="button" [attr.data-testid]="'remove-' + key + '-' + i" (click)="remove(i)" i18n="@@nodeform.array.remove">Видалити</button>
+                <button mat-button type="button" [attr.data-testid]="'remove-' + key + '-' + i" (click)="remove(i)" i18n="@@nodeform.array.remove" bpVariant="danger">Видалити</button>
               }
             }
           </div>
@@ -1179,7 +1180,7 @@ export class NodeConditionFieldComponent extends FieldType<FieldTypeConfig> impl
       min-height: 28px;
       padding: 0 8px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       font: 400 13px/18px monospace;
     }
 

@@ -369,7 +369,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
 
     .row__trigger-icon {
       font-size: 18px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .row__actions {
@@ -379,11 +379,11 @@ import { BpButtonDirective } from '../../shared/button.directive';
     }
 
     .row__action {
-      color: var(--ac-kit, #0d736d);
+      color: var(--bp-primary, #0d736d);
     }
 
     .row__action--danger:not([disabled]) {
-      color: var(--ac-red, #ff6060);
+      color: var(--bp-danger, #ff6060);
     }
 
     .row__confirm {
@@ -401,7 +401,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
 
     .group__handle,
     .row__handle {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       cursor: grab;
     }
 
@@ -413,9 +413,9 @@ import { BpButtonDirective } from '../../shared/button.directive';
       min-width: 0;
       padding: 4px 4px 4px 0;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: none;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
       font: var(--bp-font-h6);
       text-align: left;
       cursor: pointer;
@@ -423,12 +423,12 @@ import { BpButtonDirective } from '../../shared/button.directive';
 
     .group__toggle:hover,
     .group__toggle:focus-visible {
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
     }
 
     .group__chevron {
       font-size: 20px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       transition: transform 0.15s ease;
     }
 
@@ -439,7 +439,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
     .group__count {
       padding: 0 8px;
       border-radius: 10px;
-      background: var(--ac-button);
+      background: var(--bp-tonal);
       font-size: 12px;
       font-weight: 400;
     }
@@ -449,8 +449,8 @@ import { BpButtonDirective } from '../../shared/button.directive';
     }
 
     .cdk-drag-preview {
-      box-shadow: var(--ac-shadow);
-      background: var(--ac-white);
+      box-shadow: var(--bp-shadow);
+      background: var(--bp-white);
     }
 
     .cdk-drag-placeholder {

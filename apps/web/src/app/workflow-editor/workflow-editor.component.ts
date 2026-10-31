@@ -265,7 +265,7 @@ export interface EditorErrorEvent {
               <app-empty-start class="absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2" (addTrigger)="startWithTrigger($event)" (pick)="startFromTemplate($event)" (describe)="assistantAction('describe')" />
             }
             @if (notice(); as text) {
-              <p class="absolute bottom-4 left-1/2 z-[2] m-0 -translate-x-1/2 rounded-md bg-ac-kit px-3 py-1.5 text-[13px] text-white" role="status" data-testid="editor-notice">{{ text }}</p>
+              <p class="absolute bottom-4 left-1/2 z-[2] m-0 -translate-x-1/2 rounded-md bg-bp-primary px-3 py-1.5 text-[13px] text-white" role="status" data-testid="editor-notice">{{ text }}</p>
             }
             @if (contextMenu(); as menu) {
               <div class="editor__backdrop" data-testid="context-menu-backdrop" (pointerdown)="closeContextMenu()" (contextmenu)="$event.preventDefault(); closeContextMenu()"></div>
@@ -392,10 +392,10 @@ export interface EditorErrorEvent {
                       <div dataNote class="editor__step-error" role="alert" data-testid="node-run-error">
                         <p class="m-0" data-testid="node-run-error-message">{{ error.message }}</p>
                         @if (error.itemIndex !== null && error.itemIndex !== undefined) {
-                          <p class="m-0 text-ac-cool-grey-4" data-testid="node-run-error-item" i18n="@@workfloweditor.error.item">Вузол зупинився на item {{ error.itemIndex }} вхідних даних.</p>
+                          <p class="m-0 text-bp-text-muted" data-testid="node-run-error-item" i18n="@@workfloweditor.error.item">Вузол зупинився на item {{ error.itemIndex }} вхідних даних.</p>
                         }
                         @if (error.details) {
-                          <details class="max-w-full text-ac-cool-grey-4" data-testid="node-run-error-details">
+                          <details class="max-w-full text-bp-text-muted" data-testid="node-run-error-details">
                             <summary i18n="@@workfloweditor.error.details">Технічні подробиці</summary>
                             <pre class="m-0 overflow-x-auto text-xs break-words whitespace-pre-wrap">{{ error.details }}</pre>
                           </details>
@@ -509,7 +509,7 @@ export interface EditorErrorEvent {
       height: 36px;
       padding: 0;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       cursor: pointer;
     }
 
@@ -609,7 +609,7 @@ export interface EditorErrorEvent {
       flex-shrink: 0;
       max-width: calc(100% - 240px);
       border-left: 1px solid var(--mat-sys-outline-variant);
-      box-shadow: var(--ac-shadow);
+      box-shadow: var(--bp-shadow);
     }
 
     .editor__resize {
@@ -670,7 +670,7 @@ export interface EditorErrorEvent {
       min-height: 28px;
       padding: 0 6px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: var(--bp-white);
       font-size: 12px;
     }
@@ -703,11 +703,11 @@ export interface EditorErrorEvent {
     }
 
     .editor__step--success {
-      background: var(--ac-green);
+      background: var(--bp-success);
     }
 
     .editor__step--error {
-      background: var(--ac-red);
+      background: var(--bp-danger);
     }
 
     .editor__step-error {

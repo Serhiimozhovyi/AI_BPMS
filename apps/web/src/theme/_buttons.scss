@@ -12,11 +12,11 @@
       text-container-height: 40px,
       protected-container-height: 40px,
       tonal-container-height: 40px,
-      filled-container-shape: var(--ac-radius),
-      outlined-container-shape: var(--ac-radius),
-      text-container-shape: var(--ac-radius),
-      protected-container-shape: var(--ac-radius),
-      tonal-container-shape: var(--ac-radius),
+      filled-container-shape: var(--bp-radius),
+      outlined-container-shape: var(--bp-radius),
+      text-container-shape: var(--bp-radius),
+      protected-container-shape: var(--bp-radius),
+      tonal-container-shape: var(--bp-radius),
       filled-container-color: var(--bp-primary),
       filled-label-text-color: var(--bp-white),
       tonal-container-color: var(--bp-tonal),
@@ -124,23 +124,23 @@
 
   // Кнопка з атрибутом `bpVariant="danger"`: червоний 15 % з рамкою; текст затемнено до ≥ 4,5:1 (axe).
   .bp-btn-danger.mat-mdc-button-base {
-    background-color: var(--ac-red-15);
+    background-color: var(--bp-danger-15);
     color: #b3261e;
-    border: 1px solid color-mix(in srgb, var(--ac-red) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bp-danger) 60%, transparent);
 
     &:not(:disabled):hover {
-      background-color: color-mix(in srgb, var(--ac-red) 25%, var(--bp-white));
+      background-color: color-mix(in srgb, var(--bp-danger) 25%, var(--bp-white));
       color: #8c1d18;
     }
 
     &:not(:disabled):active {
-      background-color: color-mix(in srgb, var(--ac-red) 35%, var(--bp-white));
+      background-color: color-mix(in srgb, var(--bp-danger) 35%, var(--bp-white));
       color: #7a1914;
     }
 
     &:focus-visible {
       outline-color: #b3261e;
-      box-shadow: 0 0 0 4px var(--ac-red-15);
+      box-shadow: 0 0 0 4px var(--bp-danger-15);
     }
 
     &:disabled {

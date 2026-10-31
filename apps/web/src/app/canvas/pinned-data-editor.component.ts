@@ -83,19 +83,19 @@ import { formatPinnedItems, parsePinnedItems } from './pinned-data';
       min-height: 160px;
       padding: 8px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       font: 12px/1.4 monospace;
       resize: vertical;
     }
 
     .pinned__json[aria-invalid='true'] {
-      border-color: var(--ac-red);
+      border-color: var(--bp-danger);
     }
 
     .pinned__error {
       margin: 0;
       font-size: 12px;
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .pinned__actions {

@@ -6,6 +6,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { WorkflowGroup } from './workflows-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
+import { MatIconModule } from '@angular/material/icon';
 
 /** Дані діалогу створення сценарію (F3-80). */
 export interface CreateWorkflowDialogData {
@@ -24,9 +26,10 @@ export interface CreateWorkflowResult {
 @Component({
   selector: 'app-create-workflow-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [BpButtonDirective, MatIconModule, ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title i18n="@@workflows.create">Створити сценарій</h2>
+    <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
     <form [formGroup]="form" (ngSubmit)="submit()" data-testid="create-form">
       <mat-dialog-content class="flex flex-col gap-2">
         <mat-form-field appearance="outline">

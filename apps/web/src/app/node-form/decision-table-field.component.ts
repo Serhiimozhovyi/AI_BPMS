@@ -176,7 +176,7 @@ import { NodeFieldProps } from './schema-fields';
       min-height: 28px;
       padding: 0 6px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: var(--bp-white);
       font: inherit;
     }

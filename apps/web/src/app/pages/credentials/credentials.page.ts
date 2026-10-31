@@ -35,7 +35,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
       </p>
 
       @if (adding()) {
-        <div class="mb-6 max-w-2xl rounded-lg border border-ac-line p-4">
+        <div class="mb-6 max-w-2xl rounded-lg border border-bp-line p-4">
           <h2 class="mb-2 font-semibold" i18n="@@credentials.form.newTitle">Нові облікові дані</h2>
           <app-credential-form [types]="types()" (saved)="onSaved($event)" (cancelled)="adding.set(false)" />
         </div>
@@ -75,7 +75,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
       @if (credentials().length > 0) {
         <table class="w-full text-left" data-testid="credentials-table">
           <thead>
-            <tr class="border-b border-ac-line">
+            <tr class="border-b border-bp-line">
               <th class="p-2" i18n="@@credentials.col.name">Назва</th>
               <th class="p-2" i18n="@@credentials.col.type">Тип</th>
               <th class="p-2" i18n="@@credentials.col.fields">Заповнено</th>
@@ -86,7 +86,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
           </thead>
           <tbody>
             @for (c of credentials(); track c.id) {
-              <tr class="border-b border-ac-line-2 align-top" [attr.data-credential]="c.id">
+              <tr class="border-b border-bp-line-2 align-top" [attr.data-credential]="c.id">
                 <td class="p-2 font-medium">{{ c.name }}</td>
                 <td class="p-2">{{ typeLabel(c.type) }}</td>
                 <td class="p-2 text-sm">
@@ -131,7 +131,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
               @if (editing() === c.id) {
                 <tr>
                   <td colspan="6" class="p-2">
-                    <div class="max-w-2xl rounded-lg border border-ac-line p-4">
+                    <div class="max-w-2xl rounded-lg border border-bp-line p-4">
                       <app-credential-form [types]="types()" [credential]="c" (saved)="onSaved($event)" (cancelled)="editing.set(null)" />
                     </div>
                   </td>
@@ -145,15 +145,15 @@ import { BpButtonDirective } from '../../shared/button.directive';
   `,
   styles: `
     .state-ok {
-      background: var(--ac-green-15);
+      background: var(--bp-success-15);
     }
 
     .state-bad {
-      background: var(--ac-red-15);
+      background: var(--bp-danger-15);
     }
 
     .state-muted {
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
   `,
 })

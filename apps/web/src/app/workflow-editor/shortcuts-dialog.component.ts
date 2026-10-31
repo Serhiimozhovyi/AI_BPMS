@@ -2,14 +2,17 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule } from '@angular/material/dialog';
 import { keyLabel, shortcutGroups } from './shortcuts';
+import { BpButtonDirective } from '../shared/button.directive';
+import { MatIconModule } from '@angular/material/icon';
 
 /** Довідка «Гарячі клавіші» (F3-90): клавіші редактора, згруповані за діями. */
 @Component({
   selector: 'app-shortcuts-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatDialogModule],
+  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule],
   template: `
     <h2 mat-dialog-title i18n="@@shortcuts.title">Гарячі клавіші</h2>
+    <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
     <mat-dialog-content>
       <div class="groups" data-testid="shortcuts">
         @for (group of groups; track group.id) {

@@ -96,7 +96,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
       width: 100%;
       padding: 4px 4px 4px 0;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: none;
       color: var(--bp-text);
       font: 700 12px/16px var(--bp-font-family);
@@ -127,7 +127,7 @@ export const PALETTE_COLLAPSE_KEY = 'openbp.palette.collapsed';
 
     .palette__count {
       padding: 0 6px;
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       background: var(--bp-tonal);
       color: var(--bp-primary);
       font-weight: 500;

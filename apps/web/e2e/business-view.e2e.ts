@@ -168,7 +168,7 @@ test('виконання на бізнес-вигляді: пройдені кр
   // Збій згорнутого «Поля для Кіта» видно на рішенні перед ним.
   await expect(view.locator('[data-step="n_if"]')).toHaveAttribute('data-status', 'error');
   await expect(view.locator('[data-step="n_back"]')).toHaveAttribute('data-status', 'pending');
-  await expect(view.locator('[data-step="n_hook"] rect')).toHaveCSS('stroke', 'rgb(71, 204, 138)');
+  await expect(view.locator('[data-step="n_hook"] rect')).toHaveCSS('stroke', 'rgb(27, 122, 75)');
   await expect(page.getByTestId('business-legend')).toContainText('збій');
 });
 

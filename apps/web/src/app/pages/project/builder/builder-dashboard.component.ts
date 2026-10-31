@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { PageAction, PageBlock } from '../../../projects/project-pages-api.service';
+import { BpButtonDirective } from '../../../shared/button.directive';
 
 const KINDS: readonly PageBlock['kind'][] = ['text', 'tiles', 'list', 'calendar', 'form', 'actions'];
 
@@ -11,7 +12,7 @@ const KINDS: readonly PageBlock['kind'][] = ['text', 'tiles', 'list', 'calendar'
 @Component({
   selector: 'app-builder-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule],
   template: `
     <h3 class="mb-1 mt-4 font-medium" i18n="@@bd.title">Блоки головної</h3>
     @for (b of blocks(); track $index; let i = $index) {
@@ -49,7 +50,7 @@ const KINDS: readonly PageBlock['kind'][] = ['text', 'tiles', 'list', 'calendar'
         <input class="w-56 border p-1" [placeholder]="hint" aria-label="Умова показу" i18n-aria-label="@@bd.when" [value]="b.when ?? ''" (input)="patch(i, { when: $any($event.target).value || undefined })" />
         <button mat-button type="button" [disabled]="i === 0" (click)="move(i, -1)" aria-label="Вище" i18n-aria-label="@@bd.up">↑</button>
         <button mat-button type="button" [disabled]="i === blocks().length - 1" (click)="move(i, 1)" aria-label="Нижче" i18n-aria-label="@@bd.down">↓</button>
-        <button mat-button type="button" (click)="remove(i)" i18n="@@builder.remove">Прибрати</button>
+        <button mat-button type="button" (click)="remove(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
 
         @if (b.kind === 'actions') {
           <div class="w-full pl-4">
@@ -86,7 +87,7 @@ const KINDS: readonly PageBlock['kind'][] = ['text', 'tiles', 'list', 'calendar'
                     {{ r.name }}
                   </label>
                 }
-                <button mat-button type="button" (click)="removeAction(i, j)" i18n="@@builder.remove">Прибрати</button>
+                <button mat-button type="button" (click)="removeAction(i, j)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
               </div>
             }
             <button mat-button type="button" [attr.data-testid]="'bd-add-action-' + i" (click)="addAction(i)" i18n="@@builder.addAction">Додати дію</button>

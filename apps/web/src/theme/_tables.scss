@@ -16,12 +16,12 @@ main table.w-full {
 
   th:first-child {
     border-left: 1px solid var(--bp-line);
-    border-top-left-radius: var(--ac-radius);
+    border-top-left-radius: var(--bp-radius);
   }
 
   th:last-child {
     border-right: 1px solid var(--bp-line);
-    border-top-right-radius: var(--ac-radius);
+    border-top-right-radius: var(--bp-radius);
   }
 
   tbody td {
@@ -38,11 +38,11 @@ main table.w-full {
   }
 
   tbody tr:last-child td:first-child {
-    border-bottom-left-radius: var(--ac-radius);
+    border-bottom-left-radius: var(--bp-radius);
   }
 
   tbody tr:last-child td:last-child {
-    border-bottom-right-radius: var(--ac-radius);
+    border-bottom-right-radius: var(--bp-radius);
   }
 
   // Наведення й вибраний рядок — --bp-bg-2; вибраний ще має смугу primary зліва.
@@ -108,7 +108,7 @@ main table.w-full.bp-table--grid {
     margin-bottom: 12px;
     padding: 12px 16px;
     border: 1px solid var(--bp-line);
-    border-radius: var(--ac-radius);
+    border-radius: var(--bp-radius);
     background: var(--bp-white);
   }
 
@@ -168,7 +168,7 @@ table[appCardTable].bp-cards {
   display: inline-flex;
   padding: 2px;
   border: 1px solid var(--bp-line);
-  border-radius: var(--ac-radius);
+  border-radius: var(--bp-radius);
   background: var(--bp-white);
 }
 
@@ -205,7 +205,7 @@ table[appCardTable].bp-cards {
   height: 40px;
   padding: 0 12px;
   border: 1px solid var(--bp-line);
-  border-radius: var(--ac-radius);
+  border-radius: var(--bp-radius);
   background: var(--bp-white);
   color: var(--bp-text);
   font: 400 14px/20px Ubuntu, sans-serif;

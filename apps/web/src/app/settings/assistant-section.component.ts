@@ -11,6 +11,7 @@ import { ASSISTANT_PROVIDERS, AssistantApiService } from '../assistant/assistant
 import { NotifyService } from '../shared/notify.service';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { CredentialOption, CredentialsApiService } from '../credentials/credentials-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /** Рядок списку моделей помічника. */
 interface Row {
@@ -28,7 +29,7 @@ interface Row {
 @Component({
   selector: 'app-assistant-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatRadioModule, MatSelectModule],
+  imports: [BpButtonDirective, FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatRadioModule, MatSelectModule],
   template: `
     <h2 class="mb-2 text-lg font-semibold" i18n="@@settings.assistant.title">Помічник</h2>
     <p class="mb-4 max-w-3xl opacity-70" i18n="@@settings.assistant.hint">
@@ -63,7 +64,7 @@ interface Row {
                 }
               </datalist>
             </mat-form-field>
-            <button mat-button type="button" class="mt-2" [attr.data-testid]="'assistant-remove-' + i" (click)="remove(i)" i18n="@@settings.assistant.remove">Прибрати</button>
+            <button mat-button type="button" class="mt-2" [attr.data-testid]="'assistant-remove-' + i" (click)="remove(i)" i18n="@@settings.assistant.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
       </mat-radio-group>

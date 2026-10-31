@@ -16,9 +16,9 @@
       outlined-focus-outline-color: var(--bp-primary),
       outlined-focus-outline-width: 1px,
       outlined-disabled-outline-color: var(--bp-line-2),
-      outlined-error-outline-color: var(--ac-red),
-      outlined-error-hover-outline-color: var(--ac-red),
-      outlined-error-focus-outline-color: var(--ac-red),
+      outlined-error-outline-color: var(--bp-danger),
+      outlined-error-hover-outline-color: var(--bp-danger),
+      outlined-error-focus-outline-color: var(--bp-danger),
       outlined-input-text-color: var(--bp-text),
       outlined-input-text-placeholder-color: var(--bp-text-muted),
       outlined-label-text-color: var(--bp-text-muted),
@@ -99,7 +99,7 @@
   // Календар і діапазон дат.
   @include mat.datepicker-overrides(
     (
-      calendar-container-shape: var(--ac-radius-lg),
+      calendar-container-shape: var(--bp-radius-lg),
       calendar-container-background-color: var(--bp-white),
       calendar-container-text-color: var(--bp-text),
       calendar-date-selected-state-background-color: var(--bp-primary),
@@ -128,7 +128,7 @@
 
     &.mat-form-field-invalid.mat-focused .mdc-notched-outline {
       border-radius: 8px;
-      box-shadow: 0 0 0 3px var(--ac-red-15);
+      box-shadow: 0 0 0 3px var(--bp-danger-15);
     }
 
     &.mat-form-field-disabled .mdc-notched-outline {
@@ -138,7 +138,7 @@
 
     // Успіх: клас `bp-field-success` на mat-form-field.
     &.bp-field-success .mdc-notched-outline > * {
-      border-color: var(--ac-green);
+      border-color: var(--bp-success);
     }
 
     // Завантаження: клас `bp-field-loading` — смуга-прогрес замість підказки.
@@ -165,7 +165,7 @@
   .mat-mdc-autocomplete-panel {
     border: 1px solid var(--bp-line);
     border-radius: 8px !important;
-    box-shadow: var(--ac-shadow) !important;
+    box-shadow: var(--bp-shadow) !important;
     padding: 4px 0;
   }
 

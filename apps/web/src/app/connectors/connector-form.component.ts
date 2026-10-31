@@ -151,7 +151,7 @@ export function credentialTypesFor(transport: ConnectorTransport): string[] {
         }
       </div>
       @if (creatingCredential()) {
-        <div class="rounded-lg border border-ac-line p-3" data-testid="credential-dialog">
+        <div class="rounded-lg border border-bp-line p-3" data-testid="credential-dialog">
           <h3 class="mb-2 font-semibold" i18n="@@connectors.form.credential.newTitle">Нові облікові дані</h3>
           <app-credential-form
             [types]="credentialTypes()"

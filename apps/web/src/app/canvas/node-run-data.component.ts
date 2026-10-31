@@ -111,11 +111,11 @@ interface PortView {
     }
 
     .run__status--success {
-      background: var(--ac-green);
+      background: var(--bp-success);
     }
 
     .run__status--error {
-      background: var(--ac-red);
+      background: var(--bp-danger);
     }
 
     .run__subtitle {

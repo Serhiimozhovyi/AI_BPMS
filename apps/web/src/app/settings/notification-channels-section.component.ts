@@ -113,7 +113,7 @@ function draftOf(c: NotificationChannel): ChannelDraft {
     }
 
     @if (draft(); as d) {
-      <div class="mb-6 max-w-3xl rounded-lg border border-ac-line p-4" data-testid="channel-form">
+      <div class="mb-6 max-w-3xl rounded-lg border border-bp-line p-4" data-testid="channel-form">
         <div class="flex flex-wrap gap-2">
           <mat-form-field appearance="outline" class="w-72">
             <mat-label i18n="@@notifications.form.name">Назва</mat-label>

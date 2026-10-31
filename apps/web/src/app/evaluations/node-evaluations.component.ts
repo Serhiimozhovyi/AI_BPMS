@@ -16,6 +16,7 @@ import {
   jsonText,
   parseJsonField,
 } from './evaluations-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
 
 /** Кейс у формі: JSON-поля — текстом, налаштування перевірки — окремими полями. */
 interface CaseDraft {
@@ -82,9 +83,9 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
 @Component({
   selector: 'app-node-evaluations',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule],
+  imports: [BpButtonDirective, MatButtonModule, MatProgressBarModule],
   template: `
-    <section class="mt-4 flex flex-col gap-3 border-t border-ac-line pt-4" data-testid="evaluations">
+    <section class="mt-4 flex flex-col gap-3 border-t border-bp-line pt-4" data-testid="evaluations">
       <div class="flex items-center gap-2">
         <h3 class="m-0 font-semibold" i18n="@@evaluations.title">Оцінки</h3>
         @if (detail(); as d) {
@@ -114,10 +115,10 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
       @if (detail()) {
         <ol class="m-0 flex list-none flex-col gap-3 p-0" data-testid="evaluation-cases">
           @for (c of drafts(); track $index; let i = $index) {
-            <li class="flex flex-col gap-2 rounded-lg border border-ac-line p-3" [attr.data-case]="i">
+            <li class="flex flex-col gap-2 rounded-lg border border-bp-line p-3" [attr.data-case]="i">
               <div class="flex items-center gap-2">
                 <input
-                  class="min-w-0 flex-1 rounded border border-ac-line px-2 py-1 text-sm"
+                  class="min-w-0 flex-1 rounded border border-bp-line px-2 py-1 text-sm"
                   data-testid="case-name"
                   [value]="c.name"
                   [placeholder]="caseLabel(i)"
@@ -126,7 +127,7 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
                   (input)="edit(i, 'name', $event)"
                 />
                 <select
-                  class="rounded border border-ac-line px-2 py-1 text-sm"
+                  class="rounded border border-bp-line px-2 py-1 text-sm"
                   data-testid="case-check"
                   [value]="c.check"
                   [disabled]="readonly()"
@@ -138,32 +139,32 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
                   }
                 </select>
                 @if (!readonly()) {
-                  <button mat-button type="button" data-testid="case-remove" (click)="remove(i)" i18n="@@evaluations.remove">Прибрати</button>
+                  <button mat-button type="button" data-testid="case-remove" (click)="remove(i)" i18n="@@evaluations.remove" bpVariant="danger">Прибрати</button>
                 }
               </div>
               <div class="grid gap-2 md:grid-cols-2">
                 <label class="flex flex-col gap-1 text-xs">
                   <span i18n="@@evaluations.inputLabel">Вхід (json item'а або масив items)</span>
-                  <textarea class="min-h-16 rounded border border-ac-line p-1 font-mono text-xs" data-testid="case-input" [value]="c.input" [readOnly]="readonly()" (input)="edit(i, 'input', $event)"></textarea>
+                  <textarea class="min-h-16 rounded border border-bp-line p-1 font-mono text-xs" data-testid="case-input" [value]="c.input" [readOnly]="readonly()" (input)="edit(i, 'input', $event)"></textarea>
                 </label>
                 <label class="flex flex-col gap-1 text-xs">
                   <span i18n="@@evaluations.expectedLabel">Очікуване (JSON)</span>
-                  <textarea class="min-h-16 rounded border border-ac-line p-1 font-mono text-xs" data-testid="case-expected" [value]="c.expected" [readOnly]="readonly()" (input)="edit(i, 'expected', $event)"></textarea>
+                  <textarea class="min-h-16 rounded border border-bp-line p-1 font-mono text-xs" data-testid="case-expected" [value]="c.expected" [readOnly]="readonly()" (input)="edit(i, 'expected', $event)"></textarea>
                 </label>
               </div>
               @switch (c.check) {
                 @case ('jsonPath') {
-                  <input class="rounded border border-ac-line px-2 py-1 font-mono text-xs" data-testid="case-path" placeholder="text" [value]="c.path" [readOnly]="readonly()" [attr.aria-label]="pathLabel" (input)="edit(i, 'path', $event)" />
+                  <input class="rounded border border-bp-line px-2 py-1 font-mono text-xs" data-testid="case-path" placeholder="text" [value]="c.path" [readOnly]="readonly()" [attr.aria-label]="pathLabel" (input)="edit(i, 'path', $event)" />
                 }
                 @case ('expression') {
-                  <input class="rounded border border-ac-line px-2 py-1 font-mono text-xs" data-testid="case-expression" placeholder="$json.text === $node['expected'].json.text" [value]="c.expression" [readOnly]="readonly()" [attr.aria-label]="expressionLabel" (input)="edit(i, 'expression', $event)" />
+                  <input class="rounded border border-bp-line px-2 py-1 font-mono text-xs" data-testid="case-expression" placeholder="$json.text === $node['expected'].json.text" [value]="c.expression" [readOnly]="readonly()" [attr.aria-label]="expressionLabel" (input)="edit(i, 'expression', $event)" />
                 }
                 @case ('llm') {
                   <div class="grid gap-2 md:grid-cols-2">
-                    <input class="rounded border border-ac-line px-2 py-1 text-xs" data-testid="case-credential" [value]="c.credentialId" [readOnly]="readonly()" [attr.aria-label]="credentialLabel" [placeholder]="credentialLabel" (input)="edit(i, 'credentialId', $event)" />
-                    <input class="rounded border border-ac-line px-2 py-1 text-xs" data-testid="case-model" [value]="c.model" [readOnly]="readonly()" [attr.aria-label]="modelLabel" [placeholder]="modelLabel" (input)="edit(i, 'model', $event)" />
+                    <input class="rounded border border-bp-line px-2 py-1 text-xs" data-testid="case-credential" [value]="c.credentialId" [readOnly]="readonly()" [attr.aria-label]="credentialLabel" [placeholder]="credentialLabel" (input)="edit(i, 'credentialId', $event)" />
+                    <input class="rounded border border-bp-line px-2 py-1 text-xs" data-testid="case-model" [value]="c.model" [readOnly]="readonly()" [attr.aria-label]="modelLabel" [placeholder]="modelLabel" (input)="edit(i, 'model', $event)" />
                   </div>
-                  <textarea class="rounded border border-ac-line p-1 text-xs" data-testid="case-criteria" [value]="c.criteria" [readOnly]="readonly()" [attr.aria-label]="criteriaLabel" [placeholder]="criteriaLabel" (input)="edit(i, 'criteria', $event)"></textarea>
+                  <textarea class="rounded border border-bp-line p-1 text-xs" data-testid="case-criteria" [value]="c.criteria" [readOnly]="readonly()" [attr.aria-label]="criteriaLabel" [placeholder]="criteriaLabel" (input)="edit(i, 'criteria', $event)"></textarea>
                 }
               }
             </li>
@@ -201,7 +202,7 @@ export function fromDraft(d: CaseDraft, index: number): EvaluationCaseInput {
                 </thead>
                 <tbody>
                   @for (res of r.results; track res.caseId) {
-                    <tr class="border-t border-ac-line align-top" [attr.data-result]="res.passed ? 'pass' : 'fail'">
+                    <tr class="border-t border-bp-line align-top" [attr.data-result]="res.passed ? 'pass' : 'fail'">
                       <td class="p-1">{{ res.name }}</td>
                       <td class="p-1" [class.text-green-700]="res.passed" [class.text-red-700]="!res.passed">
                         {{ res.passed ? '✓' : '✗' }}

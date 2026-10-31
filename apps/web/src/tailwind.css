@@ -6,7 +6,7 @@
 @source not "../e2e-element";
 @source not "../scripts";
 
-/* Токени дизайн-системи AC-Kit (Figma, лише читання) для утиліт Tailwind: bg-ac-kit, text-ac-vivid тощо. */
+/* Токени AI_BPMS для утиліт Tailwind (компоненти — за Figma AC-Kit, лише читання). */
 @theme {
   --font-sans: "Ubuntu", ui-sans-serif, system-ui, sans-serif;
 
@@ -40,26 +40,12 @@
   --color-bp-text: #0c2b30;
   --color-bp-text-muted: #57696b;
 
-  /* Застарілі назви — до F9-11. */
-  --color-ac-kit: #0d736d;
-  --color-ac-vivid: #0c2b30;
-  --color-ac-mid: #12404a;
-  --color-ac-button: #ddf3f1;
-  --color-ac-stone: #f8fbfb;
-  --color-ac-line: #c3cfce;
-  --color-ac-line-2: #dbe6e5;
-  --color-ac-cool-grey: #f2f6f6;
-  --color-ac-cool-grey-2: #e9f4f3;
-  --color-ac-cool-grey-3: #b4c4c3;
-  --color-ac-cool-grey-4: #57696b;
-
-  --color-ac-teal: #27c7be;
-  --color-ac-blue: #20aaea;
-  --color-ac-green: #47cc8a;
-  --color-ac-orange: #ff840a;
-  --color-ac-red: #ff6060;
-  --color-ac-violet: #b36bd4;
-  --color-ac-plum: #73327a;
-  --color-ac-navy: #006298;
-  --color-ac-yellow: #fac701;
+  --color-bp-surface-2: #f8fbfb;
+  --color-bp-line-2: #dbe6e5;
+  --color-bp-line-3: #b4c4c3;
+  --color-bp-success: #1b7a4b;
+  --color-bp-warning: #9a5200;
+  --color-bp-danger: #c62f2f;
+  --color-bp-info: #0a6fa8;
+  --color-bp-cat-violet: #b36bd4;
 }

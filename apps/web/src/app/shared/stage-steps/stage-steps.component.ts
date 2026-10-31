@@ -113,7 +113,7 @@ export interface StageStep {
     }
     .stage--cancelled {
       border-color: #b3261e;
-      background: var(--ac-red-15);
+      background: var(--bp-danger-15);
       color: #b3261e;
     }
     .stage--skipped {

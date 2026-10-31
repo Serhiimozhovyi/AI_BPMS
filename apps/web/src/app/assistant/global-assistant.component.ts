@@ -115,8 +115,8 @@ import { ProposalCardComponent } from './proposal-card.component';
       box-sizing: border-box;
       width: min(400px, 100vw);
       padding: 12px;
-      background: var(--ac-white);
-      color: var(--ac-vivid);
+      background: var(--bp-white);
+      color: var(--bp-text);
       box-shadow: -2px 0 12px rgb(0 0 0 / 0.2);
     }
 
@@ -141,19 +141,19 @@ import { ProposalCardComponent } from './proposal-card.component';
       height: 36px;
       padding: 0;
       border: 0;
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       background: transparent;
       color: inherit;
       cursor: pointer;
     }
 
     .ga__icon:hover {
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
 
     .ga__context {
       margin: 0;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font:
         400 12px/16px Ubuntu,
         sans-serif;
@@ -178,30 +178,30 @@ import { ProposalCardComponent } from './proposal-card.component';
 
     .ga__line {
       padding: 6px 10px;
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       white-space: pre-wrap;
     }
 
     .ga__line--user {
       align-self: flex-end;
       max-width: 85%;
-      background: var(--ac-button);
+      background: var(--bp-tonal);
     }
 
     .ga__line--assistant {
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
 
     .ga__line--step,
     .ga__hint {
       padding: 0 10px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 12px;
     }
 
     .ga__line--error,
     .ga__line--failed {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .ga__card {
@@ -212,12 +212,12 @@ import { ProposalCardComponent } from './proposal-card.component';
       display: flex;
       align-items: center;
       gap: 4px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
     }
 
     .ga__item--current {
-      background: var(--ac-cool-grey);
+      background: var(--bp-bg);
     }
 
     .ga__open {
@@ -235,14 +235,14 @@ import { ProposalCardComponent } from './proposal-card.component';
     }
 
     .ga__item-date {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 12px;
     }
 
     .ga__mcp {
       padding: 8px 10px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
       font:
         400 13px/18px Ubuntu,
         sans-serif;
@@ -260,9 +260,9 @@ import { ProposalCardComponent } from './proposal-card.component';
 
     .ga__input {
       padding: 8px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
-      background: var(--ac-white);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
+      background: var(--bp-white);
       color: inherit;
       font: inherit;
       resize: vertical;
@@ -272,9 +272,9 @@ import { ProposalCardComponent } from './proposal-card.component';
       align-self: flex-end;
       padding: 8px 16px;
       border: 0;
-      border-radius: var(--ac-radius);
-      background: var(--ac-vivid);
-      color: var(--ac-white);
+      border-radius: var(--bp-radius);
+      background: var(--bp-text);
+      color: var(--bp-white);
       font: inherit;
       cursor: pointer;
     }

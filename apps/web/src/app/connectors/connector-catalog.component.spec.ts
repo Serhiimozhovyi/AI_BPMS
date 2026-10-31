@@ -111,7 +111,7 @@ describe('ConnectorCatalogComponent', () => {
 
     expect(Array.from(host.querySelectorAll('[data-catalog]')).map((e) => e.getAttribute('data-catalog'))).toEqual(['telegram', 'fake', 'crm-sample', 'psy']);
     expect(card(host, 'telegram').textContent).toContain('Telegram Bot API');
-    expect(card(host, 'telegram').classList).toContain('border-ac-kit');
+    expect(card(host, 'telegram').classList).toContain('border-bp-primary');
     expect(card(host, 'fake').textContent).toContain('зовнішній');
     // У telegram два транспорти — є перемикач, у fake один.
     expect(card(host, 'telegram').querySelector('[data-testid="catalog-transport"]')).not.toBeNull();

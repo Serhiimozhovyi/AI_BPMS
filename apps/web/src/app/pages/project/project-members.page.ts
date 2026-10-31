@@ -9,6 +9,7 @@ import { forkJoin } from 'rxjs';
 import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectAppRole, ProjectMember, WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 type MemberRole = ProjectMember['role'];
 
@@ -21,7 +22,7 @@ type MemberRole = ProjectMember['role'];
 @Component({
   selector: 'app-project-members-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [BpButtonDirective, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
   template: `
     <section class="p-6">
       @if (project(); as p) {
@@ -132,7 +133,7 @@ type MemberRole = ProjectMember['role'];
                 }
                 @if (canManage()) {
                   <td class="whitespace-nowrap p-2 text-right">
-                    <button mat-button type="button" data-testid="member-remove" (click)="remove(m)" i18n="@@project.members.remove">Прибрати</button>
+                    <button mat-button type="button" data-testid="member-remove" (click)="remove(m)" i18n="@@project.members.remove" bpVariant="danger">Прибрати</button>
                   </td>
                 }
               </tr>
@@ -155,7 +156,7 @@ type MemberRole = ProjectMember['role'];
               <span class="font-medium">{{ r.name }}</span>
               <code class="opacity-70">{{ r.key }}</code>
               @if (canManage()) {
-                <button mat-button type="button" data-testid="app-role-remove" [disabled]="saving()" (click)="removeAppRole(r)" i18n="@@project.appRoles.remove">Прибрати</button>
+                <button mat-button type="button" data-testid="app-role-remove" [disabled]="saving()" (click)="removeAppRole(r)" i18n="@@project.appRoles.remove" bpVariant="danger">Прибрати</button>
               }
             </li>
           }

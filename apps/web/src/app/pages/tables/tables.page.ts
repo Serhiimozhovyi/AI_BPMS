@@ -77,7 +77,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
       }
 
       @if (designing()) {
-        <div class="mb-6 max-w-3xl rounded-lg border border-ac-line p-4" data-testid="table-form">
+        <div class="mb-6 max-w-3xl rounded-lg border border-bp-line p-4" data-testid="table-form">
           <h2 class="mb-2 font-semibold">
             @if (designId()) {
               <ng-container i18n="@@tables.form.editTitle">Структура таблиці</ng-container>
@@ -145,7 +145,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                   <input type="checkbox" data-testid="column-sensitive" [checked]="!!c.sensitive" (change)="patchColumn(i, { sensitive: checked($event) })" />
                   <span i18n="@@tables.form.sensitive">Чутлива</span>
                 </label>
-                <button mat-button type="button" data-testid="column-remove" (click)="removeColumn(i)" i18n="@@tables.form.removeColumn">
+                <button mat-button type="button" data-testid="column-remove" (click)="removeColumn(i)" i18n="@@tables.form.removeColumn" bpVariant="danger">
                   Прибрати
                 </button>
               </div>
@@ -170,7 +170,7 @@ export const TABLE_ROWS_PAGE_SIZE = 50;
                   <mat-label i18n="@@tables.form.uniqueWhereValue">дорівнює</mat-label>
                   <input matInput data-testid="unique-where-value" [value]="u.whereValue" (input)="patchUnique(i, { whereValue: text($event) })" />
                 </mat-form-field>
-                <button mat-button type="button" data-testid="unique-remove" (click)="removeUnique(i)" i18n="@@tables.form.removeUnique">Прибрати</button>
+                <button mat-button type="button" data-testid="unique-remove" (click)="removeUnique(i)" i18n="@@tables.form.removeUnique" bpVariant="danger">Прибрати</button>
               </div>
             }
           </div>
