@@ -8,6 +8,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { WorkflowSummary, WorkflowValidationError, WorkflowsApiService } from '../workflows/workflows-api.service';
 import { LimitField, SettingsFormValue, WorkflowSettings, applySettings, limitErrors, settingsFormValue, timeoutError, timezones } from './workflow-settings';
+import { BpButtonDirective } from '../shared/button.directive';
+import { MatIconModule } from '@angular/material/icon';
 
 export interface WorkflowSettingsDialogData {
   /** Сценарій, що редагується, — його немає у виборі сценарію помилок. */
@@ -25,9 +27,10 @@ export interface WorkflowSettingsDialogData {
 @Component({
   selector: 'app-workflow-settings-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatSlideToggleModule],
+  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatSlideToggleModule],
   template: `
     <h2 mat-dialog-title i18n="@@workflowsettings.title">Налаштування сценарію</h2>
+    <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
     <mat-dialog-content>
       <div class="flex flex-col gap-2 pt-2" data-testid="workflow-settings">
         <mat-form-field appearance="outline">

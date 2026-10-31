@@ -249,8 +249,8 @@ describe('AppPagePage (F8-04)', () => {
     expect(values).toHaveLength(2);
     expect(values[0]).toContain('1');
     expect(values[1]).toBe('—');
-    expect(host.querySelector('[data-point="2026-10-01"] span.bg-ac-kit')?.getAttribute('style')).toContain('width: 100%');
-    expect(host.querySelector('[data-point="2026-09-01"] span.bg-ac-kit')?.getAttribute('style')).toContain('width: 50%');
+    expect(host.querySelector('[data-point="2026-10-01"] span.bg-bp-primary')?.getAttribute('style')).toContain('width: 100%');
+    expect(host.querySelector('[data-point="2026-09-01"] span.bg-bp-primary')?.getAttribute('style')).toContain('width: 50%');
     expect(host.querySelector('[data-testid="app-edit-page"]')?.getAttribute('href')).toBe('/projects/p1/app/_builder/stats');
   });
 

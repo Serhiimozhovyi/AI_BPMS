@@ -8,6 +8,8 @@ import { forkJoin, map, of, switchMap } from 'rxjs';
 import { apiErrorMessage } from '../connectors/connectors-api.service';
 import { VersionDiff, describeDiff, diffDefinitions } from './version-diff';
 import { WorkflowDefinition, WorkflowVersionSummary, WorkflowsApiService } from './workflows-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
+import { MatIconModule } from '@angular/material/icon';
 
 /** Дані діалогу. */
 export interface VersionHistoryDialogData {
@@ -40,22 +42,23 @@ interface Row {
 @Component({
   selector: 'app-version-history-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, MatButtonModule, MatDialogModule, RouterLink],
+  imports: [BpButtonDirective, MatIconModule, DatePipe, MatButtonModule, MatDialogModule, RouterLink],
   template: `
     <h2 mat-dialog-title i18n="@@versions.title">Історія версій</h2>
+    <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
     <mat-dialog-content>
       @if (error()) {
         <p role="alert" class="text-red-700" data-testid="versions-error">{{ error() }}</p>
       }
       <ol class="m-0 flex list-none flex-col gap-2 p-0" data-testid="versions">
         @for (row of rows(); track row.summary.id) {
-          <li class="rounded border border-[var(--ac-line)] p-3" data-testid="version" [attr.data-version]="row.summary.version">
+          <li class="rounded border border-[var(--bp-line)] p-3" data-testid="version" [attr.data-version]="row.summary.version">
             <div class="flex flex-wrap items-center gap-2">
               <strong i18n="@@versions.number">Версія {{ row.summary.version }}</strong>
               @if (row.summary.version === data.currentVersion) {
-                <span class="rounded bg-[var(--ac-button)] px-1.5 text-xs" i18n="@@versions.current">поточна</span>
+                <span class="rounded bg-[var(--bp-tonal)] px-1.5 text-xs" i18n="@@versions.current">поточна</span>
               }
-              <span class="text-sm text-[var(--ac-cool-grey-4)]">{{ row.summary.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ row.summary.createdByEmail ?? system }}</span>
+              <span class="text-sm text-[var(--bp-text-muted)]">{{ row.summary.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ row.summary.createdByEmail ?? system }}</span>
               <span class="flex-1"></span>
               <a mat-button data-testid="version-view" [routerLink]="['/workflows', data.workflowId]" [queryParams]="{ version: row.summary.version }" (click)="ref.close()" i18n="@@versions.view">Переглянути</a>
               @if (!data.readonly && row.summary.version !== data.currentVersion) {

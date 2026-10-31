@@ -46,7 +46,7 @@ export const MIN_PASSWORD_LENGTH = 8;
               <input matInput type="password" formControlName="repeat" autocomplete="new-password" data-testid="password-repeat" />
             </mat-form-field>
             @if (error()) {
-              <p role="alert" class="mb-4" style="color: var(--ac-red)" data-testid="password-error">{{ error() }}</p>
+              <p role="alert" class="mb-4" style="color: var(--bp-danger)" data-testid="password-error">{{ error() }}</p>
             }
             <button mat-flat-button type="submit" [disabled]="saving()" data-testid="password-submit" i18n="@@account.password.submit">
               Змінити пароль

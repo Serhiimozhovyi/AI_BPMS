@@ -93,12 +93,12 @@ export class PublicSelectFieldComponent extends FieldType<PublicField> {}
     .pf-hint {
       margin-left: 40px;
       font-size: 12px;
-      color: var(--ac-mid);
+      color: var(--bp-shell-2);
     }
     .pf-error {
       margin-left: 40px;
       font-size: 12px;
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
   `,
 })
@@ -133,7 +133,7 @@ export class PublicCheckboxFieldComponent extends FieldType<PublicField> {}
     .pf-file__label {
       margin-bottom: 6px;
       font-size: 14px;
-      color: var(--ac-mid);
+      color: var(--bp-shell-2);
     }
     .pf-file__row {
       display: flex;
@@ -147,12 +147,12 @@ export class PublicCheckboxFieldComponent extends FieldType<PublicField> {}
     .pf-hint {
       margin-top: 4px;
       font-size: 12px;
-      color: var(--ac-mid);
+      color: var(--bp-shell-2);
     }
     .pf-error {
       margin-top: 4px;
       font-size: 12px;
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
   `,
 })

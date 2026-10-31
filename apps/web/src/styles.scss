@@ -26,8 +26,8 @@ html {
 
 body {
   color-scheme: light;
-  background-color: var(--ac-cool-grey);
-  color: var(--ac-vivid);
+  background-color: var(--bp-bg);
+  color: var(--bp-text);
   font: var(--bp-font-p3);
   margin: 0;
   height: 100%;
@@ -38,18 +38,18 @@ body {
 // Сторінки-розділи — білі картки на тлі Cool Grey, як «Вкладка Введення ДО».
 main > :not(router-outlet) > section.p-6 {
   margin: 20px;
-  border-radius: var(--ac-radius-lg);
-  background: var(--ac-white);
-  box-shadow: var(--ac-shadow);
+  border-radius: var(--bp-radius-lg);
+  background: var(--bp-white);
+  box-shadow: var(--bp-shadow);
 }
 
 a {
-  color: var(--ac-kit);
+  color: var(--bp-primary);
 }
 
 /* Частини {{ … }} у редакторі виразів Monaco (F3-56) — фон AC-Kit «Buttun», як у звичайному полі. */
 .openbp-expr-hl {
-  background: var(--ac-button);
+  background: var(--bp-tonal);
   border-radius: 3px;
 }
 
@@ -67,20 +67,20 @@ a {
 }
 
 // Бічне меню оболонки застосунку: пункти на Cool Grey, активний — Kit на Buttun.
-.ac-side-link {
+.bp-side-link {
   display: block;
   padding: 8px 12px;
   border-radius: 8px;
-  color: var(--ac-vivid);
+  color: var(--bp-text);
   font: var(--bp-font-h7);
   text-decoration: none;
 
   &:hover {
-    background: var(--ac-cool-grey-2);
+    background: var(--bp-bg-2);
   }
 
   &.active {
-    background: var(--ac-button);
-    color: var(--ac-kit);
+    background: var(--bp-tonal);
+    color: var(--bp-primary);
   }
 }

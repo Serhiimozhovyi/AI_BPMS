@@ -91,7 +91,7 @@ export type CanvasMenuAction = 'run' | 'toggle' | 'duplicate' | 'rename' | 'pin'
     }
 
     .menu__item--danger {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .menu__item kbd {

@@ -22,6 +22,8 @@ import {
   unmappedOf,
   validationErrorsOf,
 } from './workflows-api.service';
+import { BpButtonDirective } from '../shared/button.directive';
+import { MatIconModule } from '@angular/material/icon';
 
 export interface ImportWorkflowDialogData {
   /** Група, у яку покласти новий сценарій. */
@@ -85,9 +87,10 @@ export const choiceKey = (u: Pick<UnmappedReference, 'kind' | 'ref'>) => `${u.ki
 @Component({
   selector: 'app-import-workflow-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [BpButtonDirective, MatIconModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title i18n="@@import.title">Імпорт сценарію</h2>
+    <button mat-icon-button type="button" bpVariant="close" class="bp-dialog-close" mat-dialog-close data-testid="dialog-close" i18n-aria-label="@@dialog.close" aria-label="Закрити вікно"><mat-icon>close</mat-icon></button>
     <mat-dialog-content>
       @if (result(); as r) {
         <div data-testid="import-done">

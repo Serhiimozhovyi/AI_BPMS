@@ -4,7 +4,7 @@
 // Діалог: білий непрозорий контейнер, радіус 12, тінь AC-Kit; заголовок H5, дії праворуч з розділювачем.
 .mat-mdc-dialog-container {
   --mat-dialog-container-color: var(--bp-white);
-  --mat-dialog-container-shape: var(--ac-radius-lg);
+  --mat-dialog-container-shape: var(--bp-radius-lg);
   --mat-dialog-subhead-color: var(--bp-text);
   --mat-dialog-supporting-text-color: var(--bp-text);
   --mat-dialog-subhead-font: Ubuntu, sans-serif;
@@ -46,7 +46,7 @@
 .ob-notify-error {
   --mat-snack-bar-container-color: var(--bp-shell);
   --mat-snack-bar-supporting-text-color: var(--bp-white);
-  --mat-snack-bar-container-shape: var(--ac-radius);
+  --mat-snack-bar-container-shape: var(--bp-radius);
 
   .mdc-snackbar__surface {
     box-shadow: 0 8px 24px rgb(12 43 48 / 0.24);
@@ -59,10 +59,10 @@
 }
 
 .ob-notify-error {
-  --mat-snack-bar-button-color: var(--ac-red);
+  --mat-snack-bar-button-color: var(--bp-danger-on-dark);
 
   .mdc-snackbar__surface {
-    border-left-color: var(--ac-red);
+    border-left-color: var(--bp-danger);
   }
 }
 

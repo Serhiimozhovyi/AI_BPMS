@@ -45,7 +45,7 @@ const OIDC_ERRORS: Record<string, string> = {
             <p
               role="alert"
               class="mt-4"
-              style="color: var(--ac-red)"
+              style="color: var(--bp-danger)"
               data-testid="login-oidc-error"
             >
               {{ oidcError() }}
@@ -97,7 +97,7 @@ const OIDC_ERRORS: Record<string, string> = {
                 />
               </mat-form-field>
               @if (error()) {
-                <p role="alert" class="mb-4" style="color: var(--ac-red)" data-testid="login-error">
+                <p role="alert" class="mb-4" style="color: var(--bp-danger)" data-testid="login-error">
                   {{ error() }}
                 </p>
               }
@@ -128,14 +128,14 @@ const OIDC_ERRORS: Record<string, string> = {
 
     .login__card {
       padding: 16px 12px 8px;
-      box-shadow: var(--ac-shadow);
+      box-shadow: var(--bp-shadow);
     }
 
     .login__card .mat-mdc-card-title {
       font:
         700 24px/30px Ubuntu,
         sans-serif;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .login__card button[type='submit'],
@@ -147,7 +147,7 @@ const OIDC_ERRORS: Record<string, string> = {
       display: flex;
       align-items: center;
       gap: 12px;
-      color: var(--ac-mid);
+      color: var(--bp-shell-2);
       font-size: 13px;
     }
 
@@ -155,7 +155,7 @@ const OIDC_ERRORS: Record<string, string> = {
     .login__divider::after {
       content: '';
       flex: 1;
-      border-top: 1px solid var(--ac-line);
+      border-top: 1px solid var(--bp-line);
     }
   `,
 })

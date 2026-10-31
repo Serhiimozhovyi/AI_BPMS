@@ -137,8 +137,8 @@ export function mcpExplainPrompt(name: string | null): string {
       display: flex;
       flex-direction: column;
       padding: 8px 10px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
       font:
         400 13px/18px Ubuntu,
         sans-serif;
@@ -157,7 +157,7 @@ export function mcpExplainPrompt(name: string | null): string {
 
     .explanation__badge,
     .explanation__note {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 12px;
     }
 
@@ -166,14 +166,14 @@ export function mcpExplainPrompt(name: string | null): string {
     }
 
     .explanation__note--error {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .explanation__prompt {
       margin: 4px 0 0;
       padding: 4px 8px;
-      border-radius: var(--ac-radius);
-      background: var(--ac-cool-grey);
+      border-radius: var(--bp-radius);
+      background: var(--bp-bg);
       user-select: all;
     }
 

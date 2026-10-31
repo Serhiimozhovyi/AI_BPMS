@@ -50,7 +50,7 @@ import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
                 <div class="mt-2 w-full px-2 text-xs uppercase opacity-60" data-testid="shell-group">{{ group.label }}</div>
               }
               @for (p of group.pages; track p.id) {
-                <a class="ac-side-link" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
+                <a class="bp-side-link" [routerLink]="[p.key]" routerLinkActive="active" [attr.data-page]="p.key">{{ p.name }}</a>
               }
             }
           </nav>
@@ -67,8 +67,8 @@ import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
             </p>
           }
           @if (canEdit() && !building()) {
-            <a class="ac-side-link mt-3" data-testid="shell-builder" routerLink="_builder" i18n="@@project.app.builder">Конструктор</a>
-            <a class="ac-side-link" data-testid="shell-settings" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
+            <a class="bp-side-link mt-3" data-testid="shell-builder" routerLink="_builder" i18n="@@project.app.builder">Конструктор</a>
+            <a class="bp-side-link" data-testid="shell-settings" routerLink="_app" i18n="@@project.app.settings">Вигляд застосунку</a>
           }
         </aside>
         <div class="min-w-0 grow">

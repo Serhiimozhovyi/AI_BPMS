@@ -250,7 +250,7 @@ export interface DataFieldPick {
       font: 400 12px/18px monospace;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: var(--ac-green);
+      color: var(--bp-success);
     }
 
     .table-wrap {

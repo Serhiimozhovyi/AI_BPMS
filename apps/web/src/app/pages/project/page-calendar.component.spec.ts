@@ -127,7 +127,7 @@ describe('PageCalendarComponent (F8-17)', () => {
     expect(el.textContent).toContain('Консультація');
     expect(el.textContent).toContain('Онлайн');
     expect(el.style.top).toBe('96px');
-    expect(el.className).toContain('bg-ac-blue');
+    expect(el.className).toContain('bg-bp-info');
     expect(el.getAttribute('aria-label')).toBe('10:00–11:00: Консультація');
   });
 

@@ -63,7 +63,7 @@ interface Connecting {
     }
 
     @if (connecting(); as c) {
-      <div class="mb-6 max-w-2xl rounded-lg border border-ac-line p-4" data-testid="catalog-connect">
+      <div class="mb-6 max-w-2xl rounded-lg border border-bp-line p-4" data-testid="catalog-connect">
         <h2 class="mb-3 font-semibold" i18n="@@connectors.catalog.connectTitle">Підключити «{{ c.entry.manifest.name }}»</h2>
         <div class="flex flex-col gap-2">
           <mat-form-field appearance="outline">
@@ -110,7 +110,7 @@ interface Connecting {
             }
           }
           @if (connectError()) {
-            <p role="alert" class="text-sm text-ac-red" data-testid="connect-error">{{ connectError() }}</p>
+            <p role="alert" class="text-sm text-bp-danger" data-testid="connect-error">{{ connectError() }}</p>
           }
           @if (!c.credentialType || credentialChoice() !== 'new') {
             <div class="flex gap-2">
@@ -131,7 +131,7 @@ interface Connecting {
     }
 
     @if (pending(); as p) {
-      <div class="mb-6 max-w-2xl rounded-lg border border-ac-line p-4" data-testid="catalog-credential">
+      <div class="mb-6 max-w-2xl rounded-lg border border-bp-line p-4" data-testid="catalog-credential">
         <h2 class="mb-1 font-semibold" i18n="@@connectors.catalog.credentialTitle">Облікові дані для «{{ p.detail.summary.name }}»</h2>
         <p class="mb-2 text-sm opacity-70" i18n="@@connectors.catalog.credentialHint">Конектор створено. Заповніть значення, і AI_BPMS перепідключиться з ними:</p>
         <ul class="mb-3 list-disc pl-5 text-sm">
@@ -166,15 +166,15 @@ interface Connecting {
       @for (e of visibleEntries(); track e.manifest.id) {
         <li
           class="flex flex-col gap-2 rounded-lg border p-4"
-          [class.border-ac-kit]="e.manifest.id === highlight()"
-          [class.border-ac-line]="e.manifest.id !== highlight()"
+          [class.border-bp-primary]="e.manifest.id === highlight()"
+          [class.border-bp-line]="e.manifest.id !== highlight()"
           [attr.data-catalog]="e.manifest.id"
         >
           <div class="flex items-center gap-2">
             <span class="text-2xl" aria-hidden="true">{{ e.manifest.icon || '🔌' }}</span>
             <h3 class="font-semibold">{{ e.manifest.name }}</h3>
             @if (e.source === 'external') {
-              <span class="rounded bg-ac-cool-grey px-2 text-xs" i18n="@@connectors.catalog.external">зовнішній</span>
+              <span class="rounded bg-bp-bg px-2 text-xs" i18n="@@connectors.catalog.external">зовнішній</span>
             }
           </div>
           <p class="text-sm opacity-80">{{ e.manifest.description }}</p>

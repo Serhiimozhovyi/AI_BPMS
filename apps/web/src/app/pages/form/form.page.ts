@@ -84,7 +84,7 @@ interface Problem {
     .pform__card {
       max-width: 560px;
       padding: 16px 12px 8px;
-      box-shadow: var(--ac-shadow);
+      box-shadow: var(--bp-shadow);
     }
 
     .pform__title {
@@ -92,13 +92,13 @@ interface Problem {
       font:
         700 24px/30px Ubuntu,
         sans-serif;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .pform__description {
       margin: 0 0 20px;
       white-space: pre-line;
-      color: var(--ac-mid);
+      color: var(--bp-shell-2);
     }
 
     .pform__notice {
@@ -108,7 +108,7 @@ interface Problem {
 
     .pform__submit-error {
       margin: 0 0 12px;
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     button[type='submit'] {

@@ -78,7 +78,7 @@ interface AgendaItem {
       }
       <div class="grid max-w-6xl grid-cols-12 gap-4" data-testid="dash-grid">
         @for (b of d.blocks; track b.index) {
-          <section class="col-span-12 rounded border border-ac-line p-4" [class]="span(b.width)" [attr.data-block]="b.index" [attr.data-kind]="b.kind">
+          <section class="col-span-12 rounded border border-bp-line p-4" [class]="span(b.width)" [attr.data-block]="b.index" [attr.data-kind]="b.kind">
             @if (b.label) {
               <h3 class="mb-2 font-semibold" data-testid="block-label">{{ b.label }}</h3>
             }
@@ -108,7 +108,7 @@ interface AgendaItem {
                         </thead>
                         <tbody>
                           @for (row of r.items; track row.key) {
-                            <tr [attr.data-row]="row.key" class="border-t border-ac-line">
+                            <tr [attr.data-row]="row.key" class="border-t border-bp-line">
                               @for (c of listColumns(b); track c.column) {
                                 @let cell = cellOf(b, row, c);
                                 <td class="p-1.5" [attr.data-field]="c.column">

@@ -227,7 +227,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         @for (f of filters(); track $index; let i = $index) {
           <div class="mb-1 flex flex-wrap items-center gap-2" [attr.data-filter]="i">
             <ng-container *ngTemplateOutlet="filterTpl; context: { $implicit: f, columns: columnNames(), set: setFilter(i) }" />
-            <button mat-button type="button" (click)="filters.set(removeAt(filters(), i))" i18n="@@builder.remove">Прибрати</button>
+            <button mat-button type="button" (click)="filters.set(removeAt(filters(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
         <button mat-button type="button" data-testid="b-add-filter" (click)="filters.set([...filters(), emptyFilter()])" i18n="@@builder.addFilter">Додати умову</button>
@@ -269,7 +269,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
                   {{ r.name }}
                 </label>
               }
-              <button mat-button type="button" (click)="actions.set(removeAt(actions(), i))" i18n="@@builder.remove">Прибрати</button>
+              <button mat-button type="button" (click)="actions.set(removeAt(actions(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
             </div>
           }
           <button mat-button type="button" data-testid="b-add-action" (click)="actions.set([...actions(), emptyAction()])" i18n="@@builder.addAction">Додати дію</button>
@@ -308,7 +308,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
               <ng-container *ngTemplateOutlet="aggregateTpl; context: { $implicit: t, set: setTile(i) }" />
               <ng-container *ngTemplateOutlet="filterTpl; context: { $implicit: t.where, columns: columnsOf(t.table), set: setTileFilter(i) }" />
             }
-            <button mat-button type="button" (click)="tiles.set(removeAt(tiles(), i))" i18n="@@builder.remove">Прибрати</button>
+            <button mat-button type="button" (click)="tiles.set(removeAt(tiles(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
         <button mat-button type="button" data-testid="b-add-tile" (click)="tiles.set([...tiles(), emptyTile()])" i18n="@@builder.addTile">Додати плитку</button>
@@ -320,7 +320,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
             <input class="w-48 border p-1" placeholder="групувати: колонка або month(колонка)" i18n-placeholder="@@builder.chart.groupBy" [value]="c.groupBy" (input)="setChart(i, { groupBy: $any($event.target).value })" />
             <ng-container *ngTemplateOutlet="aggregateTpl; context: { $implicit: c, set: setChart(i) }" />
             <ng-container *ngTemplateOutlet="filterTpl; context: { $implicit: c.where, columns: columnsOf(c.table), set: setChartFilter(i) }" />
-            <button mat-button type="button" (click)="charts.set(removeAt(charts(), i))" i18n="@@builder.remove">Прибрати</button>
+            <button mat-button type="button" (click)="charts.set(removeAt(charts(), i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
         }
         <button mat-button type="button" data-testid="b-add-chart" (click)="charts.set([...charts(), emptyChart()])" i18n="@@builder.addChart">Додати діаграму</button>
@@ -347,7 +347,7 @@ type SubmitMode = 'insert' | 'upsert' | 'update' | 'workflow';
         <p role="alert" class="mb-2 text-red-700" data-testid="preview-error">{{ previewError() }}</p>
       }
       @if (previewData(); as p) {
-        <div class="rounded border border-ac-line p-3" [class.opacity-50]="previewError()">
+        <div class="rounded border border-bp-line p-3" [class.opacity-50]="previewError()">
           <app-page-preview [data]="p" />
         </div>
       } @else if (!previewError()) {

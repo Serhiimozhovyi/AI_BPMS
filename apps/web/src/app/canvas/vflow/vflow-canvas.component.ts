@@ -40,7 +40,7 @@ interface NoteData {
   /** Текст нотатки як HTML (Markdown-підмножина, екранований). */
   html: string;
   color: NoteColor;
-  /** `var(--ac-…)` кольору — рамка й 15 %-тло. */
+  /** `var(--bp-…)` кольору — рамка й 15 %-тло. */
   colorVar: string;
   width: number;
   height: number;
@@ -152,11 +152,11 @@ const PORT_STEP = 16;
 
 /** Колір групи для картки вузла: highlight-гама AC-Kit; текст — суміш 45% кольору з `--bp-text` (≥ 4,5:1 на 15%-тлі). */
 export const GROUP_COLORS: Record<CanvasNodeGroup, string> = {
-  trigger: 'var(--ac-green)',
-  logic: 'var(--ac-orange)',
+  trigger: 'var(--bp-success)',
+  logic: 'var(--bp-warning)',
   transform: 'var(--bp-accent)',
-  integration: 'var(--ac-blue)',
-  ai: 'var(--ac-violet)',
+  integration: 'var(--bp-info)',
+  ai: 'var(--bp-cat-violet)',
   unknown: 'var(--bp-text-muted)',
 };
 
@@ -397,7 +397,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
             @if ((ctx.selected() || firstStepHint(d.node)) && !readonly()) {
               @if (firstStepHint(d.node)) {
                 <span
-                  class="pointer-events-none absolute left-[calc(100%+48px)] -translate-y-1/2 whitespace-nowrap text-[12px] text-ac-kit"
+                  class="pointer-events-none absolute left-[calc(100%+48px)] -translate-y-1/2 whitespace-nowrap text-[12px] text-bp-primary"
                   data-testid="first-step-hint"
                   [style.top.px]="portTop(0, d.node.outputs.length, d.height)"
                   i18n="@@canvas.firstStepHint"
@@ -548,18 +548,18 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node.invalid {
-      border-color: var(--ac-red);
+      border-color: var(--bp-danger);
       box-shadow: 0 0 0 2px rgb(255 96 96 / 0.35);
     }
 
     .node.run-success {
-      border-color: var(--ac-green);
-      background: var(--ac-green-15);
+      border-color: var(--bp-success);
+      background: var(--bp-success-15);
     }
 
     .node.run-error {
-      border-color: var(--ac-red);
-      background: var(--ac-red-15);
+      border-color: var(--bp-danger);
+      background: var(--bp-danger-15);
     }
 
     .node.run-skipped {
@@ -582,11 +582,11 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__run--success {
-      color: var(--ac-green);
+      color: var(--bp-success);
     }
 
     .node__run--error {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .node__run--skipped {
@@ -613,7 +613,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .node__errors {
       padding: 0 6px;
       border-radius: 8px;
-      background: var(--ac-red);
+      background: var(--bp-danger);
       color: var(--bp-white);
       font-weight: 600;
       cursor: help;
@@ -696,7 +696,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__tool--danger:hover {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .node__rename {
@@ -713,7 +713,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     .node__run-error {
       overflow: hidden;
       font-size: 11px;
-      color: var(--ac-red);
+      color: var(--bp-danger);
       white-space: nowrap;
       text-overflow: ellipsis;
     }
@@ -724,10 +724,10 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
       top: calc(100% + 4px);
       left: 0;
       padding: 0 6px;
-      border: 1px solid var(--ac-orange);
+      border: 1px solid var(--bp-warning);
       border-radius: 8px;
       background: var(--bp-white);
-      color: var(--ac-orange);
+      color: var(--bp-warning);
       font: 700 12px/16px var(--bp-font-family);
       white-space: nowrap;
       cursor: pointer;
@@ -749,7 +749,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .node__port--error {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     /* «+» біля вихідного порту виділеного вузла (F3-50): за межею картки, щоб не заважати тягнути з'єднання з порту. */
@@ -913,7 +913,7 @@ export function handleIndex(handle: string | undefined, prefix: 'in' | 'out'): n
     }
 
     .note__tool--danger:hover {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .note__resize {

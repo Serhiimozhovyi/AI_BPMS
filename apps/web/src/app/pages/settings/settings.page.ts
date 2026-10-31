@@ -212,25 +212,25 @@ export interface SettingsSectionItem {
       display: flex;
       gap: 4px;
       overflow-x: auto;
-      border-bottom: 1px solid var(--ac-line);
+      border-bottom: 1px solid var(--bp-line);
     }
     .settings-nav__item {
       padding: 8px 14px;
-      border-radius: var(--ac-radius-sm);
-      color: var(--ac-vivid);
+      border-radius: var(--bp-radius-sm);
+      color: var(--bp-text);
       white-space: nowrap;
       text-decoration: none;
     }
     .settings-nav__item:hover {
-      background: var(--ac-cool-grey-2);
+      background: var(--bp-bg-2);
     }
     .settings-nav__item[aria-current='page'] {
-      background: var(--ac-button);
-      color: var(--ac-kit);
+      background: var(--bp-tonal);
+      color: var(--bp-primary);
       font-weight: 600;
     }
     .settings-nav__item:focus-visible {
-      outline: 2px solid var(--ac-kit);
+      outline: 2px solid var(--bp-primary);
       outline-offset: 2px;
     }
     @media (min-width: 768px) {

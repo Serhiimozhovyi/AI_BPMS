@@ -68,9 +68,9 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       max-height: 380px;
       padding: 8px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       background: var(--bp-white);
-      box-shadow: var(--ac-shadow);
+      box-shadow: var(--bp-shadow);
       font: 13px/1.3 Ubuntu, sans-serif;
     }
 
@@ -87,7 +87,7 @@ import { PaletteItem, PaletteSection, connectorPageSections, filterPalette, item
       width: 100%;
       padding: 8px 10px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       font: inherit;
       outline: none;
     }

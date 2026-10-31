@@ -14,15 +14,15 @@ export const MIN_NOTE_SIZE: [number, number] = [120, 60];
 
 export const DEFAULT_NOTE_COLOR: NoteColor = 'yellow';
 
-/** Кольори нотаток — Highlight-палітра AC-Kit (`--ac-*` у styles.scss) у порядку показу в палітрі нотатки. */
+/** Кольори нотаток — Highlight-палітра AC-Kit (`--bp-*`) у порядку показу в палітрі нотатки. */
 export const NOTE_COLORS: readonly { color: NoteColor; token: string; label: string }[] = [
-  { color: 'yellow', token: '--ac-yellow', label: $localize`:@@canvas.note.color.yellow:Жовтий` },
-  { color: 'green', token: '--ac-green', label: $localize`:@@canvas.note.color.green:Зелений` },
-  { color: 'blue', token: '--ac-blue', label: $localize`:@@canvas.note.color.blue:Синій` },
-  { color: 'teal', token: '--ac-teal', label: $localize`:@@canvas.note.color.teal:Бірюзовий` },
-  { color: 'orange', token: '--ac-orange', label: $localize`:@@canvas.note.color.orange:Помаранчевий` },
-  { color: 'red', token: '--ac-red', label: $localize`:@@canvas.note.color.red:Червоний` },
-  { color: 'violet', token: '--ac-violet', label: $localize`:@@canvas.note.color.violet:Фіолетовий` },
+  { color: 'yellow', token: '--bp-yellow', label: $localize`:@@canvas.note.color.yellow:Жовтий` },
+  { color: 'green', token: '--bp-success', label: $localize`:@@canvas.note.color.green:Зелений` },
+  { color: 'blue', token: '--bp-info', label: $localize`:@@canvas.note.color.blue:Синій` },
+  { color: 'teal', token: '--bp-accent', label: $localize`:@@canvas.note.color.teal:Бірюзовий` },
+  { color: 'orange', token: '--bp-warning', label: $localize`:@@canvas.note.color.orange:Помаранчевий` },
+  { color: 'red', token: '--bp-danger', label: $localize`:@@canvas.note.color.red:Червоний` },
+  { color: 'violet', token: '--bp-cat-violet', label: $localize`:@@canvas.note.color.violet:Фіолетовий` },
 ];
 
 /** CSS-змінна кольору нотатки; невідомий колір (з файлу) — як типовий. */

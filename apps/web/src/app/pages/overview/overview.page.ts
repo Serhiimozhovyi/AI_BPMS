@@ -36,7 +36,7 @@ import {
         @if (projectId && canExport()) {
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <input
-              class="rounded border border-ac-line px-2 py-1"
+              class="rounded border border-bp-line px-2 py-1"
               type="text"
               [value]="rowsFor()"
               (input)="rowsFor.set($any($event.target).value)"
@@ -60,7 +60,7 @@ import {
 
       @if (data(); as d) {
         <div class="mb-6 grid max-w-5xl grid-cols-2 gap-4 md:grid-cols-4">
-          <div class="rounded-lg border border-ac-line p-4" data-testid="stat-total">
+          <div class="rounded-lg border border-bp-line p-4" data-testid="stat-total">
             <div class="text-sm opacity-70" i18n="@@overview.total">Виконань</div>
             <div class="text-2xl font-semibold">{{ d.total }}</div>
             <a
@@ -72,15 +72,15 @@ import {
               >з помилкою: {{ d.failed }}</a
             >
           </div>
-          <div class="rounded-lg border border-ac-line p-4" data-testid="stat-rate">
+          <div class="rounded-lg border border-bp-line p-4" data-testid="stat-rate">
             <div class="text-sm opacity-70" i18n="@@overview.successRate">Успішних</div>
             <div class="text-2xl font-semibold">{{ rate(d.successRate) }}</div>
           </div>
-          <div class="rounded-lg border border-ac-line p-4" data-testid="stat-p50">
+          <div class="rounded-lg border border-bp-line p-4" data-testid="stat-p50">
             <div class="text-sm opacity-70" i18n="@@overview.p50">Медіана тривалості</div>
             <div class="text-2xl font-semibold">{{ duration(d.p50Ms) }}</div>
           </div>
-          <div class="rounded-lg border border-ac-line p-4" data-testid="stat-p95">
+          <div class="rounded-lg border border-bp-line p-4" data-testid="stat-p95">
             <div class="text-sm opacity-70" i18n="@@overview.p95">95 % виконань</div>
             <div class="text-2xl font-semibold">{{ duration(d.p95Ms) }}</div>
           </div>

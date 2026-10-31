@@ -62,7 +62,7 @@ import { WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-ap
         <mat-progress-bar mode="indeterminate" />
       }
       @if (unmapped().length > 0) {
-        <form class="mb-6 max-w-3xl rounded-lg border border-ac-line p-4" data-testid="import-unmapped" (submit)="$event.preventDefault(); retry()">
+        <form class="mb-6 max-w-3xl rounded-lg border border-bp-line p-4" data-testid="import-unmapped" (submit)="$event.preventDefault(); retry()">
           <p class="mb-2 font-semibold" i18n="@@projects.import.unmapped">У цьому середовищі немає відповідників. Вкажіть id наявних об'єктів (Підключення → їхні картки) і повторіть імпорт.</p>
           @for (u of unmapped(); track u.kind + u.ref) {
             <mat-form-field appearance="outline" class="mb-1 block">
@@ -74,7 +74,7 @@ import { WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-ap
         </form>
       }
       @if (imported(); as r) {
-        <div class="mb-6 max-w-3xl rounded-lg border border-ac-line p-4" data-testid="import-result" role="status">
+        <div class="mb-6 max-w-3xl rounded-lg border border-bp-line p-4" data-testid="import-result" role="status">
           <p class="font-semibold">
             <ng-container i18n="@@projects.import.done">Імпортовано проєкт</ng-container>
             <a class="underline" [routerLink]="['/projects', r.projectId]" data-testid="import-open">«{{ r.name }}»</a>
@@ -103,7 +103,7 @@ import { WorkflowGroup, WorkflowsApiService } from '../../workflows/workflows-ap
       <div class="grid max-w-5xl grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         @for (p of projects(); track p.id) {
           <a
-            class="block rounded-lg border border-ac-line p-4 no-underline hover:shadow"
+            class="block rounded-lg border border-bp-line p-4 no-underline hover:shadow"
             [routerLink]="['/projects', p.id]"
             data-testid="project-card"
             [attr.data-project]="p.id"

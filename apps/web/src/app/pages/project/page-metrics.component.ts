@@ -9,7 +9,7 @@ import { PageMetrics } from '../../projects/project-pages-api.service';
     @if (metrics().tiles.length) {
       <div class="mb-6 grid max-w-5xl grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" data-testid="app-tiles">
         @for (t of metrics().tiles; track $index) {
-          <div class="rounded border border-ac-line p-3" [attr.data-tile]="t.key ?? $index">
+          <div class="rounded border border-bp-line p-3" [attr.data-tile]="t.key ?? $index">
             <div class="opacity-70">{{ t.label }}</div>
             <div class="text-2xl font-semibold" data-testid="tile-value">{{ number(t.value) }}</div>
           </div>
@@ -25,7 +25,7 @@ import { PageMetrics } from '../../projects/project-pages-api.service';
           @for (p of chart.points; track p.label) {
             <li class="grid grid-cols-[10rem_1fr_5rem] items-center gap-2 py-0.5" [attr.data-point]="p.label">
               <span class="truncate">{{ p.label }}</span>
-              <span class="block h-3 rounded bg-ac-kit" [style.width.%]="barWidth(chart.points, p.value)"></span>
+              <span class="block h-3 rounded bg-bp-primary" [style.width.%]="barWidth(chart.points, p.value)"></span>
               <span class="text-right">{{ number(p.value) }}</span>
             </li>
           }

@@ -67,28 +67,28 @@ export function priorityTone(priority: ChipPriority): ChipTone {
     }
     :host(.bp-chip--green) {
       --chip-fg: #1b6e45;
-      --chip-bg: var(--ac-green-15);
-      --chip-line: var(--ac-green);
+      --chip-bg: var(--bp-success-15);
+      --chip-line: var(--bp-success);
     }
     :host(.bp-chip--orange) {
       --chip-fg: #9a4a00;
-      --chip-bg: var(--ac-orange-15);
-      --chip-line: var(--ac-orange);
+      --chip-bg: var(--bp-warning-15);
+      --chip-line: var(--bp-warning);
     }
     :host(.bp-chip--red) {
       --chip-fg: #b3261e;
-      --chip-bg: var(--ac-red-15);
-      --chip-line: var(--ac-red);
+      --chip-bg: var(--bp-danger-15);
+      --chip-line: var(--bp-danger);
     }
     :host(.bp-chip--yellow) {
       --chip-fg: #7a5c00;
-      --chip-bg: var(--ac-yellow-15);
-      --chip-line: var(--ac-yellow);
+      --chip-bg: var(--bp-yellow-15);
+      --chip-line: var(--bp-yellow);
     }
     :host(.bp-chip--blue) {
       --chip-fg: #0b5c8a;
-      --chip-bg: var(--ac-blue-15);
-      --chip-line: var(--ac-blue);
+      --chip-bg: var(--bp-info-15);
+      --chip-line: var(--bp-info);
     }
     :host(.bp-chip--teal) {
       --chip-fg: var(--bp-primary);
@@ -98,7 +98,7 @@ export function priorityTone(priority: ChipPriority): ChipTone {
     :host(.bp-chip--violet) {
       --chip-fg: #6f3a8c;
       --chip-bg: #f1e6f7;
-      --chip-line: var(--ac-violet);
+      --chip-line: var(--bp-cat-violet);
     }
     .bp-chip__dot {
       width: 8px;

@@ -68,7 +68,7 @@ import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.c
       height: 100%;
       padding: 12px;
       overflow-y: auto;
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .assistant [hidden] {
@@ -90,7 +90,7 @@ import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.c
 
     .assistant__hint {
       margin: 0;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font:
         400 12px/18px Ubuntu,
         sans-serif;
@@ -98,8 +98,8 @@ import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.c
 
     .assistant__mcp {
       padding: 8px 10px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
       font:
         400 13px/18px Ubuntu,
         sans-serif;
@@ -112,8 +112,8 @@ import { ExplanationCardComponent, mcpExplainPrompt } from './explanation-card.c
     .assistant__mcp-prompt {
       margin: 6px 0 0;
       padding: 4px 8px;
-      border-radius: var(--ac-radius);
-      background: var(--ac-cool-grey);
+      border-radius: var(--bp-radius);
+      background: var(--bp-bg);
       user-select: all;
     }
   `,

@@ -197,7 +197,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       padding: 2px 6px;
       overflow: hidden;
       border: 1px solid transparent;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       font: inherit;
       color: inherit;
@@ -217,7 +217,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       min-width: 0;
       padding: 2px 6px;
       border: 1px solid var(--bp-primary);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       font: inherit;
       font-size: 18px;
     }
@@ -240,7 +240,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
     .bar__views {
       display: inline-flex;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       overflow: hidden;
     }
 
@@ -280,7 +280,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       height: 36px;
       padding: 0;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       font: inherit;
       color: var(--bp-text);
@@ -323,7 +323,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
       min-width: 180px;
       padding: 4px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: var(--bp-white);
       box-shadow: 0 4px 16px rgb(12 43 48 / 16%);
     }
@@ -332,7 +332,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
     .bar__menu a {
       padding: 8px 12px;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       font: inherit;
       font-size: 14px;
@@ -380,7 +380,7 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
 
     .bar__last--error,
     .bar__last--timed_out {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     @media (min-width: 1500px) {
@@ -402,13 +402,13 @@ export type ToolbarAction = 'undo' | 'redo' | 'copy' | 'paste' | 'delete' | 'ass
 
     .bar__run--success {
       color: var(--bp-white);
-      background: var(--ac-green);
+      background: var(--bp-success);
     }
 
     .bar__run--error,
     .bar__run--timed_out {
       color: var(--bp-white);
-      background: var(--ac-red);
+      background: var(--bp-danger);
     }
 
     @media (max-width: 1200px) {

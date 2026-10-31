@@ -29,7 +29,7 @@ import { MatButtonModule } from '@angular/material/button';
       margin: 48px auto;
       padding: 32px 24px;
       border: 1px dashed var(--bp-line);
-      border-radius: var(--ac-radius-lg);
+      border-radius: var(--bp-radius-lg);
       background: var(--bp-white);
       text-align: center;
     }

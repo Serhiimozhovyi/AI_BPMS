@@ -254,18 +254,18 @@ interface MenuItem {
     }
 
     .bv__swatch--trigger {
-      background: var(--ac-yellow-15);
-      border-color: var(--ac-yellow);
+      background: var(--bp-yellow-15);
+      border-color: var(--bp-yellow);
     }
 
     .bv__swatch--node {
-      background: var(--ac-teal-15);
-      border-color: var(--ac-teal);
+      background: var(--bp-tonal);
+      border-color: var(--bp-accent);
     }
 
     .bv__swatch--wait {
-      background: var(--ac-orange-15);
-      border-color: var(--ac-orange);
+      background: var(--bp-warning-15);
+      border-color: var(--bp-warning);
     }
 
     .bv__swatch--external {
@@ -293,7 +293,7 @@ interface MenuItem {
     }
 
     .bv__swatch--alt {
-      border-color: var(--ac-orange);
+      border-color: var(--bp-warning);
     }
 
     .bv__hint {
@@ -322,7 +322,7 @@ interface MenuItem {
       overflow: hidden;
       border-radius: 15px;
       background: var(--bp-white);
-      box-shadow: var(--ac-shadow-card);
+      box-shadow: var(--bp-shadow-card);
       cursor: grab;
       touch-action: none;
     }
@@ -358,27 +358,27 @@ interface MenuItem {
 
     /* Кроки — як блоки «БП схеми» AC-Kit: тло 15% кольору, рамка й текст кольором кроку. */
     .bv__step {
-      --bv-color: var(--ac-teal);
-      --bv-fill: var(--ac-teal-15);
-      --bv-text: var(--ac-teal);
+      --bv-color: var(--bp-accent);
+      --bv-fill: var(--bp-tonal);
+      --bv-text: var(--bp-accent);
     }
 
     .bv__step--trigger {
-      --bv-color: var(--ac-yellow);
-      --bv-fill: var(--ac-yellow-15);
-      --bv-text: var(--ac-yellow-dark);
+      --bv-color: var(--bp-yellow);
+      --bv-fill: var(--bp-yellow-15);
+      --bv-text: var(--bp-yellow-dark);
     }
 
     .bv__step--wait {
-      --bv-color: var(--ac-orange);
-      --bv-fill: var(--ac-orange-15);
-      --bv-text: var(--ac-orange);
+      --bv-color: var(--bp-warning);
+      --bv-fill: var(--bp-warning-15);
+      --bv-text: var(--bp-warning);
     }
 
     .bv__step--loop {
-      --bv-color: var(--ac-blue);
-      --bv-fill: var(--ac-blue-15);
-      --bv-text: var(--ac-blue);
+      --bv-color: var(--bp-info);
+      --bv-fill: var(--bp-info-15);
+      --bv-text: var(--bp-info);
     }
 
     .bv__step--external {
@@ -446,14 +446,14 @@ interface MenuItem {
 
     /* Статуси виконання — як «стрілки етапів» AC-Kit: пройдено — зелений з білим текстом, ще ні — Cool Grey 2 з текстом Kit. */
     .bv__step--st-done {
-      --bv-color: var(--ac-green);
-      --bv-fill: var(--ac-green);
+      --bv-color: var(--bp-success);
+      --bv-fill: var(--bp-success);
       --bv-text: var(--bp-white);
     }
 
     .bv__step--st-done.bv__step--decision .bv__shape {
-      fill: var(--ac-green-15);
-      stroke: var(--ac-green);
+      fill: var(--bp-success-15);
+      stroke: var(--bp-success);
     }
 
     .bv__step--st-running .bv__shape,
@@ -467,9 +467,9 @@ interface MenuItem {
     }
 
     .bv__step--st-error {
-      --bv-color: var(--ac-red);
-      --bv-fill: var(--ac-red-15);
-      --bv-text: var(--ac-red);
+      --bv-color: var(--bp-danger);
+      --bv-fill: var(--bp-danger-15);
+      --bv-text: var(--bp-danger);
     }
 
     .bv__step--st-error .bv__shape {
@@ -483,8 +483,8 @@ interface MenuItem {
     }
 
     .bv__swatch--st-done {
-      background: var(--ac-green);
-      border-color: var(--ac-green);
+      background: var(--bp-success);
+      border-color: var(--bp-success);
     }
 
     .bv__swatch--st-running {
@@ -494,8 +494,8 @@ interface MenuItem {
     }
 
     .bv__swatch--st-error {
-      background: var(--ac-red-15);
-      border-color: var(--ac-red);
+      background: var(--bp-danger-15);
+      border-color: var(--bp-danger);
     }
 
     .bv__swatch--st-pending {
@@ -515,7 +515,7 @@ interface MenuItem {
     }
 
     .bv__edge--alt {
-      stroke: var(--ac-orange);
+      stroke: var(--bp-warning);
       stroke-dasharray: 4 3;
     }
 
@@ -528,7 +528,7 @@ interface MenuItem {
     }
 
     .bv__arrowhead--alt {
-      fill: var(--ac-orange);
+      fill: var(--bp-warning);
     }
 
     .bv__edge-label {
@@ -538,11 +538,11 @@ interface MenuItem {
     }
 
     .bv__edge-label--yes {
-      fill: var(--ac-green);
+      fill: var(--bp-success);
     }
 
     .bv__edge-label--no {
-      fill: var(--ac-red);
+      fill: var(--bp-danger);
     }
 
     .bv__edge-hit {

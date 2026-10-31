@@ -28,16 +28,16 @@ export function publishStateOf(workflow: Pick<WorkflowDetail, 'version' | 'publi
       <span class="inline-flex min-w-0 flex-wrap items-center gap-2" data-testid="publish-bar">
         @switch (state()) {
           @case ('published') {
-            <span class="text-sm text-[var(--ac-cool-grey-4)]" data-testid="publish-state" data-state="published" i18n="@@publish.state.published">Опубліковано · версія {{ wf.publishedVersion }}</span>
+            <span class="text-sm text-[var(--bp-text-muted)]" data-testid="publish-state" data-state="published" i18n="@@publish.state.published">Опубліковано · версія {{ wf.publishedVersion }}</span>
           }
           @case ('changed') {
-            <span class="rounded bg-[var(--ac-yellow-15)] px-1.5 text-sm" data-testid="publish-state" data-state="changed" [title]="diffText() ?? ''" i18n="@@publish.state.changed">Є неопубліковані зміни</span>
+            <span class="rounded bg-[var(--bp-yellow-15)] px-1.5 text-sm" data-testid="publish-state" data-state="changed" [title]="diffText() ?? ''" i18n="@@publish.state.changed">Є неопубліковані зміни</span>
             @if (diffText(); as text) {
-              <span class="max-w-[16rem] truncate text-xs text-[var(--ac-cool-grey-4)]" data-testid="publish-diff" [title]="text">{{ text }}</span>
+              <span class="max-w-[16rem] truncate text-xs text-[var(--bp-text-muted)]" data-testid="publish-diff" [title]="text">{{ text }}</span>
             }
           }
           @case ('never') {
-            <span class="rounded bg-[var(--ac-yellow-15)] px-1.5 text-sm" data-testid="publish-state" data-state="never" i18n="@@publish.state.never">Не опубліковано</span>
+            <span class="rounded bg-[var(--bp-yellow-15)] px-1.5 text-sm" data-testid="publish-state" data-state="never" i18n="@@publish.state.never">Не опубліковано</span>
           }
         }
         @if (!readonly() && state() !== 'published') {

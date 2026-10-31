@@ -24,7 +24,7 @@ import { PageMetricsComponent } from '../page-metrics.component';
           } @else if (v.page.definition.layout === 'cards') {
             <ul class="grid gap-2" data-testid="preview-cards">
               @for (row of rows(); track row.key) {
-                <li class="rounded border border-ac-line p-3">
+                <li class="rounded border border-bp-line p-3">
                   <div class="font-medium">{{ titleOf(row) }}</div>
                   @if (subtitleOf(row)) {
                     <div class="opacity-70">{{ subtitleOf(row) }}</div>

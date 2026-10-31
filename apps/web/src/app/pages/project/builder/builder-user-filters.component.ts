@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { PageUserFilter } from '../../../projects/project-pages-api.service';
+import { BpButtonDirective } from '../../../shared/button.directive';
 
 const KINDS: readonly PageUserFilter['kind'][] = ['select', 'chips', 'period', 'search'];
 
@@ -11,7 +12,7 @@ const KINDS: readonly PageUserFilter['kind'][] = ['select', 'chips', 'period', '
 @Component({
   selector: 'app-builder-user-filters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule],
+  imports: [BpButtonDirective, MatButtonModule],
   template: `
     @for (f of filters(); track $index; let i = $index) {
       <div class="mb-1 flex flex-wrap items-center gap-2" [attr.data-user-filter]="i">
@@ -34,7 +35,7 @@ const KINDS: readonly PageUserFilter['kind'][] = ['select', 'chips', 'period', '
           [value]="defaultText(f)"
           (input)="patch(i, { default: $any($event.target).value || undefined })"
         />
-        <button mat-button type="button" (click)="remove(i)" i18n="@@builder.remove">Прибрати</button>
+        <button mat-button type="button" (click)="remove(i)" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
       </div>
     }
     <button mat-button type="button" data-testid="b-add-user-filter" (click)="add()" i18n="@@bo.filter.add">Додати фільтр</button>

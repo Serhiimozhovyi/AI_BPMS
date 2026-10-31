@@ -52,9 +52,9 @@ export function emptyFilters(filters: PageUserFilter[]): Record<string, PageFilt
                 <button
                   type="button"
                   class="rounded-full border px-3 py-1 text-sm"
-                  [class.border-ac-kit]="selected(f, o.value)"
-                  [class.bg-ac-button]="selected(f, o.value)"
-                  [class.border-ac-line]="!selected(f, o.value)"
+                  [class.border-bp-primary]="selected(f, o.value)"
+                  [class.bg-bp-tonal]="selected(f, o.value)"
+                  [class.border-bp-line]="!selected(f, o.value)"
                   [attr.aria-pressed]="selected(f, o.value)"
                   [attr.data-chip]="o.value"
                   (click)="toggle(f, o.value)"

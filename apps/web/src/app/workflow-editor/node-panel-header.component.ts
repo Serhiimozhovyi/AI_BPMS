@@ -104,7 +104,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       margin-left: -6px;
       overflow: hidden;
       border: 1px solid transparent;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       font: inherit;
       color: inherit;
@@ -122,7 +122,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       min-width: 0;
       padding: 2px 6px;
       border: 1px solid var(--bp-primary);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       font: inherit;
       font-size: 16px;
     }
@@ -147,7 +147,7 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       height: 36px;
       padding: 0;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       color: var(--bp-text);
       cursor: pointer;
@@ -178,14 +178,14 @@ export type NodeHeaderAction = 'test' | 'until' | 'pin' | 'unpin' | 'pinManual' 
       min-width: 200px;
       padding: 4px;
       border: 1px solid var(--bp-line);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: var(--bp-white);
       box-shadow: 0 4px 16px rgb(12 43 48 / 16%);
     }
     .head__menu button {
       padding: 8px 12px;
       border: 0;
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--bp-radius-sm);
       background: transparent;
       font: inherit;
       font-size: 14px;

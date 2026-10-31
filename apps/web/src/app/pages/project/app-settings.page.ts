@@ -6,6 +6,7 @@ import { apiErrorMessage } from '../../connectors/connectors-api.service';
 import { ProjectContextService } from '../../projects/project-context.service';
 import { ProjectPage, ProjectPagesApiService } from '../../projects/project-pages-api.service';
 import { ProjectAppNavGroup, WorkflowsApiService } from '../../workflows/workflows-api.service';
+import { BpButtonDirective } from '../../shared/button.directive';
 
 /**
  * `/projects/:id/app/_app` — налаштування оболонки застосунку (F8-19, `docs/projects.md` §3.9): назва, значок, головна
@@ -14,7 +15,7 @@ import { ProjectAppNavGroup, WorkflowsApiService } from '../../workflows/workflo
 @Component({
   selector: 'app-app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, RouterLink],
+  imports: [BpButtonDirective, MatButtonModule, RouterLink],
   template: `
     <section class="max-w-3xl px-6 pb-8 pt-2" data-testid="app-settings">
       <h2 class="mb-3 text-lg font-semibold" i18n="@@appset.title">Вигляд застосунку</h2>
@@ -43,12 +44,12 @@ import { ProjectAppNavGroup, WorkflowsApiService } from '../../workflows/workflo
       <h3 class="mb-1 font-medium" i18n="@@appset.menu">Меню</h3>
       <p class="mb-2 text-sm opacity-70" i18n="@@appset.menuHint">Без груп меню — усі сторінки за порядком. Сторінки, яких немає в жодній групі, у меню не показуються.</p>
       @for (g of nav(); track $index; let i = $index) {
-        <fieldset class="mb-2 rounded border border-ac-line p-2" [attr.data-nav-group]="i">
+        <fieldset class="mb-2 rounded border border-bp-line p-2" [attr.data-nav-group]="i">
           <div class="mb-1 flex items-center gap-2">
             <input class="w-56 border p-1" placeholder="Назва групи" i18n-placeholder="@@appset.group" [value]="g.label" (input)="setGroup(i, { label: $any($event.target).value })" />
             <button mat-button type="button" [disabled]="i === 0" (click)="move(i, -1)" aria-label="Вище" i18n-aria-label="@@bd.up">↑</button>
             <button mat-button type="button" [disabled]="i === nav().length - 1" (click)="move(i, 1)" aria-label="Нижче" i18n-aria-label="@@bd.down">↓</button>
-            <button mat-button type="button" (click)="nav.set(removeAt(i))" i18n="@@builder.remove">Прибрати</button>
+            <button mat-button type="button" (click)="nav.set(removeAt(i))" i18n="@@builder.remove" bpVariant="danger">Прибрати</button>
           </div>
           @for (p of pages(); track p.key) {
             <label class="mr-4 inline-flex items-center gap-1">
@@ -63,7 +64,7 @@ import { ProjectAppNavGroup, WorkflowsApiService } from '../../workflows/workflo
       <div class="mt-6 flex flex-wrap gap-2">
         <button mat-flat-button type="button" data-testid="as-save" [disabled]="saving() || !title().trim()" (click)="save()" i18n="@@appset.save">Зберегти</button>
         @if (hasShell()) {
-          <button mat-button type="button" data-testid="as-clear" [disabled]="saving()" (click)="clear()" i18n="@@appset.clear">Прибрати оболонку</button>
+          <button mat-button type="button" data-testid="as-clear" [disabled]="saving()" (click)="clear()" i18n="@@appset.clear" bpVariant="danger">Прибрати оболонку</button>
         }
         <a mat-button [routerLink]="['/projects', projectId, 'app']" i18n="@@builder.cancel">Скасувати</a>
       </div>

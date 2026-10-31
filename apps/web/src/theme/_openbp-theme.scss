@@ -2,7 +2,7 @@
 // і веб-компонента <openbp-canvas> (src/element, токени на :host у Shadow DOM).
 @use '@angular/material' as mat;
 
-/// CSS-змінні AC-Kit (--ac-*).
+/// CSS-змінні AI_BPMS (--bp-*).
 @mixin tokens() {
   // Семантичні токени AI_BPMS — палітра «Глибока бірюза» (F9-01). Бірюза з гами AC-Kit (#27C7BE), затемнена
   // для тексту й кнопок; усі текстові пари ≥ 4,5:1 (axe, F3-86). Figma лише читаємо. Опис — docs/design-system.md.
@@ -24,45 +24,32 @@
   --bp-text-muted: #57696b;
   --bp-white: #ffffff;
 
-  // Застарілі назви --ac-* — аліаси на --bp-* до F9-11, щоб паралельні задачі фази 9 не конфліктували.
-  --ac-kit: var(--bp-primary);
-  --ac-kit-hover: var(--bp-primary-hover);
-  --ac-vivid: var(--bp-shell);
-  --ac-mid: var(--bp-shell-2);
-  --ac-button: var(--bp-tonal);
-  --ac-stone: var(--bp-surface-2);
-  --ac-white: var(--bp-white);
-  --ac-line: var(--bp-line);
-  --ac-line-2: var(--bp-line-2);
-  --ac-cool-grey: var(--bp-bg);
-  --ac-cool-grey-2: var(--bp-bg-2);
-  --ac-cool-grey-3: var(--bp-line-3);
-  --ac-cool-grey-4: var(--bp-text-muted);
-  // Highlight colours і їхні 15%-відтінки
-  --ac-teal: #27c7be;
-  --ac-teal-15: #dff7f5;
-  --ac-blue: #20aaea;
-  --ac-blue-15: #def2fc;
-  --ac-green: #47cc8a;
-  --ac-green-15: #e3f7ed;
-  --ac-orange: #ff840a;
-  --ac-orange-15: #ffedda;
-  --ac-red: #ff6060;
-  --ac-red-15: #ffe7e7;
-  --ac-violet: #b36bd4;
-  --ac-plum: #73327a;
-  --ac-navy: #006298;
-  --ac-yellow: #fac701;
-  --ac-yellow-15: #fef7d9;
+  // Статусні кольори: основний — AA-безпечний (≥ 4,5:1 на білому й на своєму 15%-тлі), -15 — світле тло.
+  --bp-success: #1b7a4b;
+  --bp-success-15: #e3f7ed;
+  --bp-warning: #9a5200;
+  --bp-warning-15: #ffedda;
+  --bp-danger: #c62f2f;
+  --bp-danger-15: #ffe7e7;
+  // Світлий відтінок для темного тла (кнопка снекбара): основний danger на #0c2b30 не читається
+  --bp-danger-on-dark: #ff8a8a;
+  --bp-info: #0a6fa8;
+  --bp-info-15: #def2fc;
+  --bp-yellow: #fac701;
+  --bp-yellow-15: #fef7d9;
   // Текст на жовтому блоці «БП схеми» (жовтий #fac701 на світлому тлі не читається)
-  --ac-yellow-dark: #e2b400;
+  --bp-yellow-dark: #e2b400;
+  // Категорії вузлів і доріжки (AC-Kit highlight)
+  --bp-cat-violet: #b36bd4;
+  --bp-cat-plum: #73327a;
+  --bp-cat-navy: #006298;
 
-  --ac-radius-sm: 4px;
-  --ac-radius: 8px;
-  --ac-radius-lg: 12px;
-  --ac-shadow: 0 4px 24px rgb(12 43 48 / 0.08);
+  --bp-radius-sm: 4px;
+  --bp-radius: 8px;
+  --bp-radius-lg: 12px;
+  --bp-shadow: 0 4px 24px rgb(12 43 48 / 0.08);
   // Картка схеми «БП схема» (Rectangle 287)
-  --ac-shadow-card: 0 10px 17px rgb(12 43 48 / 0.1);
+  --bp-shadow-card: 0 10px 17px rgb(12 43 48 / 0.1);
 }
 
 /// Angular Material: системні токени і перевизначення компонентів під AC-Kit.
@@ -114,53 +101,53 @@
   // Поля AC-Kit: обведення Line, радіус 4px.
   @include mat.form-field-overrides(
     (
-      outlined-container-shape: var(--ac-radius-sm),
-      outlined-outline-color: var(--ac-line),
-      outlined-hover-outline-color: var(--ac-cool-grey-4),
-      outlined-focus-outline-color: var(--ac-kit),
-      filled-container-color: var(--ac-cool-grey),
+      outlined-container-shape: var(--bp-radius-sm),
+      outlined-outline-color: var(--bp-line),
+      outlined-hover-outline-color: var(--bp-text-muted),
+      outlined-focus-outline-color: var(--bp-primary),
+      filled-container-color: var(--bp-bg),
     )
   );
 
   // Верхня панель: «Vivid» з білим текстом, як у шапці AgriChainKit.
   @include mat.toolbar-overrides(
     (
-      container-background-color: var(--ac-vivid),
-      container-text-color: var(--ac-white),
+      container-background-color: var(--bp-text),
+      container-text-color: var(--bp-white),
     )
   );
 
   @include mat.card-overrides(
     (
-      elevated-container-shape: var(--ac-radius-lg),
-      outlined-container-shape: var(--ac-radius-lg),
-      outlined-outline-color: var(--ac-line-2),
+      elevated-container-shape: var(--bp-radius-lg),
+      outlined-container-shape: var(--bp-radius-lg),
+      outlined-outline-color: var(--bp-line-2),
     )
   );
 
   // Модальні вікна й випадні списки — непрозорі білі, радіус і тінь AC-Kit (Atoms / Modal).
   @include mat.dialog-overrides(
     (
-      container-color: var(--ac-white),
-      container-shape: var(--ac-radius-lg),
+      container-color: var(--bp-white),
+      container-shape: var(--bp-radius-lg),
     )
   );
 
   @include mat.select-overrides(
     (
-      panel-background-color: var(--ac-white),
+      panel-background-color: var(--bp-white),
     )
   );
 
   @include mat.autocomplete-overrides(
     (
-      background-color: var(--ac-white),
+      background-color: var(--bp-white),
     )
   );
 
   @include mat.chips-overrides(
     (
-      container-shape-radius: var(--ac-radius-sm),
+      container-shape-radius: var(--bp-radius-sm),
     )
   );
 }

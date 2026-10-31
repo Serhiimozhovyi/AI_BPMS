@@ -147,20 +147,20 @@ export function progressText(e: DraftEvent): string {
 
     .describe__hint,
     .describe__line {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .describe__warn,
     .describe__error,
     .describe__line--failed {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
 
     .describe__input {
       padding: 8px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
-      background: var(--ac-white);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
+      background: var(--bp-white);
       color: inherit;
       font: inherit;
       resize: vertical;
@@ -191,9 +191,9 @@ export function progressText(e: DraftEvent): string {
     .describe__todo-item {
       width: 100%;
       padding: 6px 10px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
-      background: var(--ac-cool-grey);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
+      background: var(--bp-bg);
       color: inherit;
       font: inherit;
       text-align: left;

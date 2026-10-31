@@ -127,9 +127,9 @@ import {
   styles: `
     .pc {
       padding: 10px;
-      border: 1px solid var(--ac-line);
-      border-radius: var(--ac-radius);
-      background: var(--ac-white);
+      border: 1px solid var(--bp-line);
+      border-radius: var(--bp-radius);
+      background: var(--bp-white);
       font:
         400 13px/18px Ubuntu,
         sans-serif;
@@ -151,14 +151,14 @@ import {
 
     .pc__warning {
       padding: 4px 8px;
-      border-radius: var(--ac-radius);
-      background: var(--ac-cool-grey);
-      color: var(--ac-red);
+      border-radius: var(--bp-radius);
+      background: var(--bp-bg);
+      color: var(--bp-danger);
     }
 
     .pc__note {
       margin: 0 0 4px;
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
       font-size: 12px;
     }
 
@@ -170,7 +170,7 @@ import {
     }
 
     .pc__args dt {
-      color: var(--ac-cool-grey-4);
+      color: var(--bp-text-muted);
     }
 
     .pc__args dd {
@@ -195,19 +195,19 @@ import {
     .pc__apply,
     .pc__cancel {
       padding: 6px 14px;
-      border-radius: var(--ac-radius);
+      border-radius: var(--bp-radius);
       font: inherit;
       cursor: pointer;
     }
 
     .pc__apply {
       border: 0;
-      background: var(--ac-vivid);
-      color: var(--ac-white);
+      background: var(--bp-text);
+      color: var(--bp-white);
     }
 
     .pc__cancel {
-      border: 1px solid var(--ac-line);
+      border: 1px solid var(--bp-line);
       background: transparent;
       color: inherit;
     }
@@ -219,11 +219,11 @@ import {
     }
 
     .pc__status--ok {
-      color: var(--ac-vivid);
+      color: var(--bp-text);
     }
 
     .pc__status--failed {
-      color: var(--ac-red);
+      color: var(--bp-danger);
     }
   `,
 })

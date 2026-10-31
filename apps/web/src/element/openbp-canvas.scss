@@ -11,8 +11,8 @@
   min-height: 480px;
   overflow: hidden;
   color-scheme: light;
-  background-color: var(--ac-cool-grey);
-  color: var(--ac-vivid);
+  background-color: var(--bp-bg);
+  color: var(--bp-text);
   font: 400 14px/20px Ubuntu, sans-serif;
   text-align: start;
   letter-spacing: normal;
@@ -28,9 +28,9 @@
 
 .mat-font-headline-sm {
   font: 700 24px/30px Ubuntu, sans-serif;
-  color: var(--ac-vivid);
+  color: var(--bp-text);
 }
 
 a {
-  color: var(--ac-kit);
+  color: var(--bp-primary);
 }
