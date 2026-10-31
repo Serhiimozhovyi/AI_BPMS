@@ -1,6 +1,7 @@
 import { Injector, inject, isDevMode } from '@angular/core';
 import { Router, Routes, UrlMatcher, UrlSegment } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
+import { RECREATE_ON_PARAMS } from './projects/project-route-reuse';
 
 /** `/form/<шлях з кількох сегментів>` — публічна сторінка форми (F6-03). */
 export const formMatcher: UrlMatcher = (segments: UrlSegment[]) =>
@@ -79,6 +80,8 @@ export const routes: Routes = [
         // Проєкт як робочий простір: вкладки — дочірні маршрути (F8-03); учасники — F6-14.
         path: 'projects/:id',
         title: $localize`:@@project.title:Проєкт`,
+        // Інший проєкт — нова сторінка з усіма вкладками, а не стара з даними попереднього.
+        data: { [RECREATE_ON_PARAMS]: true },
         loadComponent: () => import('./pages/project/project.page').then((m) => m.ProjectPage),
         children: [
           {
