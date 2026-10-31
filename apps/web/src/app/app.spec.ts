@@ -190,26 +190,6 @@ describe('App: вибір проєкту (F6-14)', () => {
     localStorage.removeItem('openbp.project');
   });
 
-  it('вибір іншого проєкту на сторінці проєкту відкриває ту саму вкладку вибраного; «усі» — список проєктів', async () => {
-    configure();
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    TestBed.inject(HttpTestingController).expectOne({ method: 'GET', url: '/api/v1/workflow-groups' }).flush([]);
-    const router = TestBed.inject(Router);
-    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
-    vi.spyOn(router, 'url', 'get').mockReturnValue('/projects/p1/members');
-    const app = fixture.componentInstance as unknown as { selectProject(value: string): void };
-
-    app.selectProject('p2');
-    expect(navigate).toHaveBeenLastCalledWith(['/projects', 'p2', 'members']);
-    app.selectProject('');
-    expect(navigate).toHaveBeenLastCalledWith(['/projects']);
-    navigate.mockClear();
-    app.selectProject('p1');
-    expect(navigate).not.toHaveBeenCalled();
-    localStorage.removeItem('openbp.project');
-  });
-
   it('користувач лише з роллю застосунку: з головної — у застосунок проєкту, меню «Застосунок» і «Огляд» (F8-04)', async () => {
     configure({ id: 'u9', email: 'operator@firma.ua', role: 'viewer' });
     const fixture = TestBed.createComponent(App);

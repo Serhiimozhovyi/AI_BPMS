@@ -168,16 +168,9 @@ export class App {
     el?.scrollBy?.({ left: direction * Math.max(120, el.clientWidth * 0.7), behavior: 'smooth' });
   }
 
-  /**
-   * Вибір у шапці: порожнє значення — усі проєкти. Якщо відкрито сторінку проєкту, переходимо на ту саму вкладку
-   * вибраного проєкту (для «усі» і спільного простору — до списку проєктів), щоб шапка й сторінка не розходилися.
-   */
+  /** Вибір у шапці: порожнє значення — усі проєкти. */
   protected selectProject(value: string): void {
     this.projects.select(value === '' ? null : value);
-    const match = /^\/projects\/([^/?#]+)(?:\/([^/?#]+))?/.exec(this.router.url);
-    if (!match || match[1] === value) return;
-    if (value === '' || value === NO_GROUP) void this.router.navigate(['/projects']);
-    else void this.router.navigate(['/projects', value, ...(match[2] ? [match[2]] : [])]);
   }
 
   /** Вихід: сесію закрито на Api — на сторінку входу; якщо Api недоступний, користувача все одно забуваємо. */
