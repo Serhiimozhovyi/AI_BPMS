@@ -1,4 +1,5 @@
-import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDragPlaceholder, CdkDropList } from '@angular/cdk/drag-drop';
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -9,7 +10,7 @@ import { BpButtonDirective } from '../../shared/button.directive';
 import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 import type { JsonSchema } from '../form-fields';
-import { UI_KEY, rowWidths } from '../form-layout';
+import { MAX_ROW_CELLS, UI_KEY, rowWidths } from '../form-layout';
 import {
   DesignerHistory,
   DesignerState,
@@ -22,7 +23,16 @@ import {
   fromSchema,
   keyError,
   kindOf,
-  moveRow,
+  addFieldToRow,
+  canJoinPrevious,
+  joinPrevious,
+  moveField,
+  placeInRow,
+  resizeBoundary,
+  resizeField,
+  setRowWidths,
+  splitFromRow,
+  widthPresets,
   moveSection,
   nudgeField,
   optionsOf,
@@ -40,20 +50,28 @@ import {
 
 type Selection = { kind: 'field'; key: string } | { kind: 'section'; index: number } | null;
 type Mode = 'design' | 'json';
+/** Місце скидання: рядок `row` секції `section` (для проміжку — індекс нового рядка). */
+interface DropSpot {
+  section: number;
+  row: number;
+}
 
 const PALETTE_ID = 'fd-palette';
+const GRID_UNITS = 12;
 
 /**
  * Конструктор форми `bp-form-designer` (F11-02, docs/forms-designer.md §3.2): палітра типів полів · канвас із секціями й
- * рядками (форма як на сторінці) · властивості вибраного поля чи секції. Перетягування: тип з палітри — нове поле на
- * вказане місце; рядок — у межах секції й між секціями; секцію — за ручку в заголовку. Клавіатура на картці поля:
- * Alt+↑/↓ — перемістити, Delete — видалити, Ctrl+D — дублювати; Ctrl+Z / Ctrl+Shift+Z — скасувати / повторити.
- * Вхід і вихід — JSON Schema форми (`schemaChange` на кожну зміну); режим «JSON» редагує її напряму.
+ * рядками (форма як на сторінці) · властивості вибраного поля чи секції. Перетягування (F11-03): поле чи тип з палітри
+ * у проміжок між рядками — окремим рядком; у рядок — поруч з іншими полями (до 4); межа між полями — ширини з кроком
+ * 1/12; секцію — за ручку в заголовку. Клавіатура на картці поля: Alt+↑/↓ — перемістити, Alt+←/→ — ширина в рядку,
+ * Delete — видалити, Ctrl+D — дублювати; Ctrl+Z / Ctrl+Shift+Z — скасувати / повторити. У властивостях поля — пресети
+ * ширин рядка, «Окремим рядком», «В один рядок із попереднім». Вхід і вихід — JSON Schema форми (`schemaChange` на
+ * кожну зміну); режим «JSON» редагує її напряму.
  */
 @Component({
   selector: 'bp-form-designer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CdkDrag, CdkDragHandle, CdkDropList, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, BpButtonDirective, BpTabsComponent, SelectSearchComponent],
+  imports: [CdkDrag, CdkDragHandle, CdkDragPlaceholder, CdkDropList, NgTemplateOutlet, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, BpButtonDirective, BpTabsComponent, SelectSearchComponent],
   host: { '(keydown)': 'hostKey($event)' },
   template: `
     <div class="fd" data-testid="form-designer">
@@ -76,7 +94,7 @@ const PALETTE_ID = 'fd-palette';
               class="fd__kinds"
               cdkDropList
               [id]="paletteId"
-              [cdkDropListConnectedTo]="rowListIds()"
+              [cdkDropListConnectedTo]="dropIds()"
               [cdkDropListSortingDisabled]="true"
               [cdkDropListEnterPredicate]="noEnter"
               data-testid="fd-palette"
@@ -115,33 +133,42 @@ const PALETTE_ID = 'fd-palette';
                 @if (section.description) {
                   <p class="fd-section__description">{{ section.description }}</p>
                 }
-                <div
-                  class="fd-rows"
-                  cdkDropList
-                  [id]="rowListId(si)"
-                  [cdkDropListData]="si"
-                  [cdkDropListConnectedTo]="rowListIds()"
-                  (cdkDropListDropped)="rowDropped($event)"
-                  data-testid="fd-rows"
-                >
+                <div class="fd-rows" data-testid="fd-rows">
                   @for (row of section.rows; track $index; let ri = $index) {
+                    <ng-container *ngTemplateOutlet="gap; context: { $implicit: si, row: ri, empty: false }" />
                     @let widths = rowWidthsOf(row);
-                    <div class="fd-row pf-row" cdkDrag [cdkDragData]="ri" data-testid="fd-row">
+                    <div
+                      class="fd-row"
+                      cdkDropList
+                      cdkDropListOrientation="horizontal"
+                      [id]="rowId(si, ri)"
+                      [cdkDropListData]="{ section: si, row: ri }"
+                      [cdkDropListConnectedTo]="dropIds()"
+                      [cdkDropListEnterPredicate]="canEnterRow"
+                      (cdkDropListDropped)="rowDropped($event)"
+                      data-testid="fd-row"
+                      [attr.data-row]="si + ':' + ri"
+                    >
                       @for (cell of row; track cell.field; let ci = $index) {
                         @let p = state().properties[cell.field];
                         <div
-                          class="fd-card pf-col"
-                          [class]="'pf-col-' + widths[ci]"
+                          class="fd-card"
+                          cdkDrag
+                          [cdkDragData]="cell.field"
+                          [style.flex]="widths[ci] + ' 1 0'"
                           [class.fd-card--selected]="isFieldSelected(cell.field)"
                           tabindex="0"
                           role="button"
                           [attr.aria-pressed]="isFieldSelected(cell.field)"
+                          [attr.aria-describedby]="'fd-card-help'"
                           [attr.data-field]="cell.field"
+                          [attr.data-width]="widths[ci]"
                           [attr.data-testid]="'fd-card-' + cell.field"
                           (click)="selectField(cell.field, $event)"
                           (keydown)="cardKey($event, cell.field)"
                         >
-                          <span class="material-symbols-outlined fd__handle" cdkDragHandle i18n-title="@@fd.dragField" title="Перетягніть поле" aria-hidden="true">drag_indicator</span>
+                          <div *cdkDragPlaceholder class="fd-drop-marker"></div>
+                          <span class="material-symbols-outlined fd__handle" cdkDragHandle i18n-title="@@fd.dragField" title="Перетягніть поле: між рядками — окремим рядком, у рядок — поруч з іншими" aria-hidden="true">drag_indicator</span>
                           <span class="fd-card__body">
                             <span class="fd-card__label">
                               {{ titleOf(p, cell.field) }}
@@ -149,18 +176,39 @@ const PALETTE_ID = 'fd-palette';
                                 <span class="fd-card__required" aria-hidden="true">*</span>
                               }
                             </span>
-                            <span class="fd-card__meta">{{ kindLabel(p) }} · {{ cell.field }}</span>
+                            <span class="fd-card__meta">{{ kindLabel(p) }} · {{ cell.field }}@if (row.length > 1) { · {{ widths[ci] }}/12}</span>
                           </span>
+                          @if (ci < row.length - 1) {
+                            <span class="fd-resize" data-testid="fd-resize" aria-hidden="true" i18n-title="@@fd.resize" title="Потягніть, щоб змінити ширину" (pointerdown)="startResize($event, si, ri, ci)" (click)="$event.stopPropagation()"></span>
+                          }
                         </div>
                       }
                     </div>
-                  } @empty {
-                    <p class="fd-rows__empty" i18n="@@fd.emptySection">Перетягніть сюди поле з палітри або клацніть тип поля.</p>
                   }
+                  <ng-container *ngTemplateOutlet="gap; context: { $implicit: si, row: section.rows.length, empty: !section.rows.length }" />
                 </div>
               </section>
             }
           </div>
+
+          <ng-template #gap let-si let-row="row" let-empty="empty">
+            <div
+              class="fd-gap"
+              cdkDropList
+              [class.fd-gap--empty]="empty"
+              [id]="gapId(si, row)"
+              [cdkDropListData]="{ section: si, row: row }"
+              [cdkDropListConnectedTo]="dropIds()"
+              (cdkDropListDropped)="gapDropped($event)"
+              data-testid="fd-gap"
+              [attr.data-gap]="si + ':' + row"
+            >
+              @if (empty) {
+                <p class="fd-rows__empty" i18n="@@fd.emptySection">Перетягніть сюди поле з палітри або клацніть тип поля.</p>
+              }
+            </div>
+          </ng-template>
+          <p id="fd-card-help" class="fd__sr-only" i18n="@@fd.cardHelp">Alt+стрілки вгору/вниз — перемістити, Alt+стрілки вліво/вправо — ширина в рядку, Delete — видалити, Ctrl+D — дублювати.</p>
 
           <aside class="fd__props" data-testid="fd-props" aria-labelledby="fd-props-title">
             @switch (selection()?.kind) {
@@ -257,6 +305,32 @@ const PALETTE_ID = 'fd-palette';
                     <mat-label i18n="@@fd.prop.default">Значення за замовчуванням</mat-label>
                     <input matInput data-testid="fd-prop-default" [value]="str(p['default'])" (input)="setDefault(key, kind, text($event))" />
                   </mat-form-field>
+                }
+                @if (selectedRow(); as r) {
+                  <h4 class="fd__subheading" i18n="@@fd.row">Рядок</h4>
+                  @if (r.size > 1) {
+                    <div class="fd__presets" role="group" i18n-aria-label="@@fd.row.widths" aria-label="Ширини полів у рядку">
+                      @for (preset of r.presets; track $index) {
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          bpSize="sm"
+                          [bpVariant]="sameWidths(preset, r.widths) ? 'tonal' : undefined"
+                          [attr.aria-pressed]="sameWidths(preset, r.widths)"
+                          [attr.data-testid]="'fd-row-preset-' + preset.join('-')"
+                          (click)="applyPreset(preset)"
+                        >
+                          {{ presetLabel(preset) }}
+                        </button>
+                      }
+                    </div>
+                    <p class="fd__note" i18n="@@fd.row.widthsNote">Ширини — частки з 12. Потягніть межу між полями на канвасі або Alt+←/→ на картці.</p>
+                    <button mat-stroked-button type="button" data-testid="fd-split" (click)="split(key)" i18n="@@fd.row.split">Окремим рядком</button>
+                  } @else if (canJoin()) {
+                    <button mat-stroked-button type="button" data-testid="fd-join" (click)="join(key)" i18n="@@fd.row.join">В один рядок із попереднім</button>
+                  } @else {
+                    <p class="fd__note" i18n="@@fd.row.alone">Перетягніть поле на інше поле, щоб поставити їх в один рядок (до 4 полів).</p>
+                  }
                 }
                 <div class="fd__actions">
                   <button mat-stroked-button type="button" data-testid="fd-duplicate" (click)="duplicate(key)" i18n="@@fd.duplicate">Дублювати</button>
@@ -427,9 +501,7 @@ const PALETTE_ID = 'fd-palette';
     .fd-rows {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      min-height: 44px;
-      padding-top: 4px;
+      padding-top: 2px;
     }
     .fd-rows__empty {
       margin: 0;
@@ -440,10 +512,44 @@ const PALETTE_ID = 'fd-palette';
       color: var(--bp-text-muted);
       text-align: center;
     }
+    /* Проміжок між рядками — місце скидання «окремим рядком». */
+    .fd-gap {
+      min-height: 10px;
+      border-radius: 4px;
+    }
+    .fd-gap--empty {
+      min-height: 48px;
+    }
+    .fd-gap.cdk-drop-list-receiving {
+      background: color-mix(in srgb, var(--bp-accent) 8%, transparent);
+    }
     .fd-row {
-      row-gap: 8px;
+      display: flex;
+      gap: 12px;
+      border-radius: 10px;
+    }
+    .fd-row.cdk-drop-list-dragging {
+      outline: 1px dashed var(--bp-accent);
+      outline-offset: 3px;
+    }
+    .fd-drop-marker {
+      flex: none;
+      align-self: stretch;
+      min-width: 4px;
+      min-height: 4px;
+      border-radius: 2px;
+      background: var(--bp-accent);
+    }
+    .fd-row .fd-drop-marker {
+      width: 4px;
+    }
+    .fd-gap .fd-drop-marker {
+      height: 4px;
+      margin: 3px 0;
     }
     .fd-card {
+      position: relative;
+      min-width: 0;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -480,6 +586,35 @@ const PALETTE_ID = 'fd-palette';
       font-size: 12px;
       color: var(--bp-text-muted);
       text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* Межа між полями в рядку: тягнуть, щоб змінити ширини з кроком 1/12. */
+    .fd-resize {
+      position: absolute;
+      top: 8px;
+      right: -10px;
+      bottom: 8px;
+      z-index: 1;
+      width: 8px;
+      border-radius: 4px;
+      cursor: col-resize;
+      touch-action: none;
+    }
+    .fd-resize:hover,
+    .fd-resize:active {
+      background: var(--bp-accent);
+    }
+    .fd__presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .fd__sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
       white-space: nowrap;
     }
     .fd__handle {
@@ -552,12 +687,13 @@ const PALETTE_ID = 'fd-palette';
     .cdk-drag-preview {
       box-shadow: 0 4px 16px rgb(12 43 48 / 0.18);
     }
-    .cdk-drag-placeholder {
+    .cdk-drag-placeholder:not(.fd-drop-marker) {
       opacity: 0.4;
       outline: 2px dashed var(--bp-accent);
     }
     .cdk-drag-animating,
-    .fd-rows.cdk-drop-list-dragging .fd-row:not(.cdk-drag-placeholder) {
+    .fd-row.cdk-drop-list-dragging .fd-card:not(.cdk-drag-placeholder),
+    .fd__canvas.cdk-drop-list-dragging .fd-section:not(.cdk-drag-placeholder) {
       transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
     }
   `,
@@ -590,7 +726,25 @@ export class FormDesignerComponent {
 
   protected readonly canUndo = computed(() => (this.historyVersion(), this.history.canUndo));
   protected readonly canRedo = computed(() => (this.historyVersion(), this.history.canRedo));
-  protected readonly rowListIds = computed(() => this.state().layout.sections.map((_, i) => this.rowListId(i)));
+  /** Усі списки скидання полів: рядки (поруч з іншими полями) і проміжки між рядками (окремим рядком). */
+  protected readonly dropIds = computed(() =>
+    this.state().layout.sections.flatMap((section, si) => [
+      ...section.rows.map((_, ri) => this.rowId(si, ri)),
+      ...Array.from({ length: section.rows.length + 1 }, (_, ri) => this.gapId(si, ri)),
+    ]),
+  );
+  /** Рядок вибраного поля, якщо в ньому кілька полів: для пресетів ширин. */
+  protected readonly selectedRow = computed(() => {
+    const key = this.selectedKey();
+    const place = key ? placeOf(this.state(), key) : null;
+    if (!place) return null;
+    const cells = this.state().layout.sections[place.section].rows[place.row];
+    return { ...place, size: cells.length, widths: rowWidths(cells), presets: widthPresets(cells.length) };
+  });
+  protected readonly canJoin = computed(() => {
+    const key = this.selectedKey();
+    return !!key && canJoinPrevious(this.state(), key);
+  });
   protected readonly selectedKey = computed(() => {
     const s = this.selection();
     return s?.kind === 'field' && s.key in this.state().properties ? s.key : null;
@@ -630,8 +784,26 @@ export class FormDesignerComponent {
 
   protected readonly noEnter = () => false;
 
-  protected rowListId(index: number): string {
-    return `fd-rows-${index}`;
+  protected rowId(section: number, row: number): string {
+    return `fd-row-${section}-${row}`;
+  }
+
+  protected gapId(section: number, row: number): string {
+    return `fd-gap-${section}-${row}`;
+  }
+
+  /** У рядок можна скинути поле, якщо в ньому менше 4 полів або поле вже з цього рядка. */
+  protected readonly canEnterRow = (drag: CdkDrag<string>, drop: CdkDropList<DropSpot>): boolean => {
+    const cells = this.state().layout.sections[drop.data.section]?.rows[drop.data.row] ?? [];
+    return cells.length < MAX_ROW_CELLS || cells.some((c) => c.field === drag.data);
+  };
+
+  protected presetLabel(widths: readonly number[]): string {
+    return widths.join(' / ');
+  }
+
+  protected sameWidths(a: readonly number[], b: readonly number[]): boolean {
+    return a.length === b.length && a.every((w, i) => w === b[i]);
   }
 
   protected rowWidthsOf = rowWidths;
@@ -843,6 +1015,10 @@ export class FormDesignerComponent {
       event.preventDefault();
       this.update(nudgeField(this.state(), key, event.key === 'ArrowUp' ? -1 : 1));
       this.selectField(key, undefined, true);
+    } else if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      this.update(resizeField(this.state(), key, event.key === 'ArrowLeft' ? -1 : 1));
+      this.selectField(key, undefined, true);
     } else if (event.key === 'Delete') {
       event.preventDefault();
       this.remove(key);
@@ -872,18 +1048,87 @@ export class FormDesignerComponent {
 
   // ---------- Перетягування ----------
 
-  protected rowDropped(event: CdkDragDrop<number>): void {
-    const toSection = event.container.data;
+  /** Скидання в рядок: поле стає поруч з іншими (у своєму рядку — змінює порядок). */
+  protected rowDropped(event: CdkDragDrop<DropSpot>): void {
+    const { section, row } = event.container.data;
     if (event.previousContainer.id === PALETTE_ID) {
-      const kind = event.item.data as FieldKind;
-      const { state, key } = addField(this.state(), kind, toSection, event.currentIndex);
+      const { state, key } = addFieldToRow(this.state(), event.item.data as FieldKind, section, row, event.currentIndex);
       this.update(state);
       this.selectField(key);
       return;
     }
-    const fromSection = event.previousContainer.data;
-    if (fromSection === toSection && event.previousIndex === event.currentIndex) return;
-    this.update(moveRow(this.state(), fromSection, event.previousIndex, toSection, event.currentIndex));
+    const key = event.item.data as string;
+    if (event.previousContainer === event.container) {
+      if (event.previousIndex === event.currentIndex) return;
+      // CDK дає кінцеву позицію; placeInRow чекає позицію в рядку до вилучення поля.
+      const index = event.currentIndex > event.previousIndex ? event.currentIndex + 1 : event.currentIndex;
+      this.update(placeInRow(this.state(), key, section, row, index));
+    } else {
+      this.update(placeInRow(this.state(), key, section, row, event.currentIndex));
+    }
+    this.selectField(key);
+  }
+
+  /** Скидання в проміжок між рядками: поле стає окремим рядком на цьому місці. */
+  protected gapDropped(event: CdkDragDrop<DropSpot>): void {
+    const { section, row } = event.container.data;
+    if (event.previousContainer.id === PALETTE_ID) {
+      const { state, key } = addField(this.state(), event.item.data as FieldKind, section, row);
+      this.update(state);
+      this.selectField(key);
+      return;
+    }
+    const key = event.item.data as string;
+    const from = placeOf(this.state(), key);
+    if (!from) return;
+    // Якщо поле було саме в рядку вище за місце скидання, після вилучення рядки зсуваються на один.
+    const alone = this.state().layout.sections[from.section].rows[from.row].length === 1;
+    const index = alone && from.section === section && from.row < row ? row - 1 : row;
+    this.update(moveField(this.state(), key, section, index));
+    this.selectField(key);
+  }
+
+  // ---------- Рядки й ширини ----------
+
+  protected applyPreset(widths: readonly number[]): void {
+    const row = this.selectedRow();
+    if (!row) return;
+    this.update(setRowWidths(this.state(), row.section, row.row, widths));
+  }
+
+  protected split(key: string): void {
+    this.update(splitFromRow(this.state(), key));
+    this.selectField(key, undefined, true);
+  }
+
+  protected join(key: string): void {
+    this.update(joinPrevious(this.state(), key));
+    this.selectField(key, undefined, true);
+  }
+
+  /** Перетягування межі між клітинками: крок — 1/12 ширини рядка; один крок історії на весь рух. */
+  protected startResize(event: PointerEvent, section: number, row: number, boundary: number): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const rowEl = (event.target as HTMLElement).closest('.fd-row');
+    const unit = (rowEl?.getBoundingClientRect().width ?? 0) / GRID_UNITS;
+    if (!unit) return;
+    const start = this.state();
+    const startX = event.clientX;
+    const series = `resize:${section}:${row}:${boundary}:${Date.now()}`;
+    const move = (e: PointerEvent) => {
+      const delta = Math.round((e.clientX - startX) / unit);
+      this.update(resizeBoundary(start, section, row, boundary, delta), series);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      this.coalesce = null;
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   protected sectionDropped(event: CdkDragDrop<string>): void {
