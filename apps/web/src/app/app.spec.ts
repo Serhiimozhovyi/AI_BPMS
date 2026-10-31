@@ -378,10 +378,14 @@ describe('App: верхнє меню як у Кіт CRM (F9-04)', () => {
     fixture.detectChanges();
     await new Promise((r) => setTimeout(r));
     const items = [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-    expect(items.map((i) => i.dataset['testid'])).toEqual(['change-password', 'logout']);
+    expect(items.map((i) => i.dataset['testid'])).toEqual(['change-password', 'api-docs', 'logout']);
     expect(document.activeElement).toBe(items[0]);
     host.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     expect(document.activeElement).toBe(items[1]);
+    expect(items[1].getAttribute('href')).toBe('/swagger');
+    expect(items[1].getAttribute('target')).toBe('_blank');
+    host.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(items[2]);
     host.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     expect(document.activeElement).toBe(items[0]);
 

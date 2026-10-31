@@ -29,7 +29,9 @@ curl -fsS -b cookies.txt -H 'content-type: application/json' \
 
 ## 2. REST API
 
-Опис — OpenAPI 3.1: `$OPENBP_URL/openapi/v1.json` (без входу) і знімок [docs/openapi.json](../openapi.json). Клієнта
+Опис — OpenAPI 3.1: `$OPENBP_URL/openapi/v1.json` (без входу) і знімок [docs/openapi.json](../openapi.json). Переглянути
+й спробувати методи в браузері — Swagger UI `$OPENBP_URL/swagger` (меню користувача → «Документація API»): увійшовши в
+AI_BPMS, «Try it out» працює одразу; інакше — «Authorize» і API-ключ. Клієнта
 можна згенерувати будь-яким генератором OpenAPI. Помилки — Problem Details (RFC 9457) з машинним `code`:
 `{ "status": 404, "title", "detail": "…", "code": "NOT_FOUND" }`. 401 — без ключа, 403 — бракує ролі, 409 — конфлікт,
 422 `WORKFLOW_INVALID` — невалідний сценарій, з `errors: [{ "code", "message", "nodeId", "path": "/nodes/0/type" }]`.

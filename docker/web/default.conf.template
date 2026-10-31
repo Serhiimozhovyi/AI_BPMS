@@ -28,7 +28,7 @@ server {
 
     # Api: REST (/api, зокрема SSE журналу виконань), опис OpenAPI (/openapi), MCP-сервер (/mcp), webhook-и, health-checks,
     # повернення від OIDC-провайдера (/signin-oidc/<key>, F4-14).
-    location ~ ^/(api|openapi|mcp|webhook|health|signin-oidc)(/|$) {
+    location ~ ^/(api|openapi|swagger|llms\.txt|mcp|webhook|health|signin-oidc)(/|$) {
         proxy_pass http://$openbp_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

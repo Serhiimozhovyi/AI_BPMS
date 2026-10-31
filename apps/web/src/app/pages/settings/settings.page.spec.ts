@@ -52,6 +52,14 @@ describe('SettingsPage', () => {
     expect(host.querySelector('[data-testid="created-key"]')).toBeNull();
   });
 
+  it('посилання на Swagger відкриває документацію REST у новій вкладці', async () => {
+    const { host } = await setup();
+    const link = host.querySelector<HTMLAnchorElement>('[data-testid="api-docs-link"]')!;
+    expect(link.getAttribute('href')).toBe('/swagger');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener');
+  });
+
   it('порожній список — підказка', async () => {
     const { host } = await setup([]);
     expect(host.querySelector('[data-testid="empty"]')).not.toBeNull();
@@ -108,6 +116,16 @@ describe('SettingsPage', () => {
     expect(host.querySelectorAll('[data-key]')).toHaveLength(2);
   });
 
+  it('блок «Підключити ШІ-агента» — адреса інструкції /llms.txt відкривається й копіюється', async () => {
+    const { copy, host } = await setup([], undefined, 'agent');
+    const link = host.querySelector<HTMLAnchorElement>('[data-testid="llms-url"]')!;
+    expect(link.textContent?.trim()).toBe(`${location.origin}/llms.txt`);
+    expect(link.getAttribute('href')).toBe(`${location.origin}/llms.txt`);
+    expect(link.getAttribute('target')).toBe('_blank');
+    host.querySelector<HTMLButtonElement>('[data-testid="copy-llms-url"]')!.click();
+    expect(copy).toHaveBeenCalledWith(`${location.origin}/llms.txt`);
+  });
+
   it('блок «Підключити ШІ-агента» — URL /mcp і заглушка ключа', async () => {
     const { fixture, copy, host } = await setup([], undefined, 'agent');
     expect(host.textContent).toContain('Підключити ШІ-агента');
@@ -119,13 +137,48 @@ describe('SettingsPage', () => {
     host.querySelector<HTMLButtonElement>('[data-testid="copy-config-desktop"]')!.click();
     expect(copy).toHaveBeenCalledWith(expect.stringContaining('"mcp-remote"'));
 
-    const labels = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
-    expect(labels.map((t) => t.querySelector('.bp-tab__label')?.textContent?.trim())).toEqual(['Claude Desktop', 'Claude Code', 'Інше']);
-    labels[1].click();
-    await render(fixture);
+    const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const labels = tabs.map((t) => t.querySelector('.bp-tab__label')?.textContent?.trim());
+    expect(labels).toEqual([
+      'Claude Desktop',
+      'Claude Code',
+      'claude.ai',
+      'Copilot (VS Code)',
+      'Copilot Studio',
+      'Codex',
+      'OpenAI API',
+      'ChatGPT',
+      'Інше',
+    ]);
+    const open = async (label: string) => {
+      tabs[labels.indexOf(label)].click();
+      await render(fixture);
+    };
+
+    await open('Claude Code');
     expect(host.querySelector('[data-testid="mcp-config-code"]')?.textContent).toContain('claude mcp add --transport http openbp');
-    labels[2].click();
-    await render(fixture);
+
+    // GitHub Copilot: ключа у файлі немає — VS Code питає його через inputs.
+    await open('Copilot (VS Code)');
+    const vscode = JSON.parse(host.querySelector('[data-testid="mcp-config-vscode"]')!.textContent!);
+    expect(vscode.servers.openbp).toEqual({ type: 'http', url: `${location.origin}/mcp`, headers: { Authorization: 'Bearer ${input:ai-bpms-key}' } });
+    expect(vscode.inputs[0]).toMatchObject({ id: 'ai-bpms-key', password: true });
+    expect(host.querySelector('[data-testid="mcp-where"]')?.textContent).toContain('.vscode/mcp.json');
+
+    // Copilot Studio: поля майстра; на localhost — підказка про публічну HTTPS-адресу.
+    await open('Copilot Studio');
+    const studio = host.querySelector('[data-testid="mcp-config-copilot-studio"]')!.textContent!;
+    expect(studio).toContain('Header name: Authorization');
+    expect(studio).toContain('Bearer <ваш API-ключ>');
+    expect(host.querySelector('[data-testid="mcp-public-hint"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="mcp-steps"] li').length).toBe(3);
+
+    // ChatGPT: фрагмента немає, лише пояснення.
+    await open('ChatGPT');
+    expect(host.querySelector('[data-testid="mcp-warning"]')?.textContent).toContain('OAuth');
+    expect(host.querySelector('[data-testid^="mcp-config-"]')).toBeNull();
+
+    await open('Інше');
     const other = JSON.parse(host.querySelector('[data-testid="mcp-config-other"]')!.textContent!);
     expect(other.mcpServers.openbp.headers.Authorization).toBe('Bearer <ваш API-ключ>');
 
@@ -133,6 +186,8 @@ describe('SettingsPage', () => {
     fixture.componentInstance.created.set({ id: 'k9', name: 'Новий', key: 'obp_once' });
     await render(fixture);
     expect(host.querySelector('[data-testid="mcp-config-other"]')?.textContent).toContain('Bearer obp_once');
+    await open('Codex');
+    expect(host.querySelector('[data-testid="mcp-config-codex"]')?.textContent).toContain('export OPENBP_API_KEY=obp_once');
   });
 
   it('без ?section= відкриваються API-ключі, у навігації лише розділи для ролі', async () => {

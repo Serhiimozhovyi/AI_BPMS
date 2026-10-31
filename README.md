@@ -12,7 +12,7 @@ MCP-native BPMS-конструктор: процеси на канвасі, ін
 - Формат сценарію: [docs/workflow-format.md](docs/workflow-format.md)
 - Вузли і конектори: [docs/connectors.md](docs/connectors.md)
 - AI_BPMS як MCP-сервер для агентів (Claude Desktop, Claude Code): [docs/mcp-server.md](docs/mcp-server.md)
-- Користувачам (вхід, задачі, форми, журнал, імпорт з n8n, Telegram): [docs/guide/users.md](docs/guide/users.md) · підключити Claude і ChatGPT через MCP: [docs/guide/ai-connectors.md](docs/guide/ai-connectors.md)
+- Користувачам (вхід, задачі, форми, журнал, імпорт з n8n, Telegram): [docs/guide/users.md](docs/guide/users.md) · підключити Claude, Copilot (VS Code, Copilot Studio) і ChatGPT через MCP: [docs/guide/ai-connectors.md](docs/guide/ai-connectors.md)
 - Авторам сценаріїв: [docs/guide/authors.md](docs/guide/authors.md) · інтеграторам (REST, webhook, MCP, вбудовування, свій конектор): [docs/guide/integrators.md](docs/guide/integrators.md)
 - Адміністратору: встановлення, HTTPS, користувачі, бекапи, оновлення — [docs/admin/README.md](docs/admin/README.md) · змінні середовища — [docs/admin/env.md](docs/admin/env.md)
 - Фази: [docs/roadmap.md](docs/roadmap.md) · Задачі: [BACKLOG.md](BACKLOG.md)
@@ -85,7 +85,7 @@ scripts/restore.sh backups/openbp-openbp-<час>.dump  # зупиняє api/wor
 | api | `docker/api.Dockerfile` | `OpenBP.Api` на `aspnet:10`, порт 8080, користувач без root, `HEALTHCHECK` на `/health/ready` |
 | worker | `docker/worker.Dockerfile` | `OpenBP.Worker`, лише health-порт 8089, файли — том `/data/files` |
 | migrate | `docker/migrate.Dockerfile` | EF Core bundle: застосовує міграції до `ConnectionStrings__Default` і завершується |
-| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/mcp`, `/webhook`, `/health`, `/signin-oidc` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), `/element/openbp-canvas.js` — веб-компонент редактора ([docs/embedding.md](docs/embedding.md)), решта — SPA |
+| web | `docker/web.Dockerfile` | зібраний Angular у `nginx-unprivileged` (порт 8080): `/api`, `/openapi`, `/swagger`, `/llms.txt`, `/mcp`, `/webhook`, `/health`, `/signin-oidc` проксіюються на `OPENBP_API_UPSTREAM` (типово `api:8080`, адреса резолвиться через `OPENBP_DNS_RESOLVER`), `/element/openbp-canvas.js` — веб-компонент редактора ([docs/embedding.md](docs/embedding.md)), решта — SPA |
 | backup | `docker/backup.Dockerfile` | `pg_dump` 16 і busybox `crond`: бекапи за `OPENBP_BACKUP_CRON` (див. «Бекапи і відновлення») |
 
 ```bash
@@ -96,6 +96,8 @@ docker build -f docker/api.Dockerfile -t openbp-api .
 
 Опис REST — OpenAPI 3.1 за адресою `/openapi/v1.json` (відкритий без входу, лише схеми й описи українською);
 знімок — [docs/openapi.json](docs/openapi.json). Клієнт можна згенерувати будь-яким генератором OpenAPI.
+Swagger UI — `/swagger` (у застосунку: меню користувача → «Документація API»). Інструкція для ШІ-агентів —
+`/llms.txt` (усі MCP tools, REST-операції й рецепти; [docs/mcp-server.md](docs/mcp-server.md)).
 Після зміни маршрутів чи DTO оновіть знімок (тест `OpenApiTests` інакше впаде):
 
 ```bash

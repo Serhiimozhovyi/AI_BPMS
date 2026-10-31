@@ -375,7 +375,9 @@ OTLP-експорт вмикається `OTEL_EXPORTER_OTLP_ENDPOINT`; без �
 (`IFormService`; доступ задає вузол — `auth: none | login | token`).
 
 Машиночитний опис — OpenAPI 3.1 за адресою `/openapi/v1.json` (без входу, лише схеми); знімок у репозиторії —
-[`docs/openapi.json`](openapi.json), тест `OpenApiTests` звіряє його з живим документом (F4-12).
+[`docs/openapi.json`](openapi.json), тест `OpenApiTests` звіряє його з живим документом (F4-12). Для людей — Swagger UI
+(`Swashbuckle.AspNetCore.SwaggerUI`) на `/swagger` поверх того самого документа (F10-01): сторінка без входу, «Try it out» —
+з сесією браузера або API-ключем в «Authorize» (ключ не зберігається між вкладками).
 
 | Метод і шлях | Роль | Відповідь |
 |---|---|---|

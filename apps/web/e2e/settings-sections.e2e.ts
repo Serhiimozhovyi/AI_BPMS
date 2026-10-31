@@ -31,4 +31,8 @@ test('навігація перемикає розділ і веде у query; �
   await expect(page.getByTestId('mcp-config-desktop')).toContainText('mcp-remote');
   await page.getByRole('tab', { name: 'Claude Code' }).click();
   await expect(page.getByTestId('mcp-config-code')).toContainText('claude mcp add');
+  await page.getByRole('tab', { name: 'Copilot (VS Code)' }).click();
+  await expect(page.getByTestId('mcp-config-vscode')).toContainText('${input:ai-bpms-key}');
+  await page.getByRole('tab', { name: 'Copilot Studio' }).click();
+  await expect(page.getByTestId('mcp-config-copilot-studio')).toContainText('Header name: Authorization');
 });
