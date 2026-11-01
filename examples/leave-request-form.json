@@ -23,7 +23,7 @@
         "onSubmit": { "message": "Дякуємо, заяву прийнято" },
         "schema": {
           "type": "object",
-          "required": ["name", "from", "to", "kind"],
+          "required": ["name", "from", "to", "kind", "reason"],
           "properties": {
             "name": { "type": "string", "title": "ПІБ", "minLength": 2, "x-openbp-ui": { "placeholder": "Прізвище та ім'я" } },
             "email": { "type": "string", "format": "email", "title": "Робоча пошта" },
@@ -46,7 +46,11 @@
               {
                 "title": "Відпустка",
                 "description": "Дати включно.",
-                "rows": [[{ "field": "from", "width": 6 }, { "field": "to", "width": 6 }], [{ "field": "kind" }], [{ "field": "reason" }]]
+                "rows": [
+                  [{ "field": "from", "width": 6 }, { "field": "to", "width": 6 }],
+                  [{ "field": "kind" }],
+                  [{ "field": "reason", "visibleIf": { "field": "kind", "operator": "eq", "value": "unpaid" } }]
+                ]
               },
               { "title": "Документи", "collapsible": true, "collapsed": true, "rows": [[{ "field": "scan" }]] }
             ]

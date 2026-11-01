@@ -115,19 +115,24 @@ internal static class FormSchema
         }
     }
 
-    /// <summary>Перевіряє поля; повертає помилки за полями (порожній список — усе гаразд).</summary>
+    /// <summary>
+    /// Перевіряє поля; повертає помилки за полями (порожній список — усе гаразд). Поля, приховані умовами
+    /// «Показувати, якщо» (F11-06), не перевіряються й не обов'язкові — викликач відкидає їх <see cref="VisibleIf.WithoutHidden"/>.
+    /// </summary>
     /// <param name="schema">Схема форми.</param>
     /// <param name="fields">Поля без незаповнених.</param>
     /// <exception cref="ConflictException">Схема форми сама некоректна (<c>FORM_SCHEMA_INVALID</c>).</exception>
     public static List<FormFieldError> Validate(JsonObject schema, JsonObject fields)
     {
-        var compiled = Compile(schema);
+        var hidden = VisibleIf.HiddenFields(schema, fields);
+        fields = VisibleIf.WithoutHidden(schema, fields);
+        var compiled = Compile(hidden.Count == 0 ? schema : WithoutRequired(schema, hidden));
         var errors = new List<FormFieldError>();
         if (schema["required"] is JsonArray required)
         {
             foreach (var name in required.OfType<JsonValue>().Select(v => v.TryGetValue<string>(out var n) ? n : null).OfType<string>())
             {
-                if (!fields.ContainsKey(name))
+                if (!fields.ContainsKey(name) && !hidden.Contains(name))
                 {
                     errors.Add(new(name, "Заповніть це поле."));
                 }
@@ -172,6 +177,18 @@ internal static class FormSchema
         }
 
         return errors;
+    }
+
+    /// <summary>Копія схеми, де приховані поля прибрано з <c>required</c>.</summary>
+    private static JsonObject WithoutRequired(JsonObject schema, HashSet<string> hidden)
+    {
+        var copy = schema.DeepClone().AsObject();
+        if (copy["required"] is JsonArray required)
+        {
+            copy["required"] = new JsonArray([.. required.Where(r => !(r is JsonValue v && v.TryGetValue<string>(out var n) && hidden.Contains(n))).Select(r => r?.DeepClone())]);
+        }
+
+        return copy;
     }
 
     private static string Unescape(string segment) => segment.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal);

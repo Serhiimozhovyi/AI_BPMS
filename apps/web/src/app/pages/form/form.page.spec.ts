@@ -100,6 +100,36 @@ describe('FormPage (F6-03)', () => {
     expect(host.querySelector('[data-testid="form-done"]')?.textContent).toContain('Дякуємо, заяву прийнято');
   });
 
+  it('умова «Показувати, якщо» (F11-06): поле з’являється за значенням, приховане не блокує й не надсилається', async () => {
+    const { fixture, http, host } = await setup();
+    http.expectOne('/api/v1/forms/hr/leave').flush({
+      ...leave,
+      schema: {
+        type: 'object',
+        required: ['kind', 'reason'],
+        properties: { kind: { type: 'string', title: 'Вид' }, reason: { type: 'string', title: 'Причина' } },
+        'x-openbp-layout': {
+          sections: [{ rows: [[{ field: 'kind' }], [{ field: 'reason', visibleIf: { field: 'kind', operator: 'eq', value: 'інше' } }]] }],
+        },
+      },
+    });
+    await render(fixture);
+    expect(host.querySelector('[data-testid="form-field-reason"]')).toBeNull();
+
+    type(host, 'kind', 'інше');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="form-field-reason"]')).not.toBeNull();
+    type(host, 'reason', 'Сімейні обставини');
+    await render(fixture);
+
+    type(host, 'kind', 'щорічна');
+    await render(fixture);
+    expect(host.querySelector('[data-testid="form-field-reason"]')).toBeNull();
+    submit(host);
+    const post = http.expectOne({ method: 'POST', url: '/api/v1/forms/hr/leave' });
+    expect(post.request.body).toEqual({ fields: { kind: 'щорічна' } });
+  });
+
   it('з файлом — multipart: fields і файл за назвою поля; токен посилання — у заголовку', async () => {
     const { fixture, http, host } = await setup(['form', 'hr', 'leave'], { token: 'link-1' });
     const get = http.expectOne('/api/v1/forms/hr/leave');

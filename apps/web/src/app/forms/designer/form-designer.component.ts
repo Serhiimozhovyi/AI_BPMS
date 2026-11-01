@@ -10,8 +10,9 @@ import { BpButtonDirective } from '../../shared/button.directive';
 import { SelectSearchComponent } from '../../shared/select-search/select-search.component';
 import { BpTab, BpTabsComponent } from '../../shared/tabs/tabs.component';
 import { FormPreviewComponent } from './form-preview.component';
+import { RuleSource, VisibleIfEditorComponent } from './visible-if-editor.component';
 import type { JsonSchema } from '../form-fields';
-import { MAX_ROW_CELLS, UI_KEY, rowWidths } from '../form-layout';
+import { MAX_ROW_CELLS, UI_KEY, VisibleIf, rowWidths } from '../form-layout';
 import {
   DesignerHistory,
   DesignerState,
@@ -19,6 +20,10 @@ import {
   FieldKind,
   OptionRow,
   addField,
+  optionsOf as propertyOptions,
+  ruleSources,
+  rulesUsing,
+  setFieldVisibleIf,
   addSection,
   duplicateField,
   fromSchema,
@@ -88,7 +93,7 @@ const GRID_UNITS = 12;
 @Component({
   selector: 'bp-form-designer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CdkDrag, CdkDragHandle, CdkDragPlaceholder, CdkDropList, NgTemplateOutlet, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, BpButtonDirective, BpTabsComponent, SelectSearchComponent, FormPreviewComponent],
+  imports: [CdkDrag, CdkDragHandle, CdkDragPlaceholder, CdkDropList, NgTemplateOutlet, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, BpButtonDirective, BpTabsComponent, SelectSearchComponent, FormPreviewComponent, VisibleIfEditorComponent],
   host: { '(keydown)': 'hostKey($event)' },
   template: `
     <div class="fd" data-testid="form-designer">
@@ -245,6 +250,9 @@ const GRID_UNITS = 12;
           <p id="fd-card-help" class="fd__sr-only" i18n="@@fd.cardHelp">Alt+стрілки вгору/вниз — перемістити, Alt+стрілки вліво/вправо — ширина в рядку, Delete — видалити, Ctrl+D — дублювати.</p>
 
           <aside class="fd__props" data-testid="fd-props" aria-labelledby="fd-props-title">
+            @if (notice(); as n) {
+              <p class="fd__notice" role="status" data-testid="fd-notice">{{ n }}</p>
+            }
             @switch (selection()?.kind) {
               @case ('field') {
                 @let key = selectedKey()!;
@@ -372,6 +380,7 @@ const GRID_UNITS = 12;
                     <p class="fd__note" i18n="@@fd.row.alone">Перетягніть поле на інше поле, щоб поставити їх в один рядок (до 4 полів).</p>
                   }
                 }
+                <bp-visible-if-editor testId="fd-if" [rule]="cellRule(key)" [sources]="fieldSources()" (ruleChange)="setFieldRule(key, $event)" />
                 <div class="fd__actions">
                   @if (!tableMode()) {
                     <button mat-stroked-button type="button" data-testid="fd-duplicate" (click)="duplicate(key)" i18n="@@fd.duplicate">Дублювати</button>
@@ -397,6 +406,7 @@ const GRID_UNITS = 12;
                 @if (s.collapsible) {
                   <mat-checkbox data-testid="fd-section-prop-collapsed" [checked]="!!s.collapsed" (change)="setSection(si, 'collapsed', $event.checked)" i18n="@@fd.section.collapsed">Згорнута спочатку</mat-checkbox>
                 }
+                <bp-visible-if-editor testId="fd-section-if" [rule]="s.visibleIf" [sources]="sectionSources()" (ruleChange)="setSectionRule(si, $event)" />
                 <div class="fd__actions">
                   <button mat-button type="button" bpVariant="danger" data-testid="fd-section-delete" [disabled]="state().layout.sections.length < 2" (click)="deleteSection(si)" i18n="@@fd.section.delete">Видалити секцію</button>
                 </div>
@@ -689,6 +699,15 @@ const GRID_UNITS = 12;
       gap: 8px;
       margin-top: 4px;
     }
+    .fd__notice {
+      margin: 0 0 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: var(--bp-tonal);
+      border-left: 3px solid var(--bp-warning);
+      color: var(--bp-text);
+    }
     .fd__note {
       margin: 0;
       font-size: 13px;
@@ -804,6 +823,15 @@ export class FormDesignerComponent {
     const s = this.selection();
     return s?.kind === 'field' && s.key in this.state().properties ? s.key : null;
   });
+  protected readonly notice = signal<string | null>(null);
+  protected readonly fieldSources = computed(() => {
+    const key = this.selectedKey();
+    return key ? this.sourcesOf(ruleSources(this.state(), { field: key })) : [];
+  });
+  protected readonly sectionSources = computed(() => {
+    const index = this.selectedSection();
+    return index === null || index === undefined ? [] : this.sourcesOf(ruleSources(this.state(), { section: index }));
+  });
   protected readonly selectedSection = computed(() => {
     const s = this.selection();
     return s?.kind === 'section' && s.index < this.state().layout.sections.length ? s.index : null;
@@ -909,6 +937,7 @@ export class FormDesignerComponent {
   private update(next: DesignerState, series: string | null = null): void {
     const current = this.state();
     if (next === current) return;
+    this.notice.set(null);
     if (series === null || series !== this.coalesce) {
       this.history.push(current);
       this.historyVersion.update((v) => v + 1);
@@ -984,7 +1013,15 @@ export class FormDesignerComponent {
   protected remove(key: string): void {
     const order = this.state().layout.sections.flatMap((s) => s.rows.flatMap((r) => r.map((c) => c.field)));
     const index = order.indexOf(key);
+    const users = rulesUsing(this.state(), key);
+    const names = [
+      ...users.fields.map((f) => `«${this.labelOf(f)}»`),
+      ...users.sections.map((i) => `«${this.state().layout.sections[i].title || this.sectionPlaceholder}»`),
+    ];
+    const label = this.labelOf(key);
     this.update(removeField(this.state(), key));
+    // Умови інших полів і секцій на видалене поле прибрано (F11-06) — кажемо, де саме.
+    if (names.length) this.notice.set($localize`:@@fd.if.removed:Умову «Показувати, якщо» від поля «${label}:label:» прибрано: ${names.join(', ')}:names:.`);
     const next = order[index + 1] ?? order[index - 1];
     if (next && next !== key) this.selectField(next, undefined, true);
     else this.selection.set(null);
@@ -994,6 +1031,31 @@ export class FormDesignerComponent {
     const { state, key: copy } = duplicateField(this.state(), key);
     this.update(state);
     this.selectField(copy, undefined, true);
+  }
+
+  protected cellRule(key: string): VisibleIf | undefined {
+    const place = placeOf(this.state(), key);
+    return place ? this.state().layout.sections[place.section].rows[place.row][place.cell].visibleIf : undefined;
+  }
+
+  protected setFieldRule(key: string, rule: VisibleIf | undefined): void {
+    this.update(setFieldVisibleIf(this.state(), key, rule));
+  }
+
+  protected setSectionRule(index: number, rule: VisibleIf | undefined): void {
+    this.update(setSectionProps(this.state(), index, { visibleIf: rule }));
+  }
+
+  private labelOf(key: string): string {
+    const title = this.state().properties[key]?.['title'];
+    return typeof title === 'string' && title ? title : key;
+  }
+
+  private sourcesOf(keys: string[]): RuleSource[] {
+    return keys.map((key) => {
+      const property = this.state().properties[key] ?? {};
+      return { key, label: this.labelOf(key), kind: kindOf(property), options: propertyOptions(property) };
+    });
   }
 
   protected deleteSection(index: number): void {

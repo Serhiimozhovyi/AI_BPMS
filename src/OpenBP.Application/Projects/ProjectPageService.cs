@@ -310,6 +310,11 @@ public sealed partial class ProjectPageService(
 
         var errors = new List<FormFieldError>();
         var data = new JsonObject();
+
+        // Поля, приховані умовами «Показувати, якщо» розмітки (F11-06), не перевіряються й не записуються.
+        var hidden = def.FormLayout is { } formLayout
+            ? Forms.VisibleIf.HiddenFields(new JsonObject { [Forms.FormLayout.LayoutKey] = formLayout.DeepClone() }, values)
+            : [];
         foreach (var field in def.Fields ?? [])
         {
             var column = Column(c.Table, field.Column);
@@ -319,7 +324,7 @@ public sealed partial class ProjectPageService(
                 continue;
             }
 
-            if (field.CopyFrom is not null)
+            if (field.CopyFrom is not null || hidden.Contains(column.Name) || hidden.Contains(field.Column))
             {
                 continue;
             }

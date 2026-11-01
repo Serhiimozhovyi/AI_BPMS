@@ -1,3 +1,4 @@
+import type { FormlyFieldConfig } from '@ngx-formly/core';
 import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps, formFields, toPayload } from './form-fields';
 
 describe('formFields (F6-03)', () => {
@@ -101,5 +102,30 @@ describe('formFields (F6-03)', () => {
     expect((name.props as PublicFieldProps).placeholder).toBe('Прізвище та ім’я');
     expect([reason.type, (reason.props as PublicFieldProps).rows]).toEqual([PF_TEXTAREA, 2]);
     expect((fields[1].fieldGroup![0].fieldGroup![0].props as PublicFieldProps).required).toBe(true);
+  });
+
+  it('умова «Показувати, якщо» (F11-06): hide-вираз поля й секції за моделлю; toPayload не надсилає приховане', () => {
+    const schema = {
+      type: 'object',
+      properties: { kind: { type: 'string' }, reason: { type: 'string' }, doctor: { type: 'string' } },
+      'x-openbp-layout': {
+        sections: [
+          { rows: [[{ field: 'kind' }, { field: 'reason', visibleIf: { field: 'kind', operator: 'eq', value: 'other' } }]] },
+          { visibleIf: { field: 'kind', operator: 'eq', value: 'sick' }, rows: [[{ field: 'doctor' }]] },
+        ],
+      },
+    };
+    const fields = formFields(schema);
+    const reason = fields[0].fieldGroup![0].fieldGroup![1];
+    const kind = fields[0].fieldGroup![0].fieldGroup![0];
+    const hide = (f: FormlyFieldConfig, model: Record<string, unknown>) =>
+      (f.expressions!['hide'] as (field: FormlyFieldConfig) => boolean)({ ...f, model });
+
+    expect(kind.expressions).toBeUndefined();
+    expect(fields[0].expressions).toBeUndefined();
+    expect([hide(reason, { kind: 'annual' }), hide(reason, { kind: 'other' })]).toEqual([true, false]);
+    expect([hide(fields[1], { kind: 'annual' }), hide(fields[1], { kind: 'sick' })]).toEqual([true, false]);
+    expect(toPayload(schema, { kind: 'annual', reason: 'x', doctor: 'y' }).fields).toEqual({ kind: 'annual' });
+    expect(toPayload(schema, { kind: 'other', reason: 'x', doctor: 'y' }).fields).toEqual({ kind: 'other', reason: 'x' });
   });
 });

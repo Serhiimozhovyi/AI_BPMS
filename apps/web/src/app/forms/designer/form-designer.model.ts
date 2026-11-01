@@ -1,5 +1,5 @@
 import type { JsonSchema } from '../form-fields';
-import { FormCell, FormLayout, FormSection, GRID_COLUMNS, MAX_ROW_CELLS, UI_KEY, readLayout, rowWidths, writeLayout } from '../form-layout';
+import { FormCell, FormLayout, FormSection, GRID_COLUMNS, MAX_ROW_CELLS, UI_KEY, VisibleIf, readLayout, rowWidths, writeLayout } from '../form-layout';
 
 /**
  * Модель конструктора форми (F11-02, docs/forms-designer.md §3.2): JSON Schema форми → «секції → рядки → поля» +
@@ -214,13 +214,52 @@ export function addField(state: DesignerState, kind: FieldKind, section = state.
   return { state: { ...state, properties: { ...state.properties, [key]: propertyFor(kind, info.label) }, layout: { sections } }, key };
 }
 
-/** Видаляє поле: властивість, обов'язковість, місце в розмітці. */
+/**
+ * Видаляє поле: властивість, обов'язковість, місце в розмітці й умови «Показувати, якщо», що на нього посилались
+ * (F11-06; хто залежав — `rulesUsing` до видалення, щоб попередити).
+ */
 export function removeField(state: DesignerState, key: string): DesignerState {
   if (!(key in state.properties)) return state;
   const { sections } = takeOut(state, key);
+  for (const section of sections) {
+    if (section.visibleIf?.field === key) delete section.visibleIf;
+    for (const row of section.rows) for (const cell of row) if (cell.visibleIf?.field === key) delete cell.visibleIf;
+  }
   const properties = { ...state.properties };
   delete properties[key];
   return { ...state, properties, required: state.required.filter((r) => r !== key), layout: { sections } };
+}
+
+/** Хто залежить від поля умовою «Показувати, якщо»: ключі полів і індекси секцій (F11-06). */
+export interface RuleUsers {
+  fields: string[];
+  sections: number[];
+}
+
+export function rulesUsing(state: DesignerState, key: string): RuleUsers {
+  const users: RuleUsers = { fields: [], sections: [] };
+  state.layout.sections.forEach((section, index) => {
+    if (section.visibleIf?.field === key) users.sections.push(index);
+    for (const row of section.rows) for (const cell of row) if (cell.visibleIf?.field === key) users.fields.push(cell.field);
+  });
+  return users;
+}
+
+/** Умова «Показувати, якщо» поля (`undefined` прибирає). Умова на саме поле не ставиться (F11-06). */
+export function setFieldVisibleIf(state: DesignerState, key: string, rule: VisibleIf | undefined): DesignerState {
+  const place = placeOf(state, key);
+  if (!place || (rule && (rule.field === key || !(rule.field in state.properties)))) return state;
+  const sections = copySections(state);
+  const cell = sections[place.section].rows[place.row][place.cell];
+  if (rule) cell.visibleIf = { ...rule };
+  else delete cell.visibleIf;
+  return withSections(state, sections);
+}
+
+/** Поля, від яких може залежати поле `key` (усі інші) чи секція `section` (поля поза нею) — у порядку розмітки. */
+export function ruleSources(state: DesignerState, target: { field: string } | { section: number }): string[] {
+  const own = 'field' in target ? new Set([target.field]) : new Set(state.layout.sections[target.section]?.rows.flat().map((c) => c.field) ?? []);
+  return fieldOrder(state).filter((k) => !own.has(k));
 }
 
 /** Переносить поле окремим рядком у секцію `section` на місце `row` (індекс — у секції після вилучення поля). */

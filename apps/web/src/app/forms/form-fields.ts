@@ -1,5 +1,6 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { fieldUi, hasLayout, readLayout, rowWidths } from './form-layout';
+import { hiddenFields, hiddenState } from './visible-if';
 
 /**
  * JSON Schema полів публічної форми (F6-03) → поля ngx-formly і назад — у тіло надсилання. Підтримується те, що
@@ -112,12 +113,21 @@ export function formFields(schema: JsonSchema | null | undefined): FormlyFieldCo
   if (!hasLayout(schema)) {
     return [...properties.keys()].map(field);
   }
-  return readLayout(schema).sections.map((section): FormlyFieldConfig => {
+  // Умови «Показувати, якщо» (F11-06): та сама функція, що й у toPayload і на сервері; приховане поле formly не
+  // валідує, а його значення прибирає з моделі (resetFieldOnHide).
+  const model = (f: FormlyFieldConfig) => (f.model ?? {}) as Record<string, unknown>;
+  return readLayout(schema).sections.map((section, index): FormlyFieldConfig => {
     const rows = section.rows.map((row): FormlyFieldConfig => {
       const widths = rowWidths(row);
       return {
         fieldGroupClassName: 'pf-row',
-        fieldGroup: row.map((cell, i) => ({ ...field(cell.field), className: `pf-col pf-col-${widths[i]}` })),
+        fieldGroup: row.map((cell, i): FormlyFieldConfig => {
+          const config: FormlyFieldConfig = { ...field(cell.field), className: `pf-col pf-col-${widths[i]}` };
+          if (cell.visibleIf || section.visibleIf) {
+            config.expressions = { hide: (f: FormlyFieldConfig) => hiddenFields(schema, model(f)).has(cell.field) };
+          }
+          return config;
+        }),
       };
     });
     const props: SectionProps = {
@@ -126,7 +136,11 @@ export function formFields(schema: JsonSchema | null | undefined): FormlyFieldCo
       collapsible: section.collapsible,
       collapsed: section.collapsible && section.collapsed,
     };
-    return { wrappers: [PF_SECTION], props, fieldGroup: rows };
+    const group: FormlyFieldConfig = { wrappers: [PF_SECTION], props, fieldGroup: rows };
+    if (section.visibleIf) {
+      group.expressions = { hide: (f: FormlyFieldConfig) => hiddenState(schema, model(f)).sections.has(index) };
+    }
+    return group;
   });
 }
 
@@ -186,11 +200,13 @@ export interface FormPayload {
   files: Record<string, File>;
 }
 
-/** Модель форми → тіло надсилання. */
+/** Модель форми → тіло надсилання. Поля, приховані умовами «Показувати, якщо» (F11-06), не надсилаються. */
 export function toPayload(schema: JsonSchema | null | undefined, model: Record<string, unknown>): FormPayload {
   const fields: Record<string, unknown> = {};
   const files: Record<string, File> = {};
+  const hidden = hiddenFields(schema, model);
   for (const [key, property] of propertiesOf(schema)) {
+    if (hidden.has(key)) continue;
     const value = model[key];
     if (value === undefined || value === null || value === '') continue;
     if (isFileProperty(property)) {

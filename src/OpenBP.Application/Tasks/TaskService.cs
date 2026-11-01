@@ -117,6 +117,8 @@ public sealed class TaskService(OpenBpDbContext db, IWaitResumeService resume, I
         var data = FormSchema.WithoutEmpty(request.Data ?? []);
         if (Fields(task) is { } schema)
         {
+            // Приховані умовами «Показувати, якщо» поля (F11-06) не перевіряються й не зберігаються.
+            data = VisibleIf.WithoutHidden(schema, data);
             var errors = FormSchema.Validate(schema, data);
             if (errors.Count > 0)
             {
