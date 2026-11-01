@@ -1,5 +1,5 @@
 import type { FormlyFieldConfig } from '@ngx-formly/core';
-import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps, formFields, toPayload } from './form-fields';
+import { PF_CHECKBOX, PF_CHIPS, PF_FILE, PF_INPUT, PF_RADIO, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps, formFields, toPayload } from './form-fields';
 
 describe('formFields (F6-03)', () => {
   const schema = {
@@ -127,5 +127,51 @@ describe('formFields (F6-03)', () => {
     expect([hide(fields[1], { kind: 'annual' }), hide(fields[1], { kind: 'sick' })]).toEqual([true, false]);
     expect(toPayload(schema, { kind: 'annual', reason: 'x', doctor: 'y' }).fields).toEqual({ kind: 'annual' });
     expect(toPayload(schema, { kind: 'other', reason: 'x', doctor: 'y' }).fields).toEqual({ kind: 'other', reason: 'x' });
+  });
+
+  describe('віджети й телефон (F11-07)', () => {
+    const options = (n: number) => Array.from({ length: n }, (_, i) => ({ const: `o${i}`, title: `Варіант ${i}` }));
+    const byKey = (schema: Record<string, unknown>) => Object.fromEntries(formFields(schema).map((f) => [f.key as string, f]));
+
+    it('radio — кнопками до 6 варіантів, більше — списком', () => {
+      const fields = byKey({
+        type: 'object',
+        properties: {
+          few: { type: 'string', oneOf: options(3), 'x-openbp-ui': { widget: 'radio' } },
+          six: { type: 'string', enum: ['a', 'b', 'c', 'd', 'e', 'f'], 'x-openbp-ui': { widget: 'radio' } },
+          many: { type: 'string', oneOf: options(7), 'x-openbp-ui': { widget: 'radio' } },
+          plain: { type: 'string', oneOf: options(2) },
+        },
+      });
+      expect([fields['few'].type, fields['six'].type, fields['many'].type, fields['plain'].type]).toEqual([PF_RADIO, PF_RADIO, PF_SELECT, PF_SELECT]);
+      expect((fields['few'].props as PublicFieldProps).options?.map((o) => o.label)).toEqual(['Варіант 0', 'Варіант 1', 'Варіант 2']);
+    });
+
+    it('chips — кілька варіантів чипами; на одиночному виборі не діє', () => {
+      const fields = byKey({
+        type: 'object',
+        properties: {
+          tags: { type: 'array', items: { enum: ['a', 'b'] }, 'x-openbp-ui': { widget: 'chips' } },
+          one: { type: 'string', enum: ['a', 'b'], 'x-openbp-ui': { widget: 'chips' } },
+        },
+      });
+      expect([fields['tags'].type, (fields['tags'].props as PublicFieldProps).multiple]).toEqual([PF_CHIPS, true]);
+      expect(fields['one'].type).toBe(PF_SELECT);
+    });
+
+    it('телефон — поле tel з маскою і перевіркою; у тілі — цифри', () => {
+      const schema = { type: 'object', properties: { phone: { type: 'string', format: 'phone', 'x-openbp-ui': { placeholder: '+380 67 123 45 67' } } } };
+      const phone = byKey(schema)['phone'];
+      const props = phone.props as PublicFieldProps;
+      expect([phone.type, props.type, props.phone, props.placeholder]).toEqual([PF_INPUT, 'tel', true, '+380 67 123 45 67']);
+      const check = (phone.validators!['phone'] as { expression: (c: { value: unknown }) => boolean }).expression;
+      expect([check({ value: '+380 67 123 45 67' }), check({ value: '+380 67' }), check({ value: '' })]).toEqual([true, false, true]);
+      expect(toPayload(schema, { phone: '+380 67 123 45 67' }).fields).toEqual({ phone: '380671234567' });
+    });
+
+    it('адреса — багаторядкове поле з висотою 2', () => {
+      const address = byKey({ type: 'object', properties: { address: { type: 'string', format: 'textarea', 'x-openbp-ui': { rows: 2 } } } })['address'];
+      expect([address.type, (address.props as PublicFieldProps).rows]).toEqual([PF_TEXTAREA, 2]);
+    });
   });
 });

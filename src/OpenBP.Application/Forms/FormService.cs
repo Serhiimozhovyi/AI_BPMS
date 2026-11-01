@@ -172,6 +172,7 @@ public sealed class FormService(
         // Приховані умовами «Показувати, якщо» поля (F11-06) не зберігаються, разом з їхніми файлами.
         var hidden = VisibleIf.HiddenFields(schema, fields);
         fields = VisibleIf.WithoutHidden(schema, fields);
+        fields = FormSchema.NormalizePhones(schema, fields);
         errors.AddRange(FormSchema.Validate(schema, fields).Where(e => errors.All(x => x.Field != e.Field)));
         if (errors.Count > 0)
         {

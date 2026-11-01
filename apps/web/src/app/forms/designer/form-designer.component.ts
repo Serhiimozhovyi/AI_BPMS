@@ -24,6 +24,8 @@ import {
   ruleSources,
   rulesUsing,
   setFieldVisibleIf,
+  widgetOf,
+  widgetsFor,
   addSection,
   duplicateField,
   fromSchema,
@@ -282,6 +284,23 @@ const GRID_UNITS = 12;
                   <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
                     <mat-label i18n="@@fd.prop.placeholder">Текст у порожньому полі</mat-label>
                     <input matInput data-testid="fd-prop-placeholder" [value]="str(ui(p)['placeholder'])" (input)="setUi(key, 'placeholder', text($event))" />
+                  </mat-form-field>
+                }
+                @if (kind === 'textarea' || kind === 'address') {
+                  <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
+                    <mat-label i18n="@@fd.prop.rows">Висота, рядків</mat-label>
+                    <input matInput type="number" min="1" max="20" data-testid="fd-prop-rows" [value]="str(ui(p)['rows'])" (input)="setRows(key, $event)" />
+                  </mat-form-field>
+                }
+                @if (widgetsFor(p).length) {
+                  <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
+                    <mat-label i18n="@@fd.prop.widget">Як показати</mat-label>
+                    <mat-select data-testid="fd-prop-widget" [value]="widgetOf(p) ?? ''" (selectionChange)="setUi(key, 'widget', $event.value || undefined)">
+                      <mat-option value="" i18n="@@fd.widget.list">Випадний список</mat-option>
+                      @for (w of widgetsFor(p); track w) {
+                        <mat-option [value]="w">{{ widgetLabel(w) }}</mat-option>
+                      }
+                    </mat-select>
                   </mat-form-field>
                 }
                 <mat-checkbox data-testid="fd-prop-required" [checked]="isRequired(key)" (change)="toggleRequired(key, $event.checked)" i18n="@@fd.prop.required">Обов'язкове</mat-checkbox>
@@ -1069,6 +1088,18 @@ export class FormDesignerComponent {
 
   protected setUi(key: string, name: string, value: unknown): void {
     this.update(setFieldUi(this.state(), key, { [name]: value }), `${key}:ui.${name}`);
+  }
+
+  protected readonly widgetsFor = widgetsFor;
+  protected readonly widgetOf = widgetOf;
+
+  protected widgetLabel(widget: 'radio' | 'chips'): string {
+    return widget === 'radio' ? $localize`:@@fd.widget.radio:Кнопки (до 6 варіантів)` : $localize`:@@fd.widget.chips:Чипи`;
+  }
+
+  protected setRows(key: string, event: Event): void {
+    const n = Math.round(Number(this.text(event)));
+    this.setUi(key, 'rows', Number.isFinite(n) && n >= 1 && n <= 20 ? n : undefined);
   }
 
   protected setNumber(key: string, name: string, event: Event): void {
