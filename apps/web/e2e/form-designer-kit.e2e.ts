@@ -100,3 +100,28 @@ test('конструктор форм: рядок «З — По» перетяг
   const blocking = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   expect(blocking.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
 });
+
+test('конструктор форм: набір одразу після вибору поля з палітри йде в нове поле, не в попереднє', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    return route.fulfill({ json: { items: [], page: 1, pageSize: 50, total: 0 } });
+  });
+  await page.goto('/dev/kit');
+  const designer = page.getByTestId('kit-form-designer');
+  await designer.getByTestId('fd-card-name').click();
+  await expect(designer.getByTestId('fd-prop-title')).toHaveValue('ПІБ');
+  // Клік у палітрі й набір в одній задачі браузера: між ними Angular ще не встиг перемалювати панель.
+  for (let i = 0; i < 3; i++) {
+    await page.evaluate((text) => {
+      const root = document.querySelector('[data-testid="kit-form-designer"]')!;
+      (root.querySelector('[data-testid="fd-kind-text"]') as HTMLButtonElement).click();
+      const input = root.querySelector('[data-testid="fd-prop-title"]') as HTMLInputElement;
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, `Поле ${i}`);
+  }
+  await expect(designer.getByTestId('fd-card-name')).toContainText('ПІБ');
+  for (let i = 0; i < 3; i++) await expect(designer.locator('[data-testid^="fd-card-"]', { hasText: `Поле ${i}` })).toHaveCount(1);
+});

@@ -1,6 +1,6 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDragPlaceholder, CdkDropList } from '@angular/cdk/drag-drop';
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -260,7 +260,22 @@ const GRID_UNITS = 12;
                 @let key = selectedKey()!;
                 @let p = state().properties[key];
                 @let kind = selectedKind()!;
-                <h3 id="fd-props-title" class="fd__heading" i18n="@@fd.fieldProps">Поле</h3>
+                <!-- Дії над полем — у заголовку панелі: довга панель (список, умова показу) не ховає їх під нижньою панеллю діалогу. -->
+                <div class="fd__props-head">
+                  <h3 id="fd-props-title" class="fd__heading" i18n="@@fd.fieldProps">Поле</h3>
+                  @if (!tableMode()) {
+                    <button mat-icon-button type="button" data-testid="fd-duplicate" (click)="duplicate(key)" i18n-aria-label="@@fd.duplicate.hint" aria-label="Дублювати поле (Ctrl+D)" i18n-title="@@fd.duplicate.hint" title="Дублювати поле (Ctrl+D)">
+                      <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                    </button>
+                    <button mat-icon-button type="button" class="fd__danger" data-testid="fd-delete" (click)="remove(key)" i18n-aria-label="@@fd.delete.hint" aria-label="Видалити поле (Delete)" i18n-title="@@fd.delete.hint" title="Видалити поле (Delete)">
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                  } @else {
+                    <button mat-icon-button type="button" class="fd__danger" data-testid="fd-delete" (click)="remove(key)" i18n-aria-label="@@fd.removeColumn" aria-label="Прибрати з форми" i18n-title="@@fd.removeColumn" title="Прибрати з форми">
+                      <span class="material-symbols-outlined" aria-hidden="true">remove_circle</span>
+                    </button>
+                  }
+                </div>
                 <mat-form-field appearance="outline" class="bp-field-compact w-full" subscriptSizing="dynamic">
                   <mat-label i18n="@@fd.prop.title">Підпис</mat-label>
                   <input matInput data-testid="fd-prop-title" [value]="titleOf(p, key)" (input)="setProp(key, 'title', text($event))" />
@@ -400,14 +415,6 @@ const GRID_UNITS = 12;
                   }
                 }
                 <bp-visible-if-editor testId="fd-if" [rule]="cellRule(key)" [sources]="fieldSources()" (ruleChange)="setFieldRule(key, $event)" />
-                <div class="fd__actions">
-                  @if (!tableMode()) {
-                    <button mat-stroked-button type="button" data-testid="fd-duplicate" (click)="duplicate(key)" i18n="@@fd.duplicate">Дублювати</button>
-                    <button mat-button type="button" bpVariant="danger" data-testid="fd-delete" (click)="remove(key)" i18n="@@fd.delete">Видалити поле</button>
-                  } @else {
-                    <button mat-button type="button" bpVariant="danger" data-testid="fd-delete" (click)="remove(key)" i18n="@@fd.removeColumn">Прибрати з форми</button>
-                  }
-                </div>
               }
               @case ('section') {
                 @let si = selectedSection()!;
@@ -476,6 +483,19 @@ const GRID_UNITS = 12;
       .fd__grid {
         grid-template-columns: minmax(0, 1fr);
       }
+    }
+    .fd__props-head {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin: -6px -6px 0 0;
+    }
+    .fd__props-head .fd__heading {
+      flex: 1;
+      margin: 0;
+    }
+    .fd__danger {
+      color: var(--bp-danger);
     }
     .fd__heading {
       margin: 0 0 8px;
@@ -806,6 +826,7 @@ export class FormDesignerComponent {
 
   protected readonly state = signal<DesignerState>(fromSchema(null));
   protected readonly selection = signal<Selection>(null);
+  private readonly cdr = inject(ChangeDetectorRef);
   protected readonly mode = signal<Mode>('design');
   protected readonly keyDraft = signal<string | null>(null);
   protected readonly jsonText = signal('');
@@ -1027,6 +1048,7 @@ export class FormDesignerComponent {
   protected newSection(): void {
     this.update(addSection(this.state()));
     this.selection.set({ kind: 'section', index: this.state().layout.sections.length - 1 });
+    this.renderNow();
   }
 
   protected remove(key: string): void {
@@ -1124,6 +1146,7 @@ export class FormDesignerComponent {
     this.update(renameKey(this.state(), key, draft));
     this.keyDraft.set(null);
     this.selection.set({ kind: 'field', key: draft });
+    this.renderNow();
   }
 
   protected setSection(index: number, name: 'title' | 'description' | 'collapsible' | 'collapsed', value: string | boolean): void {
@@ -1168,13 +1191,23 @@ export class FormDesignerComponent {
     if (!this.isFieldSelected(key)) this.keyDraft.set(null);
     this.selection.set({ kind: 'field', key });
     this.coalesce = null;
+    this.renderNow();
     if (focus) queueMicrotask(() => this.focusCard(key));
+  }
+
+  /**
+   * Перемалювати панель властивостей одразу, у тій самій задачі, що й вибір. Без цього (zoneless, OnPush) між кліком
+   * і перемальовуванням є вікно: швидкий набір у «Підпис» ішов у попереднє поле, бо обробники ще тримали старий ключ.
+   */
+  private renderNow(): void {
+    this.cdr.detectChanges();
   }
 
   protected selectSection(index: number, event: Event): void {
     event.stopPropagation();
     this.selection.set({ kind: 'section', index });
     this.coalesce = null;
+    this.renderNow();
   }
 
   private focusCard(key: string): void {

@@ -321,7 +321,7 @@ describe('FormDesignerComponent (F11-02)', () => {
       expect(q('fd-prop-column')?.textContent).toContain('starts_at');
       expect(q('fd-prop-key')).toBeNull();
       expect(q('fd-duplicate')).toBeNull();
-      expect(q('fd-delete')?.textContent).toContain('Прибрати з форми');
+      expect(q('fd-delete')?.getAttribute('aria-label')).toBe('Прибрати з форми');
     });
 
     it('«Додати всі» і повернення колонки в палітру після «Прибрати з форми»', async () => {

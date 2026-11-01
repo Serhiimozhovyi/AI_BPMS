@@ -132,3 +132,40 @@ test('скасування діалогу зі змінами питає під�
   await expect(page.getByTestId('fs-open')).toContainText('(0)');
   expect(puts).toBe(0);
 });
+
+test('1440×900: «Дублювати» і «Видалити поле» видно одразу, без прокручування, навіть у довгій панелі властивостей', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/auth/me') return route.fulfill({ json: { id: 'u1', email: 'e2e@openbp.test', role: 'admin' } });
+    if (path === '/api/v1/nodes') {
+      return route.fulfill({
+        json: [{ type: 'core.formTrigger', version: 1, displayName: 'Форма', group: 'trigger', inputs: [], outputs: ['main'], parametersSchema: descriptorSchema, isTrigger: true }],
+      });
+    }
+    if (path === `/api/v1/workflows/${WORKFLOW_ID}`) {
+      return route.fulfill({ json: { id: WORKFLOW_ID, name: 'Форма', active: false, version: 1, versionId: 'v1', definition, updatedAt: new Date().toISOString() } });
+    }
+    return route.fulfill({ json: { items: [], page: 1, pageSize: 50, total: 0 } });
+  });
+  await page.goto(`/workflows/${WORKFLOW_ID}`);
+  await page.locator('[data-node-id] .node__name').dblclick();
+  await page.getByTestId('fs-open').click();
+  const dialog = page.getByTestId('form-designer-dialog');
+  // Список — найдовша панель властивостей: варіанти, «Як показати», умова показу.
+  await dialog.getByTestId('fd-kind-text').click();
+  await dialog.getByTestId('fd-kind-select').click();
+
+  const actions = (await page.locator('.bp-dialog-fullscreen mat-dialog-actions').boundingBox())!;
+  for (const id of ['fd-duplicate', 'fd-delete']) {
+    const button = dialog.getByTestId(id);
+    const box = (await button.boundingBox())!;
+    expect(box.y + box.height, `${id} під нижньою панеллю`).toBeLessThanOrEqual(actions.y);
+    // Кнопку видно й нею можна натиснути: у її центрі саме вона, а не інший елемент.
+    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid]')?.getAttribute('data-testid'), [box.x + box.width / 2, box.y + box.height / 2]);
+    expect(hit).toBe(id);
+  }
+  await testInfo.attach('form-designer-actions', { body: await page.screenshot(), contentType: 'image/png' });
+  await dialog.getByTestId('fd-delete').click();
+  await expect(dialog.getByTestId('fd-card-spysok')).toHaveCount(0);
+});
