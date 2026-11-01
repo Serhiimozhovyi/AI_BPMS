@@ -4,6 +4,7 @@ import { By } from '@angular/platform-browser';
 import { TestBed } from '@angular/core/testing';
 import { FormDesignerComponent } from './form-designer.component';
 import type { JsonSchema } from '../form-fields';
+import { chooseOption, selectOptionValues } from '../../shared/select-search/select-testing';
 
 @Component({
   imports: [FormDesignerComponent],
@@ -357,6 +358,81 @@ describe('FormDesignerComponent (F11-02)', () => {
       await render();
       expect(layoutOf(last())).toEqual([[['name', 'minutes']]]);
       expect(q('fd-row-preset-6-6')).not.toBeNull();
+    });
+  });
+
+  describe('«Показувати, якщо» (F11-06)', () => {
+    const withKind: JsonSchema = {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', title: 'Вид', oneOf: [{ const: 'annual', title: 'Щорічна' }, { const: 'other', title: 'Інше' }] },
+        reason: { type: 'string', title: 'Причина' },
+        agree: { type: 'boolean', title: 'Згода' },
+      },
+    };
+    const layout = (schema: JsonSchema) => schema['x-openbp-layout'] as { sections: { visibleIf?: unknown; rows: { field: string; visibleIf?: unknown }[][] }[] };
+
+    it('умова поля: джерело — інші поля, значення — варіанти списку; «Завжди» прибирає умову', async () => {
+      const { q, render, last } = await setup(withKind);
+      q('fd-card-reason')!.click();
+      await render();
+      expect(selectOptionValues(q('fd-if-field')!)).toEqual(['', 'kind', 'agree']);
+
+      chooseOption(q('fd-if-field')!, 'kind');
+      await render();
+      expect(layout(last()).sections[0].rows[1][0].visibleIf).toEqual({ field: 'kind', operator: 'eq', value: 'annual' });
+      expect(selectOptionValues(q('fd-if-value')!)).toEqual(['annual', 'other']);
+      chooseOption(q('fd-if-value')!, 'other');
+      await render();
+      expect(layout(last()).sections[0].rows[1][0].visibleIf).toEqual({ field: 'kind', operator: 'eq', value: 'other' });
+
+      chooseOption(q('fd-if-operator')!, 'isEmpty');
+      await render();
+      expect(layout(last()).sections[0].rows[1][0].visibleIf).toEqual({ field: 'kind', operator: 'isEmpty' });
+      expect(q('fd-if-value')).toBeNull();
+
+      chooseOption(q('fd-if-field')!, '');
+      await render();
+      expect(last()['x-openbp-layout']).toBeUndefined();
+    });
+
+    it('умова секції: джерело — поля поза секцією, «Так/Ні» для прапорця', async () => {
+      const { q, render, last } = await setup({
+        ...withKind,
+        'x-openbp-layout': { sections: [{ rows: [[{ field: 'agree' }]] }, { title: 'Деталі', rows: [[{ field: 'kind' }], [{ field: 'reason' }]] }] },
+      });
+      q('fd-section-title')!.click();
+      await render();
+      const titles = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="fd-section-title"]'));
+      titles[1].click();
+      await render();
+      expect(selectOptionValues(q('fd-section-if-field')!)).toEqual(['', 'agree']);
+      chooseOption(q('fd-section-if-field')!, 'agree');
+      await render();
+      expect(layout(last()).sections[1].visibleIf).toEqual({ field: 'agree', operator: 'eq', value: true });
+      expect(selectOptionValues(q('fd-section-if-value')!)).toEqual([true, false]);
+    });
+
+    it('видалення поля-джерела прибирає умови з попередженням', async () => {
+      const { q, render, last } = await setup({
+        ...withKind,
+        'x-openbp-layout': {
+          sections: [
+            { rows: [[{ field: 'kind' }], [{ field: 'reason', visibleIf: { field: 'kind', operator: 'eq', value: 'other' } }]] },
+            { title: 'Згода', visibleIf: { field: 'kind', operator: 'isNotEmpty' }, rows: [[{ field: 'agree' }]] },
+          ],
+        },
+      });
+      q('fd-card-kind')!.click();
+      await render();
+      q('fd-delete')!.click();
+      await render();
+      const sections = layout(last()).sections;
+      expect(sections[0].rows[0][0]).toEqual({ field: 'reason' });
+      expect(sections[1].visibleIf).toBeUndefined();
+      expect(q('fd-notice')?.textContent).toContain('«Вид»');
+      expect(q('fd-notice')?.textContent).toContain('«Причина»');
+      expect(q('fd-notice')?.textContent).toContain('«Згода»');
     });
   });
 });

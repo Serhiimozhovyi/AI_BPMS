@@ -333,6 +333,47 @@ public class ProjectPageTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Hidden_by_visible_if_field_is_neither_required_nor_saved()
+    {
+        // F11-06: phone обов'язковий, але показується лише якщо name = «Подзвонити»; приховане поле не блокує й не записується.
+        var (project, table, editor, psyA, _) = await SetupAsync();
+        await Ok(await editor.Client.PutAsJsonAsync($"/api/v1/projects/{project}/pages/book-if", new
+        {
+            name = "Записатися",
+            kind = "form",
+            definition = new
+            {
+                table,
+                fields = new object[] { new { column = "name" }, new { column = "slot" }, new { column = "phone", required = true }, new { column = "status", value = "active" } },
+                formLayout = new
+                {
+                    sections = new[]
+                    {
+                        new
+                        {
+                            rows = new[]
+                            {
+                                new object[] { new { field = "name" }, new { field = "slot" } },
+                                new object[] { new { field = "phone", visibleIf = new { field = "name", @operator = "eq", value = "Подзвонити" } } },
+                            },
+                        },
+                    },
+                },
+                onSubmit = new { operation = "insert" },
+            },
+        }));
+
+        await Ok(await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book-if/submit", new { values = new { name = "Нова", slot = "s-if1", phone = "+380111" } }));
+        var tableId = (await JsonAsync(await editor.Client.GetAsync($"/api/v1/tables/{table}?projectId={project}"))).GetProperty("id").GetGuid();
+        var row = (await JsonAsync(await editor.Client.GetAsync($"/api/v1/tables/{tableId}/rows?search=s-if1"))).GetProperty("items")[0].GetProperty("data");
+        Assert.False(row.TryGetProperty("phone", out var phone) && phone.ValueKind != JsonValueKind.Null);
+
+        var missing = await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book-if/submit", new { values = new { name = "Подзвонити", slot = "s-if2" } });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, missing.StatusCode);
+        Assert.Equal("phone", (await JsonAsync(missing)).GetProperty("errors")[0].GetProperty("field").GetString());
+    }
+
+    [Fact]
     public async Task Page_definition_is_validated_and_app_roles_are_managed()
     {
         var (project, table, editor, psyA, _) = await SetupAsync();

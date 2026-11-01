@@ -258,6 +258,15 @@ JSON Schema формату — `src/OpenBP.Shared/Schemas/workflow.schema.json`;
   плоскими (`fields`), перевірка даних не змінюється. Посилання на поле, якого немає, повтор поля, ширина поза 1–12 чи
   сума понад 12 — `PARAMETER_INVALID` на `/parameters/schema` під час активації `core.formTrigger`. Розмітку так само
   показують форми `core.wait` (`form.schema`) і картка задачі `core.approval` (`fields`).
+- Умова «Показувати, якщо» (F11-06): `visibleIf` на клітинці (`{ "field", "width"?, "visibleIf"? }`) або на секції —
+  `{ "field", "operator": "eq" | "ne" | "contains" | "isEmpty" | "isNotEmpty" | "gt" | "lt", "value"? }`. Порожнє —
+  немає значення, `null`, `""` або `[]`; два числа (і рядки-числа) порівнюються як числа, решта — як текст (`eq`/`ne` з
+  урахуванням регістру, `contains` — без; для масиву `eq`/`contains` — «містить значення»); `gt`/`lt` для тексту —
+  ординально (дати `YYYY-MM-DD` — правильно). Умови перевіряються в порядку розмітки, значення вже прихованого поля
+  вважається порожнім. Приховане поле на сторінці не показується й не надсилається; сервер (форма тригера, `core.wait`,
+  картка задачі) прибирає його з `required`, не перевіряє і не зберігає. Посилання на неіснуюче поле чи на саме поле —
+  `PARAMETER_INVALID`. Семантику клієнта (`forms/visible-if.ts`) і сервера (`Forms/VisibleIf.cs`) перевіряє одна таблиця
+  кейсів `tests/form-cases/visible-if.cases.json`.
 
 ```json
 "schema": { "type": "object", "required": ["name"],

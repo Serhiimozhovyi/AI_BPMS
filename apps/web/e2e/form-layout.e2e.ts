@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { chooseOption } from './mat-select';
 
 /**
  * F11-01: розмітка форми `x-openbp-layout` — секції, два поля в рядку на широкому екрані й у стовпчик на телефоні,
- * згортання секції. Схема — з `examples/leave-request-form.json`.
+ * згортання секції. F11-06: «Причина» з'являється лише для відпустки за свій рахунок; без неї надсилання проходить.
+ * Схема — з `examples/leave-request-form.json`.
  */
 const example = JSON.parse(readFileSync(resolve(__dirname, '../../../examples/leave-request-form.json'), 'utf-8'));
 const params = example.nodes[0].parameters;
@@ -38,6 +40,7 @@ test('1024 px: секції, «З — По» в одному рядку, зго�
   expect(Math.abs(from.y - to.y)).toBeLessThan(2);
   expect(to.x).toBeGreaterThan(from.x + from.width - 1);
   await expect(page.getByTestId('form-field-name')).toHaveAttribute('placeholder', "Прізвище та ім'я");
+  await chooseOption(page.getByTestId('form-field-kind'), 'За свій рахунок');
   await expect(page.getByTestId('form-field-reason')).toHaveAttribute('rows', '2');
 
   const toggle = page.getByTestId('form-section-toggle');
@@ -60,4 +63,31 @@ test('390 px: рядок розпадається у стовпчик без г�
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   await page.screenshot({ path: 'test-results/form-layout-390.png', fullPage: true });
+});
+
+test('«Показувати, якщо»: «Причина» з\'являється за варіантом, надсилання без неї проходить', async ({ page }) => {
+  let sent: unknown = null;
+  await page.route(`**/api/v1/forms/${params.path}`, async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    sent = route.request().postDataJSON();
+    return route.fulfill({ json: { message: 'Дякуємо, заяву прийнято' } });
+  });
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto(`/form/${params.path}`);
+  await expect(page.getByTestId('form-title')).toBeVisible();
+  await expect(page.getByTestId('form-field-reason')).toHaveCount(0);
+
+  await page.getByTestId('form-field-name').fill('Олена Петренко');
+  await page.getByTestId('form-field-from').fill('2026-11-10');
+  await page.getByTestId('form-field-to').fill('2026-11-14');
+  await chooseOption(page.getByTestId('form-field-kind'), 'За свій рахунок');
+  await expect(page.getByTestId('form-field-reason')).toBeVisible();
+  await page.getByTestId('form-field-reason').fill('Сімейні обставини');
+  await page.screenshot({ path: 'test-results/form-visible-if-shown.png', fullPage: true });
+
+  await chooseOption(page.getByTestId('form-field-kind'), 'Щорічна');
+  await expect(page.getByTestId('form-field-reason')).toHaveCount(0);
+  await page.getByTestId('form-submit').click();
+  await expect.poll(() => sent).toEqual({ fields: { name: 'Олена Петренко', from: '2026-11-10', to: '2026-11-14', kind: 'annual' } });
+  await expect(page.getByText('Дякуємо, заяву прийнято')).toBeVisible();
 });

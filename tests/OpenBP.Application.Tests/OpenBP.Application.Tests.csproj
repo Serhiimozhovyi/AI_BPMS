@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <None Include="N8n/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../form-cases/*.json" Link="form-cases/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

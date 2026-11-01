@@ -37,6 +37,9 @@ import {
   setSectionProps,
   toSchema,
   uniqueKey,
+  rulesUsing,
+  ruleSources,
+  setFieldVisibleIf,
 } from './form-designer.model';
 
 describe('модель конструктора форми (F11-02)', () => {
@@ -293,6 +296,44 @@ describe('модель конструктора форми (F11-02)', () => {
       history.push(before);
       const after = mergeIntoRow(before, 'reason', 'from', 'before');
       expect(history.undo(after)).toEqual(before);
+    });
+  });
+
+  describe('«Показувати, якщо» (F11-06)', () => {
+    const schema = {
+      type: 'object',
+      properties: { kind: { type: 'string' }, reason: { type: 'string' }, note: { type: 'string' } },
+      'x-openbp-layout': {
+        sections: [
+          { rows: [[{ field: 'kind' }, { field: 'reason', visibleIf: { field: 'kind', operator: 'eq', value: 'other' } }]] },
+          { title: 'Ще', visibleIf: { field: 'kind', operator: 'isNotEmpty' }, rows: [[{ field: 'note' }]] },
+        ],
+      },
+    };
+
+    it('ставить і прибирає умову поля; на саме поле чи неіснуюче — ні', () => {
+      const state = fromSchema(schema);
+      const set = setFieldVisibleIf(state, 'note', { field: 'reason', operator: 'isNotEmpty' });
+      expect(set.layout.sections[1].rows[0][0].visibleIf).toEqual({ field: 'reason', operator: 'isNotEmpty' });
+      expect(setFieldVisibleIf(set, 'note', undefined).layout.sections[1].rows[0][0].visibleIf).toBeUndefined();
+      expect(setFieldVisibleIf(state, 'note', { field: 'note', operator: 'isEmpty' })).toBe(state);
+      expect(setFieldVisibleIf(state, 'note', { field: 'ghost', operator: 'isEmpty' })).toBe(state);
+    });
+
+    it('джерела: для поля — усі інші, для секції — поля поза нею', () => {
+      const state = fromSchema(schema);
+      expect(ruleSources(state, { field: 'reason' })).toEqual(['kind', 'note']);
+      expect(ruleSources(state, { section: 1 })).toEqual(['kind', 'reason']);
+    });
+
+    it('видалення поля-джерела прибирає умови, що на нього посилались', () => {
+      const state = fromSchema(schema);
+      expect(rulesUsing(state, 'kind')).toEqual({ fields: ['reason'], sections: [1] });
+      const next = removeField(state, 'kind');
+      expect(rulesUsing(next, 'kind')).toEqual({ fields: [], sections: [] });
+      expect(next.layout.sections[0].rows[0]).toEqual([{ field: 'reason' }]);
+      expect(next.layout.sections[1].visibleIf).toBeUndefined();
+      expect(state.layout.sections[1].visibleIf).toBeDefined();
     });
   });
 });

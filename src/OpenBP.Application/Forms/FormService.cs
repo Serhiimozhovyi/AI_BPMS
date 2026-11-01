@@ -169,6 +169,9 @@ public sealed class FormService(
             }
         }
 
+        // Приховані умовами «Показувати, якщо» поля (F11-06) не зберігаються, разом з їхніми файлами.
+        var hidden = VisibleIf.HiddenFields(schema, fields);
+        fields = VisibleIf.WithoutHidden(schema, fields);
         errors.AddRange(FormSchema.Validate(schema, fields).Where(e => errors.All(x => x.Field != e.Field)));
         if (errors.Count > 0)
         {
@@ -179,7 +182,7 @@ public sealed class FormService(
         var ids = new List<string>();
         try
         {
-            foreach (var file in submission.Files)
+            foreach (var file in submission.Files.Where(f => !hidden.Contains(f.Field)))
             {
                 var reference = await files.PutAsync(file.Content, string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType, file.FileName, ct)
                     .ConfigureAwait(false);
