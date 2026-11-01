@@ -52,7 +52,8 @@ test('конструктор форм: рядок «З — По» перетяг
   // Розбити наявний рядок, щоб зібрати його знову мишею.
   await to.click();
   await designer.getByTestId('fd-split').click();
-  const top = async (l: typeof from) => (await l.boundingBox())!.y;
+  // Після «Окремим рядком» картки перемальовуються: на мить елемента немає — `boundingBox()` дає null, poll повторює.
+  const top = async (l: typeof from) => (await l.boundingBox())?.y ?? Number.NaN;
   await expect.poll(async () => (await top(to)) - (await top(from))).toBeGreaterThan(20);
 
   // Тягнемо «По» за ручку на праву половину «З».

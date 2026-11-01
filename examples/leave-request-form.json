@@ -35,7 +35,8 @@
               "oneOf": [
                 { "const": "annual", "title": "Щорічна" },
                 { "const": "unpaid", "title": "За свій рахунок" }
-              ]
+              ],
+              "x-openbp-ui": { "widget": "radio" }
             },
             "reason": { "type": "string", "format": "textarea", "title": "Причина", "x-openbp-ui": { "rows": 2 } },
             "scan": { "type": "string", "format": "binary", "title": "Скан заяви" }

@@ -83,6 +83,14 @@ describe('розмітка форми (F11-01)', () => {
     expect(Object.keys(result['properties'] as object)).toEqual(['to', 'name', 'from', 'reason']);
   });
 
+  it('keepOrder (F11-08): проста розмітка лишається, якщо полів більше одного, — порядок тримає вона, а не jsonb', () => {
+    const rows = [[{ field: 'to' }], [{ field: 'name' }], [{ field: 'from' }], [{ field: 'reason' }]];
+    const kept = writeLayout({ type: 'object', properties }, { sections: [{ rows }] }, { keepOrder: true });
+    expect(kept[LAYOUT_KEY]).toEqual({ sections: [{ rows }] });
+    const one = writeLayout({ type: 'object', properties: { name: {} } }, { sections: [{ rows: [[{ field: 'name' }]] }] }, { keepOrder: true });
+    expect(one).not.toHaveProperty(LAYOUT_KEY);
+  });
+
   it('підказки показу поля', () => {
     expect(fieldUi({ 'x-openbp-ui': { widget: 'radio', placeholder: 'Коротко', rows: 3 } })).toEqual({ widget: 'radio', placeholder: 'Коротко', rows: 3 });
     expect(fieldUi({ 'x-openbp-ui': { widget: 'slider', rows: 50 } })).toEqual({});

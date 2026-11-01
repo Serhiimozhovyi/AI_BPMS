@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { chooseOption } from './mat-select';
 
 /**
  * F11-01: розмітка форми `x-openbp-layout` — секції, два поля в рядку на широкому екрані й у стовпчик на телефоні,
@@ -40,7 +39,7 @@ test('1024 px: секції, «З — По» в одному рядку, зго�
   expect(Math.abs(from.y - to.y)).toBeLessThan(2);
   expect(to.x).toBeGreaterThan(from.x + from.width - 1);
   await expect(page.getByTestId('form-field-name')).toHaveAttribute('placeholder', "Прізвище та ім'я");
-  await chooseOption(page.getByTestId('form-field-kind'), 'За свій рахунок');
+  await page.getByRole('radio', { name: 'За свій рахунок' }).check();
   await expect(page.getByTestId('form-field-reason')).toHaveAttribute('rows', '2');
 
   const toggle = page.getByTestId('form-section-toggle');
@@ -80,12 +79,12 @@ test('«Показувати, якщо»: «Причина» з\'являєть�
   await page.getByTestId('form-field-name').fill('Олена Петренко');
   await page.getByTestId('form-field-from').fill('2026-11-10');
   await page.getByTestId('form-field-to').fill('2026-11-14');
-  await chooseOption(page.getByTestId('form-field-kind'), 'За свій рахунок');
+  await page.getByRole('radio', { name: 'За свій рахунок' }).check();
   await expect(page.getByTestId('form-field-reason')).toBeVisible();
   await page.getByTestId('form-field-reason').fill('Сімейні обставини');
   await page.screenshot({ path: 'test-results/form-visible-if-shown.png', fullPage: true });
 
-  await chooseOption(page.getByTestId('form-field-kind'), 'Щорічна');
+  await page.getByRole('radio', { name: 'Щорічна' }).check();
   await expect(page.getByTestId('form-field-reason')).toHaveCount(0);
   await page.getByTestId('form-submit').click();
   await expect.poll(() => sent).toEqual({ fields: { name: 'Олена Петренко', from: '2026-11-10', to: '2026-11-14', kind: 'annual' } });

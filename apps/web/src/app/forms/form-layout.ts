@@ -161,11 +161,20 @@ function isTrivial(layout: FormLayout): boolean {
   return !s.title && !s.description && !s.collapsible && !s.visibleIf && s.rows.every((r) => r.length === 1 && !r[0].width && !r[0].visibleIf);
 }
 
+/** Як писати розмітку. */
+export interface WriteLayoutOptions {
+  /**
+   * Зберігати розмітку й для простої форми з кількох полів, бо лише вона тримає порядок: схема вузла лежить у `jsonb`,
+   * а Postgres переставляє ключі `properties` (F11-08). Формі сторінки не потрібно — там порядок задає масив `fields`.
+   */
+  keepOrder?: boolean;
+}
+
 /**
  * Нова схема з розміткою: `x-openbp-layout` записано (або прибрано, якщо розмітка тривіальна), ключі `properties`
  * переставлено в порядку розмітки, щоб JSON читався так само, як форма. Решта схеми не змінюється.
  */
-export function writeLayout(schema: JsonSchema, layout: FormLayout): JsonSchema {
+export function writeLayout(schema: JsonSchema, layout: FormLayout, options: WriteLayoutOptions = {}): JsonSchema {
   const properties = isObject(schema['properties']) ? schema['properties'] : {};
   const ordered: Record<string, unknown> = {};
   for (const section of layout.sections) {
@@ -181,7 +190,7 @@ export function writeLayout(schema: JsonSchema, layout: FormLayout): JsonSchema 
 
   const result: JsonSchema = { ...schema, properties: ordered };
   const order = Object.keys(ordered);
-  const trivial = isTrivial(layout) && layout.sections[0].rows.every((r, i) => r[0].field === order[i]);
+  const trivial = isTrivial(layout) && layout.sections[0].rows.every((r, i) => r[0].field === order[i]) && !(options.keepOrder && order.length > 1);
   if (trivial) {
     delete result[LAYOUT_KEY];
   } else {
