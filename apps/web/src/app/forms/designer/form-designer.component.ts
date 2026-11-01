@@ -798,7 +798,7 @@ export class FormDesignerComponent {
   private readonly modePreview: BpTab = { value: 'preview', label: $localize`:@@fd.mode.preview:Перегляд`, testId: 'fd-mode-preview' };
   private readonly modeJson: BpTab = { value: 'json', label: 'JSON', testId: 'fd-mode-json' };
   protected readonly modes = computed<BpTab[]>(() => (this.preview() ? [this.modeDesign, this.modePreview, this.modeJson] : [this.modeDesign, this.modeJson]));
-  protected readonly currentSchema = computed(() => toSchema(this.state()));
+  protected readonly currentSchema = computed(() => toSchema(this.state(), { keepOrder: !this.tableMode() }));
   protected readonly tableMode = computed(() => this.columns() !== null);
   protected readonly freeColumns = computed(() => columnsNotOnForm(this.state(), this.columns() ?? []));
   protected readonly paletteHeading = $localize`:@@fd.palette:Додати поле`;
@@ -967,7 +967,7 @@ export class FormDesignerComponent {
   }
 
   private emit(): void {
-    const schema = toSchema(this.state());
+    const schema = toSchema(this.state(), { keepOrder: !this.tableMode() });
     this.lastEmitted = JSON.stringify(schema);
     this.schemaChange.emit(schema);
   }
@@ -1343,7 +1343,7 @@ export class FormDesignerComponent {
   protected setMode(mode: Mode): void {
     if (mode === this.mode()) return;
     if (mode === 'json') {
-      this.jsonText.set(JSON.stringify(toSchema(this.state()), null, 2));
+      this.jsonText.set(JSON.stringify(toSchema(this.state(), { keepOrder: !this.tableMode() }), null, 2));
       this.jsonError.set(null);
     }
     this.coalesce = null;

@@ -1,5 +1,5 @@
 import { RADIO_MAX_OPTIONS, type JsonSchema } from '../form-fields';
-import { FormCell, FormLayout, FormSection, GRID_COLUMNS, MAX_ROW_CELLS, UI_KEY, VisibleIf, readLayout, rowWidths, writeLayout } from '../form-layout';
+import { FormCell, FormLayout, FormSection, GRID_COLUMNS, MAX_ROW_CELLS, UI_KEY, VisibleIf, WriteLayoutOptions, readLayout, rowWidths, writeLayout } from '../form-layout';
 
 /**
  * Модель конструктора форми (F11-02, docs/forms-designer.md §3.2): JSON Schema форми → «секції → рядки → поля» +
@@ -86,12 +86,12 @@ export function fromSchema(schema: JsonSchema | null | undefined): DesignerState
 }
 
 /** Схема зі стану: `type: object`, властивості в порядку розмітки, `required` лише за наявними полями. */
-export function toSchema(state: DesignerState): JsonSchema {
+export function toSchema(state: DesignerState, options: WriteLayoutOptions = {}): JsonSchema {
   const base: JsonSchema = { type: 'object', ...clone(state.rest), properties: clone(state.properties) };
   const required = state.required.filter((r) => r in state.properties);
   if (required.length) base['required'] = required;
   else delete base['required'];
-  return writeLayout(base, state.layout);
+  return writeLayout(base, state.layout, options);
 }
 
 /** Тип поля конструктора за властивістю схеми. */

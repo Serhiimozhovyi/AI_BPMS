@@ -28,6 +28,9 @@ const leave: JsonSchema = {
   },
 };
 
+/** Схема `leave` з конструктора: проста розмітка лишається, бо тримає порядок полів у jsonb (F11-08). */
+const leaveOut: JsonSchema = { ...leave, 'x-openbp-layout': { sections: [{ rows: [[{ field: 'name' }], [{ field: 'from' }]] }] } };
+
 describe('FormDesignerComponent (F11-02)', () => {
   async function setup(schema: JsonSchema | null = leave) {
     TestBed.configureTestingModule({ imports: [HostComponent] });
@@ -96,7 +99,7 @@ describe('FormDesignerComponent (F11-02)', () => {
     const host = el.querySelector('bp-form-designer')!;
     host.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
     await render();
-    expect(last()).toEqual(leave);
+    expect(last()).toEqual(leaveOut);
     host.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true, bubbles: true }));
     await render();
     expect(Object.keys(last()['properties'] as object)).toEqual(['from']);
@@ -111,7 +114,7 @@ describe('FormDesignerComponent (F11-02)', () => {
     await type('fd-prop-title', 'Прізвище');
     q('fd-undo')!.click();
     await render();
-    expect(last()).toEqual(leave);
+    expect(last()).toEqual(leaveOut);
     expect(q<HTMLButtonElement>('fd-undo')!.disabled).toBe(true);
   });
 
@@ -162,7 +165,7 @@ describe('FormDesignerComponent (F11-02)', () => {
     q('fd-mode-json')!.click();
     await render();
     const area = q<HTMLTextAreaElement>('fd-json')!;
-    expect(JSON.parse(area.value)).toEqual(leave);
+    expect(JSON.parse(area.value)).toEqual(leaveOut);
     area.value = '{ "type": "object", ';
     area.dispatchEvent(new Event('input'));
     await render();
@@ -218,7 +221,7 @@ describe('FormDesignerComponent (F11-02)', () => {
       expect(layoutOf(ctx.last())).toEqual([[['name', 'from']]]);
       expect(ctx.q('fd-card-from')?.getAttribute('data-width')).toBe('6');
       await drop(ctx, '[data-gap="0:1"]', 'from', { id: 'fd-row-0-0', index: 1 }, 0);
-      expect(ctx.last()['x-openbp-layout']).toBeUndefined();
+      expect(layoutOf(ctx.last())).toEqual([[['name'], ['from']]]);
       expect(Object.keys(ctx.last()['properties'] as object)).toEqual(['name', 'from']);
     });
 
@@ -258,7 +261,7 @@ describe('FormDesignerComponent (F11-02)', () => {
       await ctx.render();
       ctx.q('fd-split')!.click();
       await ctx.render();
-      expect(ctx.last()['x-openbp-layout']).toBeUndefined();
+      expect(layoutOf(ctx.last())).toEqual([[['name'], ['from']]]);
       ctx.q('fd-undo')!.click();
       await ctx.render();
       expect(layoutOf(ctx.last())).toEqual([[['name:5', 'from:7']]]);
@@ -393,7 +396,7 @@ describe('FormDesignerComponent (F11-02)', () => {
 
       chooseOption(q('fd-if-field')!, '');
       await render();
-      expect(last()['x-openbp-layout']).toBeUndefined();
+      expect(layout(last()).sections[0].rows[1][0]).toEqual({ field: 'reason' });
     });
 
     it('умова секції: джерело — поля поза секцією, «Так/Ні» для прапорця', async () => {
