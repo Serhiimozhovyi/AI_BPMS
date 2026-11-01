@@ -344,7 +344,7 @@ public class ProjectPageTests(ApiFactory api)
             definition = new
             {
                 table,
-                fields = new object[] { new { column = "name" }, new { column = "slot" }, new { column = "phone", required = true }, new { column = "status", value = "active" } },
+                fields = new object[] { new { column = "name" }, new { column = "slot" }, new { column = "phone", required = true, format = "phone" }, new { column = "status", value = "active" } },
                 formLayout = new
                 {
                     sections = new[]
@@ -362,6 +362,10 @@ public class ProjectPageTests(ApiFactory api)
                 onSubmit = new { operation = "insert" },
             },
         }));
+
+        // F11-07: колонка з format: phone — поле-телефон з маскою у схемі форми.
+        var schema = (await JsonAsync(await psyA.Client.GetAsync($"/api/v1/projects/{project}/pages/book-if"))).GetProperty("schema");
+        Assert.Equal("phone", schema.GetProperty("properties").GetProperty("phone").GetProperty("format").GetString());
 
         await Ok(await psyA.Client.PostAsJsonAsync($"/api/v1/projects/{project}/pages/book-if/submit", new { values = new { name = "Нова", slot = "s-if1", phone = "+380111" } }));
         var tableId = (await JsonAsync(await editor.Client.GetAsync($"/api/v1/tables/{table}?projectId={project}"))).GetProperty("id").GetGuid();

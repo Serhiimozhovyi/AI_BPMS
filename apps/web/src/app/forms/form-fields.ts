@@ -1,5 +1,6 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { fieldUi, hasLayout, readLayout, rowWidths } from './form-layout';
+import { PHONE_FORMAT, isPhone, normalizePhone } from './phone';
 import { hiddenFields, hiddenState } from './visible-if';
 
 /**
@@ -18,6 +19,12 @@ export const PF_TEXTAREA = 'pf-textarea';
 export const PF_SELECT = 'pf-select';
 export const PF_CHECKBOX = 'pf-checkbox';
 export const PF_FILE = 'pf-file';
+/** Варіанти кнопками (`x-openbp-ui.widget: "radio"`, F11-07). */
+export const PF_RADIO = 'pf-radio';
+/** Кілька варіантів чипами (`x-openbp-ui.widget: "chips"`, F11-07). */
+export const PF_CHIPS = 'pf-chips';
+/** Найбільше варіантів, які показуються кнопками; більше — списком. */
+export const RADIO_MAX_OPTIONS = 6;
 /** Обгортка секції форми з розміткою (F11-01). */
 export const PF_SECTION = 'pf-section';
 
@@ -45,6 +52,8 @@ export interface PublicFieldProps {
   placeholder?: string;
   /** Висота багаторядкового поля в рядках (`x-openbp-ui.rows`). */
   rows?: number;
+  /** Поле-телефон (`format: "phone"`): маска під час введення, у даних — цифри (F11-07). */
+  phone?: boolean;
 }
 
 /** Властивості обгортки секції. */
@@ -163,10 +172,11 @@ function fieldFor(key: string, property: JsonSchema, required: boolean): FormlyF
     return { ...base, type: PF_FILE };
   }
   if (options) {
-    return { ...base, type: PF_SELECT, props: { ...props, options } };
+    const radio = ui.widget === 'radio' && options.length <= RADIO_MAX_OPTIONS;
+    return { ...base, type: radio ? PF_RADIO : PF_SELECT, props: { ...props, options } };
   }
   if (type === 'array' && items && optionsOf(items)) {
-    return { ...base, type: PF_SELECT, props: { ...props, options: optionsOf(items)!, multiple: true } };
+    return { ...base, type: ui.widget === 'chips' ? PF_CHIPS : PF_SELECT, props: { ...props, options: optionsOf(items)!, multiple: true } };
   }
   if (type === 'boolean') {
     // Обов'язковий «так/ні» — це «треба погодитись»: requiredTrue не потрібен, false теж відповідь.
@@ -188,6 +198,14 @@ function fieldFor(key: string, property: JsonSchema, required: boolean): FormlyF
   };
   if (format === 'textarea' || (numberOf(property, 'maxLength') ?? 0) > 200) {
     return { ...base, type: PF_TEXTAREA, props: text };
+  }
+  if (format === PHONE_FORMAT) {
+    return {
+      ...base,
+      type: PF_INPUT,
+      props: { ...text, type: 'tel', phone: true },
+      validators: { phone: { expression: (c: { value: unknown }) => !c.value || isPhoneValue(c.value) } },
+    };
   }
   const inputType =
     format === 'email' ? 'email' : format === 'date' ? 'date' : format === 'date-time' ? 'datetime-local' : format === 'uri' ? 'url' : 'text';
@@ -217,6 +235,8 @@ export function toPayload(schema: JsonSchema | null | undefined, model: Record<s
     if ((type === 'number' || type === 'integer') && typeof value === 'string') {
       const n = Number(value);
       fields[key] = Number.isFinite(n) ? n : value;
+    } else if (property['format'] === PHONE_FORMAT && typeof value === 'string') {
+      fields[key] = normalizePhone(value);
     } else if (property['format'] === 'date-time' && typeof value === 'string') {
       const date = new Date(value);
       fields[key] = Number.isNaN(date.getTime()) ? value : date.toISOString();
@@ -227,4 +247,8 @@ export function toPayload(schema: JsonSchema | null | undefined, model: Record<s
     }
   }
   return { fields, files };
+}
+
+function isPhoneValue(value: unknown): boolean {
+  return typeof value === 'string' && isPhone(value);
 }

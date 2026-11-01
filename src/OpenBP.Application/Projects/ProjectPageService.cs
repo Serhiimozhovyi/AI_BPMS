@@ -752,6 +752,12 @@ public sealed partial class ProjectPageService(
                     break;
             }
 
+            if (field.Format == PageFormats.Phone && column.Type == DataColumnType.String)
+            {
+                // Маска телефону на формі (F11-07); сервер і так зберігає цифрами (F8-15).
+                property["format"] = Forms.FormSchema.PhoneFormat;
+            }
+
             if (field.Ui is { Count: > 0 } ui)
             {
                 property[Forms.FormLayout.UiKey] = ui.DeepClone();

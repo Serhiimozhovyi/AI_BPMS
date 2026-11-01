@@ -40,6 +40,8 @@ import {
   rulesUsing,
   ruleSources,
   setFieldVisibleIf,
+  widgetOf,
+  widgetsFor,
 } from './form-designer.model';
 
 describe('модель конструктора форми (F11-02)', () => {
@@ -334,6 +336,28 @@ describe('модель конструктора форми (F11-02)', () => {
       expect(next.layout.sections[0].rows[0]).toEqual([{ field: 'reason' }]);
       expect(next.layout.sections[1].visibleIf).toBeUndefined();
       expect(state.layout.sections[1].visibleIf).toBeDefined();
+    });
+  });
+
+  describe('віджети (F11-07)', () => {
+    it('новий «Вибір» — кнопками, «Телефон» — format: phone, «Адреса» — 2 рядки', () => {
+      expect(propertyFor('select', 'Вид')['x-openbp-ui']).toEqual({ widget: 'radio' });
+      expect(propertyFor('phone', 'Телефон')).toMatchObject({ format: 'phone' });
+      expect(kindOf(propertyFor('phone', 'Телефон'))).toBe('phone');
+      expect(kindOf({ type: 'string', pattern: '^\\+?[0-9 ()-]{7,20}$' })).toBe('phone');
+      expect(propertyFor('address', 'Адреса')).toMatchObject({ format: 'textarea', 'x-openbp-ui': { rows: 2 } });
+    });
+
+    it('доступні віджети за типом і кількістю варіантів; понад 6 варіантів кнопки прибираються', () => {
+      expect(widgetsFor(propertyFor('select', 'Вид'))).toEqual(['radio']);
+      expect(widgetsFor(propertyFor('multiselect', 'Теги'))).toEqual(['chips']);
+      expect(widgetsFor(propertyFor('text', 'Ім’я'))).toEqual([]);
+      const { state, key } = addField(fromSchema(null), 'select');
+      const seven = Array.from({ length: 7 }, (_, i) => ({ value: `o${i}`, label: `В${i}` }));
+      expect(widgetOf(setOptions(state, key, seven.slice(0, 6)).properties[key])).toBe('radio');
+      const next = setOptions(state, key, seven);
+      expect(widgetOf(next.properties[key])).toBeUndefined();
+      expect(widgetsFor(next.properties[key])).toEqual([]);
     });
   });
 });

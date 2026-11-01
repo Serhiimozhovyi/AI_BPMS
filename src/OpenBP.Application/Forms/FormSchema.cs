@@ -16,6 +16,40 @@ internal static class FormSchema
     /// <summary>Значення <c>format</c> поля-файлу.</summary>
     public const string BinaryFormat = "binary";
 
+    /// <summary>Значення <c>format</c> поля-телефону (F11-07): у даних — лише цифри, від 10 до 15.</summary>
+    public const string PhoneFormat = "phone";
+
+    private const int PhoneMinDigits = 10;
+    private const int PhoneMaxDigits = 15;
+
+    /// <summary>
+    /// Поля-телефони (<c>format: "phone"</c>) — лише цифрами: «+380 67 123-45-67» → <c>380671234567</c>, як колонка
+    /// <c>format: "phone"</c> сторінки (F8-15) і маска форми на клієнті (<c>forms/phone.ts</c>).
+    /// </summary>
+    /// <param name="schema">Схема форми.</param>
+    /// <param name="fields">Надіслані поля.</param>
+    public static JsonObject NormalizePhones(JsonObject schema, JsonObject fields)
+    {
+        if (schema["properties"] is not JsonObject properties)
+        {
+            return fields;
+        }
+
+        var result = fields.DeepClone().AsObject();
+        foreach (var (name, property) in properties)
+        {
+            if (IsPhone(property) && result[name] is JsonValue v && v.TryGetValue<string>(out var text))
+            {
+                result[name] = new string([.. text.Where(char.IsAsciiDigit)]);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsPhone(JsonNode? property) =>
+        property is JsonObject p && p["format"] is JsonValue f && f.TryGetValue<string>(out var format) && format == PhoneFormat;
+
     /// <summary>Назви властивостей-файлів схеми верхнього рівня.</summary>
     /// <param name="schema">Схема форми.</param>
     public static HashSet<string> FileFields(JsonObject schema)
@@ -135,6 +169,18 @@ internal static class FormSchema
                 if (!fields.ContainsKey(name) && !hidden.Contains(name))
                 {
                     errors.Add(new(name, "Заповніть це поле."));
+                }
+            }
+        }
+
+        if (schema["properties"] is JsonObject phoneProperties)
+        {
+            foreach (var (name, property) in phoneProperties)
+            {
+                if (IsPhone(property) && fields[name] is JsonValue pv && pv.TryGetValue<string>(out var phone)
+                    && (phone.Length is < PhoneMinDigits or > PhoneMaxDigits || !phone.All(char.IsAsciiDigit)))
+                {
+                    errors.Add(new(name, "Вкажіть номер телефону, напр. +380 67 123 45 67."));
                 }
             }
         }

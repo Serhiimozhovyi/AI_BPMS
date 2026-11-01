@@ -4,7 +4,7 @@ import { By } from '@angular/platform-browser';
 import { TestBed } from '@angular/core/testing';
 import { FormDesignerComponent } from './form-designer.component';
 import type { JsonSchema } from '../form-fields';
-import { chooseOption, selectOptionValues } from '../../shared/select-search/select-testing';
+import { chooseOption, selectOptionValues, selectValue } from '../../shared/select-search/select-testing';
 
 @Component({
   imports: [FormDesignerComponent],
@@ -434,5 +434,31 @@ describe('FormDesignerComponent (F11-02)', () => {
       expect(q('fd-notice')?.textContent).toContain('«Причина»');
       expect(q('fd-notice')?.textContent).toContain('«Згода»');
     });
+  });
+
+  it('«Як показати» (F11-07): «Вибір» — кнопки або список, «Кілька варіантів» — чипи; висота багаторядкового', async () => {
+    const { q, render, type, last } = await setup(null);
+    q('fd-kind-select')!.click();
+    await render();
+    const key = Object.keys(last()['properties'] as object)[0];
+    const props = () => (last()['properties'] as Record<string, JsonSchema>);
+    expect(selectValue(q('fd-prop-widget')!)).toBe('radio');
+    chooseOption(q('fd-prop-widget')!, '');
+    await render();
+    expect(props()[key]['x-openbp-ui']).toBeUndefined();
+
+    q('fd-kind-multiselect')!.click();
+    await render();
+    const multi = Object.keys(props())[1];
+    expect(selectOptionValues(q('fd-prop-widget')!)).toEqual(['', 'chips']);
+    chooseOption(q('fd-prop-widget')!, 'chips');
+    await render();
+    expect(props()[multi]['x-openbp-ui']).toEqual({ widget: 'chips' });
+
+    q('fd-kind-textarea')!.click();
+    await render();
+    expect(q('fd-prop-widget')).toBeNull();
+    await type('fd-prop-rows', '3');
+    expect(props()[Object.keys(props())[2]]['x-openbp-ui']).toEqual({ rows: 3 });
   });
 });

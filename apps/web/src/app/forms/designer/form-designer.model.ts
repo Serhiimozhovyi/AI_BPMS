@@ -1,4 +1,4 @@
-import type { JsonSchema } from '../form-fields';
+import { RADIO_MAX_OPTIONS, type JsonSchema } from '../form-fields';
 import { FormCell, FormLayout, FormSection, GRID_COLUMNS, MAX_ROW_CELLS, UI_KEY, VisibleIf, readLayout, rowWidths, writeLayout } from '../form-layout';
 
 /**
@@ -122,7 +122,8 @@ export function propertyFor(kind: FieldKind, title: string): JsonSchema {
     case 'email':
       return { type: 'string', title, format: 'email' };
     case 'phone':
-      return { type: 'string', title, pattern: PHONE_PATTERN, [UI_KEY]: { placeholder: '+380 67 123 45 67' } };
+      // Маска й нормалізація до цифр — за `format: "phone"` (F11-07); старі поля з PHONE_PATTERN теж розпізнаються.
+      return { type: 'string', title, format: 'phone', [UI_KEY]: { placeholder: '+380 67 123 45 67' } };
     case 'address':
       return { type: 'string', title, format: 'textarea', [UI_KEY]: { rows: 2 } };
     case 'date':
@@ -132,7 +133,13 @@ export function propertyFor(kind: FieldKind, title: string): JsonSchema {
     case 'boolean':
       return { type: 'boolean', title };
     case 'select':
-      return { type: 'string', title, oneOf: [{ const: 'option_1', title: $localize`:@@fd.option1:Варіант 1` }, { const: 'option_2', title: $localize`:@@fd.option2:Варіант 2` }] };
+      // До 3 варіантів — кнопками (F11-07); варіантів стане більше 6 — віджет прибирається (`setOptions`).
+      return {
+        type: 'string',
+        title,
+        oneOf: [{ const: 'option_1', title: $localize`:@@fd.option1:Варіант 1` }, { const: 'option_2', title: $localize`:@@fd.option2:Варіант 2` }],
+        [UI_KEY]: { widget: 'radio' },
+      };
     case 'multiselect':
       return { type: 'array', title, items: { type: 'string', oneOf: [{ const: 'option_1', title: $localize`:@@fd.option1:Варіант 1` }, { const: 'option_2', title: $localize`:@@fd.option2:Варіант 2` }] } };
     case 'file':
@@ -655,7 +662,22 @@ export function setOptions(state: DesignerState, key: string, options: readonly 
     delete items['enum'];
     return setFieldProps(state, key, { items });
   }
-  return setFieldProps(state, key, { oneOf, enum: undefined });
+  const next = setFieldProps(state, key, { oneOf, enum: undefined });
+  return options.length > RADIO_MAX_OPTIONS && widgetOf(property) === 'radio' ? setFieldUi(next, key, { widget: undefined }) : next;
+}
+
+/** Як показати поле (`x-openbp-ui.widget`, F11-07): `radio`, `chips` або `undefined` — типово (список). */
+export function widgetOf(property: JsonSchema): 'radio' | 'chips' | undefined {
+  const ui = isObject(property[UI_KEY]) ? property[UI_KEY] : {};
+  return ui['widget'] === 'radio' || ui['widget'] === 'chips' ? ui['widget'] : undefined;
+}
+
+/** Які віджети доступні полю: «Вибір» — кнопки (до 6 варіантів), «Кілька варіантів» — чипи; іншим — жодного. */
+export function widgetsFor(property: JsonSchema): ('radio' | 'chips')[] {
+  const kind = kindOf(property);
+  if (kind === 'select') return optionsOf(property).length <= RADIO_MAX_OPTIONS ? ['radio'] : [];
+  if (kind === 'multiselect') return ['chips'];
+  return [];
 }
 
 /** Історія станів конструктора: undo/redo до `limit` кроків. */

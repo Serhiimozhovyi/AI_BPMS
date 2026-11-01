@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/cor
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
 import { FieldType, FieldTypeConfig, FieldWrapper, FormlyAttributes, FormlyFieldConfig, FormlyValidationMessage, provideFormlyCore } from '@ngx-formly/core';
-import { PF_CHECKBOX, PF_FILE, PF_INPUT, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps } from './form-fields';
+import { PF_CHECKBOX, PF_CHIPS, PF_FILE, PF_INPUT, PF_RADIO, PF_SECTION, PF_SELECT, PF_TEXTAREA, PublicFieldProps, SectionProps } from './form-fields';
+import { maskPhone } from './phone';
 import { SelectSearchComponent } from '../shared/select-search/select-search.component';
 
 /** Типи полів публічної форми (F6-03): Angular Material у стилі AC-Kit, підказка і помилка під полем. */
@@ -22,6 +25,19 @@ type PublicField = FieldTypeConfig<PublicFieldProps>;
       <mat-label>{{ props.label }}</mat-label>
       @if (props.type === 'number') {
         <input matInput type="number" [placeholder]="props.placeholder ?? ''" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key" />
+      } @else if (props.phone) {
+        <input
+          matInput
+          type="tel"
+          inputmode="tel"
+          autocomplete="tel"
+          [placeholder]="props.placeholder ?? ''"
+          [formControl]="formControl"
+          [formlyAttributes]="field"
+          [required]="!!props.required"
+          [attr.data-testid]="'form-field-' + key"
+          (input)="mask($event)"
+        />
       } @else {
         <input matInput [type]="props.type ?? 'text'" [placeholder]="props.placeholder ?? ''" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.data-testid]="'form-field-' + key" />
       }
@@ -32,7 +48,112 @@ type PublicField = FieldTypeConfig<PublicFieldProps>;
     </mat-form-field>
   `,
 })
-export class PublicInputFieldComponent extends FieldType<PublicField> {}
+export class PublicInputFieldComponent extends FieldType<PublicField> {
+  /** Телефон (F11-07): маска `+380 67 123 45 67` під час введення; у даних — цифри (`toPayload`). */
+  protected mask(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const masked = maskPhone(input.value);
+    if (masked !== input.value) {
+      input.value = masked;
+      this.formControl.setValue(masked);
+    }
+  }
+}
+
+/** Варіанти кнопками (F11-07, `x-openbp-ui.widget: "radio"`): до 6 варіантів, стрілки перемикають вибір. */
+@Component({
+  selector: 'app-pf-radio',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ReactiveFormsModule, MatRadioModule, FormlyAttributes, FormlyValidationMessage],
+  template: `
+    <div class="pf-choice" role="group" [attr.aria-labelledby]="id + '-label'">
+      <div class="pf-choice__label" [id]="id + '-label'">
+        {{ props.label }}@if (props.required) {<span aria-hidden="true"> *</span>}
+      </div>
+      <mat-radio-group class="pf-choice__options" [formControl]="formControl" [formlyAttributes]="field" [required]="!!props.required" [attr.aria-labelledby]="id + '-label'" [attr.data-testid]="'form-field-' + key">
+        @for (option of props.options ?? []; track $index) {
+          <mat-radio-button [value]="option.value" [attr.data-testid]="'form-option-' + key + '-' + $index">{{ option.label }}</mat-radio-button>
+        }
+      </mat-radio-group>
+      @if (props.description) {
+        <div class="pf-hint">{{ props.description }}</div>
+      }
+      @if (showError) {
+        <div class="pf-error" role="alert"><formly-validation-message [field]="field" /></div>
+      }
+    </div>
+  `,
+  styles: `
+    .pf-choice {
+      margin: 0 0 16px;
+    }
+    .pf-choice__label {
+      margin-bottom: 4px;
+      font-size: 14px;
+      color: var(--bp-shell-2);
+    }
+    .pf-choice__options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0 16px;
+    }
+    .pf-hint {
+      font-size: 12px;
+      color: var(--bp-shell-2);
+    }
+    .pf-error {
+      font-size: 12px;
+      color: var(--bp-danger);
+    }
+  `,
+})
+export class PublicRadioFieldComponent extends FieldType<PublicField> {}
+
+/** Кілька варіантів чипами (F11-07, `x-openbp-ui.widget: "chips"`): Tab — до списку, стрілки й пробіл — вибір. */
+@Component({
+  selector: 'app-pf-chips',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ReactiveFormsModule, MatChipsModule, FormlyAttributes, FormlyValidationMessage],
+  template: `
+    <div class="pf-choice">
+      <div class="pf-choice__label" [id]="id + '-label'">
+        {{ props.label }}@if (props.required) {<span aria-hidden="true"> *</span>}
+      </div>
+      <mat-chip-listbox multiple [formControl]="formControl" [formlyAttributes]="field" [attr.aria-labelledby]="id + '-label'" [attr.data-testid]="'form-field-' + key">
+        @for (option of props.options ?? []; track $index) {
+          <mat-chip-option [value]="option.value" [attr.data-testid]="'form-option-' + key + '-' + $index">{{ option.label }}</mat-chip-option>
+        }
+      </mat-chip-listbox>
+      @if (props.description) {
+        <div class="pf-hint">{{ props.description }}</div>
+      }
+      @if (showError) {
+        <div class="pf-error" role="alert"><formly-validation-message [field]="field" /></div>
+      }
+    </div>
+  `,
+  styles: `
+    .pf-choice {
+      margin: 0 0 16px;
+    }
+    .pf-choice__label {
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: var(--bp-shell-2);
+    }
+    .pf-hint {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--bp-shell-2);
+    }
+    .pf-error {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--bp-danger);
+    }
+  `,
+})
+export class PublicChipsFieldComponent extends FieldType<PublicField> {}
 
 @Component({
   selector: 'app-pf-textarea',
@@ -258,6 +379,8 @@ export function providePublicForm() {
       { name: PF_SELECT, component: PublicSelectFieldComponent },
       { name: PF_CHECKBOX, component: PublicCheckboxFieldComponent },
       { name: PF_FILE, component: PublicFileFieldComponent },
+      { name: PF_RADIO, component: PublicRadioFieldComponent },
+      { name: PF_CHIPS, component: PublicChipsFieldComponent },
     ],
     wrappers: [{ name: PF_SECTION, component: PublicSectionWrapperComponent }],
     validationMessages: [
@@ -268,6 +391,7 @@ export function providePublicForm() {
       { name: 'max', message: (_e: unknown, f: FormlyFieldConfig) => $localize`:@@form.error.max:Значення має бути не більше ${f.props?.max}:max:.` },
       { name: 'pattern', message: $localize`:@@form.error.pattern:Значення не відповідає потрібному формату.` },
       { name: 'email', message: $localize`:@@form.error.email:Вкажіть коректну адресу пошти.` },
+      { name: 'phone', message: $localize`:@@form.error.phone:Вкажіть номер телефону, напр. +380 67 123 45 67.` },
       { name: 'server', message: (error: unknown) => String(error) },
     ],
   });
